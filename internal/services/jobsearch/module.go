@@ -86,7 +86,7 @@ type Store interface {
 	ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error)
 	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error
 	FailBoard(ctx context.Context, poll dto.BoardPoll) error
-	ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.CompanyBoard, error)
+	ListUntrackedDiscoveredBoards(ctx context.Context, uk bool, ukSince time.Time) ([]dto.CompanyBoard, error)
 	ListVerifiedBoardsBySlug(ctx context.Context, slugs []string) ([]dto.CardBoard, error)
 	ListVerifiedCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
 	GetBoardCompanyID(ctx context.Context, source, token string) (string, error)
@@ -97,6 +97,9 @@ type Store interface {
 	PutFetch(ctx context.Context, resp dto.CachedResponse) error
 	ForgetFetches(ctx context.Context, urls []string) error
 	DeleteExpiredFetches(ctx context.Context) error
+	MarkBoardUKJobsSeen(ctx context.Context, source, token string) error
+	RecordDiscoverMiss(ctx context.Context, source, token string) error
+	DiscoverMissedSince(ctx context.Context, source, token string, since time.Time) (bool, error)
 }
 
 type Deps struct {

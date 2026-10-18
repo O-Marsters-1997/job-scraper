@@ -366,6 +366,7 @@ CREATE TABLE IF NOT EXISTS company_boards (
     retired_at TIMESTAMPTZ,
     superseded_at TIMESTAMPTZ,
     discovered_via TEXT,
+    uk_jobs_seen_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (source, board_token)
 );
@@ -469,6 +470,13 @@ CREATE TABLE fetch_cache (
 );
 
 CREATE INDEX fetch_cache_fetched_at_idx ON fetch_cache (fetched_at);
+
+CREATE TABLE board_discover_misses (
+    source      TEXT        NOT NULL,
+    board_token TEXT        NOT NULL,
+    missed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (source, board_token)
+);
 
 CREATE TABLE company_profiles (
     company_id UUID        NOT NULL REFERENCES companies(id) ON DELETE CASCADE,

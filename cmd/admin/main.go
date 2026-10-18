@@ -33,6 +33,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "       admin scoring-feedback clear <username>")
 	fmt.Fprintln(os.Stderr, "       admin scoring replay <username>")
 	fmt.Fprintln(os.Stderr, "       admin scoring fit <username>")
+	fmt.Fprintln(os.Stderr, "       admin resolve-domains <file>")
 	os.Exit(1)
 }
 
@@ -58,6 +59,8 @@ func main() {
 		runScoringFeedback(os.Args[2:])
 	case "scoring":
 		runScoring(os.Args[2:])
+	case "resolve-domains":
+		runResolveDomains(os.Args[2:])
 	default:
 		usage()
 	}

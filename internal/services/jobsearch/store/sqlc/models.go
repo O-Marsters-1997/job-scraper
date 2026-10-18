@@ -195,6 +195,12 @@ type BankSkill struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type BoardDiscoverMiss struct {
+	Source     string
+	BoardToken string
+	MissedAt   pgtype.Timestamptz
+}
+
 type BoardJobObservation struct {
 	BoardID             pgtype.UUID
 	JobID               pgtype.UUID
@@ -259,6 +265,7 @@ type CompanyBoard struct {
 	RetiredAt          pgtype.Timestamptz
 	SupersededAt       pgtype.Timestamptz
 	DiscoveredVia      pgtype.Text
+	UkJobsSeenAt       pgtype.Timestamptz
 	CreatedAt          pgtype.Timestamptz
 }
 

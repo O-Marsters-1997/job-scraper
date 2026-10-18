@@ -621,6 +621,93 @@ func TestProcessBoardDiscover(t *testing.T) {
 		}
 	})
 
+	t.Run("a required-UK task with no jobs or a failed fetch records a miss and is not verified", func(t *testing.T) {
+		t.Parallel()
+		empty := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp"}, nil
+		}
+		failing := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{}, errors.New("boom")
+		}
+		for name, fn := range map[string]worker.DiscoverFunc{"no jobs": empty, "failed fetch": failing} {
+			f := newFixture(t, http.StatusOK, "")
+			uk := task
+			uk.RequireUK = true
+			if err := f.discoverProcessor(fn, configsStub{match}).Process(ctx, uk); err != nil {
+				t.Fatalf("%s: Process() = %v, want nil", name, err)
+			}
+			missed, err := f.store.DiscoverMissedSince(ctx, "greenhouse", "acme", time.Now().Add(-time.Minute))
+			if err != nil || !missed {
+				t.Errorf("%s: DiscoverMissedSince = %v, %v, want true", name, missed, err)
+			}
+			if _, err := f.store.GetVerifiedBoardID(ctx, "greenhouse", "acme"); !errors.Is(err, data.ErrNotFound) {
+				t.Errorf("%s: GetVerifiedBoardID err = %v, want ErrNotFound", name, err)
+			}
+		}
+	})
+
+	t.Run("UK gate", func(t *testing.T) {
+		t.Parallel()
+		nonUK := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp", Recheck: true, Jobs: []dto.Job{{Title: "Go Engineer", Location: "Berlin"}}}, nil
+		}
+		for name, tc := range map[string]struct {
+			fn          worker.DiscoverFunc
+			requireUK   bool
+			wantTracked int
+			wantStamped bool
+		}{
+			"required-UK non-UK jobs verify but track nobody": {nonUK, true, 0, false},
+			"ingest-queued non-UK jobs are tracked":           {nonUK, false, 1, false},
+			"required-UK UK jobs are stamped and tracked":     {discover, true, 1, true},
+		} {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				f := newFixture(t, http.StatusOK, "")
+				tk := task
+				tk.RequireUK = tc.requireUK
+				if err := f.discoverProcessor(tc.fn, configsStub{match}).Process(ctx, tk); err != nil {
+					t.Fatalf("Process() = %v, want nil", err)
+				}
+				tracked, err := f.store.ListTrackedCompaniesForUser(ctx, "match")
+				if err != nil || len(tracked) != tc.wantTracked {
+					t.Errorf("ListTrackedCompaniesForUser(match) = %+v, %v, want %d", tracked, err, tc.wantTracked)
+				}
+				company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme Corp"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				boards, err := f.store.ListCompanyBoards(ctx, company.ID)
+				if err != nil || len(boards) != 1 {
+					t.Fatalf("ListCompanyBoards() = %+v, %v, want one board", boards, err)
+				}
+				if boards[0].Status != dto.BoardVerified {
+					t.Errorf("board status = %q, want verified", boards[0].Status)
+				}
+				if got := boards[0].UKJobsSeenAt != nil; got != tc.wantStamped {
+					t.Errorf("UKJobsSeenAt set = %v, want %v", got, tc.wantStamped)
+				}
+			})
+		}
+	})
+
+	t.Run("an ingest-queued task with no jobs records no miss and still verifies", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		empty := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp"}, nil
+		}
+		if err := f.discoverProcessor(empty, configsStub{match}).Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		if missed, _ := f.store.DiscoverMissedSince(ctx, "greenhouse", "acme", time.Now().Add(-time.Minute)); missed {
+			t.Error("DiscoverMissedSince = true, want false")
+		}
+		if _, err := f.store.GetVerifiedBoardID(ctx, "greenhouse", "acme"); err != nil {
+			t.Errorf("GetVerifiedBoardID err = %v, want verified", err)
+		}
+	})
+
 	t.Run("a board that is not worth rechecking is verified wttj-origin", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
 		noRecheck := func(context.Context, string, string) (scraper.Discovery, error) {
@@ -637,7 +724,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 		if err != nil || len(boards) != 1 || boards[0].VerificationMethod != scraper.MethodWTTJOrigin {
 			t.Fatalf("ListCompanyBoards(%s) = %+v, %v, want one board verified wttj-origin", company.ID, boards, err)
 		}
-		untracked, err := f.store.ListUntrackedDiscoveredBoards(ctx)
+		untracked, err := f.store.ListUntrackedDiscoveredBoards(ctx, false, time.Now())
 		if err != nil || len(untracked) != 0 {
 			t.Fatalf("ListUntrackedDiscoveredBoards() = %+v, %v, want none", untracked, err)
 		}

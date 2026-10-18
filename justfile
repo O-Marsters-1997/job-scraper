@@ -169,6 +169,9 @@ scoring-feedback-clear user:
 eval-scoring user:
     go run ./cmd/admin scoring replay {{user}}
 
+resolve-domains file:
+    go run ./cmd/admin resolve-domains {{file}}
+
 # ── Seeds ─────────────────────────────────────────────────────────────────────
 
 # seed the scoring-options bank (idempotent; safe to rerun in any environment)

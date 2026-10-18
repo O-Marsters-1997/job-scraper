@@ -941,8 +941,8 @@ func (s *Store) GetBoardCompanyID(ctx context.Context, source, token string) (st
 	return id.String(), nil
 }
 
-func (s *Store) ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.CompanyBoard, error) {
-	rows, err := s.queries.ListUntrackedDiscoveredBoards(ctx)
+func (s *Store) ListUntrackedDiscoveredBoards(ctx context.Context, uk bool, ukSince time.Time) ([]dto.CompanyBoard, error) {
+	rows, err := s.queries.ListUntrackedDiscoveredBoards(ctx, sqlc.ListUntrackedDiscoveredBoardsParams{Uk: uk, UkSince: pgtype.Timestamptz{Time: ukSince, Valid: true}})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListUntrackedDiscoveredBoards: %w", err)
 	}
@@ -1480,6 +1480,13 @@ func (s *Store) RenameCompany(ctx context.Context, id, name string) error {
 	}
 	if err := s.queries.RenameCompany(ctx, sqlc.RenameCompanyParams{ID: cid, Name: name}); err != nil {
 		return fmt.Errorf("store.RenameCompany: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) MarkBoardUKJobsSeen(ctx context.Context, source, token string) error {
+	if err := s.queries.MarkBoardUKJobsSeen(ctx, sqlc.MarkBoardUKJobsSeenParams{Source: source, BoardToken: token}); err != nil {
+		return fmt.Errorf("store.MarkBoardUKJobsSeen: %w", err)
 	}
 	return nil
 }

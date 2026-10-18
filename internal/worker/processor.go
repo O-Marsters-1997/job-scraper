@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/filter"
+	"github.com/ollymarsters/job-scraper/internal/location"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
@@ -179,7 +181,11 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	if err != nil {
 		slog.WarnContext(ctx, "board discovery failed", slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		logBoardDiscover(ctx, task, "failed")
-		return nil
+		return p.recordMiss(ctx, task)
+	}
+	if len(found.Jobs) == 0 && task.RequireUK {
+		logBoardDiscover(ctx, task, "empty")
+		return p.recordMiss(ctx, task)
 	}
 	companyID, err := p.discoveryCompanyID(ctx, task, found.Name)
 	if err != nil {
@@ -194,6 +200,14 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	}
 	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, companyID, task.Source, task.BoardToken, method, task.Via); err != nil && !errors.Is(err, data.ErrNotFound) {
 		return err
+	}
+	if hasUKJob(found.Jobs) {
+		if err := p.js.Boards().MarkBoardUKJobsSeen(ctx, task.Source, task.BoardToken); err != nil {
+			return err
+		}
+	} else if task.RequireUK {
+		logBoardDiscover(ctx, task, "non_uk")
+		return nil
 	}
 	pivoted, err := p.pivotToATS(ctx, task.Source, cmp.Or(task.Via, task.Source), companyID, found.Jobs)
 	if err != nil {
@@ -235,6 +249,17 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 		}
 	}
 	return p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0)
+}
+
+func hasUKJob(jobs []dto.Job) bool {
+	return slices.ContainsFunc(jobs, func(j dto.Job) bool { return location.IsUK(j.Location) })
+}
+
+func (p *Processor) recordMiss(ctx context.Context, task queue.Task) error {
+	if !task.RequireUK {
+		return nil
+	}
+	return p.js.Boards().RecordDiscoverMiss(ctx, task.Source, task.BoardToken)
 }
 
 func logBoardDiscover(ctx context.Context, task queue.Task, outcome string) {

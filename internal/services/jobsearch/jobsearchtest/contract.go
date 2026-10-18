@@ -62,6 +62,50 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("a recorded discover miss is seen only since before it", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		if err := st.RecordDiscoverMiss(ctx, "greenhouse", "acme"); err != nil {
+			t.Fatal(err)
+		}
+		for name, tc := range map[string]struct {
+			token string
+			since time.Time
+			want  bool
+		}{
+			"recent window": {"acme", time.Now().Add(-time.Hour), true},
+			"future window": {"acme", time.Now().Add(time.Hour), false},
+			"other board":   {"other", time.Now().Add(-time.Hour), false},
+		} {
+			got, err := st.DiscoverMissedSince(ctx, "greenhouse", tc.token, tc.since)
+			if err != nil || got != tc.want {
+				t.Errorf("%s: DiscoverMissedSince = %v, %v, want %v", name, got, err, tc.want)
+			}
+		}
+		if err := st.RecordDiscoverMiss(ctx, "greenhouse", "acme"); err != nil {
+			t.Errorf("RecordDiscoverMiss(repeat) = %v, want nil", err)
+		}
+	})
+
+	t.Run("marking a board's UK jobs seen stamps it", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme"); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.MarkBoardUKJobsSeen(ctx, "greenhouse", "acme"); err != nil {
+			t.Fatal(err)
+		}
+		boards, err := st.ListCompanyBoards(ctx, company.ID)
+		if err != nil || len(boards) != 1 || boards[0].UKJobsSeenAt == nil {
+			t.Fatalf("ListCompanyBoards() = %+v, %v, want one stamped board", boards, err)
+		}
+	})
+
 	t.Run("get an unknown job returns not found", func(t *testing.T) {
 		st, _ := newStore(t)
 		_, err := st.GetJob(t.Context(), missingID, missingID)
@@ -921,7 +965,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 				}
 			}
 		}
-		got, err := st.ListUntrackedDiscoveredBoards(ctx)
+		got, err := st.ListUntrackedDiscoveredBoards(ctx, false, time.Now().Add(-30*24*time.Hour))
 		if err != nil || len(got) != 1 || got[0].BoardToken != "untracked-co" {
 			t.Fatalf("ListUntrackedDiscoveredBoards() = %+v, %v, want only untracked-co", got, err)
 		}

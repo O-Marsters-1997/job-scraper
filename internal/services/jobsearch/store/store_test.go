@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -39,6 +40,48 @@ func newUserStore(t *testing.T) (*store.Store, *pgxpool.Pool, string) {
 	t.Helper()
 	st, pool := newStore(t)
 	return st, pool, pgtest.InsertUser(t, pool)
+}
+
+func TestStore_ListUntrackedDiscoveredBoards(t *testing.T) {
+	t.Parallel()
+	st, pool := newStore(t)
+	ctx := t.Context()
+	since := time.Now().Add(-30 * 24 * time.Hour).Truncate(time.Second)
+	after, before := since.Add(time.Second), since.Add(-time.Second)
+	seen := map[string]*time.Time{"never": nil, "before": &before, "at": &since, "after": &after}
+	for slug, at := range seen {
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug, Name: slug})
+		if err != nil {
+			t.Fatalf("UpsertCompany(%s) = %v", slug, err)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", slug); err != nil {
+			t.Fatalf("UpsertCandidateBoard(%s) = %v", slug, err)
+		}
+		if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", slug, "discovered", ""); err != nil {
+			t.Fatalf("VerifyCompanyBoard(%s) = %v", slug, err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE company_boards SET uk_jobs_seen_at = $1 WHERE board_token = $2`, at, slug); err != nil {
+			t.Fatalf("stamp %s: %v", slug, err)
+		}
+	}
+	tokens := func(uk bool) []string {
+		got, err := st.ListUntrackedDiscoveredBoards(ctx, uk, since)
+		if err != nil {
+			t.Fatalf("ListUntrackedDiscoveredBoards(%v) = %v", uk, err)
+		}
+		out := make([]string, len(got))
+		for i, b := range got {
+			out[i] = b.BoardToken
+		}
+		slices.Sort(out)
+		return out
+	}
+	if diff := cmp.Diff([]string{"after", "at"}, tokens(true)); diff != "" {
+		t.Errorf("uk boards mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"before", "never"}, tokens(false)); diff != "" {
+		t.Errorf("abroad boards mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestStoreSatisfiesContract(t *testing.T) {

@@ -87,10 +87,14 @@ type Catalog interface {
 	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
 	ListVerifiedCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
 	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
+	DiscoverMissedSince(ctx context.Context, source, token string, since time.Time) (bool, error)
 	UpsertCandidateBoard(ctx context.Context, companyID, source, token string) (dto.CompanyBoard, error)
 }
 
-const gateKeyPrefix = "harvest:"
+const (
+	gateKeyPrefix = "harvest:"
+	missWindow    = 30 * 24 * time.Hour
+)
 
 // Runner publishes a board_discover task per harvested board, and records each
 // harvested Company that has no verified Board, with a candidate Board and a
@@ -152,8 +156,16 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 			if !errors.Is(err, data.ErrNotFound) {
 				log.WarnContext(ctx, "could not check board verified, publishing", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
 			}
+			missed, err := r.catalog.DiscoverMissedSince(ctx, b.Source, b.Token, time.Now().Add(-missWindow))
+			if err != nil {
+				log.WarnContext(ctx, "could not check board missed, publishing", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
+			}
+			if missed {
+				found.Skipped++
+				continue
+			}
 		}
-		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.Token, Via: h.Name()}
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.Token, Via: h.Name(), RequireUK: true}
 		if err := r.publisher.Publish(ctx, task); err != nil {
 			log.ErrorContext(ctx, "publish failed", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
 			continue
@@ -216,6 +228,6 @@ func (r *Runner) recordCompany(ctx context.Context, via string, c Company) error
 	}
 	return r.publisher.Publish(ctx, queue.Task{
 		Version: 1, ID: uuid.NewString(), Source: board.Source, Kind: queue.BoardDiscoverTask,
-		CompanyID: company.ID, BoardToken: board.BoardToken, Via: via,
+		CompanyID: company.ID, BoardToken: board.BoardToken, Via: via, RequireUK: true,
 	})
 }
