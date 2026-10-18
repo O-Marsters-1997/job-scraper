@@ -93,7 +93,7 @@ type Catalog interface {
 
 const (
 	gateKeyPrefix = "harvest:"
-	missTTL       = 30 * 24 * time.Hour
+	missWindow    = 30 * 24 * time.Hour
 )
 
 // Runner publishes a board_discover task per harvested board, and records each
@@ -156,7 +156,7 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 			if !errors.Is(err, data.ErrNotFound) {
 				log.WarnContext(ctx, "could not check board verified, publishing", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
 			}
-			missed, err := r.catalog.DiscoverMissedSince(ctx, b.Source, b.Token, time.Now().Add(-missTTL))
+			missed, err := r.catalog.DiscoverMissedSince(ctx, b.Source, b.Token, time.Now().Add(-missWindow))
 			if err != nil {
 				log.WarnContext(ctx, "could not check board missed, publishing", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
 			}

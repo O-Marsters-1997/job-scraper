@@ -622,6 +622,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 	})
 
 	t.Run("a required-UK task with no jobs or a failed fetch records a miss and is not verified", func(t *testing.T) {
+		t.Parallel()
 		empty := func(context.Context, string, string) (scraper.Discovery, error) {
 			return scraper.Discovery{Name: "Acme Corp"}, nil
 		}
@@ -646,6 +647,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 	})
 
 	t.Run("an ingest-queued task with no jobs records no miss and still verifies", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t, http.StatusOK, "")
 		empty := func(context.Context, string, string) (scraper.Discovery, error) {
 			return scraper.Discovery{Name: "Acme Corp"}, nil

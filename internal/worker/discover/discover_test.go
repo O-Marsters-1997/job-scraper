@@ -187,6 +187,7 @@ func TestRunner_RepublishesDiscoveryForCandidateBoards(t *testing.T) {
 }
 
 func TestRunner_PublishedTasksRequireUK(t *testing.T) {
+	t.Parallel()
 	h := &fakeHarvester{name: "wttj", interval: time.Hour, found: discover.Harvest{
 		Boards:    []discover.Board{{Source: "greenhouse", Token: "acme"}},
 		Companies: []discover.Company{wttjCompany("faculty")},
@@ -208,6 +209,7 @@ func TestRunner_PublishedTasksRequireUK(t *testing.T) {
 }
 
 func TestRunner_MissedBoardsAreSkippedForThirtyDays(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		recheck bool
 		missed  bool
@@ -218,6 +220,7 @@ func TestRunner_MissedBoardsAreSkippedForThirtyDays(t *testing.T) {
 		"recheck ignores a recent miss": {recheck: true, missed: true, want: 1},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			catalog := jobsearchtest.NewFakeStore()
 			if tc.missed {
 				if err := catalog.RecordDiscoverMiss(t.Context(), "greenhouse", "acme"); err != nil {
