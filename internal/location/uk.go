@@ -3,12 +3,12 @@ package location
 import "regexp"
 
 var (
-	ukName = regexp.MustCompile(`(?i)\b(?:united kingdom|uk|u\.k\.|great britain|england|scotland|northern ireland|wales)\b`)
+	ukName = regexp.MustCompile(`(?i)\b(?:united kingdom|uk|gb|great britain|england|scotland|northern ireland|wales)\b`)
 	ukCity = regexp.MustCompile(`(?i)\b(?:london|manchester|edinburgh|glasgow|bristol|birmingham|leeds|cambridge|oxford|belfast|cardiff|reading|brighton|liverpool|newcastle|sheffield|nottingham)\b`)
 
 	newSouthWales = regexp.MustCompile(`(?i)\bnew south wales\b`)
 	usStateSuffix = regexp.MustCompile(`,\s*[A-Z]{2}\b`)
-	foreignName   = regexp.MustCompile(`(?i)\b(?:usa|united states|canada|ontario|australia|nsw|massachusetts|ohio|kentucky|pennsylvania|connecticut|new hampshire)\b`)
+	foreignName   = regexp.MustCompile(`(?i)\b(?:usa|united states|canada|ontario|australia|nsw|victoria|queensland|new zealand|massachusetts|ohio|kentucky|pennsylvania|connecticut|new hampshire|alabama|mississippi|maryland|maine|wisconsin|california|texas|new york|virginia|georgia|florida|michigan|indiana|iowa|minnesota|missouri|tennessee|oregon|washington)\b`)
 )
 
 // IsUK reports whether a free-text job location is in the UK, rejecting
