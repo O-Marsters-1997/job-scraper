@@ -260,10 +260,11 @@ JOIN companies c ON c.id = b.company_id
 JOIN tracked_companies tc ON tc.company_id = b.company_id AND tc.enabled
 LEFT JOIN board_poll_state s ON s.board_id = b.id
 WHERE b.status = 'verified'
-GROUP BY b.id, c.slug, s.last_scheduled_at, s.lease_until, s.next_due_at
+GROUP BY b.id, c.slug, s.last_scheduled_at, s.lease_until, s.next_due_at, s.check_published_at
 HAVING (s.last_scheduled_at IS NULL OR s.last_scheduled_at + MIN(tc.check_interval_minutes) * INTERVAL '1 minute' <= NOW())
    AND (s.lease_until IS NULL OR s.lease_until < NOW())
    AND (s.next_due_at IS NULL OR s.next_due_at <= NOW())
+   AND (s.check_published_at IS NULL OR s.check_published_at + MIN(tc.check_interval_minutes) * INTERVAL '1 minute' <= NOW())
 ORDER BY b.id
 `
 
@@ -304,7 +305,7 @@ func (q *Queries) ListDueBoards(ctx context.Context) ([]ListDueBoardsRow, error)
 }
 
 const lockPollState = `-- name: LockPollState :one
-SELECT board_id, last_completed_at, last_scheduled_at, last_started_at, last_snapshot_version, consecutive_complete_empty, consecutive_failures, last_reported_total, last_parsed, lease_owner, lease_until, next_due_at FROM board_poll_state WHERE board_id = $1 FOR UPDATE
+SELECT board_id, last_completed_at, last_scheduled_at, last_started_at, last_snapshot_version, consecutive_complete_empty, consecutive_failures, last_reported_total, last_parsed, lease_owner, lease_until, next_due_at, check_published_at FROM board_poll_state WHERE board_id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockPollState(ctx context.Context, boardID pgtype.UUID) (BoardPollState, error) {
@@ -323,8 +324,19 @@ func (q *Queries) LockPollState(ctx context.Context, boardID pgtype.UUID) (Board
 		&i.LeaseOwner,
 		&i.LeaseUntil,
 		&i.NextDueAt,
+		&i.CheckPublishedAt,
 	)
 	return i, err
+}
+
+const markBoardCheckPublished = `-- name: MarkBoardCheckPublished :exec
+INSERT INTO board_poll_state (board_id, check_published_at) VALUES ($1, NOW())
+ON CONFLICT (board_id) DO UPDATE SET check_published_at = EXCLUDED.check_published_at
+`
+
+func (q *Queries) MarkBoardCheckPublished(ctx context.Context, boardID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markBoardCheckPublished, boardID)
+	return err
 }
 
 const observeBoardJob = `-- name: ObserveBoardJob :exec

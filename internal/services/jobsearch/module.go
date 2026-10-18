@@ -80,6 +80,7 @@ type Store interface {
 	TouchCompanyCrawled(ctx context.Context, id string) error
 	RenameCompany(ctx context.Context, id, name string) error
 	ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error)
+	MarkBoardCheckPublished(ctx context.Context, id string) error
 	ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error)
 	ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error)
 	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error

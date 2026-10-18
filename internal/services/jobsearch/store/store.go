@@ -1518,6 +1518,17 @@ func (s *Store) ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error) {
 	return boards, nil
 }
 
+func (s *Store) MarkBoardCheckPublished(ctx context.Context, id string) error {
+	boardID, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.MarkBoardCheckPublished(ctx, boardID); err != nil {
+		return fmt.Errorf("store.MarkBoardCheckPublished: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error) {
 	rows, err := s.queries.ListActiveBoards(ctx)
 	if err != nil {

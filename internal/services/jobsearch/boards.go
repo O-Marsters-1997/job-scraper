@@ -29,9 +29,19 @@ func (s *Service) PublishBoardChecks(ctx context.Context, manual bool) error {
 	}
 	for _, board := range boards {
 		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: board.Source, Kind: queue.BoardCheckTask, BoardID: board.ID, Manual: manual}
-		if err := s.queue.Publish(ctx, task); err != nil {
+		if err := s.publishBoardCheck(ctx, task); err != nil {
 			slog.ErrorContext(ctx, "publish Board check failed", slog.String(logger.KeyBoardID, board.ID), slog.Any(logger.KeyErr, err))
 		}
 	}
 	return nil
+}
+
+func (s *Service) publishBoardCheck(ctx context.Context, task queue.Task) error {
+	if err := s.queue.Publish(ctx, task); err != nil {
+		return err
+	}
+	if task.Manual {
+		return nil
+	}
+	return s.store.MarkBoardCheckPublished(ctx, task.BoardID)
 }

@@ -6,11 +6,16 @@ JOIN companies c ON c.id = b.company_id
 JOIN tracked_companies tc ON tc.company_id = b.company_id AND tc.enabled
 LEFT JOIN board_poll_state s ON s.board_id = b.id
 WHERE b.status = 'verified'
-GROUP BY b.id, c.slug, s.last_scheduled_at, s.lease_until, s.next_due_at
+GROUP BY b.id, c.slug, s.last_scheduled_at, s.lease_until, s.next_due_at, s.check_published_at
 HAVING (s.last_scheduled_at IS NULL OR s.last_scheduled_at + MIN(tc.check_interval_minutes) * INTERVAL '1 minute' <= NOW())
    AND (s.lease_until IS NULL OR s.lease_until < NOW())
    AND (s.next_due_at IS NULL OR s.next_due_at <= NOW())
+   AND (s.check_published_at IS NULL OR s.check_published_at + MIN(tc.check_interval_minutes) * INTERVAL '1 minute' <= NOW())
 ORDER BY b.id;
+
+-- name: MarkBoardCheckPublished :exec
+INSERT INTO board_poll_state (board_id, check_published_at) VALUES ($1, NOW())
+ON CONFLICT (board_id) DO UPDATE SET check_published_at = EXCLUDED.check_published_at;
 
 -- name: ListActiveBoards :many
 SELECT b.id, b.company_id, c.slug AS company_slug, b.source, b.board_token,

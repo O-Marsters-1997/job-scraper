@@ -744,6 +744,21 @@ func TestBoardPolling(t *testing.T) {
 		}
 	})
 
+	t.Run("a published check holds the board back but stays claimable", func(t *testing.T) {
+		t.Parallel()
+		env := verifiedBoardFixture(t)
+		if due := env.due(t); len(due) != 1 {
+			t.Fatalf("due = %v, want %s", due, env.board.ID)
+		}
+		if err := env.st.MarkBoardCheckPublished(t.Context(), env.board.ID); err != nil {
+			t.Fatalf("MarkBoardCheckPublished() err = %v", err)
+		}
+		if due := env.due(t); len(due) != 0 {
+			t.Errorf("published board due = %v, want none", due)
+		}
+		env.claim(t, false)
+	})
+
 	t.Run("a next-poll hint sets next_due_at and holds the board back", func(t *testing.T) {
 		t.Parallel()
 		env := verifiedBoardFixture(t)
