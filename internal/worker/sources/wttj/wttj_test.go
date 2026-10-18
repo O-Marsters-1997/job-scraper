@@ -172,16 +172,27 @@ func TestFetchPage(t *testing.T) {
 		}
 	})
 
-	t.Run("403 and 429 fail the poll without retrying", func(t *testing.T) {
+	t.Run("403 and 429 block the poll without retrying", func(t *testing.T) {
+		t.Parallel()
 		for _, status := range []int{http.StatusForbidden, http.StatusTooManyRequests} {
 			s := newSite(t, "company_faculty.html")
 			s.status = status
-			if _, err := poll(t, "blocked", s); err == nil {
-				t.Errorf("FetchPage with status %d error = %v, want error", status, err)
+			_, err := poll(t, "blocked", s)
+			if _, blocked := sources.BlockedUntil(err, now); !blocked {
+				t.Errorf("FetchPage with status %d error = %v, want a block", status, err)
 			}
 			if len(s.requests) != 1 {
 				t.Errorf("status %d: %d requests, want 1", status, len(s.requests))
 			}
+		}
+	})
+
+	t.Run("a company page with no readable state is unparseable", func(t *testing.T) {
+		t.Parallel()
+		s := newSite(t, "company_faculty.html")
+		s.company = "<html></html>"
+		if _, err := poll(t, "unparseable", s); !errors.Is(err, sources.ErrUnparseable) {
+			t.Errorf("FetchPage error = %v, want ErrUnparseable", err)
 		}
 	})
 }

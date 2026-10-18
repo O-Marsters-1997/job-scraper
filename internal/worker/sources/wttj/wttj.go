@@ -101,7 +101,8 @@ func (s *Source) get(ctx context.Context, url string) ([]byte, error) {
 	body, err := s.Get(ctx, url)
 	var statusErr *sources.StatusError
 	if errors.As(err, &statusErr) && (statusErr.Code == http.StatusForbidden || statusErr.Code == http.StatusTooManyRequests) {
-		s.shared.gate.Block(blockFor)
+		until := s.shared.gate.Block(blockFor)
+		return nil, fmt.Errorf("%w: %w", &sources.DeferredError{Until: until}, err)
 	}
 	return body, err
 }
@@ -138,7 +139,7 @@ func (s *Source) poll(ctx context.Context) (sources.BoardResult, company, error)
 	}
 	company, err := parseCompanyState(body)
 	if err != nil {
-		return sources.BoardResult{}, company, err
+		return sources.BoardResult{}, company, fmt.Errorf("%w: %w", sources.ErrUnparseable, err)
 	}
 	if !company.inUK() {
 		return sources.BoardResult{NextPollIn: otherPollIn, Profile: company.Profile}, company, nil

@@ -104,7 +104,7 @@ func run(ctx context.Context) error {
 	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{Build: sourceBuilder.BuildSource, Profiles: js}, exporter)
 	orch := scraper.New(js.Boards(), scoringModule, sourceBuilder.BuildSource, js.Targets())
 	processor := worker.NewProcessor(worker.Deps{
-		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter, MaxPages: maxPages, Scoring: scoringModule, Discover: func(ctx context.Context, source, token string) (scraper.Discovery, error) {
+		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter, MaxPages: maxPages, Scoring: scoringModule, Logger: slog.Default(), Discover: func(ctx context.Context, source, token string) (scraper.Discovery, error) {
 			return scraper.DiscoverBoard(ctx, sourceBuilder.BuildSource, source, token)
 		},
 		Verify: func(ctx context.Context, source, token string) (scraper.Verification, error) {

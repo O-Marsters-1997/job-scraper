@@ -919,6 +919,30 @@ func TestProcessRateLimit(t *testing.T) {
 		}
 	})
 
+	t.Run("an unparseable board is acked, logged and fails its run", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		exporter := scraper.NewAPIExporter(f.ingest.server.URL, "token").WithInitialBackoff(0)
+		unparseable := fmt.Errorf("wttj: no Company in state: %w", sources.ErrUnparseable)
+		var logs bytes.Buffer
+		p := worker.NewProcessor(worker.Deps{
+			JS:     jobsearch.Build(jobsearchtest.NewDeps(f.store)),
+			Boards: scraper.NewBoardPoller(f.store, failingBoard{err: unparseable}, exporter),
+			Logger: slog.New(slog.NewTextHandler(&logs, nil)),
+		})
+		target := f.target(t, "greenhouse")
+		task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: f.board(t), Manual: true, TargetID: target.ID, RunID: target.RunID}
+		if err := p.Process(t.Context(), task); err != nil {
+			t.Fatalf("Process() = %v, want nil so the task is acked", err)
+		}
+		if got := f.runStatus(t, target).RunStatus; got != "failed" {
+			t.Errorf("run status = %q, want failed", got)
+		}
+		if !strings.Contains(logs.String(), "board page unparseable") {
+			t.Errorf("logs = %q, want a board page unparseable warning", logs.String())
+		}
+	})
+
 	boards := []struct {
 		name      string
 		err       error

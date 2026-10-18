@@ -60,6 +60,7 @@ type Deps struct {
 	Scoring      IncludeFilterConfigs
 	Discover     DiscoverFunc
 	Verify       VerifyFunc
+	Logger       *slog.Logger
 }
 
 type Processor struct {
@@ -74,10 +75,11 @@ type Processor struct {
 	scoring      IncludeFilterConfigs
 	discover     DiscoverFunc
 	verify       VerifyFunc
+	log          *slog.Logger
 }
 
 func NewProcessor(d Deps) *Processor {
-	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, cardComplete: d.CardComplete, exporter: d.Exporter, maxPages: d.MaxPages, scoring: d.Scoring, discover: d.Discover, verify: d.Verify}
+	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, cardComplete: d.CardComplete, exporter: d.Exporter, maxPages: d.MaxPages, scoring: d.Scoring, discover: d.Discover, verify: d.Verify, log: d.Logger}
 }
 
 func (p *Processor) Process(ctx context.Context, task queue.Task) error {
@@ -387,6 +389,14 @@ func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
 			return &queue.DeferError{Until: until, Err: err}
 		}
+		if !errors.Is(err, sources.ErrUnparseable) {
+			return err
+		}
+		p.log.WarnContext(ctx, "board page unparseable", slog.String(logger.KeySource, task.Source), slog.String("board_id", task.BoardID), slog.Any(logger.KeyErr, err))
+		if task.TargetID == "" {
+			return nil
+		}
+		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "The board's page could not be read.")
 		return err
 	}
 	if task.TargetID != "" {

@@ -87,6 +87,8 @@ var ErrGone = errors.New("gone")
 
 var ErrNotRemote = errors.New("not remote")
 
+var ErrUnparseable = errors.New("unparseable")
+
 // ErrSourceKeyRejected is returned by a keyed Source when the provider refuses
 // its API key, so every Target of that Source will fail until the key changes.
 var ErrSourceKeyRejected = errors.New("source key rejected")
