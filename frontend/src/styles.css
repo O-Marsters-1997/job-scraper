@@ -604,8 +604,20 @@ html[data-size="lg"] {
 	);
 }
 
-::highlight(job-note) {
+::highlight(job-comment) {
+	background-color: color-mix(in oklch, var(--color-primary), transparent 92%);
+	text-decoration: underline;
+	text-decoration-color: color-mix(
+		in oklch,
+		var(--color-primary),
+		transparent 50%
+	);
+}
+
+::highlight(job-comment-active) {
 	background-color: color-mix(in oklch, var(--color-primary), transparent 75%);
+	text-decoration: underline;
+	text-decoration-color: var(--color-primary);
 }
 
 /* Empty-state / section glow: centred ambient wash */

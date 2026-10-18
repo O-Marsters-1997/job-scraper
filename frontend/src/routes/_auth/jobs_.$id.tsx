@@ -14,11 +14,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isAgencyKind } from "@/lib/agencyRollup";
 import type { Job } from "@/types/job";
-import type { NoteQuote } from "@/types/jobNote";
 import { applicationStatusesQueryOptions } from "../../hooks/useApplicationStatuses";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
 import { DismissToast, useDismissJob } from "../../hooks/useDismissJob";
 import { gradeQueryOptions } from "../../hooks/useGrades";
+import { jobCommentsQueryOptions } from "../../hooks/useJobComments";
 import { jobNotesQueryOptions } from "../../hooks/useJobNotes";
 import { jobQueryOptions, useJob, useMarkJobsSeen } from "../../hooks/useJobs";
 import {
@@ -40,6 +40,7 @@ export const Route = createFileRoute("/_auth/jobs_/$id")({
 	loader: ({ params }) => {
 		void queryClient.prefetchQuery(jobDraftsQueryOptions(params.id));
 		void queryClient.prefetchQuery(jobNotesQueryOptions(params.id));
+		void queryClient.prefetchQuery(jobCommentsQueryOptions(params.id));
 		void queryClient.prefetchQuery(jobOpenTasksQueryOptions(params.id));
 		void queryClient.prefetchQuery(gradeQueryOptions(params.id));
 		void queryClient.prefetchQuery(experienceMatchQueryOptions(params.id));
@@ -56,12 +57,7 @@ function JobDetailPage() {
 	const params = Route.useParams();
 	const [cvOpen, setCvOpen] = createSignal(false);
 	const [taskOpen, setTaskOpen] = createSignal(false);
-	const [quote, setQuote] = createSignal<NoteQuote | null>(null);
 	const [tab, setTab] = createSignal("description");
-	const comment = (q: NoteQuote) => {
-		setQuote(q);
-		setTab("notes");
-	};
 	const jobsQuery = useJob(() => params().id);
 	const navigate = useNavigate();
 	const { dismiss } = useDismissJob();
@@ -155,7 +151,6 @@ function JobDetailPage() {
 												<CommentableDescription
 													html={desc()}
 													jobId={params().id}
-													onComment={comment}
 												/>
 											)}
 										</Show>
@@ -217,11 +212,7 @@ function JobDetailPage() {
 							</div>
 						</TabsContent>
 						<TabsContent value="notes" forceMount>
-							<JobNotesCard
-								jobId={params().id}
-								quote={quote()}
-								onClearQuote={() => setQuote(null)}
-							/>
+							<JobNotesCard jobId={params().id} />
 						</TabsContent>
 					</Tabs>
 

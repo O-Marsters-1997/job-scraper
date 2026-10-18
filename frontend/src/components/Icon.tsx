@@ -134,6 +134,9 @@ const ICONS = {
 			<line x1="3" y1="18" x2="21" y2="18" />
 		</>
 	),
+	messageSquare: () => (
+		<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+	),
 	moreVertical: () => (
 		<>
 			<circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none" />

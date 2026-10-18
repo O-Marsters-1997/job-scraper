@@ -31,6 +31,7 @@ export const keys = {
 	},
 	statuses: ["application-statuses"] as const,
 	jobNotes: (jobId: string) => ["job-notes", jobId] as const,
+	jobComments: (jobId: string) => ["job-comments", jobId] as const,
 	recruiterContacts: (jobId: string) => ["recruiter-contacts", jobId] as const,
 	recruiterContactSummaries: {
 		all: ["recruiter-contacts", "summaries"] as const,

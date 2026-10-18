@@ -25,9 +25,11 @@ type FakeStore struct {
 	statuses map[string]dto.ApplicationStatus
 	contacts map[string][]dto.RecruiterContact
 	notes    map[string][]dto.JobNote
+	comments map[string][]dto.JobComment
 
 	nextContact int
 	nextNote    int
+	nextComment int
 }
 
 func NewFakeStore() *FakeStore {
@@ -36,6 +38,7 @@ func NewFakeStore() *FakeStore {
 		statuses: make(map[string]dto.ApplicationStatus),
 		contacts: make(map[string][]dto.RecruiterContact),
 		notes:    make(map[string][]dto.JobNote),
+		comments: make(map[string][]dto.JobComment),
 	}
 }
 
@@ -263,7 +266,7 @@ func (f *FakeStore) CreateJobNote(_ context.Context, userID string, in dto.Creat
 	defer f.mu.Unlock()
 	now := time.Now()
 	f.nextNote++
-	n := dto.JobNote{ID: fmt.Sprintf("note-%d", f.nextNote), JobID: in.JobID, Body: in.Body, Quote: in.Quote, CreatedAt: now, UpdatedAt: now}
+	n := dto.JobNote{ID: fmt.Sprintf("note-%d", f.nextNote), JobID: in.JobID, Body: in.Body, CreatedAt: now, UpdatedAt: now}
 	f.notes[userID] = append(f.notes[userID], n)
 	return n, nil
 }
@@ -300,6 +303,53 @@ func (f *FakeStore) DeleteJobNote(_ context.Context, userID, id string) error {
 	before := len(f.notes[userID])
 	f.notes[userID] = slices.DeleteFunc(f.notes[userID], func(n dto.JobNote) bool { return n.ID == id })
 	if len(f.notes[userID]) == before {
+		return data.ErrNotFound
+	}
+	return nil
+}
+
+func (f *FakeStore) CreateJobComment(_ context.Context, userID string, in dto.CreateJobCommentInput) (dto.JobComment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	now := time.Now()
+	f.nextComment++
+	c := dto.JobComment{ID: fmt.Sprintf("comment-%d", f.nextComment), JobID: in.JobID, Body: in.Body, Quote: in.Quote, CreatedAt: now, UpdatedAt: now}
+	f.comments[userID] = append(f.comments[userID], c)
+	return c, nil
+}
+
+func (f *FakeStore) ListJobComments(_ context.Context, userID, jobID string) ([]dto.JobComment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []dto.JobComment{}
+	for _, c := range f.comments[userID] {
+		if c.JobID == jobID {
+			out = append(out, c)
+		}
+	}
+	slices.Reverse(out)
+	return out, nil
+}
+
+func (f *FakeStore) UpdateJobComment(_ context.Context, userID string, in dto.UpdateJobCommentInput) (dto.JobComment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, c := range f.comments[userID] {
+		if c.ID == in.ID {
+			c.Body, c.UpdatedAt = in.Body, time.Now()
+			f.comments[userID][i] = c
+			return c, nil
+		}
+	}
+	return dto.JobComment{}, data.ErrNotFound
+}
+
+func (f *FakeStore) DeleteJobComment(_ context.Context, userID, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	before := len(f.comments[userID])
+	f.comments[userID] = slices.DeleteFunc(f.comments[userID], func(c dto.JobComment) bool { return c.ID == id })
+	if len(f.comments[userID]) == before {
 		return data.ErrNotFound
 	}
 	return nil

@@ -23,6 +23,11 @@ func (m *Module) Routes(r chi.Router) {
 	r.Patch("/notes/{id}", handlers.Update(m.service.UpdateJobNote))
 	r.Delete("/notes/{id}", handlers.Delete(m.store.DeleteJobNote))
 
+	r.Get("/jobs/{id}/comments", handlers.GetByID(m.store.ListJobComments))
+	r.Post("/jobs/{id}/comments", handlers.Create(m.service.CreateJobComment))
+	r.Patch("/comments/{id}", handlers.Update(m.service.UpdateJobComment))
+	r.Delete("/comments/{id}", handlers.Delete(m.store.DeleteJobComment))
+
 	r.Route("/applications", func(r chi.Router) {
 		r.Get("/", handlers.Query(m.service.List))
 		r.Post("/", handlers.Create(m.service.Create))
