@@ -366,6 +366,7 @@ CREATE TABLE IF NOT EXISTS company_boards (
     retired_at TIMESTAMPTZ,
     superseded_at TIMESTAMPTZ,
     discovered_via TEXT,
+    uk_jobs_seen_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (source, board_token)
 );

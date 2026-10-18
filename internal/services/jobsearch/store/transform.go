@@ -145,6 +145,7 @@ func toCompanyBoardDTO(row sqlc.CompanyBoard) dto.CompanyBoard {
 	board.VerifiedAt = data.TimePtr(row.VerifiedAt)
 	board.LastLinkedAt = data.TimePtr(row.LastLinkedAt)
 	board.RetiredAt = data.TimePtr(row.RetiredAt)
+	board.UKJobsSeenAt = data.TimePtr(row.UkJobsSeenAt)
 	return board
 }
 

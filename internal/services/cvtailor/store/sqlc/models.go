@@ -264,6 +264,7 @@ type CompanyBoard struct {
 	RetiredAt          pgtype.Timestamptz
 	SupersededAt       pgtype.Timestamptz
 	DiscoveredVia      pgtype.Text
+	UkJobsSeenAt       pgtype.Timestamptz
 	CreatedAt          pgtype.Timestamptz
 }
 
