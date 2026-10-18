@@ -230,7 +230,8 @@ func (c *Chrome) launch() error {
 		}
 		c.tunnel = t
 	}
-	wsURL, err := launcher.New().Headless(true).Proxy("http://" + c.tunnel.Addr()).Launch()
+	bin, _ := launcher.LookPath()
+	wsURL, err := launcher.New().Bin(bin).Headless(true).Proxy("http://" + c.tunnel.Addr()).Launch()
 	if err != nil {
 		return fmt.Errorf("launch chrome: %w", err)
 	}
