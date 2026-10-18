@@ -34,7 +34,8 @@ ORDER BY cb.created_at, cb.id;
 
 -- name: ListVerifiedBoardsBySlug :many
 SELECT c.slug, cb.source, cb.board_token,
-  EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = c.id AND tc.enabled) AS tracked
+  EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = c.id AND tc.enabled) AS tracked,
+  EXISTS (SELECT 1 FROM board_poll_state ps WHERE ps.board_id = cb.id AND ps.last_completed_at IS NOT NULL) AS polled
 FROM companies c
 JOIN company_boards cb ON cb.company_id = c.id AND cb.status = 'verified'
 WHERE c.slug = ANY($1::text[])

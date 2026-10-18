@@ -69,7 +69,7 @@ func (s *Service) splitBoardCards(ctx context.Context, target dto.SourceTarget, 
 	}
 	s.harvestUntracked(ctx, boards)
 	for _, card := range cards {
-		if slices.ContainsFunc(boards, func(b dto.CardBoard) bool { return b.CompanySlug == card.CompanySlug }) {
+		if slices.ContainsFunc(boards, func(b dto.CardBoard) bool { return b.CompanySlug == card.CompanySlug && b.Polled }) {
 			boardCards = append(boardCards, card)
 		} else {
 			kept = append(kept, card)
