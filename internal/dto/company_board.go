@@ -34,4 +34,5 @@ type CardBoard struct {
 	Source      string
 	BoardToken  string
 	Tracked     bool
+	Polled      bool
 }

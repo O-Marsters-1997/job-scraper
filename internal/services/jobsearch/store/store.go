@@ -960,7 +960,7 @@ func (s *Store) ListVerifiedBoardsBySlug(ctx context.Context, slugs []string) ([
 	}
 	boards := make([]dto.CardBoard, len(rows))
 	for i, row := range rows {
-		boards[i] = dto.CardBoard{CompanySlug: row.Slug, Source: row.Source, BoardToken: row.BoardToken, Tracked: row.Tracked}
+		boards[i] = dto.CardBoard{CompanySlug: row.Slug, Source: row.Source, BoardToken: row.BoardToken, Tracked: row.Tracked, Polled: row.Polled}
 	}
 	return boards, nil
 }

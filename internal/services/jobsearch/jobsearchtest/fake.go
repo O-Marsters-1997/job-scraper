@@ -719,7 +719,9 @@ func (f *FakeStore) ListVerifiedBoardsBySlug(_ context.Context, slugs []string) 
 		})
 		for _, b := range f.boards {
 			if b.CompanyID == c.ID && b.Status == dto.BoardVerified {
-				out = append(out, dto.CardBoard{CompanySlug: c.Slug, Source: b.Source, BoardToken: b.BoardToken, Tracked: tracked})
+				st := f.pollState[b.ID]
+				polled := st != nil && !st.completedAt.IsZero()
+				out = append(out, dto.CardBoard{CompanySlug: c.Slug, Source: b.Source, BoardToken: b.BoardToken, Tracked: tracked, Polled: polled})
 			}
 		}
 	}

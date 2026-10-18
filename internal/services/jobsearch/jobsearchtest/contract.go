@@ -547,9 +547,10 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
-	t.Run("verified boards by slug skip candidates and flag enabled trackers", func(t *testing.T) {
+	t.Run("verified boards by slug skip candidates and flag enabled trackers and completed polls", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
+		boardIDs := map[string]string{}
 		for _, tc := range []struct {
 			slug     string
 			verified bool
@@ -559,9 +560,11 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			if err != nil {
 				t.Fatalf("UpsertCompany(%s) = %v", tc.slug, err)
 			}
-			if _, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", tc.slug); err != nil {
+			board, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", tc.slug)
+			if err != nil {
 				t.Fatalf("UpsertCandidateBoard(%s) = %v", tc.slug, err)
 			}
+			boardIDs[tc.slug] = board.ID
 			if tc.verified {
 				if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", tc.slug, "test", ""); err != nil {
 					t.Fatalf("VerifyCompanyBoard(%s) = %v", tc.slug, err)
@@ -571,10 +574,17 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 				t.Fatalf("SetCompanyTracking(%s) = %v", tc.slug, err)
 			}
 		}
+		poll, err := st.ClaimBoard(ctx, boardIDs["polled-co"], false)
+		if err != nil {
+			t.Fatalf("ClaimBoard(polled-co) = %v", err)
+		}
+		if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: poll, Complete: true}); err != nil {
+			t.Fatalf("CompleteBoard(polled-co) = %v", err)
+		}
 		got, err := st.ListVerifiedBoardsBySlug(ctx, []string{"polled-co", "candidate-co", "paused-co", "unknown-co"})
 		want := []dto.CardBoard{
 			{CompanySlug: "paused-co", Source: "greenhouse", BoardToken: "paused-co"},
-			{CompanySlug: "polled-co", Source: "greenhouse", BoardToken: "polled-co", Tracked: true},
+			{CompanySlug: "polled-co", Source: "greenhouse", BoardToken: "polled-co", Tracked: true, Polled: true},
 		}
 		slices.SortFunc(got, func(a, b dto.CardBoard) int { return strings.Compare(a.CompanySlug, b.CompanySlug) })
 		if err != nil || !cmp.Equal(got, want) {
