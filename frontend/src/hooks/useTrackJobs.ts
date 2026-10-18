@@ -7,6 +7,7 @@ import {
 	toApplicationSummary,
 	toExistingApp,
 } from "@/components/jobs/TrackApplicationDialog";
+import { loadedData } from "@/lib/queryData";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import type { RecruiterContactSummary } from "@/types/recruiterContact";
@@ -37,7 +38,7 @@ export function useTrackJobs(
 	const applications = useApplications();
 	const appsForJobs = createMemo<Record<string, JobApplicationSummary>>(() =>
 		Object.fromEntries(
-			(applications.data ?? []).map((app) => [
+			(loadedData(applications) ?? []).map((app) => [
 				app.JobID,
 				toApplicationSummary(app),
 			]),
@@ -54,7 +55,9 @@ export function useTrackJobs(
 
 	const currentJob = () => jobs().find((j) => j.ID === trackingJobId());
 	const existingApp = () => {
-		const app = applications.data?.find((a) => a.JobID === trackingJobId());
+		const app = loadedData(applications)?.find(
+			(a) => a.JobID === trackingJobId(),
+		);
 		return app ? toExistingApp(app) : undefined;
 	};
 

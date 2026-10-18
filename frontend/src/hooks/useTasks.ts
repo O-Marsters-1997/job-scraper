@@ -22,6 +22,18 @@ export interface TaskListState {
 	done?: boolean | undefined;
 }
 
+export const taskPageQuery = (s: TaskListState) => ({
+	queryKey: keys.tasks.list(s),
+	queryFn: () =>
+		fetchTasks({
+			page: s.page ?? 1,
+			pageSize: TASKS_PAGE_SIZE,
+			typeId: s.type,
+			sort: s.sort,
+			done: s.done,
+		}),
+});
+
 export function useTaskPages(
 	state: () => TaskListState,
 	onChange: (patch: Partial<TaskListState>) => void,
@@ -30,15 +42,7 @@ export function useTaskPages(
 		state,
 		onChange,
 		pageSize: TASKS_PAGE_SIZE,
-		queryKey: (s) => keys.tasks.list(s),
-		queryFn: (s) =>
-			fetchTasks({
-				page: s.page ?? 1,
-				pageSize: TASKS_PAGE_SIZE,
-				typeId: s.type,
-				sort: s.sort,
-				done: s.done,
-			}),
+		query: taskPageQuery,
 		rowId: (task) => task.ID,
 	});
 }
@@ -52,19 +56,21 @@ export function useOpenTaskCount() {
 	return createQuery(() => openTaskCountQueryOptions);
 }
 
-const taskTypesQueryOptions = queryOptions({
+export const taskTypesQueryOptions = queryOptions({
 	queryKey: keys.tasks.types,
 	queryFn: fetchTaskTypes,
 });
 
 const JOB_TASKS_LIMIT = 50;
 
+export const jobOpenTasksQueryOptions = (jobId: string) =>
+	queryOptions({
+		queryKey: keys.tasks.forJob(jobId),
+		queryFn: () => fetchTasks({ page: 1, pageSize: JOB_TASKS_LIMIT, jobId }),
+	});
+
 export function useJobOpenTasks(jobId: () => string) {
-	return createQuery(() => ({
-		queryKey: keys.tasks.forJob(jobId()),
-		queryFn: () =>
-			fetchTasks({ page: 1, pageSize: JOB_TASKS_LIMIT, jobId: jobId() }),
-	}));
+	return createQuery(() => jobOpenTasksQueryOptions(jobId()));
 }
 
 export function useTaskTypes() {

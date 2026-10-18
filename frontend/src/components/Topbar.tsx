@@ -2,6 +2,7 @@ import { createQuery } from "@tanstack/solid-query";
 import { Link, useLocation } from "@tanstack/solid-router";
 import { Match, Switch } from "solid-js";
 import { Icon } from "@/components/Icon";
+import { loadedData } from "@/lib/queryData";
 import { jobQueryOptions } from "../hooks/useJobs";
 import { findSettingsSection } from "../lib/settingsSections";
 import SettingsPanel from "./SettingsPanel";
@@ -40,7 +41,7 @@ export default function Topbar(props: TopbarProps) {
 		...jobQueryOptions(jobDetailId() ?? ""),
 		enabled: jobDetailId() != null,
 	}));
-	const jobDetailTitle = () => jobQuery.data?.Title ?? null;
+	const jobDetailTitle = () => loadedData(jobQuery)?.Title ?? null;
 
 	const pageLabel = () =>
 		PAGE_LABELS[location().pathname] ?? deriveLabel(location().pathname);

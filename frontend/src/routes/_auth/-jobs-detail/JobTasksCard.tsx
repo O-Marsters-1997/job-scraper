@@ -3,6 +3,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useJobOpenTasks, useSetTaskDone } from "@/hooks/useTasks";
+import { loadedData } from "@/lib/queryData";
 
 export function JobTasksCard(props: { jobId: string; onAdd: () => void }) {
 	const tasks = useJobOpenTasks(() => props.jobId);
@@ -15,11 +16,11 @@ export function JobTasksCard(props: { jobId: string; onAdd: () => void }) {
 			</CardHeader>
 			<CardContent class="gap-3">
 				<Show
-					when={tasks.data?.items.length}
+					when={loadedData(tasks)?.items.length}
 					fallback={<p class="text-xs text-faint">No open tasks</p>}
 				>
 					<ul class="flex flex-col gap-2">
-						<For each={tasks.data?.items}>
+						<For each={loadedData(tasks)?.items}>
 							{(task) => (
 								<li class="flex items-center gap-2">
 									<input

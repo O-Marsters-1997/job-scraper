@@ -44,7 +44,8 @@ function CompanyDetailPage() {
 	const trackMutation = useSetCompanyTracking();
 	const reviewMutation = useSetCompanyReview();
 
-	const company = () => companyQuery.data ?? undefined;
+	const company = () =>
+		companyQuery.isSuccess ? (companyQuery.data ?? undefined) : undefined;
 
 	const [localFilters, setLocalFilters] = createSignal(DEFAULT_FILTERS);
 	createEffect(
@@ -196,48 +197,42 @@ function CompanyDetailPage() {
 								<CardTitle>Jobs at {c().Name}</CardTitle>
 							</CardHeader>
 							<CardContent class="gap-0">
-								<Show when={table.query.isPending}>
-									<p class="text-sm text-muted">Loading jobs…</p>
-								</Show>
-								<Show when={table.query.isError}>
-									<p class="text-sm text-destructive-strong">
-										Could not load jobs.
-									</p>
-								</Show>
-								<Show
-									when={
-										table.query.isSuccess && (table.total() > 0 || hasFilters())
-									}
-									fallback={
-										<Show when={table.query.isSuccess}>
-											<p class="text-sm text-faint">
-												No jobs from this company yet.
-											</p>
+								<QueryBoundary query={table.query} fallbackRows={3}>
+									{() => (
+										<Show
+											when={table.total() > 0 || hasFilters()}
+											fallback={
+												<p class="text-sm text-faint">
+													No jobs from this company yet.
+												</p>
+											}
+										>
+											<JobsDataTable
+												columns={
+													isAgency() ? track.contactColumns : track.columns
+												}
+												data={table.items()}
+												total={table.total()}
+												page={table.page()}
+												pageSize={table.pageSize}
+												onPage={table.setPage}
+												filters={filters()}
+												onChange={table.setFilters}
+												sourceOptions={sourceOptions()}
+												selection={table.rowSelection()}
+												onSelectionChange={table.select}
+												selectedJobs={table.selectedItems()}
+												bulkActions={[
+													{
+														label: "Grade",
+														icon: "check",
+														onSelect: track.openGrade,
+													},
+												]}
+											/>
 										</Show>
-									}
-								>
-									<JobsDataTable
-										columns={isAgency() ? track.contactColumns : track.columns}
-										data={table.items()}
-										total={table.total()}
-										page={table.page()}
-										pageSize={table.pageSize}
-										onPage={table.setPage}
-										filters={filters()}
-										onChange={table.setFilters}
-										sourceOptions={sourceOptions()}
-										selection={table.rowSelection()}
-										onSelectionChange={table.select}
-										selectedJobs={table.selectedItems()}
-										bulkActions={[
-											{
-												label: "Grade",
-												icon: "check",
-												onSelect: track.openGrade,
-											},
-										]}
-									/>
-								</Show>
+									)}
+								</QueryBoundary>
 							</CardContent>
 						</Card>
 

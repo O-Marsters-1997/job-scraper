@@ -7,6 +7,7 @@ import {
 } from "@/hooks/useApplications";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { dayKey } from "@/lib/datetime";
+import { loadedData } from "@/lib/queryData";
 import type { ApplicationWithDetails } from "@/types/application";
 import type { Job } from "@/types/job";
 
@@ -24,7 +25,7 @@ export function JobActionBar(props: JobActionBarProps) {
 	const update = useUpdateApplication();
 
 	const applied = useFormSubmit(async () => {
-		const status = statuses.data?.find(
+		const status = loadedData(statuses)?.find(
 			(s) => s.Name.trim().toLowerCase() === "applied",
 		);
 		if (!status) {
@@ -76,7 +77,7 @@ export function JobActionBar(props: JobActionBarProps) {
 					Open listing
 				</Button>
 				<Button
-					disabled={!statuses.data || applied.pending()}
+					disabled={!statuses.isSuccess || applied.pending()}
 					onClick={applied.submit}
 				>
 					I applied

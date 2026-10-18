@@ -9,6 +9,7 @@ import {
 	isChaseOverdue,
 	prefillChaseDate,
 } from "@/lib/chase";
+import { loadedData } from "@/lib/queryData";
 import { cn } from "@/lib/utils";
 import { useClearChase, useSetChase } from "../../../hooks/useApplications";
 
@@ -27,7 +28,8 @@ export function ChaseRow(props: {
 
 	const prefill = () =>
 		prefillChaseDate(
-			statuses.data?.find((s) => s.ID === props.statusId)?.ReplyWindowDays,
+			loadedData(statuses)?.find((s) => s.ID === props.statusId)
+				?.ReplyWindowDays,
 			new Date(),
 		);
 

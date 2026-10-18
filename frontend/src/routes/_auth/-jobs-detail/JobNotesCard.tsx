@@ -12,6 +12,7 @@ import {
 } from "@/hooks/useJobNotes";
 import { formatDate } from "@/lib/datetime";
 import { isOrphanedNote, scrollToHighlight } from "@/lib/noteHighlights";
+import { loadedData } from "@/lib/queryData";
 
 import {
 	JOB_NOTE_MAX_LENGTH,
@@ -220,9 +221,9 @@ export function JobNotesCard(props: {
 						Save note
 					</Button>
 				</form>
-				<Show when={(notes.data?.length ?? 0) > 0}>
+				<Show when={(loadedData(notes)?.length ?? 0) > 0}>
 					<ul class="flex flex-col gap-3">
-						<For each={notes.data}>
+						<For each={loadedData(notes)}>
 							{(n) => <NoteItem note={n} jobId={props.jobId} />}
 						</For>
 					</ul>

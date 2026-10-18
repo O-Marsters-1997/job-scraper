@@ -2,6 +2,7 @@ import { Link } from "@tanstack/solid-router";
 import { For, Show } from "solid-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/datetime";
+import { loadedData } from "@/lib/queryData";
 import type { Draft } from "@/types/tailoring";
 import { useJobDrafts } from "../../hooks/useTailoring";
 
@@ -20,13 +21,13 @@ function draftLabel(d: Draft): string {
 export function JobDrafts(props: { jobId: string }) {
 	const drafts = useJobDrafts(() => props.jobId);
 	return (
-		<Show when={(drafts.data?.length ?? 0) > 0}>
+		<Show when={(loadedData(drafts)?.length ?? 0) > 0}>
 			<Card>
 				<CardHeader class="pb-2">
 					<CardTitle>Draft CVs</CardTitle>
 				</CardHeader>
 				<CardContent class="gap-1.5">
-					<For each={drafts.data}>
+					<For each={loadedData(drafts)}>
 						{(d) => (
 							<Link
 								to="/tailoring/drafts/$id"

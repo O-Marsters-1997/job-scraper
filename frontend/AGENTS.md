@@ -20,7 +20,22 @@ Read `../DESIGN.md` before any UI change; it's the source of truth for colours, 
     `text-[Npx]`: add a token. One-off layout values (grid columns, a single max-width) may stay
     arbitrary.
   - Colour uses semantic `--color-*` tokens only, with no hex or raw Tailwind colour utilities.
-- **E2E** — page object in `e2e/src/pages/`, spec in `e2e/tests/` (copy an existing pair, e.g.
+- **Loading and errors** — TanStack Router runs each navigation in a Solid transition, and
+  solid-query's `data` getter is a Suspense resource read while there is no data, so a stray
+  read holds the old page or blanks the layout.
+  1. Page or card data from a query goes through `QueryBoundary` (`notFound` for empty,
+     `fallbackRows` matching the loaded shape). Use plain `Switch`/`Match` only for several
+     distinct error states (e.g. `ExperienceMatch`).
+  2. Never read `query.data` in render before checking `isPending`/`isSuccess`; use
+     `loadedData(query)` (`src/lib/queryData.ts`). Don't add `<Suspense>` for queries; the
+     router owns the boundary (`defaultPendingComponent`, plus one around `<Outlet />`).
+  3. Mutations: `disabled={m.isPending}` on the triggering control, with an optional
+     "Saving…" label. No spinners.
+  4. Loading data gets a skeleton, never "Loading…" text. Text is only for
+     validate-as-you-type (`PasteBox`).
+  5. Refetches keep stale data (`keepPreviousData`), with no indicator.
+  6. A route with data gets a `loader` that `prefetchQuery`s it, so `defaultPreload: "intent"`
+     warms the cache on hover.- **E2E** — page object in `e2e/src/pages/`, spec in `e2e/tests/` (copy an existing pair, e.g.
   `companies.page.ts` + `companies.spec.ts`).
 
 ## Commands

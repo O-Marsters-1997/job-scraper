@@ -1,4 +1,4 @@
-import { createQuery } from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import {
 	createJobNote,
 	deleteJobNote,
@@ -9,11 +9,14 @@ import { keys } from "../api/keys";
 import type { NoteQuote } from "../types/jobNote";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
+export const jobNotesQueryOptions = (jobId: string) =>
+	queryOptions({
+		queryKey: keys.jobNotes(jobId),
+		queryFn: () => fetchJobNotes(jobId),
+	});
+
 export function useJobNotes(jobId: () => string) {
-	return createQuery(() => ({
-		queryKey: keys.jobNotes(jobId()),
-		queryFn: () => fetchJobNotes(jobId()),
-	}));
+	return createQuery(() => jobNotesQueryOptions(jobId()));
 }
 
 export function useCreateJobNote(jobId: () => string) {

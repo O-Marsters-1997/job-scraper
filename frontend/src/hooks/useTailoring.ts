@@ -1,4 +1,4 @@
-import { createQuery } from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import type { Accessor } from "solid-js";
 import { keys } from "../api/keys";
 import {
@@ -76,13 +76,16 @@ export function useSkillSuggestions(
 	});
 }
 
-export function useExperienceMatch(jobId: Accessor<string>) {
-	return createQuery(() => ({
-		queryKey: keys.tailoring.experienceMatch(jobId()),
-		queryFn: () => fetchExperienceMatch(jobId()),
+export const experienceMatchQueryOptions = (jobId: string) =>
+	queryOptions({
+		queryKey: keys.tailoring.experienceMatch(jobId),
+		queryFn: () => fetchExperienceMatch(jobId),
 		retry: false,
 		staleTime: 5 * 60 * 1000,
-	}));
+	});
+
+export function useExperienceMatch(jobId: Accessor<string>) {
+	return createQuery(() => experienceMatchQueryOptions(jobId()));
 }
 
 export function useExplainAchievement(jobId: Accessor<string>) {
@@ -121,16 +124,19 @@ export function useDraftLayout(id: Accessor<string>) {
 	}));
 }
 
-export function useJobDrafts(jobId: Accessor<string>) {
-	return createQuery(() => ({
-		queryKey: keys.tailoring.jobDrafts(jobId()),
-		queryFn: () => fetchJobDrafts(jobId()),
+export const jobDraftsQueryOptions = (jobId: string) =>
+	queryOptions({
+		queryKey: keys.tailoring.jobDrafts(jobId),
+		queryFn: () => fetchJobDrafts(jobId),
 		retry: false,
 		refetchInterval: (query) =>
 			query.state.data?.some((d) => !isSettled(d.status))
 				? DRAFT_POLL_MS
 				: false,
-	}));
+	});
+
+export function useJobDrafts(jobId: Accessor<string>) {
+	return createQuery(() => jobDraftsQueryOptions(jobId()));
 }
 
 export function useKeepDraft() {

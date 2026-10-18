@@ -1,4 +1,5 @@
 import { Show } from "solid-js";
+import { loadedData } from "@/lib/queryData";
 import { API_BASE } from "../api/config";
 import { useGoogleStatus } from "../hooks/useGoogle";
 
@@ -14,7 +15,7 @@ export function GoogleWriteConsent(props: GoogleWriteConsentProps) {
 	const href = () => googleWriteHref(props.returnTo);
 
 	return (
-		<Show when={status.data && !status.data.canWrite}>
+		<Show when={loadedData(status)?.canWrite === false}>
 			<div class="rounded-md border border-border bg-surface-muted p-4">
 				<p class="text-sm font-medium text-foreground">
 					Allow FastTrack to create Google Docs

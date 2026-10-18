@@ -4,8 +4,8 @@ import { Icon } from "@/components/Icon";
 import { GradeDialog } from "@/components/jobs/GradeDialog";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { PageHeading } from "@/components/PageHeading";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
-import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
 import { parseSearch } from "@/lib/jobFilters";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
@@ -69,19 +69,6 @@ function JobsPage() {
 				</div>
 			</Show>
 
-			<Show when={query.isPending}>
-				<SkeletonList rows={6} />
-			</Show>
-
-			<Show when={query.isError}>
-				<div class="rounded-xl border border-destructive/30 bg-destructive-subtle p-6">
-					<p class="mb-1 text-sm font-semibold text-destructive-strong">
-						Error
-					</p>
-					<p class="text-sm text-muted">{query.error?.message}</p>
-				</div>
-			</Show>
-
 			<Show when={filters().company || filters().scored}>
 				<div class="mb-3 flex flex-wrap items-center gap-2">
 					<Show when={filters().company}>
@@ -109,43 +96,45 @@ function JobsPage() {
 				</div>
 			</Show>
 
-			<Show when={query.data}>
-				<JobsDataTable
-					columns={track.columns}
-					data={table.items()}
-					total={table.total()}
-					page={table.page()}
-					pageSize={table.pageSize}
-					onPage={table.setPage}
-					filters={filters()}
-					onChange={table.setFilters}
-					sourceOptions={sourceOptions()}
-					sortControl
-					selection={table.rowSelection()}
-					onSelectionChange={table.select}
-					selectedJobs={table.selectedItems()}
-					bulkActions={[
-						{ label: "Grade", icon: "check", onSelect: track.openGrade },
-						{
-							label: "Mark seen",
-							onSelect: (jobs) => track.bulkSeen(jobs, true),
-						},
-						{
-							label: "Mark unseen",
-							onSelect: (jobs) => track.bulkSeen(jobs, false),
-						},
-						{
-							label: "Exclude companies",
-							onSelect: track.bulkExcludeCompanies,
-						},
-						{
-							label: "Mark as recruiter",
-							onSelect: track.bulkMarkRecruiters,
-						},
-					]}
-					onMarkAllSeen={track.markAllSeen}
-				/>
-			</Show>
+			<QueryBoundary query={query} fallbackRows={6}>
+				{() => (
+					<JobsDataTable
+						columns={track.columns}
+						data={table.items()}
+						total={table.total()}
+						page={table.page()}
+						pageSize={table.pageSize}
+						onPage={table.setPage}
+						filters={filters()}
+						onChange={table.setFilters}
+						sourceOptions={sourceOptions()}
+						sortControl
+						selection={table.rowSelection()}
+						onSelectionChange={table.select}
+						selectedJobs={table.selectedItems()}
+						bulkActions={[
+							{ label: "Grade", icon: "check", onSelect: track.openGrade },
+							{
+								label: "Mark seen",
+								onSelect: (jobs) => track.bulkSeen(jobs, true),
+							},
+							{
+								label: "Mark unseen",
+								onSelect: (jobs) => track.bulkSeen(jobs, false),
+							},
+							{
+								label: "Exclude companies",
+								onSelect: track.bulkExcludeCompanies,
+							},
+							{
+								label: "Mark as recruiter",
+								onSelect: track.bulkMarkRecruiters,
+							},
+						]}
+						onMarkAllSeen={track.markAllSeen}
+					/>
+				)}
+			</QueryBoundary>
 
 			<DismissToast />
 			<SeenToast />

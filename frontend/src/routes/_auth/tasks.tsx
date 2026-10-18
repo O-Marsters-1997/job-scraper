@@ -20,10 +20,13 @@ import { taskHeadline } from "@/lib/taskHeadline";
 import { type Task, taskSortSchema } from "@/types/task";
 import {
 	type TaskListState,
+	taskPageQuery,
+	taskTypesQueryOptions,
 	useSetTaskDone,
 	useTaskPages,
 	useTaskTypes,
 } from "../../hooks/useTasks";
+import { queryClient } from "../../lib/queryClient";
 
 interface Choice {
 	value: string;
@@ -50,6 +53,12 @@ export const Route = createFileRoute("/_auth/tasks")({
 			done: search.done === true || search.done === "true" ? true : undefined,
 		};
 	},
+	loaderDeps: ({ search }) => ({ state: search }),
+	loader: ({ deps }) =>
+		Promise.all([
+			queryClient.prefetchQuery(taskPageQuery(deps.state)),
+			queryClient.prefetchQuery(taskTypesQueryOptions),
+		]),
 	component: TasksPage,
 });
 

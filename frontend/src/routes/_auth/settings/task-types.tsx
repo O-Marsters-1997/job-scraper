@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import {
+	taskTypesQueryOptions,
 	useCreateTaskType,
 	useTaskTypes,
 	useUpdateTaskType,
 } from "@/hooks/useTasks";
+import { queryClient } from "@/lib/queryClient";
 import { STATUS_FALLBACK_COLOUR, STATUS_PALETTE } from "@/lib/status";
 import { type TaskType, TaskTypeNameTakenError } from "@/types/task";
 import { AddTaskTypeForm } from "./-task-types/AddTaskTypeForm";
@@ -19,6 +21,7 @@ import { DeleteTaskTypeDialog } from "./-task-types/DeleteTaskTypeDialog";
 import { TaskTypeRow } from "./-task-types/TaskTypeRow";
 
 export const Route = createFileRoute("/_auth/settings/task-types")({
+	loader: () => queryClient.prefetchQuery(taskTypesQueryOptions),
 	component: TaskTypesPage,
 });
 

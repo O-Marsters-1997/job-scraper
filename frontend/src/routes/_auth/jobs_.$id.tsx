@@ -14,9 +14,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { isAgencyKind } from "@/lib/agencyRollup";
 import type { Job } from "@/types/job";
 import type { NoteQuote } from "@/types/jobNote";
+import { applicationStatusesQueryOptions } from "../../hooks/useApplicationStatuses";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
 import { DismissToast, useDismissJob } from "../../hooks/useDismissJob";
+import { gradeQueryOptions } from "../../hooks/useGrades";
+import { jobNotesQueryOptions } from "../../hooks/useJobNotes";
 import { jobQueryOptions, useJob, useMarkJobsSeen } from "../../hooks/useJobs";
+import {
+	experienceMatchQueryOptions,
+	jobDraftsQueryOptions,
+} from "../../hooks/useTailoring";
+import { jobOpenTasksQueryOptions } from "../../hooks/useTasks";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 import { ApplicationCard } from "./-jobs-detail/ApplicationCard";
@@ -28,11 +36,18 @@ import { JobTasksCard } from "./-jobs-detail/JobTasksCard";
 import { RecruiterContactsCard } from "./-jobs-detail/RecruiterContactsCard";
 
 export const Route = createFileRoute("/_auth/jobs_/$id")({
-	loader: ({ params }) =>
-		Promise.all([
+	loader: ({ params }) => {
+		void queryClient.prefetchQuery(jobDraftsQueryOptions(params.id));
+		void queryClient.prefetchQuery(jobNotesQueryOptions(params.id));
+		void queryClient.prefetchQuery(jobOpenTasksQueryOptions(params.id));
+		void queryClient.prefetchQuery(gradeQueryOptions(params.id));
+		void queryClient.prefetchQuery(experienceMatchQueryOptions(params.id));
+		void queryClient.prefetchQuery(applicationStatusesQueryOptions);
+		return Promise.all([
 			queryClient.prefetchQuery(jobQueryOptions(params.id)),
 			queryClient.prefetchQuery(applicationsQueryOptions()),
-		]),
+		]);
+	},
 	component: JobDetailPage,
 });
 

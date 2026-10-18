@@ -14,8 +14,7 @@ interface ServerTableOptions<
 	state: () => S;
 	onChange: (patch: Partial<S>) => void;
 	pageSize: number;
-	queryKey: (state: S) => QueryKey;
-	queryFn: (state: S) => Promise<P>;
+	query: (state: S) => { queryKey: QueryKey; queryFn: () => Promise<P> };
 	rowId: (item: P["items"][number]) => string;
 }
 
@@ -26,14 +25,14 @@ export function useServerTable<
 	type Item = P["items"][number];
 
 	const query = createQuery(() => ({
-		queryKey: opts.queryKey(opts.state()),
-		queryFn: () => opts.queryFn(opts.state()),
+		...opts.query(opts.state()),
 		placeholderData: keepPreviousData,
 	}));
 
 	const page = () => opts.state().page ?? 1;
-	const items = (): Item[] => query.data?.items ?? [];
-	const total = () => query.data?.total ?? 0;
+	const data = () => (query.isPending ? undefined : query.data);
+	const items = (): Item[] => data()?.items ?? [];
+	const total = () => data()?.total ?? 0;
 
 	const setPage = (next: number) =>
 		opts.onChange({ page: next > 1 ? next : undefined } as Partial<S>);
@@ -52,7 +51,7 @@ export function useServerTable<
 	);
 
 	createEffect(() => {
-		const count = query.data?.total;
+		const count = data()?.total;
 		if (count === undefined || query.isPlaceholderData) return;
 		const last = clampPage(page(), count, opts.pageSize);
 		if (last !== page()) setPage(last);

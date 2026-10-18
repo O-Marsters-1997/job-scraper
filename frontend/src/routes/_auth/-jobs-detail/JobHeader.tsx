@@ -11,6 +11,7 @@ import { useSetCompanyKind } from "@/hooks/useCompanies";
 import { useSources } from "@/hooks/useSources";
 import { otherListings, sourceLabel } from "@/lib/listings";
 import { postedLabel } from "@/lib/postedLabel";
+import { loadedData } from "@/lib/queryData";
 import { titleCase } from "@/lib/utils";
 import type {
 	ApplicationWithDetails,
@@ -76,7 +77,7 @@ export function JobHeader(props: {
 												rel="noopener noreferrer"
 												class="font-medium text-muted transition-colors hover:text-foreground hover:underline"
 											>
-												{sourceLabel(listing.source, sources.data)}
+												{sourceLabel(listing.source, loadedData(sources))}
 											</a>
 										</>
 									)}

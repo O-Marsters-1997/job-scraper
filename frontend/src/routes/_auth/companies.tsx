@@ -38,16 +38,20 @@ import {
 import { formatDate } from "@/lib/datetime";
 import {
 	COMPANY_PAGE_SIZE,
+	companyPageQuery,
 	useCompanyPages,
 	useSetCompanyFavourite,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
 import { useDebouncedTerm } from "../../hooks/useDebouncedTerm";
+import { queryClient } from "../../lib/queryClient";
 import type { Company } from "../../types/company";
 
 export const Route = createFileRoute("/_auth/companies")({
 	validateSearch: (raw: Record<string, unknown>): Partial<CompanyListState> =>
 		parseCompanySearch(raw),
+	loaderDeps: ({ search }) => ({ state: parseCompanySearch(search) }),
+	loader: ({ deps }) => queryClient.prefetchQuery(companyPageQuery(deps.state)),
 	component: CompaniesPage,
 });
 
