@@ -15,7 +15,6 @@ nexudus.com	-
 ksroofmaster.com	-
 ardentfinancial.co.uk	-
 stradaps.com	-
-{"time":"2026-10-18T17:02:42.148758+01:00","level":"INFO","msg":"detect: workday board detected, not a supported ATS","match":"wd5.myworkdayjobs.com"}
 workday.com	-
 curzonadvisers.com	-
 phlo.io	-
