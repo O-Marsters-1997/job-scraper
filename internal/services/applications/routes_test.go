@@ -77,9 +77,9 @@ func TestRoutesHappyPaths(t *testing.T) {
 	}
 
 	updated := handlerstest.Do[dto.Application](t, r, http.StatusOK,
-		"PATCH /applications/"+app.ID, `{"notes":"followed up"}`)
-	if updated.Notes != "followed up" {
-		t.Fatalf("updated notes = %q, want followed up", updated.Notes)
+		"PATCH /applications/"+app.ID, `{"salary_info":"60k"}`)
+	if updated.SalaryInfo != "60k" {
+		t.Fatalf("updated salary = %q, want 60k", updated.SalaryInfo)
 	}
 
 	chased := handlerstest.Do[dto.Application](t, r, http.StatusOK,

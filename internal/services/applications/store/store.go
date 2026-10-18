@@ -75,7 +75,6 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 			UserID:     uid,
 			JobID:      jid,
 			StatusID:   sid,
-			Notes:      data.Text(input.Notes),
 			AppliedAt:  appliedAt,
 			SalaryInfo: data.Text(input.SalaryInfo),
 		})
@@ -151,7 +150,6 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 			ID:         aid,
 			UserID:     uid,
 			StatusID:   sid,
-			Notes:      data.Text(input.Notes),
 			AppliedAt:  appliedAt,
 			SalaryInfo: data.Text(input.SalaryInfo),
 		})

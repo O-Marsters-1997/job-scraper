@@ -49,7 +49,6 @@ func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.C
 		UserID:     userID,
 		JobID:      in.JobID,
 		StatusID:   in.StatusID,
-		Notes:      in.Notes,
 		AppliedAt:  parseDate(in.AppliedAt),
 		SalaryInfo: in.SalaryInfo,
 	}
@@ -117,7 +116,7 @@ func parseDate(s *string) *time.Time {
 func toDetails(a dto.Application) dto.ApplicationWithDetails {
 	return dto.ApplicationWithDetails{
 		ID: a.ID, UserID: a.UserID, JobID: a.JobID, StatusID: a.StatusID,
-		Notes: a.Notes, AppliedAt: a.AppliedAt, SalaryInfo: a.SalaryInfo, ChaseBy: a.ChaseBy,
+		AppliedAt: a.AppliedAt, SalaryInfo: a.SalaryInfo, ChaseBy: a.ChaseBy,
 	}
 }
 
@@ -135,7 +134,6 @@ func (f *FakeStore) UpdateApplication(_ context.Context, userID, id string, in d
 		app.ChaseBy = nil
 	}
 	app.StatusID = in.StatusID
-	app.Notes = in.Notes
 	app.AppliedAt = parseDate(in.AppliedAt)
 	app.SalaryInfo = in.SalaryInfo
 	f.apps[id] = app

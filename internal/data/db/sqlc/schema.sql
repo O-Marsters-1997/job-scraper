@@ -93,7 +93,6 @@ CREATE TABLE IF NOT EXISTS applications (
     user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     job_id      UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     status_id   UUID        REFERENCES application_statuses(id) ON DELETE SET NULL,
-    notes       TEXT,
     applied_at  DATE,
     salary_info TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),

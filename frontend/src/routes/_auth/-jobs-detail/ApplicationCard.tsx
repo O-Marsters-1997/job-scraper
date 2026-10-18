@@ -50,13 +50,6 @@ export function ApplicationCard(props: {
 								</FactRow>
 							)}
 						</Show>
-						<Show when={a().Notes}>
-							{(notes) => (
-								<p class="rounded-md bg-surface-muted px-3 py-2 text-xs text-muted">
-									{notes()}
-								</p>
-							)}
-						</Show>
 						<ChaseRow
 							applicationId={a().ID}
 							statusId={a().StatusID}

@@ -64,7 +64,6 @@ export function createApplication(data: CreateApplicationPayload): Application {
 		UserID: "user-1",
 		JobID: data.job_id,
 		StatusID: status.ID,
-		Notes: data.notes ?? "",
 		AppliedAt: data.applied_at ?? null,
 		SalaryInfo: data.salary_info ?? "",
 		CreatedAt: new Date().toISOString(),
@@ -90,7 +89,6 @@ export function updateApplication(
 			data.status_id === undefined || data.status_id === prev.StatusID
 				? prev.ChaseBy
 				: null,
-		Notes: data.notes ?? prev.Notes,
 		AppliedAt: data.applied_at !== undefined ? data.applied_at : prev.AppliedAt,
 		SalaryInfo: data.salary_info ?? prev.SalaryInfo,
 		UpdatedAt: new Date().toISOString(),
