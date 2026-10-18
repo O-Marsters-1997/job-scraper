@@ -33,6 +33,8 @@ type Store interface {
 
 	CreateJobNote(ctx context.Context, userID string, in dto.CreateJobNoteInput) (dto.JobNote, error)
 	ListJobNotes(ctx context.Context, userID, jobID string) ([]dto.JobNote, error)
+	UpdateJobNote(ctx context.Context, userID string, in dto.UpdateJobNoteInput) (dto.JobNote, error)
+	DeleteJobNote(ctx context.Context, userID, id string) error
 }
 
 type Service struct {

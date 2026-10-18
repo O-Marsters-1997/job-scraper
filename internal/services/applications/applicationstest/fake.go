@@ -27,6 +27,7 @@ type FakeStore struct {
 	notes    map[string][]dto.JobNote
 
 	nextContact int
+	nextNote    int
 }
 
 func NewFakeStore() *FakeStore {
@@ -261,7 +262,8 @@ func (f *FakeStore) CreateJobNote(_ context.Context, userID string, in dto.Creat
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	now := time.Now()
-	n := dto.JobNote{ID: fmt.Sprintf("note-%d", len(f.notes[userID])+1), JobID: in.JobID, Body: in.Body, CreatedAt: now, UpdatedAt: now}
+	f.nextNote++
+	n := dto.JobNote{ID: fmt.Sprintf("note-%d", f.nextNote), JobID: in.JobID, Body: in.Body, CreatedAt: now, UpdatedAt: now}
 	f.notes[userID] = append(f.notes[userID], n)
 	return n, nil
 }
@@ -277,6 +279,30 @@ func (f *FakeStore) ListJobNotes(_ context.Context, userID, jobID string) ([]dto
 	}
 	slices.Reverse(out)
 	return out, nil
+}
+
+func (f *FakeStore) UpdateJobNote(_ context.Context, userID string, in dto.UpdateJobNoteInput) (dto.JobNote, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, n := range f.notes[userID] {
+		if n.ID == in.ID {
+			n.Body, n.UpdatedAt = in.Body, time.Now()
+			f.notes[userID][i] = n
+			return n, nil
+		}
+	}
+	return dto.JobNote{}, data.ErrNotFound
+}
+
+func (f *FakeStore) DeleteJobNote(_ context.Context, userID, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	before := len(f.notes[userID])
+	f.notes[userID] = slices.DeleteFunc(f.notes[userID], func(n dto.JobNote) bool { return n.ID == id })
+	if len(f.notes[userID]) == before {
+		return data.ErrNotFound
+	}
+	return nil
 }
 
 var outcomeRank = map[dto.ContactOutcome]int{

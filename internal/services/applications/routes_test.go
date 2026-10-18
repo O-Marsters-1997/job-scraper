@@ -38,12 +38,13 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"GET /jobs/{id}/recruiter-contacts",
 		"POST /jobs/{id}/recruiter-contacts",
 		"GET /jobs/{id}/notes",
-		"POST /jobs/{id}/notes",
+		"POST /jobs/{id}/notes", "PATCH /notes/{id}", "DELETE /notes/{id}",
 	)
 	handlerstest.RejectsMalformedBody(t, r,
 		"POST /application-statuses/", "PATCH /application-statuses/{id}",
 		"POST /applications/", "PATCH /applications/{id}", "PUT /applications/{id}/chase",
 		"POST /jobs/{id}/recruiter-contacts", "POST /jobs/{id}/notes",
+		"PATCH /notes/{id}",
 	)
 	handlerstest.RejectsBadPathID(t, r, "PATCH /applications/{id}")
 }
@@ -128,6 +129,13 @@ func TestRoutesHappyPaths(t *testing.T) {
 	if got := handlerstest.Do[[]dto.JobNote](t, r, http.StatusOK, "GET /jobs/job-1/notes", ""); len(got) != 1 {
 		t.Fatalf("got %d notes, want 1", len(got))
 	}
+	edited := handlerstest.Do[dto.JobNote](t, r, http.StatusOK, "PATCH /notes/"+note.ID, `{"body":"changed"}`)
+	if edited.Body != "changed" {
+		t.Fatalf("edited note body = %q, want changed", edited.Body)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusBadRequest, "PATCH /notes/"+note.ID, `{"body":""}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /notes/"+note.ID, "")
+	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "DELETE /notes/"+note.ID, "")
 
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /applications/"+app.ID, "")
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /application-statuses/"+status.ID, "")

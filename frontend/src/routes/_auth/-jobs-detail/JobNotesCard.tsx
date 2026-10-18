@@ -4,9 +4,110 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useCreateJobNote, useJobNotes } from "@/hooks/useJobNotes";
+import {
+	useCreateJobNote,
+	useDeleteJobNote,
+	useJobNotes,
+	useUpdateJobNote,
+} from "@/hooks/useJobNotes";
 import { formatDate } from "@/lib/datetime";
-import { JOB_NOTE_MAX_LENGTH } from "@/types/jobNote";
+import { JOB_NOTE_MAX_LENGTH, type JobNote } from "@/types/jobNote";
+
+function NoteItem(props: { note: JobNote; jobId: string }) {
+	const update = useUpdateJobNote(() => props.jobId);
+	const remove = useDeleteJobNote(() => props.jobId);
+	const [editing, setEditing] = createSignal(false);
+	const [draft, setDraft] = createSignal("");
+
+	const startEdit = () => {
+		setDraft(props.note.Body);
+		setEditing(true);
+	};
+	const save = (e: SubmitEvent) => {
+		e.preventDefault();
+		update.mutate(
+			{ id: props.note.ID, body: draft() },
+			{ onSuccess: () => setEditing(false) },
+		);
+	};
+
+	return (
+		<li class="flex flex-col gap-0.5">
+			<span class="font-mono text-xs tabular-nums text-muted">
+				{formatDate(props.note.CreatedAt)}
+				<Show when={props.note.UpdatedAt !== props.note.CreatedAt}>
+					{" "}
+					(edited)
+				</Show>
+			</span>
+			<Show
+				when={editing()}
+				fallback={
+					<>
+						<p class="whitespace-pre-wrap break-words text-sm text-foreground">
+							{props.note.Body}
+						</p>
+						<FormFeedback
+							error={remove.isError ? "Could not delete the note." : null}
+						/>
+						<div class="flex gap-2">
+							<Button
+								type="button"
+								size="sm"
+								variant="ghost"
+								aria-label={`Edit note from ${formatDate(props.note.CreatedAt)}`}
+								onClick={startEdit}
+							>
+								Edit
+							</Button>
+							<Button
+								type="button"
+								size="sm"
+								variant="ghost"
+								aria-label={`Delete note from ${formatDate(props.note.CreatedAt)}`}
+								disabled={remove.isPending}
+								onClick={() => remove.mutate(props.note.ID)}
+							>
+								Delete
+							</Button>
+						</div>
+					</>
+				}
+			>
+				<form onSubmit={save} class="flex flex-col gap-2">
+					<FormFeedback
+						error={update.isError ? "Could not save the note." : null}
+					/>
+					<Label for={`job-note-edit-${props.note.ID}`}>Edit note</Label>
+					<Textarea
+						id={`job-note-edit-${props.note.ID}`}
+						rows={3}
+						maxLength={JOB_NOTE_MAX_LENGTH}
+						value={draft()}
+						onInput={(e) => setDraft(e.currentTarget.value)}
+					/>
+					<div class="flex gap-2">
+						<Button
+							type="submit"
+							size="sm"
+							disabled={update.isPending || draft().length === 0}
+						>
+							Save
+						</Button>
+						<Button
+							type="button"
+							size="sm"
+							variant="ghost"
+							onClick={() => setEditing(false)}
+						>
+							Cancel
+						</Button>
+					</div>
+				</form>
+			</Show>
+		</li>
+	);
+}
 
 export function JobNotesCard(props: { jobId: string }) {
 	const notes = useJobNotes(() => props.jobId);
@@ -47,16 +148,7 @@ export function JobNotesCard(props: { jobId: string }) {
 				<Show when={(notes.data?.length ?? 0) > 0}>
 					<ul class="flex flex-col gap-3">
 						<For each={notes.data}>
-							{(n) => (
-								<li class="flex flex-col gap-0.5">
-									<span class="font-mono text-xs tabular-nums text-muted">
-										{formatDate(n.CreatedAt)}
-									</span>
-									<p class="whitespace-pre-wrap break-words text-sm text-foreground">
-										{n.Body}
-									</p>
-								</li>
-							)}
+							{(n) => <NoteItem note={n} jobId={props.jobId} />}
 						</For>
 					</ul>
 				</Show>

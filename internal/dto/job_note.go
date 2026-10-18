@@ -14,3 +14,8 @@ type CreateJobNoteInput struct {
 	JobID string `json:"-" path:"id"`
 	Body  string `json:"body"`
 }
+
+type UpdateJobNoteInput struct {
+	ID   string `json:"-" path:"id"`
+	Body string `json:"body"`
+}

@@ -465,3 +465,38 @@ func (s *Store) ListJobNotes(ctx context.Context, userID, jobID string) ([]dto.J
 	}
 	return out, nil
 }
+
+func (s *Store) UpdateJobNote(ctx context.Context, userID string, in dto.UpdateJobNoteInput) (dto.JobNote, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	nid, err := data.UUID(in.ID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	row, err := s.queries.UpdateJobNoteBody(ctx, sqlc.UpdateJobNoteBodyParams{ID: nid, UserID: uid, Body: in.Body})
+	if err != nil {
+		return dto.JobNote{}, data.QueryErr("UpdateJobNoteBody", err)
+	}
+	return toJobNoteDTO(row), nil
+}
+
+func (s *Store) DeleteJobNote(ctx context.Context, userID, id string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	nid, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.DeleteJobNote(ctx, sqlc.DeleteJobNoteParams{ID: nid, UserID: uid})
+	if err != nil {
+		return fmt.Errorf("store.DeleteJobNote: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
+}
