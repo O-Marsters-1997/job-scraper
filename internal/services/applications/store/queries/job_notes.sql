@@ -12,7 +12,7 @@ LIMIT 1000;
 -- name: UpdateJobNoteBody :one
 UPDATE job_notes SET body = $3, updated_at = now()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, job_id, body, created_at, updated_at;
+RETURNING id, user_id, job_id, body, quote, quote_prefix, quote_suffix, created_at, updated_at;
 
 -- name: DeleteJobNote :execrows
 DELETE FROM job_notes WHERE id = $1 AND user_id = $2;

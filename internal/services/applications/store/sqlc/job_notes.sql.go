@@ -112,7 +112,7 @@ func (q *Queries) ListJobNotesForJob(ctx context.Context, arg ListJobNotesForJob
 const updateJobNoteBody = `-- name: UpdateJobNoteBody :one
 UPDATE job_notes SET body = $3, updated_at = now()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, job_id, body, created_at, updated_at
+RETURNING id, user_id, job_id, body, quote, quote_prefix, quote_suffix, created_at, updated_at
 `
 
 type UpdateJobNoteBodyParams struct {
@@ -129,6 +129,9 @@ func (q *Queries) UpdateJobNoteBody(ctx context.Context, arg UpdateJobNoteBodyPa
 		&i.UserID,
 		&i.JobID,
 		&i.Body,
+		&i.Quote,
+		&i.QuotePrefix,
+		&i.QuoteSuffix,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
