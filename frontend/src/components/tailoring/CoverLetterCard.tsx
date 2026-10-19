@@ -1,19 +1,18 @@
-import { createQuery } from "@tanstack/solid-query";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { ApiError } from "@/api/client";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import {
+	useCoverLetterAchievements,
+	useCoverLetters,
+	useCreateCoverLetter,
+} from "@/hooks/useCoverLetters";
 import { useCVTemplates } from "@/hooks/useCVTemplates";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { formatDate } from "@/lib/datetime";
 import { loadedData } from "@/lib/queryData";
-import { fetchSuggestions } from "../../api/tailoring";
-import {
-	useCoverLetters,
-	useCreateCoverLetter,
-} from "../../hooks/useCoverLetters";
 
 const TOP_ACHIEVEMENTS = 8;
 const checkbox = "size-4 cursor-pointer align-middle accent-primary";
@@ -29,12 +28,7 @@ function errorMessage(err: unknown): string {
 export function CoverLetterCard(props: { jobId: string }) {
 	const letters = useCoverLetters(() => props.jobId);
 	const sources = useCVTemplates(() => "letter");
-	const suggestions = createQuery(() => ({
-		queryKey: ["cover-letters", props.jobId, "achievements"],
-		queryFn: () => fetchSuggestions(props.jobId, "", ""),
-		retry: false,
-		staleTime: 5 * 60 * 1000,
-	}));
+	const suggestions = useCoverLetterAchievements(() => props.jobId);
 	const create = useCreateCoverLetter();
 
 	const [source, setSource] = createSignal("");
