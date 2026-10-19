@@ -140,6 +140,22 @@ func Parse(tabJSON []byte) (DocStructure, error) {
 	return ds, nil
 }
 
+func Text(tabJSON []byte) (string, error) {
+	var t tab
+	if err := json.Unmarshal(tabJSON, &t); err != nil {
+		return "", fmt.Errorf("docparse.Text: %w", err)
+	}
+	var paras []para
+	flatten(t.DocumentTab.Body.Content, &paras)
+	lines := make([]string, 0, len(paras))
+	for _, p := range paras {
+		if p.text != "" {
+			lines = append(lines, p.text)
+		}
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
 func segmentParas(t tab) []para {
 	var paras []para
 	for _, segs := range []map[string]segment{t.DocumentTab.Headers, t.DocumentTab.Footers} {

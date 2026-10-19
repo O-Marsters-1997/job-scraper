@@ -74,7 +74,30 @@ func toPosition(p sqlc.Position) dto.Position {
 }
 
 func toAchievement(a sqlc.Achievement) dto.Achievement {
-	return dto.Achievement{ID: a.ID.String(), PositionID: a.PositionID.String(), Text: a.Text}
+	return dto.Achievement{ID: a.ID.String(), PositionID: a.PositionID.String(), Text: a.Text, Context: a.Context}
+}
+
+func (s *Store) SetAchievementContexts(ctx context.Context, userID string, ids, contexts []string) error {
+	uid, err := parseID(userID, ErrAchievementNotFound)
+	if err != nil {
+		return err
+	}
+	uuids := make([]pgtype.UUID, len(ids))
+	for i, id := range ids {
+		if uuids[i], err = parseID(id, ErrAchievementNotFound); err != nil {
+			return err
+		}
+	}
+	return s.inTx(ctx, func(q *sqlc.Queries) error {
+		n, err := q.SetAchievementContexts(ctx, sqlc.SetAchievementContextsParams{UserID: uid, Ids: uuids, Contexts: contexts})
+		if err != nil {
+			return fmt.Errorf("store.SetAchievementContexts: %w", err)
+		}
+		if int(n) != len(uuids) {
+			return ErrAchievementNotFound
+		}
+		return nil
+	})
 }
 
 // ListPositions returns userID's Positions in sort order, each with its
