@@ -501,6 +501,7 @@ func TestProcess(t *testing.T) {
 		{name: "board verify with poll verifies then polls the board", poll: true, wantIngested: 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newFixture(t, http.StatusOK, "")
 			company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
 			if err != nil {
