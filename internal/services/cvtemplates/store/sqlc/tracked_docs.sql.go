@@ -12,30 +12,36 @@ import (
 )
 
 const addTrackedDoc = `-- name: AddTrackedDoc :exec
-INSERT INTO tracked_docs (user_id, doc_id)
-VALUES ($1, $2)
+INSERT INTO tracked_docs (user_id, doc_id, kind)
+VALUES ($1, $2, $3)
 ON CONFLICT DO NOTHING
 `
 
 type AddTrackedDocParams struct {
 	UserID pgtype.UUID
 	DocID  string
+	Kind   string
 }
 
 func (q *Queries) AddTrackedDoc(ctx context.Context, arg AddTrackedDocParams) error {
-	_, err := q.db.Exec(ctx, addTrackedDoc, arg.UserID, arg.DocID)
+	_, err := q.db.Exec(ctx, addTrackedDoc, arg.UserID, arg.DocID, arg.Kind)
 	return err
 }
 
 const listTrackedDocs = `-- name: ListTrackedDocs :many
-SELECT id, user_id, doc_id, added_at
+SELECT id, user_id, doc_id, kind, added_at
 FROM tracked_docs
-WHERE user_id = $1
+WHERE user_id = $1 AND kind = $2
 ORDER BY added_at
 `
 
-func (q *Queries) ListTrackedDocs(ctx context.Context, userID pgtype.UUID) ([]TrackedDoc, error) {
-	rows, err := q.db.Query(ctx, listTrackedDocs, userID)
+type ListTrackedDocsParams struct {
+	UserID pgtype.UUID
+	Kind   string
+}
+
+func (q *Queries) ListTrackedDocs(ctx context.Context, arg ListTrackedDocsParams) ([]TrackedDoc, error) {
+	rows, err := q.db.Query(ctx, listTrackedDocs, arg.UserID, arg.Kind)
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +53,7 @@ func (q *Queries) ListTrackedDocs(ctx context.Context, userID pgtype.UUID) ([]Tr
 			&i.ID,
 			&i.UserID,
 			&i.DocID,
+			&i.Kind,
 			&i.AddedAt,
 		); err != nil {
 			return nil, err

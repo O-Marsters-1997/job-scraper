@@ -41,12 +41,15 @@ type FakeStore struct {
 	skills       map[string]*bankSkill
 	drafts       map[string]*draft
 	jobs         map[string]dto.Job
+	skeletons    map[string]dto.LetterSkeleton
+	letterTabs   map[letterTab]bool
+	coverLetters []coverLetter
 	labels       []dto.BulletLabel
 	seq          int
 }
 
 func NewFakeStore() *FakeStore {
-	return &FakeStore{positions: map[string]*position{}, achievements: map[string]*achievement{}, mappings: map[headingKey]*string{}, skills: map[string]*bankSkill{}, drafts: map[string]*draft{}, jobs: map[string]dto.Job{}}
+	return &FakeStore{positions: map[string]*position{}, achievements: map[string]*achievement{}, mappings: map[headingKey]*string{}, skills: map[string]*bankSkill{}, drafts: map[string]*draft{}, jobs: map[string]dto.Job{}, skeletons: map[string]dto.LetterSkeleton{}, letterTabs: map[letterTab]bool{}}
 }
 
 func (f *FakeStore) nextID() string {
@@ -190,6 +193,20 @@ func (f *FakeStore) DeleteAchievement(_ context.Context, userID, id string) erro
 		return errAchievementNotFound
 	}
 	delete(f.achievements, id)
+	return nil
+}
+
+func (f *FakeStore) SetAchievementContexts(_ context.Context, userID string, ids, contexts []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, id := range ids {
+		if a, ok := f.achievements[id]; !ok || a.userID != userID {
+			return errAchievementNotFound
+		}
+	}
+	for i, id := range ids {
+		f.achievements[id].Context = contexts[i]
+	}
 	return nil
 }
 

@@ -263,3 +263,20 @@ func skillsTab(paras []testPara) []byte {
 	}
 	return []byte(`{"documentTab":{"body":{"content":[` + strings.Join(els, ",") + `]}}}`)
 }
+
+func TestText(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile(filepath.Join("testdata", "profile_skills_list.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := docparse.Text(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Profile\nBackend engineer", "Mentored four engineers through promotion.\n"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Text() lacks %q:\n%s", want, got)
+		}
+	}
+}

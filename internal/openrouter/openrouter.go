@@ -55,6 +55,7 @@ type Request struct {
 	Stream         bool              `json:"stream,omitempty"`
 	Usage          *UsageOptions     `json:"usage,omitempty"`
 	Reasoning      *ReasoningOptions `json:"reasoning,omitempty"`
+	MaxTokens      int               `json:"max_tokens,omitempty"`
 }
 
 type Reply struct {

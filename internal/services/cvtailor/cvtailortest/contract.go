@@ -21,6 +21,8 @@ type Fixture struct {
 	Other  string
 	// JobID is an existing Job; a real store needs a jobs row for it.
 	JobID string
+
+	TrackLetterTab func(t *testing.T, userID, docID, tabID string)
 }
 
 // RunStoreContract proves newStore's cvtailor.Store behaves the same
@@ -31,6 +33,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Run("bank skills", func(t *testing.T) { runBankSkillContract(t, newStore) })
 	t.Run("heading mappings", func(t *testing.T) { runHeadingMappingContract(t, newStore) })
 	t.Run("drafts", func(t *testing.T) { runDraftContract(t, newStore) })
+	t.Run("letter skeletons", func(t *testing.T) { runLetterSkeletonContract(t, newStore) })
+	t.Run("cover letters", func(t *testing.T) { runCoverLetterContract(t, newStore) })
 }
 
 func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
@@ -182,6 +186,32 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 		if got.Text != "after" {
 			t.Fatalf("UpdateAchievement() text = %q, want after", got.Text)
+		}
+	})
+
+	t.Run("set contexts writes context and leaves text, all or nothing", func(t *testing.T) {
+		f := newStore(t)
+		p := position(t, f, f.UserID, "Acme")
+		a := achievement(t, f, p.ID, "first")
+		b := achievement(t, f, p.ID, "second")
+		foreign, err := f.Store.CreateAchievement(ctx, f.Other, dto.AchievementInput{PositionID: position(t, f, f.Other, "Theirs").ID, Text: "theirs"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Store.SetAchievementContexts(ctx, f.UserID, []string{a.ID, b.ID}, []string{"why a", "why b"}); err != nil {
+			t.Fatal(err)
+		}
+		wantNotFound(t, "SetAchievementContexts(foreign)", f.Store.SetAchievementContexts(ctx, f.UserID, []string{a.ID, foreign.ID}, []string{"x", "y"}))
+		got, err := f.Store.ListPositions(ctx, f.UserID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []dto.Achievement{
+			{ID: a.ID, PositionID: p.ID, Text: "first", Context: "why a"},
+			{ID: b.ID, PositionID: p.ID, Text: "second", Context: "why b"},
+		}
+		if diff := cmp.Diff(want, got[0].Achievements); diff != "" {
+			t.Fatalf("achievements (-want +got):\n%s", diff)
 		}
 	})
 

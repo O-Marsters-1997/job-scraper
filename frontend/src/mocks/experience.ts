@@ -3,6 +3,8 @@ import type {
 	Achievement,
 	BankSkill,
 	BankSkillInput,
+	ContextChange,
+	GrillPrompt,
 	ImportPosition,
 	ImportPreview,
 	ImportSkill,
@@ -22,11 +24,14 @@ let experience: Position[] = [
 				id: "achievement-1",
 				positionId: "position-1",
 				text: "Cut p99 API latency by 40% by moving hot paths to a read-through cache",
+				context: "",
 			},
 			{
 				id: "achievement-2",
 				positionId: "position-1",
 				text: "Led the migration of 12 services from EC2 to Kubernetes",
+				context:
+					"Cost pressure forced the move; we kept Postgres on RDS to limit risk.",
 			},
 		],
 	},
@@ -41,6 +46,7 @@ let experience: Position[] = [
 				id: "achievement-3",
 				positionId: "position-2",
 				text: "Built the billing export pipeline used by finance every month",
+				context: "",
 			},
 		],
 	},
@@ -121,6 +127,7 @@ export function importExperience(
 				id: `achievement-${faker.string.uuid().slice(0, 8)}`,
 				positionId: id,
 				text,
+				context: "",
 			})),
 		};
 	});
@@ -144,6 +151,7 @@ export function createAchievement(
 		id: `achievement-${faker.string.uuid().slice(0, 8)}`,
 		positionId,
 		text,
+		context: "",
 	};
 	experience = experience.map((p) =>
 		p.id === positionId
@@ -247,4 +255,40 @@ export function deleteBankSkills(ids: string[]): void {
 
 export function reorderBankSkills(ids: string[]): void {
 	bankSkills = renumber(inOrder(bankSkills, ids));
+}
+
+export function getGrillPrompt(): GrillPrompt {
+	return {
+		text: `Use my grilling skill.\n\n${JSON.stringify(experience, null, 2)}`,
+	};
+}
+
+export function previewContext(output: string): ContextChange[] {
+	const block = [...output.matchAll(/```json\s*([\s\S]*?)```/g)].at(-1)?.[1];
+	if (!block) throw new Error("no json block found in the output");
+	const parsed = JSON.parse(block) as {
+		achievements: { id: string; context: string }[];
+	};
+	const owned = experience.flatMap((p) => p.achievements);
+	return parsed.achievements.map((c) => {
+		const a = owned.find((o) => o.id === c.id);
+		if (!a) throw new Error(`achievement ${c.id} not found`);
+		return {
+			achievementId: a.id,
+			text: a.text,
+			before: a.context,
+			after: c.context.trim(),
+		};
+	});
+}
+
+export function applyContext(changes: ContextChange[]): void {
+	const after = new Map(changes.map((c) => [c.achievementId, c.after]));
+	experience = experience.map((p) => ({
+		...p,
+		achievements: p.achievements.map((a) => ({
+			...a,
+			context: after.get(a.id) ?? a.context,
+		})),
+	}));
 }

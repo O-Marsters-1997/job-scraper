@@ -4,7 +4,20 @@ export const achievementSchema = z.object({
 	id: z.string(),
 	positionId: z.string(),
 	text: z.string(),
+	context: z.string(),
 });
+
+export const contextChangeSchema = z.object({
+	achievementId: z.string(),
+	text: z.string(),
+	before: z.string(),
+	after: z.string(),
+});
+
+export const grillPromptSchema = z.object({ text: z.string() });
+
+export type GrillPrompt = z.infer<typeof grillPromptSchema>;
+export type ContextChange = z.infer<typeof contextChangeSchema>;
 
 export const positionSchema = z.object({
 	id: z.string(),

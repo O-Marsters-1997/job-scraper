@@ -24,8 +24,30 @@ func TestStoreContract(t *testing.T) {
 		pool := pgtest.New(t)
 		return cvtailortest.Fixture{
 			Store: store.New(pool), UserID: pgtest.InsertUser(t, pool), Other: pgtest.InsertUser(t, pool), JobID: pgtest.InsertJob(t, pool, "Role", "fp-1"),
+			TrackLetterTab: func(t *testing.T, userID, docID, tabID string) {
+				t.Helper()
+				_, err := pool.Exec(t.Context(), `WITH d AS (
+					INSERT INTO tracked_docs (user_id, doc_id, kind) VALUES ($1, $2, 'letter') RETURNING id
+				) INSERT INTO tracked_doc_tabs (tracked_doc_id, tab_id) SELECT id, $3 FROM d`, userID, docID, tabID)
+				if err != nil {
+					t.Fatal(err)
+				}
+			},
 		}
 	})
+}
+
+func TestJobBrief(t *testing.T) {
+	t.Parallel()
+	st, pool, _ := newStore(t)
+	jobID := pgtest.InsertJob(t, pool, "Backend Engineer", "fp-1")
+
+	got, err := st.JobBrief(t.Context(), jobID)
+
+	want := dto.JobBrief{Title: "Backend Engineer", Company: "acme", Description: "Build things in Go"}
+	if diff := cmp.Diff(want, got); err != nil || diff != "" {
+		t.Errorf("JobBrief() = %+v, %v (-want +got):\n%s", got, err, diff)
+	}
 }
 
 func newStore(t *testing.T) (*store.Store, *pgxpool.Pool, string) {

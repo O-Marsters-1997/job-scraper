@@ -23,18 +23,26 @@ func BannedWords(d Draft) []Finding {
 		if s.Text == s.BaseText {
 			continue
 		}
-		seen := map[string]bool{}
-		for _, w := range bannedRe.FindAllString(s.Text, -1) {
-			key := strings.ToLower(w)
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
+		for _, w := range bannedPhrases(s.Text) {
 			out = append(out, Finding{
 				Check: checkBanned, Severity: Block, SlotID: s.ID,
 				Message: fmt.Sprintf("banned word %q", w),
 			})
 		}
+	}
+	return out
+}
+
+func bannedPhrases(text string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, w := range bannedRe.FindAllString(text, -1) {
+		key := strings.ToLower(w)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, w)
 	}
 	return out
 }

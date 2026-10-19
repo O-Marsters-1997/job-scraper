@@ -154,6 +154,7 @@ type Achievement struct {
 	SortOrder  int32
 	CreatedAt  pgtype.Timestamptz
 	UpdatedAt  pgtype.Timestamptz
+	Context    string
 }
 
 type AnswerCorrection struct {
@@ -280,6 +281,20 @@ type CompanyProfile struct {
 	Source    string
 	Data      []byte
 	FetchedAt pgtype.Timestamptz
+}
+
+type CoverLetter struct {
+	ID             pgtype.UUID
+	UserID         pgtype.UUID
+	JobID          pgtype.UUID
+	SourceDocID    string
+	SourceTabID    string
+	ScaffoldTabID  string
+	AchievementIds []pgtype.UUID
+	Model          string
+	Cost           float32
+	CreatedAt      pgtype.Timestamptz
+	DoneAt         pgtype.Timestamptz
 }
 
 type CvHeadingMapping struct {
@@ -450,6 +465,14 @@ type JobView struct {
 	UserID pgtype.UUID
 	JobID  pgtype.UUID
 	SeenAt pgtype.Timestamptz
+}
+
+type LetterSkeleton struct {
+	UserID     pgtype.UUID
+	Intro      string
+	Conclusion string
+	Sections   []string
+	UpdatedAt  pgtype.Timestamptz
 }
 
 type NotificationDigest struct {
@@ -648,6 +671,7 @@ type TrackedDoc struct {
 	ID      pgtype.UUID
 	UserID  pgtype.UUID
 	DocID   string
+	Kind    string
 	AddedAt pgtype.Timestamptz
 }
 

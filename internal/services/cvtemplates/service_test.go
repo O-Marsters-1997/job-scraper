@@ -101,7 +101,7 @@ func TestList(t *testing.T) {
 		cvtemplatestest.Track(t, st, userID, "docA")
 		cvtemplatestest.Track(t, st, userID, "docB")
 
-		got, err := svc.List(t.Context(), userID)
+		got, err := svc.List(t.Context(), userID, dto.TrackedDocCV)
 		if err != nil {
 			t.Fatalf("List err = %v", err)
 		}
@@ -130,7 +130,7 @@ func TestList(t *testing.T) {
 				svc, st := newService(gc)
 				cvtemplatestest.Track(t, st, userID, "docA")
 
-				cvs, err := svc.List(t.Context(), userID)
+				cvs, err := svc.List(t.Context(), userID, dto.TrackedDocCV)
 				if err != nil {
 					t.Fatalf("List err = %v", err)
 				}
@@ -147,7 +147,7 @@ func TestList(t *testing.T) {
 		cvtemplatestest.Track(t, st, userID, "docA")
 		cvtemplatestest.Track(t, st, userID, "docB")
 
-		cvs, err := svc.List(t.Context(), userID)
+		cvs, err := svc.List(t.Context(), userID, dto.TrackedDocCV)
 		if err != nil {
 			t.Fatalf("List err = %v", err)
 		}
@@ -156,11 +156,38 @@ func TestList(t *testing.T) {
 		}
 	})
 
+	t.Run("lists only docs of the requested kind", func(t *testing.T) {
+		t.Parallel()
+		svc, st := newService(docsWith("docCV", "docLetter"))
+		cvtemplatestest.Track(t, st, userID, "docCV")
+		cvtemplatestest.TrackKind(t, st, userID, "docLetter", dto.TrackedDocLetter)
+
+		for kind, wantDoc := range map[dto.TrackedDocKind]string{dto.TrackedDocCV: "docCV", dto.TrackedDocLetter: "docLetter", "": "docCV"} {
+			got, err := svc.List(t.Context(), userID, kind)
+			if err != nil {
+				t.Fatalf("List(%q) err = %v", kind, err)
+			}
+			if len(got) != 1 || got[0].DocID != wantDoc {
+				t.Errorf("List(%q) = %+v, want a single CV from %s", kind, got, wantDoc)
+			}
+		}
+	})
+
+	t.Run("unknown kind is invalid", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(docsWith())
+
+		_, err := svc.List(t.Context(), userID, "poem")
+		if !errors.Is(err, cvtemplates.ErrInvalidKind) || !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Fatalf("List err = %v, want ErrInvalidKind", err)
+		}
+	})
+
 	t.Run("hidden tab stays hidden after reconcile", func(t *testing.T) {
 		svc, st := newService(docsWith("docA"))
 		tdID := seedTab(t, st, "docA", "t1", false)
 
-		cvs, err := svc.List(t.Context(), userID)
+		cvs, err := svc.List(t.Context(), userID, dto.TrackedDocCV)
 		if err != nil {
 			t.Fatalf("List err = %v", err)
 		}
@@ -175,7 +202,7 @@ func TestList(t *testing.T) {
 	t.Run("not connected returns unauthorized", func(t *testing.T) {
 		svc, _ := newService(identitytest.Disconnected(apperr.Unauthorized("google account not connected")))
 
-		_, err := svc.List(t.Context(), userID)
+		_, err := svc.List(t.Context(), userID, dto.TrackedDocCV)
 		if !apperr.IsKind(err, apperr.KindUnauthorized) {
 			t.Fatalf("List err = %v, want an unauthorized error", err)
 		}
@@ -219,12 +246,38 @@ func TestAddDoc(t *testing.T) {
 		if _, err := svc.AddDoc(t.Context(), userID, dto.TrackedDocInput{URL: docURL}); err != nil {
 			t.Fatalf("AddDoc err = %v", err)
 		}
-		docs, err := st.ListTrackedDocs(t.Context(), userID)
+		docs, err := st.ListTrackedDocs(t.Context(), userID, dto.TrackedDocCV)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if len(docs) != 1 || docs[0].DocID != "abc1234567890" {
-			t.Errorf("ListTrackedDocs = %+v, want the added doc", docs)
+			t.Errorf("ListTrackedDocs = %+v, want the added doc as a cv", docs)
+		}
+	})
+
+	t.Run("stores the requested kind", func(t *testing.T) {
+		t.Parallel()
+		svc, st := newService(docsWith("abc1234567890"))
+
+		if _, err := svc.AddDoc(t.Context(), userID, dto.TrackedDocInput{URL: docURL, Kind: dto.TrackedDocLetter}); err != nil {
+			t.Fatalf("AddDoc err = %v", err)
+		}
+		docs, err := st.ListTrackedDocs(t.Context(), userID, dto.TrackedDocLetter)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(docs) != 1 || docs[0].DocID != "abc1234567890" {
+			t.Errorf("ListTrackedDocs(letter) = %+v, want the added doc", docs)
+		}
+	})
+
+	t.Run("unknown kind", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(docsWith("abc1234567890"))
+
+		_, err := svc.AddDoc(t.Context(), userID, dto.TrackedDocInput{URL: docURL, Kind: "poem"})
+		if !errors.Is(err, cvtemplates.ErrInvalidKind) || !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Fatalf("AddDoc err = %v, want ErrInvalidKind", err)
 		}
 	})
 

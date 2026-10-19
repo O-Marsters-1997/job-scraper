@@ -107,6 +107,8 @@ CREATE TABLE IF NOT EXISTS tracked_docs (
     id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id  UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     doc_id   TEXT        NOT NULL,
+    kind     TEXT        NOT NULL DEFAULT 'cv'
+        CONSTRAINT tracked_docs_kind_check CHECK (kind IN ('cv', 'letter')),
     added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (user_id, doc_id)
 );
@@ -141,7 +143,8 @@ CREATE TABLE achievements (
     text        TEXT        NOT NULL,
     sort_order  INT         NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    context     TEXT        NOT NULL DEFAULT ''
 );
 CREATE INDEX achievements_position_sort_idx ON achievements (position_id, sort_order);
 
@@ -156,6 +159,29 @@ CREATE TABLE bank_skills (
 );
 CREATE UNIQUE INDEX bank_skills_user_name_idx ON bank_skills (user_id, lower(name));
 CREATE INDEX bank_skills_user_sort_idx ON bank_skills (user_id, sort_order);
+
+CREATE TABLE letter_skeletons (
+    user_id    UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    intro      TEXT        NOT NULL DEFAULT '',
+    conclusion TEXT        NOT NULL DEFAULT '',
+    sections   TEXT[]      NOT NULL DEFAULT '{}',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE cover_letters (
+    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id          UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    source_doc_id   TEXT        NOT NULL,
+    source_tab_id   TEXT        NOT NULL,
+    scaffold_tab_id TEXT        NOT NULL,
+    achievement_ids UUID[]      NOT NULL,
+    model           TEXT        NOT NULL,
+    cost            REAL        NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    done_at         TIMESTAMPTZ
+);
+CREATE INDEX cover_letters_user_job_idx ON cover_letters (user_id, job_id, created_at DESC);
 
 CREATE TABLE cv_heading_mappings (
     user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,

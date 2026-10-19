@@ -15,16 +15,32 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
-const suggestWriteWindow = 30 * time.Second
+const (
+	suggestWriteWindow  = 30 * time.Second
+	scaffoldWriteWindow = 3 * time.Minute
+)
+
+func withWriteWindow(d time.Duration, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(d))
+		h(w, r)
+	}
+}
 
 func (m *Module) tailorRoutes(r chi.Router) {
 	r.Route("/tailoring", func(r chi.Router) {
 		r.Get("/cvs/{docId}/{tabId}/headings", handlers.Query(m.svc.Headings))
 		r.Put("/cvs/{docId}/{tabId}/headings", handlers.Update(m.svc.SaveHeadings))
+		r.Get("/letter-skeleton", handlers.GetAll(m.store.GetLetterSkeleton))
+		r.Put("/letter-skeleton", handlers.Update(m.store.SaveLetterSkeleton))
 		r.Get("/jobs/{jobId}/suggestions", handlers.Query(m.svc.Suggestions))
 		r.Get("/jobs/{jobId}/skill-suggestions", handlers.Query(m.svc.SkillSuggestions))
 		r.Get("/jobs/{jobId}/experience-match", handlers.Query(m.svc.ExperienceMatch))
 		r.Post("/jobs/{jobId}/achievements/{achievementId}/explain", handlers.Update(m.Explain))
+		r.Post("/jobs/{jobId}/cover-letters", withWriteWindow(scaffoldWriteWindow, handlers.Create(m.Scaffold)))
+		r.Get("/jobs/{jobId}/cover-letters", handlers.Query(m.svc.ListCoverLetters))
+		r.Get("/cover-letters/{id}/check", handlers.Query(m.CheckCoverLetter))
+		r.Post("/cover-letters/{id}/done", handlers.GetByID(m.store.MarkCoverLetterDone))
 		r.Post("/drafts", m.createDraft())
 		r.Get("/jobs/{jobId}/drafts", handlers.Query(m.svc.ListJobDrafts))
 		r.Get("/drafts/{id}", handlers.Query(m.svc.GetDraft))

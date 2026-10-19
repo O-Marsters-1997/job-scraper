@@ -7,6 +7,7 @@ import { JobActionBar } from "@/components/jobs/JobActionBar";
 import { SuitabilityPanel } from "@/components/jobs/SuitabilityPanel";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { CoverLetterCard } from "@/components/tailoring/CoverLetterCard";
 import { JobDrafts } from "@/components/tailoring/JobDrafts";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { Button } from "@/components/ui/button";
@@ -187,6 +188,10 @@ function JobDetailPage() {
 
 									<div id="job-drafts" class="max-md:order-4">
 										<JobDrafts jobId={params().id} />
+									</div>
+
+									<div class="max-md:order-4">
+										<CoverLetterCard jobId={params().id} />
 									</div>
 
 									<div class="max-md:order-4">

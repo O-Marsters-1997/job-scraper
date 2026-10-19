@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
 import { BankSkills } from "@/components/experience/BankSkills";
+import { GrillContext } from "@/components/experience/GrillContext";
 import { ImportFromCV } from "@/components/experience/ImportFromCV";
 import { PositionCard } from "@/components/experience/PositionCard";
 import { PositionForm } from "@/components/experience/PositionForm";
@@ -25,6 +26,7 @@ function ExperiencePage() {
 	const create = useCreatePosition();
 	const [adding, setAdding] = createSignal(false);
 	const [importing, setImporting] = createSignal(false);
+	const [grilling, setGrilling] = createSignal(false);
 
 	return (
 		<div class="px-7 py-6">
@@ -33,6 +35,9 @@ function ExperiencePage() {
 				subtitle="Your Positions and Achievements, the source for tailored CVs"
 			>
 				<div class="flex shrink-0 gap-2">
+					<Button variant="outline" onClick={() => setGrilling(true)}>
+						Add context
+					</Button>
 					<Button variant="outline" onClick={() => setImporting(true)}>
 						Import from CV
 					</Button>
@@ -42,6 +47,10 @@ function ExperiencePage() {
 					</Button>
 				</div>
 			</PageHeading>
+
+			<Show when={grilling()}>
+				<GrillContext onDone={() => setGrilling(false)} />
+			</Show>
 
 			<Show when={importing()}>
 				<ImportFromCV onDone={() => setImporting(false)} />

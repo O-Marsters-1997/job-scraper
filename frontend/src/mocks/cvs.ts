@@ -1,29 +1,32 @@
 import { faker } from "@faker-js/faker";
-import type { CV } from "@/types/cv";
+import type { CV, TrackedDocKind } from "@/types/cv";
 import { failIfRequested } from "./helpers";
 import { seed } from "./seed";
 
 let cvs: CV[] = seed.cvs;
+let letters: CV[] = [];
 
-export function getCVs(): CV[] {
-	return cvs;
+export function getCVs(kind: TrackedDocKind): CV[] {
+	return kind === "letter" ? letters : cvs;
 }
 
-export function addTrackedDoc(url: string): void {
+export function addTrackedDoc(url: string, kind: TrackedDocKind): void {
 	failIfRequested("addTrackedDoc");
 	const docId = `doc-${faker.string.uuid().slice(0, 8)}`;
-	cvs = [
-		...cvs,
-		{
-			DocID: docId,
-			TabID: "t.0",
-			Title: "New Tracked Doc",
-			SourceDoc: "New Tracked Doc",
-			ModifiedAt: new Date().toISOString(),
-			DocURL: url,
-			Visible: true,
-		},
-	];
+	const added: CV = {
+		DocID: docId,
+		TabID: "t.0",
+		Title: "New Tracked Doc",
+		SourceDoc: "New Tracked Doc",
+		ModifiedAt: new Date().toISOString(),
+		DocURL: url,
+		Visible: true,
+	};
+	if (kind === "letter") {
+		letters = [...letters, added];
+		return;
+	}
+	cvs = [...cvs, added];
 }
 
 export function setTabVisibility(
@@ -31,9 +34,10 @@ export function setTabVisibility(
 	tabId: string,
 	visible: boolean,
 ): void {
-	cvs = cvs.map((cv) =>
-		cv.DocID === docId && cv.TabID === tabId ? { ...cv, Visible: visible } : cv,
-	);
+	const update = (cv: CV) =>
+		cv.DocID === docId && cv.TabID === tabId ? { ...cv, Visible: visible } : cv;
+	cvs = cvs.map(update);
+	letters = letters.map(update);
 }
 
 const MOCK_PDF = `%PDF-1.4

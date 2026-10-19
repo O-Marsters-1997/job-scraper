@@ -18,6 +18,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/letterwrite"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
@@ -39,6 +40,12 @@ type Editor interface {
 	Explain(ctx context.Context, apiKey string, in cvedit.ExplainInput) (cvedit.ExplainResult, error)
 }
 
+type Scaffolder interface {
+	Scaffold(ctx context.Context, apiKey string, in letterwrite.Input) (letterwrite.Result, error)
+}
+
+var _ Scaffolder = (*letterwrite.Client)(nil)
+
 // Credentials reads a user's stored provider API key.
 type Credentials interface {
 	Get(ctx context.Context, userID, provider string) (string, error)
@@ -47,6 +54,7 @@ type Credentials interface {
 // Drive is the Google write surface a Draft is built on.
 type Drive interface {
 	ListTabs(ctx context.Context, userID, docID string) ([]google.Tab, error)
+	AddTab(ctx context.Context, userID, docID, title string) (string, error)
 	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
 	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
 	DeleteFile(ctx context.Context, userID, fileID string) error

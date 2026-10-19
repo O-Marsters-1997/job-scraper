@@ -22,6 +22,7 @@ type Store interface {
 	UpdateAchievement(ctx context.Context, userID string, in dto.AchievementInput) (dto.Achievement, error)
 	DeleteAchievement(ctx context.Context, userID, id string) error
 	ReorderAchievements(ctx context.Context, userID, positionID string, ids []string) error
+	SetAchievementContexts(ctx context.Context, userID string, ids, contexts []string) error
 	ListBankSkills(ctx context.Context, userID string) ([]dto.BankSkill, error)
 	CreateBankSkill(ctx context.Context, userID string, in dto.BankSkillInput) (dto.BankSkill, error)
 	UpdateBankSkill(ctx context.Context, userID string, in dto.BankSkillInput) (dto.BankSkill, error)
@@ -45,6 +46,14 @@ type Store interface {
 	CompleteDraft(ctx context.Context, claim dto.DraftClaim, res dto.DraftResult) error
 	FailDraft(ctx context.Context, claim dto.DraftClaim, failure dto.DraftFailure) error
 	JobDescription(ctx context.Context, jobID string) (string, error)
+	GetLetterSkeleton(ctx context.Context, userID string) (dto.LetterSkeleton, error)
+	SaveLetterSkeleton(ctx context.Context, userID string, in dto.LetterSkeleton) (dto.LetterSkeleton, error)
+	IsLetterTab(ctx context.Context, userID, docID, tabID string) (bool, error)
+	JobBrief(ctx context.Context, jobID string) (dto.JobBrief, error)
+	CreateCoverLetter(ctx context.Context, userID string, in dto.NewCoverLetter) (dto.CoverLetter, error)
+	ListJobCoverLetters(ctx context.Context, userID, jobID string) ([]dto.CoverLetter, error)
+	GetCoverLetter(ctx context.Context, userID, id string) (dto.CoverLetterTab, error)
+	MarkCoverLetterDone(ctx context.Context, userID, id string) (dto.CoverLetter, error)
 }
 
 type Service struct {

@@ -1,5 +1,6 @@
 export * from "./applications";
 export * from "./companies";
+export * from "./coverLetters";
 export * from "./cvs";
 export * from "./experience";
 export * from "./favourites";
@@ -8,6 +9,7 @@ export * from "./jobComments";
 export * from "./jobNotes";
 export * from "./jobPage";
 export * from "./jobs";
+export * from "./letterSkeleton";
 export * from "./push";
 export * from "./recruiterContacts";
 export * from "./scoreFeedback";

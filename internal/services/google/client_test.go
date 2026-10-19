@@ -298,6 +298,43 @@ func TestCopyFile(t *testing.T) {
 	}
 }
 
+func TestAddTab(t *testing.T) {
+	t.Parallel()
+	t.Run("sends addDocumentTab and returns the new tab id", func(t *testing.T) {
+		t.Parallel()
+		ctx, client, got := recordingClient(t, http.StatusOK, `{"replies":[{"addDocumentTab":{"tabProperties":{"tabId":"t.new","title":"Acme"}}}]}`)
+
+		id, err := client.AddTab(ctx, "u1", "doc", "Acme")
+
+		if err != nil || id != "t.new" {
+			t.Fatalf("AddTab() = %q, %v, want t.new", id, err)
+		}
+		if got.method != http.MethodPost || !strings.HasSuffix(got.target, "/documents/doc:batchUpdate") {
+			t.Errorf("sent %s %s", got.method, got.target)
+		}
+		want := map[string]any{"requests": []any{map[string]any{"addDocumentTab": map[string]any{"tabProperties": map[string]any{"title": "Acme"}}}}}
+		if diff := cmp.Diff(want, decodeJSON(t, got.body)); diff != "" {
+			t.Errorf("body (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a forbidden response asks to reconnect Google", func(t *testing.T) {
+		t.Parallel()
+		ctx, client, _ := recordingClient(t, http.StatusForbidden, "")
+		if _, err := client.AddTab(ctx, "u1", "doc", "Acme"); !errors.Is(err, google.ErrNoWriteAccess) {
+			t.Errorf("AddTab on 403 = %v, want ErrNoWriteAccess", err)
+		}
+	})
+
+	t.Run("a reply without a tab id is an error", func(t *testing.T) {
+		t.Parallel()
+		ctx, client, _ := recordingClient(t, http.StatusOK, `{"replies":[{}]}`)
+		if _, err := client.AddTab(ctx, "u1", "doc", "Acme"); err == nil {
+			t.Error("AddTab with no tab id = nil error")
+		}
+	})
+}
+
 func TestBatchUpdate(t *testing.T) {
 	ctx, client, got := recordingClient(t, http.StatusOK, `{}`)
 
