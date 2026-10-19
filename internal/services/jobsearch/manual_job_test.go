@@ -114,24 +114,31 @@ func TestAddManualJob(t *testing.T) {
 		}
 	})
 
-	t.Run("an existing job or a non-ATS url publishes nothing", func(t *testing.T) {
+	t.Run("a non-ATS url publishes nothing", func(t *testing.T) {
 		t.Parallel()
 		q := &recordingQueue{}
 		svc, _ := newCompanyService(q)
 		in := dto.AddManualJobInput{URL: "https://careers.example.com/role/9", Title: "Engineer", Company: "Example"}
 		if _, err := svc.AddManualJob(t.Context(), userID, in); err != nil {
-			t.Fatalf("AddManualJob(non-ATS) err = %v", err)
-		}
-		in = dto.AddManualJobInput{URL: greenhouseURL, Title: "Engineer"}
-		if _, err := svc.AddManualJob(t.Context(), userID, in); err != nil {
-			t.Fatalf("AddManualJob(ATS) err = %v", err)
-		}
-		q.tasks = nil
-		if _, err := svc.AddManualJob(t.Context(), userID, in); err != nil {
-			t.Fatalf("AddManualJob(repeat) err = %v", err)
+			t.Fatalf("AddManualJob(...) err = %v", err)
 		}
 		if len(q.tasks) != 0 {
 			t.Errorf("published = %+v, want nothing", q.tasks)
+		}
+	})
+
+	t.Run("re-adding a held ATS url publishes nothing more", func(t *testing.T) {
+		t.Parallel()
+		q := &recordingQueue{}
+		svc, _ := newCompanyService(q)
+		in := dto.AddManualJobInput{URL: greenhouseURL, Title: "Engineer"}
+		for range 2 {
+			if _, err := svc.AddManualJob(t.Context(), userID, in); err != nil {
+				t.Fatalf("AddManualJob(...) err = %v", err)
+			}
+		}
+		if len(q.tasks) != 1 {
+			t.Errorf("published = %+v, want only the first add's task", q.tasks)
 		}
 	})
 

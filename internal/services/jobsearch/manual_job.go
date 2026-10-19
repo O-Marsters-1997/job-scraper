@@ -3,6 +3,7 @@ package jobsearch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -73,9 +74,12 @@ func (s *Service) syncBoard(ctx context.Context, source, token, companyID string
 	case errors.Is(err, data.ErrNotFound):
 		task.Kind, task.CompanyID, task.BoardToken, task.Poll = queue.BoardVerifyTask, companyID, token, true
 	default:
-		return err
+		return fmt.Errorf("find verified board: %w", err)
 	}
-	return s.queue.Publish(ctx, task)
+	if err := s.queue.Publish(ctx, task); err != nil {
+		return fmt.Errorf("publish board sync: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) trackATSCompany(ctx context.Context, userID string, job *dto.Job, source, token, postingID string, in dto.AddManualJobInput) error {
