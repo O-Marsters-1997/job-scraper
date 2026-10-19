@@ -186,6 +186,32 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("set contexts writes context and leaves text, all or nothing", func(t *testing.T) {
+		f := newStore(t)
+		p := position(t, f, f.UserID, "Acme")
+		a := achievement(t, f, p.ID, "first")
+		b := achievement(t, f, p.ID, "second")
+		foreign, err := f.Store.CreateAchievement(ctx, f.Other, dto.AchievementInput{PositionID: position(t, f, f.Other, "Theirs").ID, Text: "theirs"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Store.SetAchievementContexts(ctx, f.UserID, []string{a.ID, b.ID}, []string{"why a", "why b"}); err != nil {
+			t.Fatal(err)
+		}
+		wantNotFound(t, "SetAchievementContexts(foreign)", f.Store.SetAchievementContexts(ctx, f.UserID, []string{a.ID, foreign.ID}, []string{"x", "y"}))
+		got, err := f.Store.ListPositions(ctx, f.UserID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []dto.Achievement{
+			{ID: a.ID, PositionID: p.ID, Text: "first", Context: "why a"},
+			{ID: b.ID, PositionID: p.ID, Text: "second", Context: "why b"},
+		}
+		if diff := cmp.Diff(want, got[0].Achievements); diff != "" {
+			t.Fatalf("achievements (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("reorder positions", func(t *testing.T) {
 		f := newStore(t)
 		a := position(t, f, f.UserID, "A")

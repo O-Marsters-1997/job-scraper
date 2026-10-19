@@ -154,6 +154,7 @@ type Achievement struct {
 	SortOrder  int32
 	CreatedAt  pgtype.Timestamptz
 	UpdatedAt  pgtype.Timestamptz
+	Context    string
 }
 
 type AnswerCorrection struct {

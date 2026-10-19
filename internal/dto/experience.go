@@ -13,6 +13,7 @@ type Achievement struct {
 	ID         string `json:"id"`
 	PositionID string `json:"positionId"`
 	Text       string `json:"text"`
+	Context    string `json:"context"`
 }
 
 // PositionInput dates are YYYY-MM-DD; a nil EndDate means the Position is current.
@@ -51,4 +52,29 @@ type BankSkillInput struct {
 	ID       string `json:"-" path:"id"`
 	Name     string `json:"name"`
 	Category string `json:"category"`
+}
+
+// GrillPromptQuery optionally names the CV Tab whose text joins the prompt.
+type GrillPromptQuery struct {
+	DocID string `json:"docId"`
+	TabID string `json:"tabId"`
+}
+
+type GrillPrompt struct {
+	Text string `json:"text"`
+}
+
+type ContextImportInput struct {
+	Output string `json:"output"`
+}
+
+type ContextChange struct {
+	AchievementID string `json:"achievementId"`
+	Text          string `json:"text"`
+	Before        string `json:"before"`
+	After         string `json:"after"`
+}
+
+type ContextApplyInput struct {
+	Changes []ContextChange `json:"changes"`
 }

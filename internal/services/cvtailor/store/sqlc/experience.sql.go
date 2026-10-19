@@ -17,7 +17,7 @@ SELECT p.id, p.user_id, $1,
        (SELECT COALESCE(MAX(a.sort_order), 0) + 1 FROM achievements a WHERE a.position_id = p.id)
 FROM positions p
 WHERE p.user_id = $2 AND p.id = $3
-RETURNING id, position_id, user_id, text, sort_order, created_at, updated_at
+RETURNING id, position_id, user_id, text, sort_order, created_at, updated_at, context
 `
 
 type CreateAchievementParams struct {
@@ -37,6 +37,7 @@ func (q *Queries) CreateAchievement(ctx context.Context, arg CreateAchievementPa
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Context,
 	)
 	return i, err
 }
@@ -142,7 +143,7 @@ func (q *Queries) GetPosition(ctx context.Context, arg GetPositionParams) (Posit
 }
 
 const listAchievements = `-- name: ListAchievements :many
-SELECT id, position_id, user_id, text, sort_order, created_at, updated_at FROM achievements
+SELECT id, position_id, user_id, text, sort_order, created_at, updated_at, context FROM achievements
 WHERE user_id = $1
 ORDER BY sort_order, created_at
 `
@@ -164,6 +165,7 @@ func (q *Queries) ListAchievements(ctx context.Context, userID pgtype.UUID) ([]A
 			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Context,
 		); err != nil {
 			return nil, err
 		}
@@ -252,11 +254,32 @@ func (q *Queries) ReorderPositions(ctx context.Context, arg ReorderPositionsPara
 	return result.RowsAffected(), nil
 }
 
+const setAchievementContexts = `-- name: SetAchievementContexts :execrows
+UPDATE achievements a
+SET context = ($1::text[])[o.ord], updated_at = NOW()
+FROM unnest($3::uuid[]) WITH ORDINALITY AS o(id, ord)
+WHERE a.user_id = $2 AND a.id = o.id
+`
+
+type SetAchievementContextsParams struct {
+	Contexts []string
+	UserID   pgtype.UUID
+	Ids      []pgtype.UUID
+}
+
+func (q *Queries) SetAchievementContexts(ctx context.Context, arg SetAchievementContextsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setAchievementContexts, arg.Contexts, arg.UserID, arg.Ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateAchievement = `-- name: UpdateAchievement :one
 UPDATE achievements
 SET text = $1, updated_at = NOW()
 WHERE user_id = $2 AND id = $3
-RETURNING id, position_id, user_id, text, sort_order, created_at, updated_at
+RETURNING id, position_id, user_id, text, sort_order, created_at, updated_at, context
 `
 
 type UpdateAchievementParams struct {
@@ -276,6 +299,7 @@ func (q *Queries) UpdateAchievement(ctx context.Context, arg UpdateAchievementPa
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Context,
 	)
 	return i, err
 }

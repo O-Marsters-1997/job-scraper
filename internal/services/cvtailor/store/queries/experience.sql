@@ -57,3 +57,9 @@ WHERE a.user_id = sqlc.arg(user_id) AND a.position_id = sqlc.arg(position_id) AN
 
 -- name: GetPosition :one
 SELECT * FROM positions WHERE user_id = $1 AND id = $2;
+
+-- name: SetAchievementContexts :execrows
+UPDATE achievements a
+SET context = (sqlc.arg(contexts)::text[])[o.ord], updated_at = NOW()
+FROM unnest(sqlc.arg(ids)::uuid[]) WITH ORDINALITY AS o(id, ord)
+WHERE a.user_id = sqlc.arg(user_id) AND a.id = o.id;

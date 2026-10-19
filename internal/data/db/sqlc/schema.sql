@@ -143,7 +143,8 @@ CREATE TABLE achievements (
     text        TEXT        NOT NULL,
     sort_order  INT         NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    context     TEXT        NOT NULL DEFAULT ''
 );
 CREATE INDEX achievements_position_sort_idx ON achievements (position_id, sort_order);
 

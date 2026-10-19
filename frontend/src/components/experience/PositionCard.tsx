@@ -230,9 +230,14 @@ function AchievementRow(props: {
 							aria-hidden="true"
 							class="mt-2 size-1 shrink-0 rounded-full bg-faint"
 						/>
-						<p class="flex-1 text-sm text-foreground">
-							{props.achievement.text}
-						</p>
+						<div class="flex-1">
+							<p class="text-sm text-foreground">{props.achievement.text}</p>
+							<Show when={props.achievement.context}>
+								<p class="mt-0.5 text-sm text-muted" data-testid="context">
+									{props.achievement.context}
+								</p>
+							</Show>
+						</div>
 						<div class="flex shrink-0 items-center">
 							<button
 								type="button"

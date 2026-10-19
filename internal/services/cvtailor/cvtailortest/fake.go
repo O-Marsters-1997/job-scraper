@@ -194,6 +194,20 @@ func (f *FakeStore) DeleteAchievement(_ context.Context, userID, id string) erro
 	return nil
 }
 
+func (f *FakeStore) SetAchievementContexts(_ context.Context, userID string, ids, contexts []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, id := range ids {
+		if a, ok := f.achievements[id]; !ok || a.userID != userID {
+			return errAchievementNotFound
+		}
+	}
+	for i, id := range ids {
+		f.achievements[id].Context = contexts[i]
+	}
+	return nil
+}
+
 func (f *FakeStore) ReorderAchievements(_ context.Context, userID, positionID string, ids []string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
