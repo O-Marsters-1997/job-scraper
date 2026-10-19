@@ -44,6 +44,8 @@ type Scaffolder interface {
 	Scaffold(ctx context.Context, apiKey string, in letterwrite.Input) (letterwrite.Result, error)
 }
 
+var _ Scaffolder = (*letterwrite.Client)(nil)
+
 // Credentials reads a user's stored provider API key.
 type Credentials interface {
 	Get(ctx context.Context, userID, provider string) (string, error)
