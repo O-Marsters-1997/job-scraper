@@ -91,7 +91,7 @@ func (m *Module) chosenAchievements(ctx context.Context, userID string, ids []st
 		if !ok {
 			return nil, apperr.Invalid("unknown achievement")
 		}
-		out[i] = letterwrite.Achievement{ID: a.ID, Text: a.Text}
+		out[i] = letterwrite.Achievement{ID: a.ID, Text: a.Text, Context: a.Context}
 	}
 	return out, nil
 }

@@ -11,7 +11,9 @@ Rules:
   note, not a sentence lifted from the CV and not finished letter prose.
 - Cite the id of every Achievement a bullet draws on. Use only ids from the
   list and only facts those Achievements state. Never invent numbers,
-  technologies, employers, scope or outcomes.
+  technologies, employers, scope or outcomes. An Achievement may carry a
+  context line giving the why, constraints and trade-offs behind it; use it as
+  fact about that Achievement, and cite the same id.
 - Where the job asks for something the Achievements barely cover, add a bullet
   with gap set to true, saying what is wanted. It cites no Achievements.
 - Return one entry per source paragraph, with sourceIndex set to the number

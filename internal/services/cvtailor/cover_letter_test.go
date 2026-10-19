@@ -100,7 +100,7 @@ func TestScaffold(t *testing.T) {
 			JobDescription: "We need a Go engineer.", Company: "Acme", Role: "Platform Engineer",
 			Sections:         []string{"fit", "why us"},
 			SourceParagraphs: []string{"I led a platform team.", "I want to join you."},
-			Achievements:     []letterwrite.Achievement{{ID: e.pos.Achievements[0].ID, Text: e.pos.Achievements[0].Text}},
+			Achievements:     []letterwrite.Achievement{{ID: e.pos.Achievements[0].ID, Text: e.pos.Achievements[0].Text, Context: e.pos.Achievements[0].Context}},
 		}}
 		if diff := cmp.Diff(want, sc.Inputs); diff != "" {
 			t.Errorf("model input (-want +got):\n%s", diff)

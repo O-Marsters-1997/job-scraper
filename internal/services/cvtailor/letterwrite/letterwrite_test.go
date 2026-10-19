@@ -56,7 +56,7 @@ func input() letterwrite.Input {
 		Sections:         []string{"Why this company", "Relevant experience"},
 		SourceParagraphs: []string{"I admire Acme.", "At Globex I built APIs."},
 		Achievements: []letterwrite.Achievement{
-			{ID: "ach-1", Text: "Cut p99 latency"},
+			{ID: "ach-1", Text: "Cut p99 latency", Context: "Legacy cache constrained the fix"},
 			{ID: "ach-2", Text: "Ran on-call"},
 		},
 	}
@@ -103,7 +103,7 @@ func TestClient_Scaffold(t *testing.T) {
 
 		user := got.Messages[1].Content
 		for _, want := range []string{
-			"- achievement id=ach-1: Cut p99 latency", "- achievement id=ach-2: Ran on-call",
+			"- achievement id=ach-1: Cut p99 latency\n  context: Legacy cache constrained the fix\n- achievement id=ach-2: Ran on-call\n\n",
 			"- Why this company", "- Relevant experience",
 			"paragraph 0:\nI admire Acme.", "paragraph 1:\nAt Globex I built APIs.",
 		} {

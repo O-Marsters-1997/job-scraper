@@ -125,6 +125,10 @@ func newDraftEnv(t *testing.T) draftEnv {
 		}
 		pos.Achievements = append(pos.Achievements, a)
 	}
+	if err := store.SetAchievementContexts(ctx, userID, []string{pos.Achievements[0].ID}, []string{"Legacy ORM constrained the fix"}); err != nil {
+		t.Fatal(err)
+	}
+	pos.Achievements[0].Context = "Legacy ORM constrained the fix"
 	if err := store.SaveHeadingMappings(ctx, userID, docID, tabID, []dto.HeadingMapping{{HeadingText: heading, PositionID: &pos.ID}}); err != nil {
 		t.Fatal(err)
 	}
