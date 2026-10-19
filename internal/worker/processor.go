@@ -153,10 +153,23 @@ func (p *Processor) verifyBoard(ctx context.Context, task queue.Task) error {
 		slog.WarnContext(ctx, "board verification failed", slog.String(logger.KeyCompanyID, task.CompanyID), slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		return nil
 	}
-	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, verified.Method, task.Via); err != nil {
+	board, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, verified.Method, task.Via)
+	if err != nil {
 		return err
 	}
-	return p.nameCompany(ctx, task.CompanyID, verified.CompanyName)
+	if err := p.nameCompany(ctx, task.CompanyID, verified.CompanyName); err != nil {
+		return err
+	}
+	if !task.Poll {
+		return nil
+	}
+	if err := p.boards.PollBoard(ctx, board.ID, true); err != nil {
+		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
+			return &queue.DeferError{Until: until, Err: err}
+		}
+		return err
+	}
+	return nil
 }
 
 func (p *Processor) nameCompany(ctx context.Context, companyID, name string) error {

@@ -102,6 +102,48 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		}
 	})
 
+	t.Run("urgent task is consumed while its source queue holds a backlog", func(t *testing.T) {
+		blocker := queuetest.DetailTask("indeed")
+		backlog := queuetest.DetailTask("indeed")
+		urgent := queuetest.DetailTask("indeed")
+		urgent.Urgent = true
+		for _, task := range []queue.Task{blocker, backlog, urgent} {
+			if err := broker.Publish(ctx, task); err != nil {
+				t.Fatal(err)
+			}
+		}
+		t.Cleanup(func() { _, _ = ch.QueuePurge("source.indeed", false) })
+		consumeCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		var sawBacklog atomic.Bool
+		gotUrgent := make(chan struct{})
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_ = broker.Consume(consumeCtx, func(ctx context.Context, task queue.Task) error {
+				switch task.ID {
+				case urgent.ID:
+					close(gotUrgent)
+				case backlog.ID:
+					sawBacklog.Store(true)
+				default:
+					<-ctx.Done()
+				}
+				return nil
+			}, nil)
+		}()
+		select {
+		case <-gotUrgent:
+		case <-time.After(5 * time.Second):
+			t.Fatal("urgent task not consumed while source queue was blocked")
+		}
+		if sawBacklog.Load() {
+			t.Fatal("backlog task consumed behind the blocked source delivery")
+		}
+		cancel()
+		<-done
+	})
+
 	t.Run("board discover yields to board check", func(t *testing.T) {
 		discover := queue.Task{Version: 1, ID: uuid.NewString(), Source: "ashby", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}
 		check := queue.Task{Version: 1, ID: uuid.NewString(), Source: "ashby", Kind: queue.BoardCheckTask, BoardID: uuid.NewString()}
