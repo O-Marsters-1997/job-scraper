@@ -18,6 +18,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/letterwrite"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
@@ -38,6 +39,12 @@ type Editor interface {
 	Suggest(ctx context.Context, apiKey string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error)
 	Explain(ctx context.Context, apiKey string, in cvedit.ExplainInput) (cvedit.ExplainResult, error)
 }
+
+type Scaffolder interface {
+	Scaffold(ctx context.Context, apiKey string, in letterwrite.Input) (letterwrite.Result, error)
+}
+
+var _ Scaffolder = (*letterwrite.Client)(nil)
 
 // Credentials reads a user's stored provider API key.
 type Credentials interface {

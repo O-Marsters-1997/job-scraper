@@ -45,6 +45,8 @@ type Store interface {
 	CompleteDraft(ctx context.Context, claim dto.DraftClaim, res dto.DraftResult) error
 	FailDraft(ctx context.Context, claim dto.DraftClaim, failure dto.DraftFailure) error
 	JobDescription(ctx context.Context, jobID string) (string, error)
+	GetLetterSkeleton(ctx context.Context, userID string) (dto.LetterSkeleton, error)
+	SaveLetterSkeleton(ctx context.Context, userID string, in dto.LetterSkeleton) (dto.LetterSkeleton, error)
 }
 
 type Service struct {

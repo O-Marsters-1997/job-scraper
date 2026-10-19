@@ -31,6 +31,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Run("bank skills", func(t *testing.T) { runBankSkillContract(t, newStore) })
 	t.Run("heading mappings", func(t *testing.T) { runHeadingMappingContract(t, newStore) })
 	t.Run("drafts", func(t *testing.T) { runDraftContract(t, newStore) })
+	t.Run("letter skeletons", func(t *testing.T) { runLetterSkeletonContract(t, newStore) })
 }
 
 func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {

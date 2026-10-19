@@ -452,6 +452,14 @@ type JobView struct {
 	SeenAt pgtype.Timestamptz
 }
 
+type LetterSkeleton struct {
+	UserID     pgtype.UUID
+	Intro      string
+	Conclusion string
+	Sections   []string
+	UpdatedAt  pgtype.Timestamptz
+}
+
 type NotificationDigest struct {
 	ID       pgtype.UUID
 	SentAt   pgtype.Timestamptz
