@@ -77,6 +77,9 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 	if role, _ := sourcespec.SourceRole(in.Source); role == sourcespec.RoleATS {
 		return dto.SourceTarget{}, apperr.Invalid("ATS boards are tracked as companies — add it under Company boards")
 	}
+	if role, _ := sourcespec.SourceRole(in.Source); role == sourcespec.RoleLinkOnly {
+		return dto.SourceTarget{}, apperr.Invalid("that source can't be searched")
+	}
 	if role, _ := sourcespec.SourceRole(in.Source); role == sourcespec.RoleDiscovery {
 		if t := detect.Detect(in.Value); t != detect.UnknownHTML && t != detect.Aggregator {
 			return dto.SourceTarget{}, apperr.Invalid("that looks like an ATS board — add it under Company boards")
