@@ -25,7 +25,7 @@ type recordingQueue struct {
 }
 
 func (q *recordingQueue) Publish(_ context.Context, task queue.Task) error {
-	if task.BoardID == q.failFor {
+	if q.failFor != "" && task.BoardID == q.failFor {
 		return errors.New("broker down")
 	}
 	q.tasks = append(q.tasks, task)

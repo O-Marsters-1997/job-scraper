@@ -5,6 +5,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
 func TestAddManualJob(t *testing.T) {
@@ -13,7 +14,7 @@ func TestAddManualJob(t *testing.T) {
 
 	t.Run("an ATS url saves the job on the candidate board, with its posting ID, and tracks the company", func(t *testing.T) {
 		t.Parallel()
-		svc, st := newCompanyService(nil)
+		svc, st := newCompanyService(&recordingQueue{})
 		got, err := svc.AddManualJob(t.Context(), userID, dto.AddManualJobInput{URL: greenhouseURL, Title: "Engineer", Company: "Acme Ltd"})
 		if err != nil {
 			t.Fatalf("AddManualJob(...) err = %v", err)
@@ -33,7 +34,7 @@ func TestAddManualJob(t *testing.T) {
 
 	t.Run("a url with no ATS saves a job with source other", func(t *testing.T) {
 		t.Parallel()
-		svc, _ := newCompanyService(nil)
+		svc, _ := newCompanyService(&recordingQueue{})
 		got, err := svc.AddManualJob(t.Context(), userID, dto.AddManualJobInput{URL: "https://careers.example.com/role/9", Title: "Engineer", Company: "Example Co"})
 		if err != nil {
 			t.Fatalf("AddManualJob(...) err = %v", err)
@@ -46,7 +47,7 @@ func TestAddManualJob(t *testing.T) {
 	t.Run("a url already held returns the existing job unchanged", func(t *testing.T) {
 		t.Parallel()
 		for _, url := range []string{greenhouseURL, "https://careers.example.com/role/9"} {
-			svc, _ := newCompanyService(nil)
+			svc, _ := newCompanyService(&recordingQueue{})
 			in := dto.AddManualJobInput{URL: url, Title: "Engineer", Company: "Acme", Description: "crawled"}
 			first, err := svc.AddManualJob(t.Context(), userID, in)
 			if err != nil {
@@ -65,7 +66,7 @@ func TestAddManualJob(t *testing.T) {
 
 	t.Run("a crawled job is returned for its posting even when the url differs", func(t *testing.T) {
 		t.Parallel()
-		svc, st := newCompanyService(nil)
+		svc, st := newCompanyService(&recordingQueue{})
 		company := seedCompany(t, st, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
 		board, err := st.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "acme")
 		if err != nil {
@@ -84,6 +85,63 @@ func TestAddManualJob(t *testing.T) {
 		}
 	})
 
+	t.Run("a new job on a verified board publishes an urgent manual board check", func(t *testing.T) {
+		t.Parallel()
+		q := &recordingQueue{}
+		svc, st := newCompanyService(q)
+		verified, _ := seedBoards(t, st)
+		if _, err := svc.AddManualJob(t.Context(), userID, dto.AddManualJobInput{URL: greenhouseURL, Title: "Engineer"}); err != nil {
+			t.Fatalf("AddManualJob(...) err = %v", err)
+		}
+		if len(q.tasks) != 1 || q.tasks[0].Kind != queue.BoardCheckTask || q.tasks[0].BoardID != verified.ID || !q.tasks[0].Manual || !q.tasks[0].Urgent {
+			t.Errorf("published = %+v, want one urgent manual board check for %s", q.tasks, verified.ID)
+		}
+	})
+
+	t.Run("a new job on an unverified board publishes an urgent polling verify", func(t *testing.T) {
+		t.Parallel()
+		q := &recordingQueue{}
+		svc, _ := newCompanyService(q)
+		got, err := svc.AddManualJob(t.Context(), userID, dto.AddManualJobInput{URL: greenhouseURL, Title: "Engineer"})
+		if err != nil {
+			t.Fatalf("AddManualJob(...) err = %v", err)
+		}
+		if len(q.tasks) != 1 {
+			t.Fatalf("published = %+v, want one task", q.tasks)
+		}
+		if task := q.tasks[0]; task.Kind != queue.BoardVerifyTask || task.CompanyID != got.Job.CompanyID || task.BoardToken != "acme" || !task.Poll || !task.Urgent {
+			t.Errorf("published = %+v, want urgent polling verify for acme", task)
+		}
+	})
+
+	t.Run("a non-ATS url publishes nothing", func(t *testing.T) {
+		t.Parallel()
+		q := &recordingQueue{}
+		svc, _ := newCompanyService(q)
+		in := dto.AddManualJobInput{URL: "https://careers.example.com/role/9", Title: "Engineer", Company: "Example"}
+		if _, err := svc.AddManualJob(t.Context(), userID, in); err != nil {
+			t.Fatalf("AddManualJob(...) err = %v", err)
+		}
+		if len(q.tasks) != 0 {
+			t.Errorf("published = %+v, want nothing", q.tasks)
+		}
+	})
+
+	t.Run("re-adding a held ATS url publishes nothing more", func(t *testing.T) {
+		t.Parallel()
+		q := &recordingQueue{}
+		svc, _ := newCompanyService(q)
+		in := dto.AddManualJobInput{URL: greenhouseURL, Title: "Engineer"}
+		for range 2 {
+			if _, err := svc.AddManualJob(t.Context(), userID, in); err != nil {
+				t.Fatalf("AddManualJob(...) err = %v", err)
+			}
+		}
+		if len(q.tasks) != 1 {
+			t.Errorf("published = %+v, want only the first add's task", q.tasks)
+		}
+	})
+
 	t.Run("rejects missing input", func(t *testing.T) {
 		t.Parallel()
 		for _, in := range []dto.AddManualJobInput{
@@ -92,7 +150,7 @@ func TestAddManualJob(t *testing.T) {
 			{URL: "https://careers.example.com/role/9", Title: "Engineer"},
 			{URL: "ftp://careers.example.com/role/9", Title: "Engineer", Company: "Acme"},
 		} {
-			svc, _ := newCompanyService(nil)
+			svc, _ := newCompanyService(&recordingQueue{})
 			if _, err := svc.AddManualJob(t.Context(), userID, in); !apperr.IsKind(err, apperr.KindInvalid) {
 				t.Errorf("AddManualJob(%+v) err = %v, want kind %v", in, err, apperr.KindInvalid)
 			}
