@@ -38,8 +38,9 @@ func NewClientAt(baseURL string, httpClient *http.Client) *Client {
 }
 
 type Achievement struct {
-	ID   string
-	Text string
+	ID      string
+	Text    string
+	Context string
 }
 
 type Input struct {
@@ -104,6 +105,9 @@ func renderTask(in Input) string {
 	b.WriteString("\nAchievements:\n")
 	for _, a := range in.Achievements {
 		fmt.Fprintf(&b, "- achievement id=%s: %s\n", a.ID, a.Text)
+		if a.Context != "" {
+			fmt.Fprintf(&b, "  context: %s\n", a.Context)
+		}
 	}
 	b.WriteString("\nSource paragraphs:\n")
 	for i, p := range in.SourceParagraphs {
