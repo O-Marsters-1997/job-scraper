@@ -99,6 +99,7 @@ func TestCreate(t *testing.T) {
 			{"missing source and value", dto.CreateSourceTargetInput{}},
 			{"unsupported source", dto.CreateSourceTargetInput{Source: "unknown-ats", Value: "x"}},
 			{"ATS source", dto.CreateSourceTargetInput{Source: "greenhouse", Value: "acme"}},
+			{"link-only source", dto.CreateSourceTargetInput{Source: "other", Value: "https://example.com/job"}},
 		}
 		svc, _, _ := newService(t)
 		for _, tt := range tests {

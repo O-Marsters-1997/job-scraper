@@ -266,7 +266,7 @@ func ValidFilterValue(source, field, value string) bool {
 	return false
 }
 
-// SourceRole returns the role (RoleATS | RoleDiscovery) for a source, plus whether
+// SourceRole returns the role (RoleATS | RoleDiscovery | RoleLinkOnly) for a source, plus whether
 // the source name is known.
 func SourceRole(name string) (string, bool) {
 	e, ok := findEntry(name)
