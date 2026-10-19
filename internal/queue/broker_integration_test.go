@@ -62,17 +62,17 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = broker.Close() })
+	defer func() { _ = broker.Close() }()
 	conn, err := amqp.Dial(url)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = conn.Close() })
+	defer func() { _ = conn.Close() }()
 	ch, err := conn.Channel()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = ch.Close() })
+	defer func() { _ = ch.Close() }()
 
 	t.Run("priority and mandatory return", func(t *testing.T) {
 		detail := queuetest.DetailTask("wis")
@@ -102,8 +102,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		}
 	})
 
-	t.Run("urgent task is consumed while its source queue holds a backlog", func(t *testing.T) {
-		t.Parallel()
+	t.Run("urgent task is consumed while its source queue holds a backlog", func(t *testing.T) { //nolint:paralleltest // subtests share one broker and the restart subtest stops it
 		blocker := queuetest.DetailTask("indeed")
 		backlog := queuetest.DetailTask("indeed")
 		urgent := queuetest.DetailTask("indeed")
