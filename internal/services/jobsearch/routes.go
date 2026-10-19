@@ -15,6 +15,7 @@ import (
 
 func (m *Module) Routes(r chi.Router) {
 	r.Get("/jobs", handlers.Query(m.jobs.List))
+	r.Get("/jobs/overview", handlers.Query(m.jobs.Overview))
 	r.Post("/jobs/seen", handlers.Create(m.jobs.MarkSeen))
 	r.Get("/jobs/{id}", handlers.GetByID(m.jobs.Get))
 

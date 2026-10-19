@@ -4,8 +4,6 @@ import { PageHeading } from "@/components/PageHeading";
 import {
 	applicationStats,
 	chasesDue,
-	highValueJobs,
-	jobStats,
 	pipelineSegments,
 	RECENT_LIMIT,
 } from "@/lib/overview";
@@ -20,7 +18,7 @@ import {
 	useApplications,
 	useChases,
 } from "../../hooks/useApplications";
-import { allJobsQueryOptions, useAllJobs } from "../../hooks/useJobs";
+import { jobOverviewQueryOptions, useJobOverview } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
 import { ChasesDueCard } from "./-overview/ChasesDueCard";
 import { PipelineCard } from "./-overview/PipelineCard";
@@ -32,27 +30,31 @@ export const Route = createFileRoute("/_auth/overview")({
 	loader: () => {
 		void queryClient.prefetchQuery(chasesQueryOptions);
 		return Promise.all([
-			queryClient.ensureQueryData(allJobsQueryOptions),
+			queryClient
+				.ensureQueryData(aiPrefsQueryOptions)
+				.then((prefs) =>
+					queryClient.ensureQueryData(
+						jobOverviewQueryOptions(prefs.scoringEnabled),
+					),
+				),
 			queryClient.ensureQueryData(applicationsQueryOptions()),
 			queryClient.ensureQueryData(applicationStatusesQueryOptions),
-			queryClient.ensureQueryData(aiPrefsQueryOptions),
 		]);
 	},
 	component: OverviewPage,
 });
 
 function OverviewPage() {
-	const jobsQuery = useAllJobs();
+	const aiPrefs = useAiPrefs();
+	const ranked = () => aiPrefs.data?.scoringEnabled ?? true;
+	const overview = useJobOverview(ranked);
 	const appsQuery = useApplications();
 	const chasesQuery = useChases();
 	const statusesQuery = useApplicationStatuses();
-	const aiPrefs = useAiPrefs();
 
-	const jobs = () => jobsQuery.data ?? [];
 	const applications = () => appsQuery.data ?? [];
 	const statuses = () => statusesQuery.data ?? [];
 
-	const jobSummary = createMemo(() => jobStats(jobs()));
 	const appSummary = createMemo(() =>
 		applicationStats(applications(), statuses()),
 	);
@@ -60,9 +62,8 @@ function OverviewPage() {
 		pipelineSegments(applications(), statuses()),
 	);
 	const due = createMemo(() => chasesDue(chasesQuery.data ?? []));
-	const highValue = createMemo(() =>
-		highValueJobs(jobs(), aiPrefs.data?.scoringEnabled ?? true),
-	);
+	const jobSummary = () =>
+		overview.data ?? { total: 0, sources: 0, newToday: 0, todaySources: 0 };
 
 	return (
 		<div class="px-7 py-6">
@@ -72,7 +73,7 @@ function OverviewPage() {
 			<PipelineCard segments={segments()} />
 			<ChasesDueCard chases={due().slice(0, RECENT_LIMIT)} />
 			<div class="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_300px]">
-				<RecentJobsCard jobs={highValue().jobs} ranked={highValue().ranked} />
+				<RecentJobsCard jobs={overview.data?.top ?? []} ranked={ranked()} />
 				<RecentApplicationsCard
 					applications={applications().slice(0, RECENT_LIMIT)}
 				/>

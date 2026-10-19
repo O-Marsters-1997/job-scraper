@@ -148,3 +148,36 @@ func TestListHidesExcludedCompanies(t *testing.T) {
 		t.Errorf("List() = %+v, want only the globex job", page.Items)
 	}
 }
+
+func TestOverview(t *testing.T) {
+	t.Parallel()
+	svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
+
+	t.Run("rejects a malformed day_start", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.Overview(t.Context(), userID, dto.JobOverviewQuery{DayStart: "today"})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("Overview() err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+
+	t.Run("rejects an unknown ranked value", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.Overview(t.Context(), userID, dto.JobOverviewQuery{Ranked: "false"})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("Overview() err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+
+	t.Run("an empty search returns zero stats and an empty, non-nil top list", func(t *testing.T) {
+		t.Parallel()
+		got, err := svc.Overview(t.Context(), userID, dto.JobOverviewQuery{})
+		if err != nil {
+			t.Fatalf("Overview() err = %v", err)
+		}
+		want := dto.JobOverview{Top: []dto.Job{}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Overview() (-want +got):\n%s", diff)
+		}
+	})
+}

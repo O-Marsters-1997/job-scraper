@@ -12,6 +12,8 @@ WHERE j.closed_at IS NULL
   AND (sqlc.narg(company_id)::uuid IS NULL OR j.company_id = sqlc.narg(company_id)::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = sqlc.narg(company_id)::uuid)))
   AND (NOT sqlc.arg(scored_only)::bool OR js.job_id IS NOT NULL)
   AND (sqlc.narg(min_suitability)::int IS NULL OR js.suitability_score >= sqlc.narg(min_suitability)::int)
+  AND (cardinality(sqlc.arg(bands)::text[]) = 0 OR js.band = ANY(sqlc.arg(bands)::text[]))
+  AND (sqlc.narg(scraped_since)::timestamptz IS NULL OR j.scraped_at >= sqlc.narg(scraped_since)::timestamptz)
   AND (sqlc.arg(graded)::text = 'all' OR (sqlc.arg(graded)::text = 'graded') = (COALESCE(jg.grade, '') <> ''))
   AND (sqlc.arg(seen)::text = 'all' OR (sqlc.arg(seen)::text = 'seen') = (jv.job_id IS NOT NULL))
   AND (sqlc.arg(poster)::text = 'all' OR (sqlc.arg(poster)::text = 'agency') = (COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified') IN ('agency', 'likely_agency')))
@@ -47,6 +49,8 @@ WHERE j.closed_at IS NULL
   AND (sqlc.narg(company_id)::uuid IS NULL OR j.company_id = sqlc.narg(company_id)::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = sqlc.narg(company_id)::uuid)))
   AND (NOT sqlc.arg(scored_only)::bool OR js.job_id IS NOT NULL)
   AND (sqlc.narg(min_suitability)::int IS NULL OR js.suitability_score >= sqlc.narg(min_suitability)::int)
+  AND (cardinality(sqlc.arg(bands)::text[]) = 0 OR js.band = ANY(sqlc.arg(bands)::text[]))
+  AND (sqlc.narg(scraped_since)::timestamptz IS NULL OR j.scraped_at >= sqlc.narg(scraped_since)::timestamptz)
   AND (sqlc.arg(graded)::text = 'all' OR (sqlc.arg(graded)::text = 'graded') = (COALESCE(jg.grade, '') <> ''))
   AND (sqlc.arg(seen)::text = 'all' OR (sqlc.arg(seen)::text = 'seen') = (jv.job_id IS NOT NULL))
   AND (sqlc.arg(poster)::text = 'all' OR (sqlc.arg(poster)::text = 'agency') = (COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified') IN ('agency', 'likely_agency')))
@@ -88,3 +92,17 @@ SELECT source, normalized_url, first_seen_at
 FROM job_urls
 WHERE job_id = $1
 ORDER BY first_seen_at, normalized_url;
+
+-- name: JobStats :one
+SELECT count(*)::int AS total,
+       count(DISTINCT j.source)::int AS sources,
+       (count(*) FILTER (WHERE j.scraped_at >= sqlc.arg(day_start)::timestamptz))::int AS new_today,
+       (count(DISTINCT j.source) FILTER (WHERE j.scraped_at >= sqlc.arg(day_start)::timestamptz))::int AS today_sources
+FROM jobs j
+JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = sqlc.arg(user_id)::uuid
+WHERE j.closed_at IS NULL
+  AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > sqlc.arg(now)::timestamptz - interval '90 days'
+  AND COALESCE(j.company_slug, '') <> ALL(sqlc.arg(excluded_company_slugs)::text[])
+  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND jg.grade IS DISTINCT FROM 'no';

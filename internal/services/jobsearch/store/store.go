@@ -104,6 +104,10 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 		Arrangements:         nonNil(options.Arrangements),
 		SalaryOnly:           options.SalaryOnly,
 		SearchPattern:        likePattern(options.Search),
+		Bands:                nonNil(options.Bands),
+	}
+	if options.ScrapedSince != nil {
+		filters.ScrapedSince = pgtype.Timestamptz{Time: *options.ScrapedSince, Valid: true}
 	}
 	if options.MinSuitability != nil {
 		filters.MinSuitability = pgtype.Int4{Int32: *options.MinSuitability, Valid: true}
@@ -121,6 +125,7 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 		Graded: filters.Graded, Seen: filters.Seen, Poster: filters.Poster, FavouriteOnly: filters.FavouriteOnly,
 		Sources: filters.Sources, Arrangements: filters.Arrangements, SalaryOnly: filters.SalaryOnly,
 		SalaryFloor: filters.SalaryFloor, SalaryCeiling: filters.SalaryCeiling, SearchPattern: filters.SearchPattern,
+		Bands: filters.Bands, ScrapedSince: filters.ScrapedSince,
 		Sort: string(options.Sort), PageOffset: options.Offset, PageLimit: options.Limit,
 	})
 	if err != nil {
@@ -145,6 +150,28 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 	}
 	page.Total = int(total)
 	return page, nil
+}
+
+func (s *Store) JobStats(ctx context.Context, userID string, options dto.JobStatsOptions) (dto.JobStats, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobStats{}, ErrInvalidID
+	}
+	row, err := s.queries.JobStats(ctx, sqlc.JobStatsParams{
+		UserID:               uid,
+		Now:                  pgtype.Timestamptz{Time: options.Now, Valid: true},
+		DayStart:             pgtype.Timestamptz{Time: options.DayStart, Valid: true},
+		ExcludedCompanySlugs: nonNil(options.ExcludedCompanySlugs),
+	})
+	if err != nil {
+		return dto.JobStats{}, fmt.Errorf("job stats: %w", err)
+	}
+	return dto.JobStats{
+		Total:        int(row.Total),
+		Sources:      int(row.Sources),
+		NewToday:     int(row.NewToday),
+		TodaySources: int(row.TodaySources),
+	}, nil
 }
 
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
