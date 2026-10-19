@@ -172,6 +172,15 @@ const SOURCE_INFOS: SourceInfo[] = [
 		url_prefix: "https://remotive.com",
 		filters: [],
 	},
+	{
+		name: "other",
+		label: "Other",
+		kind: "url",
+		role: "link_only",
+		incremental: false,
+		url_prefix: "",
+		filters: [],
+	},
 ];
 
 export function getSources(): SourceInfo[] {

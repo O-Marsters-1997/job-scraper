@@ -10,6 +10,9 @@ import (
 
 func TestBuildSource_EveryRegisteredSourceInstantiates(t *testing.T) {
 	for _, info := range sourcespec.Sources() {
+		if info.Role == sourcespec.RoleLinkOnly {
+			continue
+		}
 		target := dto.SourceTarget{Source: info.Name, Enabled: true}
 		switch info.Kind {
 		case "board":

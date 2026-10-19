@@ -98,6 +98,79 @@ func (q *Queries) FindCanonicalJob(ctx context.Context, arg FindCanonicalJobPara
 	return i, err
 }
 
+const findJobByPosting = `-- name: FindJobByPosting :one
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after,
+    j.reposted_at, j.scraped_at, j.first_discovered_at, j.description, j.salary_raw,
+    j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint
+FROM jobs j
+WHERE ($1::text <> '' AND j.provider_posting_id = $1::text
+        AND j.primary_board_id = (SELECT b.id FROM company_boards b
+            WHERE b.source = $2::text AND b.board_token = $3::text))
+    OR j.url = $4::text
+    OR EXISTS (SELECT 1 FROM job_urls u WHERE u.job_id = j.id AND u.normalized_url = $4::text)
+ORDER BY j.first_discovered_at
+LIMIT 1
+`
+
+type FindJobByPostingParams struct {
+	PostingID string
+	Source    string
+	Token     string
+	Url       string
+}
+
+type FindJobByPostingRow struct {
+	ID                 pgtype.UUID
+	Title              string
+	Location           string
+	Url                string
+	CompanySlug        string
+	Source             string
+	PostedAt           pgtype.Timestamptz
+	PostedAfter        pgtype.Timestamptz
+	RepostedAt         pgtype.Timestamptz
+	ScrapedAt          pgtype.Timestamptz
+	FirstDiscoveredAt  pgtype.Timestamptz
+	Description        string
+	SalaryRaw          string
+	WorkArrangement    string
+	CompanyID          pgtype.UUID
+	PrimaryBoardID     pgtype.UUID
+	ProviderPostingID  pgtype.Text
+	ContentFingerprint pgtype.Text
+}
+
+func (q *Queries) FindJobByPosting(ctx context.Context, arg FindJobByPostingParams) (FindJobByPostingRow, error) {
+	row := q.db.QueryRow(ctx, findJobByPosting,
+		arg.PostingID,
+		arg.Source,
+		arg.Token,
+		arg.Url,
+	)
+	var i FindJobByPostingRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Location,
+		&i.Url,
+		&i.CompanySlug,
+		&i.Source,
+		&i.PostedAt,
+		&i.PostedAfter,
+		&i.RepostedAt,
+		&i.ScrapedAt,
+		&i.FirstDiscoveredAt,
+		&i.Description,
+		&i.SalaryRaw,
+		&i.WorkArrangement,
+		&i.CompanyID,
+		&i.PrimaryBoardID,
+		&i.ProviderPostingID,
+		&i.ContentFingerprint,
+	)
+	return i, err
+}
+
 const findJobIDByURL = `-- name: FindJobIDByURL :one
 SELECT id FROM jobs WHERE url = $1
 UNION ALL

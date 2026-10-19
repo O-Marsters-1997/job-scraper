@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { AddApplicationDialog } from "@/components/jobs/AddApplicationDialog";
 import {
 	TrackApplicationDialog,
 	toExistingApp,
@@ -7,6 +8,7 @@ import {
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { ToggleChip } from "@/components/ToggleChip";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatChaseDate, isChaseOverdue } from "@/lib/chase";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
@@ -23,6 +25,7 @@ import {
 } from "../../hooks/useApplications";
 import { queryClient } from "../../lib/queryClient";
 import type { ApplicationWithDetails } from "../../types/application";
+import type { Job } from "../../types/job";
 import { DeleteApplicationDialog } from "./-applications/DeleteApplicationDialog";
 import { SetAnotherChase } from "./-applications/SetAnotherChase";
 
@@ -61,6 +64,18 @@ function ApplicationsPage() {
 	const [deletingApp, setDeletingApp] =
 		createSignal<ApplicationWithDetails | null>(null);
 
+	const [addOpen, setAddOpen] = createSignal(false);
+	const [addedJob, setAddedJob] = createSignal<
+		Pick<Job, "ID" | "Title"> | undefined
+	>();
+
+	const startTracking = (job: Pick<Job, "ID" | "Title">) => {
+		setEditingApp(null);
+		setAddedJob(job);
+		setAddOpen(false);
+		setModalOpen(true);
+	};
+
 	const editing = () => {
 		const app = editingApp();
 		return app
@@ -72,6 +87,7 @@ function ApplicationsPage() {
 	};
 
 	const openEdit = (app: ApplicationWithDetails) => {
+		setAddedJob(undefined);
 		setEditingApp(app);
 		setModalOpen(true);
 	};
@@ -92,10 +108,15 @@ function ApplicationsPage() {
 
 	return (
 		<div class="px-7 py-6">
-			<PageHeading
-				title="Applications"
-				subtitle="Track where each application stands"
-			/>
+			<div class="flex items-start justify-between gap-4">
+				<PageHeading
+					title="Applications"
+					subtitle="Track where each application stands"
+				/>
+				<Button type="button" onClick={() => setAddOpen(true)}>
+					Add application
+				</Button>
+			</div>
 
 			<div class="mb-4 flex flex-wrap items-center gap-1.5">
 				<ToggleChip
@@ -258,8 +279,14 @@ function ApplicationsPage() {
 			<TrackApplicationDialog
 				open={modalOpen()}
 				onOpenChange={setModalOpen}
-				job={editing()?.job}
+				job={editing()?.job ?? addedJob()}
 				existingApp={editing()?.existing}
+			/>
+
+			<AddApplicationDialog
+				open={addOpen()}
+				onOpenChange={setAddOpen}
+				onAdded={startTracking}
 			/>
 
 			<DeleteApplicationDialog

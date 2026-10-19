@@ -491,6 +491,41 @@ func TestProcess(t *testing.T) {
 			}
 		}
 	})
+
+	for _, tt := range []struct {
+		name         string
+		poll         bool
+		wantIngested int32
+	}{
+		{name: "board verify without poll only verifies", poll: false, wantIngested: 0},
+		{name: "board verify with poll verifies then polls the board", poll: true, wantIngested: 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newFixture(t, http.StatusOK, "")
+			company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.store.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme"); err != nil {
+				t.Fatal(err)
+			}
+			task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardVerifyTask, CompanyID: company.ID, BoardToken: "acme", Poll: tt.poll}
+			if err := f.processor.Process(ctx, task); err != nil {
+				t.Fatalf("Process() = %v, want nil", err)
+			}
+			boards, err := f.store.ListCompanyBoards(ctx, company.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(boards) != 1 || boards[0].Status != dto.BoardVerified {
+				t.Fatalf("boards = %+v, want one verified board", boards)
+			}
+			if got := f.ingest.requests.Load(); got != tt.wantIngested {
+				t.Fatalf("ingest requests = %d, want %d", got, tt.wantIngested)
+			}
+		})
+	}
 }
 
 type configsStub []dto.SearchConfig
