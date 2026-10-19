@@ -283,6 +283,19 @@ type CompanyProfile struct {
 	FetchedAt pgtype.Timestamptz
 }
 
+type CoverLetter struct {
+	ID             pgtype.UUID
+	UserID         pgtype.UUID
+	JobID          pgtype.UUID
+	SourceDocID    string
+	SourceTabID    string
+	ScaffoldTabID  string
+	AchievementIds []pgtype.UUID
+	Model          string
+	Cost           float32
+	CreatedAt      pgtype.Timestamptz
+}
+
 type CvHeadingMapping struct {
 	UserID      pgtype.UUID
 	DocID       string
