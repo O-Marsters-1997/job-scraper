@@ -5,10 +5,13 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/slug"
 )
 
@@ -32,7 +35,8 @@ func (s *Service) AddManualJob(ctx context.Context, userID string, in dto.AddMan
 	}
 
 	job := dto.Job{URL: in.URL, Title: in.Title, Description: in.Description}
-	if source, token, ok := detect.ResolveBoard(in.URL); ok {
+	source, token, isATS := detect.ResolveBoard(in.URL)
+	if isATS {
 		if err := s.trackATSCompany(ctx, userID, &job, source, token, postingID, in); err != nil {
 			return dto.ManualJobResult{}, err
 		}
@@ -51,7 +55,27 @@ func (s *Service) AddManualJob(ctx context.Context, userID string, in dto.AddMan
 	if res.Status == "rejected" {
 		return dto.ManualJobResult{}, apperr.Invalid(res.Reason)
 	}
-	return s.manualResult(ctx, userID, res.JobID, res.Status != "new" && res.Status != "upgraded")
+	saved := res.Status == "new" || res.Status == "upgraded"
+	if isATS && saved {
+		if err := s.syncBoard(ctx, source, token, job.CompanyID); err != nil {
+			return dto.ManualJobResult{}, err
+		}
+	}
+	return s.manualResult(ctx, userID, res.JobID, !saved)
+}
+
+func (s *Service) syncBoard(ctx context.Context, source, token, companyID string) error {
+	task := queue.Task{Version: 1, ID: uuid.NewString(), Source: source, Urgent: true}
+	boardID, err := s.store.GetVerifiedBoardID(ctx, source, token)
+	switch {
+	case err == nil:
+		task.Kind, task.BoardID, task.Manual = queue.BoardCheckTask, boardID, true
+	case errors.Is(err, data.ErrNotFound):
+		task.Kind, task.CompanyID, task.BoardToken, task.Poll = queue.BoardVerifyTask, companyID, token, true
+	default:
+		return err
+	}
+	return s.queue.Publish(ctx, task)
 }
 
 func (s *Service) trackATSCompany(ctx context.Context, userID string, job *dto.Job, source, token, postingID string, in dto.AddManualJobInput) error {
