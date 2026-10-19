@@ -39,6 +39,8 @@ type Task struct {
 	Recovery    bool     `json:"recovery,omitempty"`
 	Via         string   `json:"via,omitempty"`
 	RequireUK   bool     `json:"require_uk,omitempty"`
+	Urgent      bool     `json:"urgent,omitempty"`
+	Poll        bool     `json:"poll,omitempty"`
 	Redelivered bool     `json:"-"`
 }
 
