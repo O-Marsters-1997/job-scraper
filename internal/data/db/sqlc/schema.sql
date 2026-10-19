@@ -178,7 +178,8 @@ CREATE TABLE cover_letters (
     achievement_ids UUID[]      NOT NULL,
     model           TEXT        NOT NULL,
     cost            REAL        NOT NULL DEFAULT 0,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    done_at         TIMESTAMPTZ
 );
 CREATE INDEX cover_letters_user_job_idx ON cover_letters (user_id, job_id, created_at DESC);
 

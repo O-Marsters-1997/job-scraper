@@ -1,4 +1,8 @@
-import type { CoverLetter, ScaffoldInput } from "../types/coverLetter";
+import type {
+	CoverLetter,
+	LetterCheck,
+	ScaffoldInput,
+} from "../types/coverLetter";
 
 const coverLetters: CoverLetter[] = [];
 
@@ -16,7 +20,25 @@ export function createCoverLetter(input: ScaffoldInput): CoverLetter {
 		achievementIds: input.achievementIds,
 		cost: 0.01,
 		createdAt: new Date().toISOString(),
+		doneAt: null,
 	};
 	coverLetters.push(letter);
+	return letter;
+}
+
+export function checkCoverLetter(_id: string): LetterCheck {
+	return {
+		words: 212,
+		findings: [
+			{ kind: "length", text: "212 words, aim for 250 to 400" },
+			{ kind: "leftover_gap", text: "[GAP] No Kubernetes yet" },
+		],
+	};
+}
+
+export function markCoverLetterDone(id: string): CoverLetter {
+	const letter = coverLetters.find((c) => c.id === id);
+	if (!letter) throw new Error("cover letter not found");
+	letter.doneAt ??= new Date().toISOString();
 	return letter;
 }

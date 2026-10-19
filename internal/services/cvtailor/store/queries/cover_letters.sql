@@ -3,13 +3,22 @@ INSERT INTO cover_letters (user_id, job_id, source_doc_id, source_tab_id, scaffo
 SELECT sqlc.arg(user_id)::uuid, j.id, sqlc.arg(source_doc_id)::text, sqlc.arg(source_tab_id)::text,
     sqlc.arg(scaffold_tab_id)::text, sqlc.arg(achievement_ids)::uuid[], sqlc.arg(model)::text, sqlc.arg(cost)::real
 FROM jobs j WHERE j.id = sqlc.arg(job_id)::uuid
-RETURNING id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at;
+RETURNING id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at, done_at;
 
 -- name: ListJobCoverLetters :many
-SELECT id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at
+SELECT id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at, done_at
 FROM cover_letters WHERE job_id = $1 AND user_id = $2
 ORDER BY created_at DESC, id
 LIMIT 100;
+
+-- name: GetCoverLetter :one
+SELECT id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at, done_at
+FROM cover_letters WHERE id = $1 AND user_id = $2;
+
+-- name: MarkCoverLetterDone :one
+UPDATE cover_letters SET done_at = COALESCE(done_at, NOW())
+WHERE id = $1 AND user_id = $2
+RETURNING id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at, done_at;
 
 -- name: IsLetterTab :one
 SELECT EXISTS (

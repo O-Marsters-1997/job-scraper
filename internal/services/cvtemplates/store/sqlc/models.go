@@ -294,6 +294,7 @@ type CoverLetter struct {
 	Model          string
 	Cost           float32
 	CreatedAt      pgtype.Timestamptz
+	DoneAt         pgtype.Timestamptz
 }
 
 type CvHeadingMapping struct {

@@ -11,6 +11,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/letterwrite"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 )
@@ -78,6 +79,32 @@ func (m *Module) Scaffold(ctx context.Context, userID string, in dto.ScaffoldInp
 
 func (s *Service) ListCoverLetters(ctx context.Context, userID string, q dto.CoverLetterJobQuery) ([]dto.CoverLetter, error) {
 	return s.store.ListJobCoverLetters(ctx, userID, q.JobID)
+}
+
+func (m *Module) CheckCoverLetter(ctx context.Context, userID string, q dto.CoverLetterQuery) (dto.LetterCheck, error) {
+	letter, err := m.store.GetCoverLetter(ctx, userID, q.ID)
+	if err != nil {
+		return dto.LetterCheck{}, err
+	}
+	brief, err := m.store.JobBrief(ctx, letter.JobID)
+	if err != nil {
+		return dto.LetterCheck{}, err
+	}
+	positions, err := m.store.ListPositions(ctx, userID)
+	if err != nil {
+		return dto.LetterCheck{}, err
+	}
+	var chosen []checks.LetterAchievement
+	for _, id := range letter.AchievementIDs {
+		if a, ok := findAchievement(positions, id); ok {
+			chosen = append(chosen, checks.LetterAchievement{ID: a.ID, Text: a.Text})
+		}
+	}
+	paragraphs, err := m.sourceParagraphs(ctx, userID, letter.SourceDocID, letter.ScaffoldTabID)
+	if err != nil {
+		return dto.LetterCheck{}, err
+	}
+	return checks.Letter(strings.Join(paragraphs, "\n"), brief.Company, brief.Title, chosen), nil
 }
 
 func (m *Module) chosenAchievements(ctx context.Context, userID string, ids []string) ([]letterwrite.Achievement, error) {

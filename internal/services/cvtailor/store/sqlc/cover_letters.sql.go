@@ -11,6 +11,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getCoverLetter = `-- name: GetCoverLetter :one
+SELECT id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at, done_at
+FROM cover_letters WHERE id = $1 AND user_id = $2
+`
+
+type GetCoverLetterParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) GetCoverLetter(ctx context.Context, arg GetCoverLetterParams) (CoverLetter, error) {
+	row := q.db.QueryRow(ctx, getCoverLetter, arg.ID, arg.UserID)
+	var i CoverLetter
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.JobID,
+		&i.SourceDocID,
+		&i.SourceTabID,
+		&i.ScaffoldTabID,
+		&i.AchievementIds,
+		&i.Model,
+		&i.Cost,
+		&i.CreatedAt,
+		&i.DoneAt,
+	)
+	return i, err
+}
+
 const getJobBrief = `-- name: GetJobBrief :one
 SELECT j.title, COALESCE(c.name, j.company_slug)::text AS company_name, j.description
 FROM jobs j
@@ -36,7 +65,7 @@ INSERT INTO cover_letters (user_id, job_id, source_doc_id, source_tab_id, scaffo
 SELECT $1::uuid, j.id, $2::text, $3::text,
     $4::text, $5::uuid[], $6::text, $7::real
 FROM jobs j WHERE j.id = $8::uuid
-RETURNING id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at
+RETURNING id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at, done_at
 `
 
 type InsertCoverLetterParams struct {
@@ -73,6 +102,7 @@ func (q *Queries) InsertCoverLetter(ctx context.Context, arg InsertCoverLetterPa
 		&i.Model,
 		&i.Cost,
 		&i.CreatedAt,
+		&i.DoneAt,
 	)
 	return i, err
 }
@@ -99,7 +129,7 @@ func (q *Queries) IsLetterTab(ctx context.Context, arg IsLetterTabParams) (bool,
 }
 
 const listJobCoverLetters = `-- name: ListJobCoverLetters :many
-SELECT id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at
+SELECT id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at, done_at
 FROM cover_letters WHERE job_id = $1 AND user_id = $2
 ORDER BY created_at DESC, id
 LIMIT 100
@@ -130,6 +160,7 @@ func (q *Queries) ListJobCoverLetters(ctx context.Context, arg ListJobCoverLette
 			&i.Model,
 			&i.Cost,
 			&i.CreatedAt,
+			&i.DoneAt,
 		); err != nil {
 			return nil, err
 		}
@@ -139,4 +170,34 @@ func (q *Queries) ListJobCoverLetters(ctx context.Context, arg ListJobCoverLette
 		return nil, err
 	}
 	return items, nil
+}
+
+const markCoverLetterDone = `-- name: MarkCoverLetterDone :one
+UPDATE cover_letters SET done_at = COALESCE(done_at, NOW())
+WHERE id = $1 AND user_id = $2
+RETURNING id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at, done_at
+`
+
+type MarkCoverLetterDoneParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) MarkCoverLetterDone(ctx context.Context, arg MarkCoverLetterDoneParams) (CoverLetter, error) {
+	row := q.db.QueryRow(ctx, markCoverLetterDone, arg.ID, arg.UserID)
+	var i CoverLetter
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.JobID,
+		&i.SourceDocID,
+		&i.SourceTabID,
+		&i.ScaffoldTabID,
+		&i.AchievementIds,
+		&i.Model,
+		&i.Cost,
+		&i.CreatedAt,
+		&i.DoneAt,
+	)
+	return i, err
 }

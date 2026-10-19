@@ -56,6 +56,39 @@ func runCoverLetterContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("marking done sets done_at once and only for the owner", func(t *testing.T) {
+		f := newStore(t)
+		in := dto.NewCoverLetter{JobID: f.JobID, SourceDocID: "doc", SourceTabID: "t.0", ScaffoldTabID: "t.1", AchievementIDs: []string{}, Model: "m"}
+		created, err := f.Store.CreateCoverLetter(ctx, f.UserID, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if created.DoneAt != nil {
+			t.Fatalf("new letter DoneAt = %v, want nil", created.DoneAt)
+		}
+		first, err := f.Store.MarkCoverLetterDone(ctx, f.UserID, created.ID)
+		if err != nil || first.DoneAt == nil {
+			t.Fatalf("MarkCoverLetterDone() = %+v, %v, want DoneAt set", first, err)
+		}
+		again, err := f.Store.MarkCoverLetterDone(ctx, f.UserID, created.ID)
+		if err != nil || again.DoneAt == nil || !again.DoneAt.Equal(*first.DoneAt) {
+			t.Errorf("second MarkCoverLetterDone() = %+v, %v, want DoneAt unchanged", again, err)
+		}
+		got, err := f.Store.GetCoverLetter(ctx, f.UserID, created.ID)
+		if err != nil || got.ScaffoldTabID != "t.1" || got.DoneAt == nil {
+			t.Errorf("GetCoverLetter() = %+v, %v, want scaffold tab t.1 and done", got, err)
+		}
+		if _, err := f.Store.MarkCoverLetterDone(ctx, f.Other, created.ID); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("other user's MarkCoverLetterDone() = %v, want not found", err)
+		}
+		if _, err := f.Store.GetCoverLetter(ctx, f.Other, created.ID); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("other user's GetCoverLetter() = %v, want not found", err)
+		}
+		if _, err := f.Store.GetCoverLetter(ctx, f.UserID, missingID); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("GetCoverLetter(missing) = %v, want not found", err)
+		}
+	})
+
 	t.Run("a missing job is not found", func(t *testing.T) {
 		f := newStore(t)
 		_, err := f.Store.CreateCoverLetter(ctx, f.UserID, dto.NewCoverLetter{JobID: missingID, AchievementIDs: []string{}})

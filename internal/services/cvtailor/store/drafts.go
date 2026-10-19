@@ -18,6 +18,8 @@ import (
 var (
 	ErrJobNotFound   = apperr.NotFound("job not found")
 	ErrDraftNotFound = apperr.NotFound("draft not found")
+
+	ErrCoverLetterNotFound = apperr.NotFound("cover letter not found")
 )
 
 var ErrKeptDraftExists = apperr.Conflict("this job already has a kept draft")
