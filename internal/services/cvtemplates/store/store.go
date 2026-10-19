@@ -33,7 +33,7 @@ func (s *Store) AddTrackedDoc(ctx context.Context, input dto.AddTrackedDocInput)
 	if err != nil {
 		return err
 	}
-	if err := s.queries.AddTrackedDoc(ctx, sqlc.AddTrackedDocParams{UserID: uid, DocID: input.DocID}); err != nil {
+	if err := s.queries.AddTrackedDoc(ctx, sqlc.AddTrackedDocParams{UserID: uid, DocID: input.DocID, Kind: string(input.Kind)}); err != nil {
 		return fmt.Errorf("store.AddTrackedDoc: %w", err)
 	}
 	return nil
@@ -54,12 +54,12 @@ func (s *Store) RemoveTrackedDoc(ctx context.Context, userID, docID string) erro
 	return nil
 }
 
-func (s *Store) ListTrackedDocs(ctx context.Context, userID string) ([]dto.TrackedDoc, error) {
+func (s *Store) ListTrackedDocs(ctx context.Context, userID string, kind dto.TrackedDocKind) ([]dto.TrackedDoc, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.queries.ListTrackedDocs(ctx, uid)
+	rows, err := s.queries.ListTrackedDocs(ctx, sqlc.ListTrackedDocsParams{UserID: uid, Kind: string(kind)})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListTrackedDocs: %w", err)
 	}

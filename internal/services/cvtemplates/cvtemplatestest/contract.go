@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 )
 
@@ -67,7 +68,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if second := Track(t, f.Store, f.UserID, "docA"); second != first {
 			t.Errorf("second Track = %q, want %q", second, first)
 		}
-		docs, err := f.Store.ListTrackedDocs(t.Context(), f.UserID)
+		docs, err := f.Store.ListTrackedDocs(t.Context(), f.UserID, dto.TrackedDocCV)
 		if err != nil {
 			t.Fatalf("ListTrackedDocs err = %v", err)
 		}
@@ -82,7 +83,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if err := f.Store.RemoveTrackedDoc(t.Context(), f.UserID, "docA"); err != nil {
 			t.Fatalf("RemoveTrackedDoc(docA) err = %v", err)
 		}
-		docs, err := f.Store.ListTrackedDocs(t.Context(), f.UserID)
+		docs, err := f.Store.ListTrackedDocs(t.Context(), f.UserID, dto.TrackedDocCV)
 		if err != nil {
 			t.Fatalf("ListTrackedDocs err = %v", err)
 		}
@@ -108,12 +109,27 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		f := newStore(t)
 		id := Track(t, f.Store, f.UserID, "docA")
 		Track(t, f.Store, f.Other, "docB")
-		got, err := f.Store.ListTrackedDocs(t.Context(), f.UserID)
+		got, err := f.Store.ListTrackedDocs(t.Context(), f.UserID, dto.TrackedDocCV)
 		if err != nil {
 			t.Fatalf("ListTrackedDocs err = %v", err)
 		}
 		if len(got) != 1 || got[0].ID != id {
 			t.Fatalf("ListTrackedDocs = %+v, want only doc %q", got, id)
+		}
+	})
+
+	t.Run("list filters by kind", func(t *testing.T) {
+		f := newStore(t)
+		cvID := TrackKind(t, f.Store, f.UserID, "docCV", dto.TrackedDocCV)
+		letterID := TrackKind(t, f.Store, f.UserID, "docLetter", dto.TrackedDocLetter)
+		for kind, wantID := range map[dto.TrackedDocKind]string{dto.TrackedDocCV: cvID, dto.TrackedDocLetter: letterID} {
+			got, err := f.Store.ListTrackedDocs(t.Context(), f.UserID, kind)
+			if err != nil {
+				t.Fatalf("ListTrackedDocs(%q) err = %v", kind, err)
+			}
+			if len(got) != 1 || got[0].ID != wantID || got[0].Kind != kind {
+				t.Errorf("ListTrackedDocs(%q) = %+v, want only doc %q", kind, got, wantID)
+			}
 		}
 	})
 

@@ -107,6 +107,8 @@ CREATE TABLE IF NOT EXISTS tracked_docs (
     id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id  UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     doc_id   TEXT        NOT NULL,
+    kind     TEXT        NOT NULL DEFAULT 'cv'
+        CONSTRAINT tracked_docs_kind_check CHECK (kind IN ('cv', 'letter')),
     added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (user_id, doc_id)
 );
