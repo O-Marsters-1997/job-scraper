@@ -33,7 +33,7 @@ func (s *Service) AddManualJob(ctx context.Context, userID string, in dto.AddMan
 
 	job := dto.Job{URL: in.URL, Title: in.Title, Description: in.Description}
 	if source, token, ok := detect.ResolveBoard(in.URL); ok {
-		if err := s.attachBoard(ctx, userID, &job, source, token, postingID, in); err != nil {
+		if err := s.trackATSCompany(ctx, userID, &job, source, token, postingID, in); err != nil {
 			return dto.ManualJobResult{}, err
 		}
 	} else {
@@ -54,13 +54,14 @@ func (s *Service) AddManualJob(ctx context.Context, userID string, in dto.AddMan
 	return s.manualResult(ctx, userID, res.JobID, res.Status != "new" && res.Status != "upgraded")
 }
 
-func (s *Service) attachBoard(ctx context.Context, userID string, job *dto.Job, source, token, postingID string, in dto.AddManualJobInput) error {
+func (s *Service) trackATSCompany(ctx context.Context, userID string, job *dto.Job, source, token, postingID string, in dto.AddManualJobInput) error {
 	_, err := s.store.GetBoardCompanyID(ctx, source, token)
 	newCompany := errors.Is(err, data.ErrNotFound)
 	if err != nil && !newCompany {
 		return err
 	}
-	company, err := s.CreateCompany(ctx, userID, dto.CreateCompanyInput{URL: in.URL})
+	track := true
+	company, err := s.CreateCompany(ctx, userID, dto.CreateCompanyInput{URL: in.URL, Track: &track})
 	if err != nil {
 		return err
 	}
