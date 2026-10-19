@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+export const trackedDocKindSchema = z.enum(["cv", "letter"]);
+
+export type TrackedDocKind = z.infer<typeof trackedDocKindSchema>;
+
 export const cvSchema = z.object({
 	DocID: z.string(),
 	TabID: z.string(),

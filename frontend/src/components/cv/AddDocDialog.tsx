@@ -12,12 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { useAddTrackedDoc } from "../../hooks/useCVTemplates";
+import type { TrackedDocKind } from "../../types/cv";
 
 export function AddDocDialog(props: {
 	open: boolean;
 	onOpenChange: (v: boolean) => void;
+	kind?: TrackedDocKind;
 }) {
-	const addMutation = useAddTrackedDoc();
+	const addMutation = useAddTrackedDoc(() => props.kind ?? "cv");
 	const [docUrl, setDocUrl] = createSignal("");
 
 	const form = useFormSubmit(
@@ -50,7 +52,9 @@ export function AddDocDialog(props: {
 				<DialogHeader>
 					<DialogTitle>Add Google Doc</DialogTitle>
 					<p class="text-sm text-faint">
-						Paste the URL of a Google Doc to track it as a CV template.
+						{props.kind === "letter"
+							? "Paste the URL of a Google Doc holding your past cover letters."
+							: "Paste the URL of a Google Doc to track it as a CV template."}
 					</p>
 				</DialogHeader>
 

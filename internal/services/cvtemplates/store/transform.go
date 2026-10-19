@@ -10,6 +10,7 @@ func toTrackedDocDTO(t sqlc.TrackedDoc) dto.TrackedDoc {
 		ID:      t.ID.String(),
 		UserID:  t.UserID.String(),
 		DocID:   t.DocID,
+		Kind:    dto.TrackedDocKind(t.Kind),
 		AddedAt: t.AddedAt.Time,
 	}
 }

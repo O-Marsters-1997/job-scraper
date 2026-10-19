@@ -40,7 +40,7 @@ func (f *FakeStore) AddTrackedDoc(_ context.Context, in dto.AddTrackedDocInput) 
 	}
 	f.seq++
 	id := fmt.Sprintf("doc-%d", f.seq)
-	f.docs[id] = dto.TrackedDoc{ID: id, UserID: in.UserID, DocID: in.DocID}
+	f.docs[id] = dto.TrackedDoc{ID: id, UserID: in.UserID, DocID: in.DocID, Kind: in.Kind}
 	return nil
 }
 
@@ -56,12 +56,12 @@ func (f *FakeStore) RemoveTrackedDoc(_ context.Context, userID, docID string) er
 	return nil
 }
 
-func (f *FakeStore) ListTrackedDocs(_ context.Context, userID string) ([]dto.TrackedDoc, error) {
+func (f *FakeStore) ListTrackedDocs(_ context.Context, userID string, kind dto.TrackedDocKind) ([]dto.TrackedDoc, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []dto.TrackedDoc
 	for _, d := range f.docs {
-		if d.UserID == userID {
+		if d.UserID == userID && d.Kind == kind {
 			out = append(out, d)
 		}
 	}

@@ -656,6 +656,7 @@ type TrackedDoc struct {
 	ID      pgtype.UUID
 	UserID  pgtype.UUID
 	DocID   string
+	Kind    string
 	AddedAt pgtype.Timestamptz
 }
 

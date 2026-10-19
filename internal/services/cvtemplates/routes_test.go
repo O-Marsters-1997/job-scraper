@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates/cvtemplatestest"
@@ -73,12 +74,26 @@ func TestTrackedDocRoutesHappyPaths(t *testing.T) {
 
 		handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /tracked-docs/", `{"url":"https://docs.google.com/document/d/doc-1/edit"}`)
 
-		docs, err := st.ListTrackedDocs(t.Context(), userID)
+		docs, err := st.ListTrackedDocs(t.Context(), userID, dto.TrackedDocCV)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if len(docs) != 1 || docs[0].DocID != "doc-1" {
 			t.Errorf("ListTrackedDocs = %+v, want doc-1", docs)
+		}
+	})
+
+	t.Run("add letter doc and list by kind", func(t *testing.T) {
+		t.Parallel()
+		st := cvtemplatestest.NewFakeStore()
+		cvtemplatestest.Track(t, st, userID, "docA")
+		r := newTestRouter(docsWith("docA", "doc-1"), st)
+
+		handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /tracked-docs/", `{"url":"https://docs.google.com/document/d/doc-1/edit","kind":"letter"}`)
+
+		got := handlerstest.Do[[]cvtemplates.CV](t, r, http.StatusOK, "GET /cv-templates/?kind=letter", "")
+		if len(got) != 1 || got[0].DocID != "doc-1" {
+			t.Errorf("GET /cv-templates/?kind=letter = %+v, want only doc-1", got)
 		}
 	})
 
@@ -113,7 +128,7 @@ func TestTrackedDocRoutesHappyPaths(t *testing.T) {
 
 		handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /tracked-docs/doc-1", "")
 
-		docs, err := st.ListTrackedDocs(t.Context(), userID)
+		docs, err := st.ListTrackedDocs(t.Context(), userID, dto.TrackedDocCV)
 		if err != nil {
 			t.Fatal(err)
 		}
