@@ -50,6 +50,7 @@ export const keys = {
 	},
 	experience: ["experience"] as const,
 	bankSkills: ["bank-skills"] as const,
+	letterSkeleton: ["letter-skeleton"] as const,
 	tailoring: {
 		all: tailoringAll,
 		headings: (docId: string, tabId: string) =>
