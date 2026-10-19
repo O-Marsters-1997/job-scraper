@@ -21,6 +21,8 @@ func (m *Module) tailorRoutes(r chi.Router) {
 	r.Route("/tailoring", func(r chi.Router) {
 		r.Get("/cvs/{docId}/{tabId}/headings", handlers.Query(m.svc.Headings))
 		r.Put("/cvs/{docId}/{tabId}/headings", handlers.Update(m.svc.SaveHeadings))
+		r.Get("/letter-skeleton", handlers.GetAll(m.store.GetLetterSkeleton))
+		r.Put("/letter-skeleton", handlers.Update(m.store.SaveLetterSkeleton))
 		r.Get("/jobs/{jobId}/suggestions", handlers.Query(m.svc.Suggestions))
 		r.Get("/jobs/{jobId}/skill-suggestions", handlers.Query(m.svc.SkillSuggestions))
 		r.Get("/jobs/{jobId}/experience-match", handlers.Query(m.svc.ExperienceMatch))

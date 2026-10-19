@@ -157,6 +157,14 @@ CREATE TABLE bank_skills (
 CREATE UNIQUE INDEX bank_skills_user_name_idx ON bank_skills (user_id, lower(name));
 CREATE INDEX bank_skills_user_sort_idx ON bank_skills (user_id, sort_order);
 
+CREATE TABLE letter_skeletons (
+    user_id    UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    intro      TEXT        NOT NULL DEFAULT '',
+    conclusion TEXT        NOT NULL DEFAULT '',
+    sections   TEXT[]      NOT NULL DEFAULT '{}',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE cv_heading_mappings (
     user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     doc_id       TEXT        NOT NULL,

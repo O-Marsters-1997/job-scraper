@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createMemo, createSignal, Show } from "solid-js";
 import { AddDocDialog } from "@/components/cv/AddDocDialog";
+import { LetterSkeletonEditor } from "@/components/cv/LetterSkeletonEditor";
 import { Icon } from "@/components/Icon";
 import { PageHeading } from "@/components/PageHeading";
 import type { SortDir } from "@/components/SortableTableHead";
@@ -143,6 +144,16 @@ function CVTemplatesPage() {
 					</Show>
 				</Show>
 			</Show>
+
+			<section class="mt-10">
+				<h2 class="text-base font-bold tracking-tight text-foreground">
+					Cover Letters
+				</h2>
+				<p class="mt-0.5 mb-4 text-xs text-faint">
+					Your letter skeleton: intro, body section purposes and conclusion
+				</p>
+				<LetterSkeletonEditor />
+			</section>
 
 			<AddDocDialog open={dialogOpen()} onOpenChange={setDialogOpen} />
 		</div>
