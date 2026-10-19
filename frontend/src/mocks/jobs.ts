@@ -1,10 +1,12 @@
 import type { Job, ScoreRow } from "@/types/job";
+import type { AddManualJobInput, ManualJobResult } from "../types/manualJob";
 import type {
 	CorrectionTarget,
 	CorrectionValue,
 	JobScore,
 	RecomputeResult,
 } from "../types/scores";
+import { slugify } from "./helpers";
 import { seed } from "./seed";
 
 let jobs: Job[] = seed.jobs;
@@ -53,4 +55,25 @@ export function correctAnswer(
 	});
 	jobs = jobs.map((j) => (j.ID === jobId ? { ...j, Breakdown: rows } : j));
 	return { jobId, score: job.SuitabilityScore, band: job.Band, rows };
+}
+
+export function addManualJob(input: AddManualJobInput): ManualJobResult {
+	const held = jobs.find((j) => j.URL === input.url);
+	if (held) return { job: held, existing: true };
+	const now = new Date().toISOString();
+	const job: Job = {
+		ID: `manual-${jobs.length + 1}`,
+		Title: input.title,
+		Location: "",
+		URL: input.url,
+		CompanySlug: slugify(input.company),
+		Source: "other",
+		PostedAt: null,
+		ScrapedAt: now,
+		FirstDiscoveredAt: now,
+		Description: input.description,
+		SuitabilityScore: null,
+	};
+	jobs = [job, ...jobs];
+	return { job, existing: false };
 }

@@ -107,3 +107,16 @@ UPDATE jobs j SET content_fingerprint = encode(sha256(convert_to(
 FROM companies c
 WHERE c.id = $1::uuid AND (j.company_id = c.id OR j.company_slug = c.slug)
     AND j.closed_at IS NULL AND j.content_fingerprint IS NULL;
+
+-- name: FindJobByPosting :one
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after,
+    j.reposted_at, j.scraped_at, j.first_discovered_at, j.description, j.salary_raw,
+    j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint
+FROM jobs j
+WHERE (sqlc.arg(posting_id)::text <> '' AND j.provider_posting_id = sqlc.arg(posting_id)::text
+        AND j.primary_board_id = (SELECT b.id FROM company_boards b
+            WHERE b.source = sqlc.arg(source)::text AND b.board_token = sqlc.arg(token)::text))
+    OR j.url = sqlc.arg(url)::text
+    OR EXISTS (SELECT 1 FROM job_urls u WHERE u.job_id = j.id AND u.normalized_url = sqlc.arg(url)::text)
+ORDER BY j.first_discovered_at
+LIMIT 1;

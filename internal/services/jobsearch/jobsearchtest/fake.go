@@ -93,9 +93,9 @@ func NewFakeStore() *FakeStore {
 	}
 }
 
-func (f *FakeStore) nextID(prefix string) string {
+func (f *FakeStore) nextID(_ string) string {
 	f.seq++
-	return fmt.Sprintf("%s-%06d", prefix, f.seq)
+	return fmt.Sprintf("00000000-0000-4000-8000-%012d", f.seq)
 }
 
 func lookup[T any](m map[string]T, id string) (T, error) {
@@ -268,6 +268,24 @@ func (f *FakeStore) GetJob(_ context.Context, jobID, userID string) (dto.Job, er
 	return f.withUserState(userID, job), nil
 }
 
+func (f *FakeStore) FindJobByPosting(_ context.Context, rawURL, source, token, postingID string) (dto.Job, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if postingID != "" {
+		for _, b := range f.boards {
+			if b.Source == source && b.BoardToken == token {
+				if id, ok := f.byBoard[b.ID+"|"+postingID]; ok {
+					return f.jobs[id], nil
+				}
+			}
+		}
+	}
+	if id, ok := f.byURL[normalizeJobURL(rawURL)]; ok {
+		return f.jobs[id], nil
+	}
+	return dto.Job{}, data.ErrNotFound
+}
+
 func (f *FakeStore) ListJobListings(_ context.Context, jobID string) ([]dto.JobListing, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -317,7 +335,6 @@ func (f *FakeStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.C
 	defer f.mu.Unlock()
 	if id, ok := f.companyBySlug[c.Slug]; ok {
 		existing := f.companies[id]
-		existing.Name = c.Name
 		if c.Kind != "" && existing.Kind != dto.KindAgency {
 			existing.Kind = c.Kind
 		}
