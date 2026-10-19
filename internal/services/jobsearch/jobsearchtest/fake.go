@@ -93,9 +93,9 @@ func NewFakeStore() *FakeStore {
 	}
 }
 
-func (f *FakeStore) nextID(prefix string) string {
+func (f *FakeStore) nextID() string {
 	f.seq++
-	return fmt.Sprintf("%s-%06d", prefix, f.seq)
+	return fmt.Sprintf("00000000-0000-4000-8000-%012d", f.seq)
 }
 
 func lookup[T any](m map[string]T, id string) (T, error) {
@@ -161,7 +161,7 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 	fingerprint := jobFingerprint(job)
 	id, ok := f.jobIdentity(job)
 	if !ok {
-		id = f.nextID("job")
+		id = f.nextID()
 		for _, card := range f.datedCards {
 			if cardMatchesJob(card, job) && (job.PostedAt == nil || card.PostedAt.Before(*job.PostedAt)) {
 				job.PostedAt = card.PostedAt
@@ -268,6 +268,24 @@ func (f *FakeStore) GetJob(_ context.Context, jobID, userID string) (dto.Job, er
 	return f.withUserState(userID, job), nil
 }
 
+func (f *FakeStore) FindJobByPosting(_ context.Context, rawURL, source, token, postingID string) (dto.Job, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if postingID != "" {
+		for _, b := range f.boards {
+			if b.Source == source && b.BoardToken == token {
+				if id, ok := f.byBoard[b.ID+"|"+postingID]; ok {
+					return f.jobs[id], nil
+				}
+			}
+		}
+	}
+	if id, ok := f.byURL[normalizeJobURL(rawURL)]; ok {
+		return f.jobs[id], nil
+	}
+	return dto.Job{}, data.ErrNotFound
+}
+
 func (f *FakeStore) ListJobListings(_ context.Context, jobID string) ([]dto.JobListing, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -317,7 +335,6 @@ func (f *FakeStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.C
 	defer f.mu.Unlock()
 	if id, ok := f.companyBySlug[c.Slug]; ok {
 		existing := f.companies[id]
-		existing.Name = c.Name
 		if c.Kind != "" && existing.Kind != dto.KindAgency {
 			existing.Kind = c.Kind
 		}
@@ -336,7 +353,7 @@ func (f *FakeStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.C
 		f.companies[id] = existing
 		return existing, nil
 	}
-	id := f.nextID("company")
+	id := f.nextID()
 	company := dto.Company{
 		ID: id, Slug: c.Slug, Name: c.Name, ATSSource: c.ATSSource, ATSToken: c.ATSToken,
 		Domain: c.Domain, LinkedInCompanyID: c.LinkedInCompanyID, FirstSeenAt: time.Now(),
@@ -702,7 +719,7 @@ func (f *FakeStore) UpsertCandidateBoard(_ context.Context, companyID, source, t
 			return f.boards[id], nil
 		}
 	}
-	id := f.nextID("board")
+	id := f.nextID()
 	board := dto.CompanyBoard{ID: id, CompanyID: companyID, Source: source, BoardToken: token, Status: dto.BoardCandidate, CreatedAt: time.Now()}
 	f.boards[id] = board
 	return board, nil
@@ -804,7 +821,7 @@ func (f *FakeStore) ClaimBoard(_ context.Context, id string, manual bool) (dto.B
 	if st.leaseOwner != "" && time.Now().Before(st.leaseExpires) {
 		return dto.BoardPoll{}, store.ErrBoardClaimUnavailable
 	}
-	st.leaseOwner = f.nextID("lease")
+	st.leaseOwner = f.nextID()
 	st.leaseExpires = time.Now().Add(10 * time.Minute)
 	st.version++
 	return dto.BoardPoll{
@@ -911,7 +928,7 @@ func (f *FakeStore) CreateSourceTarget(_ context.Context, userID, source, value 
 	if _, ok := f.targetByKey[key]; ok {
 		return dto.SourceTarget{}, store.ErrSourceTargetExists
 	}
-	id := f.nextID("target")
+	id := f.nextID()
 	manual := runwindow.Default()
 	manual.IntervalMinutes = nil
 	t := dto.SourceTarget{
@@ -995,7 +1012,7 @@ func (f *FakeStore) StartSourceTargetRun(_ context.Context, id string, nextRunAt
 	if !ok {
 		return dto.SourceTarget{}, data.ErrNotFound
 	}
-	t.RunID = f.nextID("run")
+	t.RunID = f.nextID()
 	t.NextRunAt = nextRunAt
 	t.RunStatus, t.LastRunError, t.Enabled, t.DisabledReason = "queued", "", true, ""
 	f.sourceTargets[id] = t
@@ -1016,7 +1033,7 @@ func (f *FakeStore) ClaimDueSourceTargets(_ context.Context, limit int, nextRunA
 	slices.SortFunc(due, func(a, b dto.SourceTarget) int { return a.NextRunAt.Compare(*b.NextRunAt) })
 	due = due[:min(limit, len(due))]
 	for i, t := range due {
-		t.RunID = f.nextID("run")
+		t.RunID = f.nextID()
 		t.NextRunAt = nextRunAt(t.RunWindow)
 		t.RunStatus, t.LastRunError = "queued", ""
 		f.sourceTargets[t.ID] = t
@@ -1106,7 +1123,7 @@ func (f *FakeStore) SaveCards(_ context.Context, target dto.SourceTarget, cards 
 		card.URL = normalized
 		id, ok := f.candidateByURL[normalized]
 		if !ok {
-			id = f.nextID("candidate")
+			id = f.nextID()
 			f.candidateByURL[normalized] = id
 		}
 		card.Source = target.Source

@@ -203,6 +203,38 @@ func (s *Store) GetJob(ctx context.Context, jobID, userID string) (dto.Job, erro
 	return job, nil
 }
 
+func (s *Store) FindJobByPosting(ctx context.Context, rawURL, source, token, postingID string) (dto.Job, error) {
+	if normalized, err := normalizeJobURL(rawURL); err == nil {
+		rawURL = normalized
+	}
+	row, err := s.queries.FindJobByPosting(ctx, sqlc.FindJobByPostingParams{
+		Url: rawURL, Source: source, Token: token, PostingID: postingID,
+	})
+	if err != nil {
+		return dto.Job{}, data.QueryErr("FindJobByPosting", err)
+	}
+	return dto.Job{
+		ID:                 row.ID.String(),
+		Title:              row.Title,
+		Location:           row.Location,
+		URL:                row.Url,
+		CompanySlug:        row.CompanySlug,
+		CompanyID:          row.CompanyID.String(),
+		BoardID:            row.PrimaryBoardID.String(),
+		ProviderPostingID:  row.ProviderPostingID.String,
+		ContentFingerprint: row.ContentFingerprint.String,
+		Source:             row.Source,
+		PostedAt:           data.TimePtr(row.PostedAt),
+		PostedAfter:        data.TimePtr(row.PostedAfter),
+		RepostedAt:         data.TimePtr(row.RepostedAt),
+		ScrapedAt:          row.ScrapedAt.Time,
+		FirstDiscoveredAt:  row.FirstDiscoveredAt.Time,
+		Description:        row.Description,
+		SalaryRaw:          row.SalaryRaw,
+		WorkArrangement:    row.WorkArrangement,
+	}, nil
+}
+
 func (s *Store) ListJobListings(ctx context.Context, jobID string) ([]dto.JobListing, error) {
 	jid, err := data.UUID(jobID)
 	if err != nil {

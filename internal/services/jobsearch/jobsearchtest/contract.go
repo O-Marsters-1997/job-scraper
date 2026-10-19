@@ -227,6 +227,48 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("FindJobByPosting finds a job by board posting or by url and reports a miss", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "find-co", Name: "Find Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		board, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "find-co")
+		if err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		byBoard, _, err := st.SaveCanonical(ctx, dto.Job{
+			Title: "Engineer", URL: "https://boards.greenhouse.io/find-co/jobs/42", Source: "greenhouse",
+			CompanySlug: "find-co", BoardID: board.ID, ProviderPostingID: "42",
+		})
+		if err != nil {
+			t.Fatalf("SaveCanonical(board) = %v", err)
+		}
+		byURL, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Designer", URL: "https://example.com/jobs/find-1", Source: "other", CompanySlug: "find-co"})
+		if err != nil {
+			t.Fatalf("SaveCanonical(url) = %v", err)
+		}
+
+		for _, tt := range []struct {
+			name                          string
+			url, source, token, postingID string
+			wantID                        string
+		}{
+			{"posting ID on the board", "https://elsewhere.test/x", "greenhouse", "find-co", "42", byBoard.ID},
+			{"url alone", "https://example.com/jobs/find-1?utm_source=x", "", "", "", byURL.ID},
+		} {
+			got, err := st.FindJobByPosting(ctx, tt.url, tt.source, tt.token, tt.postingID)
+			if err != nil || got.ID != tt.wantID {
+				t.Errorf("FindJobByPosting(%s) = %q, %v, want %q", tt.name, got.ID, err, tt.wantID)
+			}
+		}
+		_, err = st.FindJobByPosting(ctx, "https://example.com/jobs/none", "greenhouse", "find-co", "43")
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("FindJobByPosting(miss) err = %v, want %v", err, data.ErrNotFound)
+		}
+	})
+
 	t.Run("urls differing only by tracking parameters are one job", func(t *testing.T) {
 		st, _ := newStore(t)
 		ctx := t.Context()
