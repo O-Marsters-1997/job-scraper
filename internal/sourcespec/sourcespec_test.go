@@ -33,6 +33,7 @@ func TestSources(t *testing.T) {
 }
 
 func TestSourceRole(t *testing.T) {
+	t.Parallel()
 	role, ok := sourcespec.SourceRole("other")
 	if !ok || role != sourcespec.RoleLinkOnly {
 		t.Fatalf("SourceRole(other) = %q, %v; want %q, true", role, ok, sourcespec.RoleLinkOnly)
