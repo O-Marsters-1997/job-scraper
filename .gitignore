@@ -37,6 +37,7 @@ ideas
 # Plans and PRDs are local working files
 plans/
 docs/plans/
+docs/prds/
 docs/prd-*.md
 worker.log
 
