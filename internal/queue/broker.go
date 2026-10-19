@@ -144,6 +144,9 @@ func declareTopology(ch *amqp.Channel) error {
 func consumerNames() []string {
 	names := []string{urgentQueue}
 	for _, src := range sourcespec.Sources() {
+		if src.Role == sourcespec.RoleLinkOnly {
+			continue
+		}
 		names = append(names, src.Name)
 	}
 	return names
