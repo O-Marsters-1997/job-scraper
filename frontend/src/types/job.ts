@@ -70,3 +70,13 @@ export const jobSchema = z.object({
 });
 
 export type Job = z.infer<typeof jobSchema>;
+
+export const jobOverviewSchema = z.object({
+	total: z.number(),
+	sources: z.number(),
+	newToday: z.number(),
+	todaySources: z.number(),
+	top: jobSchema.array(),
+});
+
+export type JobOverview = z.infer<typeof jobOverviewSchema>;

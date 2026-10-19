@@ -29,6 +29,8 @@ type JobPageOptions struct {
 	SalaryMin      *float64
 	SalaryMax      *float64
 	Search         string
+	Bands          []string
+	ScrapedSince   *time.Time
 
 	ExcludedCompanySlugs []string
 }
@@ -36,4 +38,22 @@ type JobPageOptions struct {
 type JobPage struct {
 	Items []Job `json:"items"`
 	Total int   `json:"total"`
+}
+
+type JobStatsOptions struct {
+	Now                  time.Time
+	DayStart             time.Time
+	ExcludedCompanySlugs []string
+}
+
+type JobStats struct {
+	Total        int `json:"total"`
+	Sources      int `json:"sources"`
+	NewToday     int `json:"newToday"`
+	TodaySources int `json:"todaySources"`
+}
+
+type JobOverview struct {
+	JobStats
+	Top []Job `json:"top"`
 }

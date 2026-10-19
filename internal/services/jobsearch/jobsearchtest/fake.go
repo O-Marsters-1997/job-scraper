@@ -219,6 +219,26 @@ func (f *FakeStore) withUserState(userID string, job dto.Job) dto.Job {
 	return job
 }
 
+func (f *FakeStore) JobStats(_ context.Context, _ string, options dto.JobStatsOptions) (dto.JobStats, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var stats dto.JobStats
+	sources, todaySources := map[string]bool{}, map[string]bool{}
+	for _, job := range f.jobs {
+		if job.SuitabilityScore == nil || slices.Contains(options.ExcludedCompanySlugs, job.CompanySlug) {
+			continue
+		}
+		stats.Total++
+		sources[job.Source] = true
+		if !job.ScrapedAt.Before(options.DayStart) {
+			stats.NewToday++
+			todaySources[job.Source] = true
+		}
+	}
+	stats.Sources, stats.TodaySources = len(sources), len(todaySources)
+	return stats, nil
+}
+
 func (f *FakeStore) Page(_ context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

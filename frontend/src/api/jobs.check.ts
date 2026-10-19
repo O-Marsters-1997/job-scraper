@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { setDemoData } from "../lib/demoData";
 import { DEFAULT_FILTERS } from "../lib/jobFilters";
 import { API_BASE } from "./config";
-import { fetchAllJobs, fetchJob, fetchJobPage, jobPageQuery } from "./jobs";
+import {
+	fetchAllJobs,
+	fetchJob,
+	fetchJobOverview,
+	fetchJobPage,
+	jobPageQuery,
+} from "./jobs";
 
 setDemoData(true);
 const [first] = await fetchAllJobs();
@@ -132,6 +138,29 @@ try {
 		`${API_BASE}/jobs?${jobPageQuery({ ...DEFAULT_FILTERS, page: 2 }, 25)}`,
 	]);
 	assert.equal(page.total, 3);
+} finally {
+	globalThis.fetch = originalFetch;
+}
+
+globalThis.fetch = async (input) => {
+	requested.push(String(input));
+	return Response.json({
+		total: 4,
+		sources: 2,
+		newToday: 1,
+		todaySources: 1,
+		top: [],
+	});
+};
+try {
+	requested.length = 0;
+	const overview = await fetchJobOverview(false);
+	const url = new URL(requested[0] ?? "");
+	assert.equal(requested.length, 1, "overview is one request, not a page walk");
+	assert.equal(url.pathname, "/jobs/overview");
+	assert.equal(url.searchParams.get("ranked"), "0");
+	assert.ok(url.searchParams.get("day_start"), "client sends its day start");
+	assert.equal(overview.total, 4);
 } finally {
 	globalThis.fetch = originalFetch;
 }

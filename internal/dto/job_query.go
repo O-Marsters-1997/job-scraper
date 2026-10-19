@@ -31,3 +31,8 @@ type ResolvedURL struct {
 	Dropped []string          `json:"dropped"`
 	URL     string            `json:"url"`
 }
+
+type JobOverviewQuery struct {
+	DayStart string `json:"day_start"`
+	Ranked   string `json:"ranked"`
+}

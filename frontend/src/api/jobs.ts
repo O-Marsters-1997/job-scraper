@@ -1,8 +1,10 @@
+import { startOfDay } from "date-fns";
 import { z } from "zod";
 import type { JobFilters } from "../lib/jobFilters";
 import type { JobPage } from "../lib/jobPage";
-import type { Job } from "../types/job";
-import { jobSchema } from "../types/job";
+import { highValueJobs, jobStats } from "../lib/overview";
+import type { Job, JobOverview } from "../types/job";
+import { jobOverviewSchema, jobSchema } from "../types/job";
 import { apiFetch, apiFetchVoid, jsonInit } from "./client";
 import { mocked } from "./config";
 
@@ -77,6 +79,25 @@ export async function fetchAllJobs(): Promise<Job[]> {
 				jobs.push(...res.items);
 				if (res.items.length === 0 || jobs.length >= res.total) return jobs;
 			}
+		},
+	);
+}
+
+export async function fetchJobOverview(ranked: boolean): Promise<JobOverview> {
+	return mocked(
+		async () => {
+			const jobs = await fetchAllJobs();
+			return {
+				...jobStats(jobs),
+				top: highValueJobs(jobs, ranked).jobs,
+			};
+		},
+		() => {
+			const query = new URLSearchParams({
+				day_start: startOfDay(new Date()).toISOString(),
+				ranked: ranked ? "1" : "0",
+			});
+			return apiFetch(`/jobs/overview?${query}`, jobOverviewSchema);
 		},
 	);
 }

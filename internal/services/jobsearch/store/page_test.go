@@ -30,6 +30,7 @@ type listing struct {
 	posted      *time.Time
 	discovered  time.Time
 	score       *int
+	band        string
 	salaryMin   *float64
 	salaryMax   *float64
 	closed      bool
@@ -63,8 +64,8 @@ func insertListing(t *testing.T, pool *pgxpool.Pool, userID string, n int, l lis
 	}
 	if l.score != nil {
 		_, err := pool.Exec(t.Context(),
-			`INSERT INTO job_scores (job_id,user_id,suitability_score,breakdown) VALUES ($1::uuid,$2::uuid,$3,'[]'::jsonb)`,
-			id, userID, *l.score)
+			`INSERT INTO job_scores (job_id,user_id,suitability_score,band,breakdown) VALUES ($1::uuid,$2::uuid,$3,NULLIF($4,''),'[]'::jsonb)`,
+			id, userID, *l.score, l.band)
 		if err != nil {
 			t.Fatalf("score listing %d: %v", n, err)
 		}
@@ -235,6 +236,22 @@ func TestPage(t *testing.T) {
 		}
 	})
 
+	t.Run("bands and scraped-since narrow the page", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID := newUserStore(t)
+		great := insertListing(t, pool, userID, 1, listing{score: new(90), band: "great", discovered: daysAgo(1)})
+		good := insertListing(t, pool, userID, 2, listing{score: new(70), band: "good", discovered: daysAgo(2)})
+		insertListing(t, pool, userID, 3, listing{score: new(40), band: "fair", discovered: daysAgo(1)})
+		insertListing(t, pool, userID, 4, listing{score: new(95), band: "great", discovered: daysAgo(10)})
+
+		got := pageIDs(t, st, userID, func(o *dto.JobPageOptions) {
+			o.Sort = dto.JobSortBest
+			o.Bands = []string{"great", "good"}
+			o.ScrapedSince = new(daysAgo(7))
+		})
+		wantIDs(t, "Page()", []string{great, good}, got)
+	})
+
 	t.Run("salary filter keeps overlapping ranges and drops unparsed salaries", func(t *testing.T) {
 		t.Parallel()
 		st, pool, userID := newUserStore(t)
@@ -363,4 +380,28 @@ func TestPage(t *testing.T) {
 
 func sorted(ids []string) []string {
 	return slices.Sorted(slices.Values(ids))
+}
+
+func TestStore_JobStats(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newUserStore(t)
+	insertListing(t, pool, userID, 1, listing{score: new(50), source: "lever", discovered: daysAgo(0.1)})
+	insertListing(t, pool, userID, 2, listing{score: new(50), source: "lever", discovered: daysAgo(0.2)})
+	insertListing(t, pool, userID, 3, listing{score: new(50), source: "greenhouse", discovered: daysAgo(3)})
+	insertListing(t, pool, userID, 4, listing{source: "linkedin"})
+	insertListing(t, pool, userID, 5, listing{score: new(50), source: "ashby", closed: true})
+	insertListing(t, pool, userID, 6, listing{score: new(50), source: "ashby", slug: "globex"})
+
+	got, err := st.JobStats(t.Context(), userID, dto.JobStatsOptions{
+		Now:                  pageNow,
+		DayStart:             daysAgo(0.5),
+		ExcludedCompanySlugs: []string{"globex"},
+	})
+	if err != nil {
+		t.Fatalf("JobStats() err = %v", err)
+	}
+	want := dto.JobStats{Total: 3, Sources: 2, NewToday: 2, TodaySources: 1}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("JobStats() (-want +got):\n%s", diff)
+	}
 }
