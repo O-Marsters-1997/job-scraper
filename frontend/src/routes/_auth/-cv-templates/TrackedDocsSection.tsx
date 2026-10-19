@@ -79,7 +79,11 @@ export function TrackedDocsSection(props: {
 
 	return (
 		<section class="mb-10">
-			<PageHeading title={props.title} subtitle={props.subtitle}>
+			<PageHeading
+				title={props.title}
+				subtitle={props.subtitle}
+				level={props.kind === "cv" ? "h1" : "h2"}
+			>
 				<Button class="shrink-0" onClick={() => setDialogOpen(true)}>
 					<Icon name="plus" size={12} strokeWidth={2.5} />
 					Add doc
