@@ -54,6 +54,7 @@ type Credentials interface {
 // Drive is the Google write surface a Draft is built on.
 type Drive interface {
 	ListTabs(ctx context.Context, userID, docID string) ([]google.Tab, error)
+	AddTab(ctx context.Context, userID, docID, title string) (string, error)
 	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
 	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
 	DeleteFile(ctx context.Context, userID, fileID string) error

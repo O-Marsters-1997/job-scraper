@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,11 @@ const (
 	DriveReadonlyScope = "https://www.googleapis.com/auth/drive.readonly"
 	DriveFileScope     = "https://www.googleapis.com/auth/drive.file"
 	DocumentsScope     = "https://www.googleapis.com/auth/documents"
+)
+
+var (
+	ErrNoWriteAccess = apperr.Unprocessable("allow FastTrack to edit your Google Docs, then reconnect Google")
+	errForbidden     = fmt.Errorf("unexpected status %d", http.StatusForbidden)
 )
 
 type Tab struct {
@@ -339,6 +345,41 @@ func (c *Client) BatchUpdate(ctx context.Context, userID, docID string, requests
 	return nil
 }
 
+func (c *Client) AddTab(ctx context.Context, userID, docID, title string) (string, error) {
+	body, err := json.Marshal(map[string]any{"requests": []any{
+		map[string]any{"addDocumentTab": map[string]any{"tabProperties": map[string]string{"title": title}}},
+	}})
+	if err != nil {
+		return "", fmt.Errorf("google.AddTab marshal: %w", err)
+	}
+	resp, err := c.do(ctx, userID, http.MethodPost,
+		fmt.Sprintf("https://docs.googleapis.com/v1/documents/%s:batchUpdate", url.PathEscape(docID)), body)
+	if errors.Is(err, errForbidden) {
+		return "", ErrNoWriteAccess
+	}
+	if err != nil {
+		return "", fmt.Errorf("google.AddTab: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var out struct {
+		Replies []struct {
+			AddDocumentTab struct {
+				TabProperties struct {
+					TabID string `json:"tabId"`
+				} `json:"tabProperties"`
+			} `json:"addDocumentTab"`
+		} `json:"replies"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", fmt.Errorf("google.AddTab decode: %w", err)
+	}
+	if len(out.Replies) == 0 || out.Replies[0].AddDocumentTab.TabProperties.TabID == "" {
+		return "", errors.New("google.AddTab: reply has no tab id")
+	}
+	return out.Replies[0].AddDocumentTab.TabProperties.TabID, nil
+}
+
 func (c *Client) DeleteFile(ctx context.Context, userID, fileID string) error {
 	resp, err := c.do(ctx, userID, http.MethodDelete,
 		fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%s", url.PathEscape(fileID)), nil)
@@ -382,6 +423,9 @@ func (c *Client) do(ctx context.Context, userID, method, target string, body []b
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		_ = resp.Body.Close()
+		if resp.StatusCode == http.StatusForbidden {
+			return nil, errForbidden
+		}
 		return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
 	return resp, nil

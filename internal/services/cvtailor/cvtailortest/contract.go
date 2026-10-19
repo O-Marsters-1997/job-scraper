@@ -21,6 +21,8 @@ type Fixture struct {
 	Other  string
 	// JobID is an existing Job; a real store needs a jobs row for it.
 	JobID string
+
+	TrackLetterTab func(t *testing.T, userID, docID, tabID string)
 }
 
 // RunStoreContract proves newStore's cvtailor.Store behaves the same
@@ -32,6 +34,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Run("heading mappings", func(t *testing.T) { runHeadingMappingContract(t, newStore) })
 	t.Run("drafts", func(t *testing.T) { runDraftContract(t, newStore) })
 	t.Run("letter skeletons", func(t *testing.T) { runLetterSkeletonContract(t, newStore) })
+	t.Run("cover letters", func(t *testing.T) { runCoverLetterContract(t, newStore) })
 }
 
 func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {

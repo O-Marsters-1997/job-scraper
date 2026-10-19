@@ -46,10 +46,22 @@ type Drive struct {
 	Renamed   map[string]string
 	RenameErr error
 	Updates   [][]json.RawMessage
+	AddedTabs []string
+	AddTabErr error
 }
 
 func (d *Drive) ListTabs(context.Context, string, string) ([]google.Tab, error) {
 	return d.Tabs, nil
+}
+
+func (d *Drive) AddTab(_ context.Context, _, _, title string) (string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.AddTabErr != nil {
+		return "", d.AddTabErr
+	}
+	d.AddedTabs = append(d.AddedTabs, title)
+	return fmt.Sprintf("t.added%d", len(d.AddedTabs)), nil
 }
 
 func (d *Drive) CopyFile(_ context.Context, _, _, _ string) (string, error) {

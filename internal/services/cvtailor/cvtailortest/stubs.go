@@ -110,6 +110,24 @@ func FailsBatchUpdate(d cvtailor.Drive, err error) cvtailor.Drive {
 	return failingBatchUpdate{Drive: d, err: err}
 }
 
+type failsFirstBatchUpdate struct {
+	cvtailor.Drive
+	err    error
+	failed bool
+}
+
+func (f *failsFirstBatchUpdate) BatchUpdate(ctx context.Context, userID, docID string, reqs []json.RawMessage) error {
+	if !f.failed {
+		f.failed = true
+		return f.err
+	}
+	return f.Drive.BatchUpdate(ctx, userID, docID, reqs)
+}
+
+func FailsFirstBatchUpdate(d cvtailor.Drive, err error) cvtailor.Drive {
+	return &failsFirstBatchUpdate{Drive: d, err: err}
+}
+
 type failingExport struct {
 	cvtailor.Drive
 	err error

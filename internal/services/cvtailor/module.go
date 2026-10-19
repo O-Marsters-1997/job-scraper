@@ -9,6 +9,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/letterwrite"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 )
 
@@ -23,15 +24,18 @@ type Deps struct {
 	Asker  Asker
 	Editor Editor
 	Creds  Credentials
+
+	Scaffolder Scaffolder
 }
 
 type Module struct {
-	store  Store
-	svc    *Service
-	docs   DocFetcher
-	drive  Drive
-	editor Editor
-	creds  Credentials
+	store      Store
+	svc        *Service
+	docs       DocFetcher
+	drive      Drive
+	editor     Editor
+	creds      Credentials
+	scaffolder Scaffolder
 }
 
 func Build(deps Deps) *Module {
@@ -42,11 +46,13 @@ func Build(deps Deps) *Module {
 		drive:  deps.Drive,
 		editor: deps.Editor,
 		creds:  deps.Creds,
+
+		scaffolder: deps.Scaffolder,
 	}
 }
 
 func New(pool *pgxpool.Pool, docs Docs, asker Asker, creds Credentials) *Module {
-	return Build(Deps{Store: store.New(pool), Docs: docs, Drive: docs, Asker: asker, Editor: cvedit.NewClient(), Creds: creds})
+	return Build(Deps{Store: store.New(pool), Docs: docs, Drive: docs, Asker: asker, Editor: cvedit.NewClient(), Creds: creds, Scaffolder: letterwrite.NewClient()})
 }
 
 // Run generates pending Drafts until ctx is cancelled.
