@@ -230,4 +230,14 @@ func TestScaffoldRoutes(t *testing.T) {
 		t.Errorf("POST then GET cover-letters = %+v, %+v, want the one created letter", created, listed)
 	}
 	handlerstest.RequiresAuth(t, r, "POST /tailoring/jobs/"+jobID+"/cover-letters", "GET /tailoring/jobs/"+jobID+"/cover-letters")
+
+	checked := handlerstest.Do[dto.LetterCheck](t, r, http.StatusOK, "GET /tailoring/cover-letters/"+created.ID+"/check", "")
+	if checked.Words != 10 || len(checked.Findings) == 0 || checked.Findings[0].Kind != dto.FindingLength {
+		t.Errorf("GET check = %+v, want the 10 words of the tab and a length finding", checked)
+	}
+	done := handlerstest.Do[dto.CoverLetter](t, r, http.StatusOK, "POST /tailoring/cover-letters/"+created.ID+"/done", "")
+	if done.DoneAt == nil {
+		t.Errorf("POST done = %+v, want DoneAt set", done)
+	}
+	handlerstest.RequiresAuth(t, r, "GET /tailoring/cover-letters/"+created.ID+"/check", "POST /tailoring/cover-letters/"+created.ID+"/done")
 }

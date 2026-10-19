@@ -39,6 +39,8 @@ func (m *Module) tailorRoutes(r chi.Router) {
 		r.Post("/jobs/{jobId}/achievements/{achievementId}/explain", handlers.Update(m.Explain))
 		r.Post("/jobs/{jobId}/cover-letters", withWriteWindow(scaffoldWriteWindow, handlers.Create(m.Scaffold)))
 		r.Get("/jobs/{jobId}/cover-letters", handlers.Query(m.svc.ListCoverLetters))
+		r.Get("/cover-letters/{id}/check", handlers.Query(m.CheckCoverLetter))
+		r.Post("/cover-letters/{id}/done", handlers.GetByID(m.store.MarkCoverLetterDone))
 		r.Post("/drafts", m.createDraft())
 		r.Get("/jobs/{jobId}/drafts", handlers.Query(m.svc.ListJobDrafts))
 		r.Get("/drafts/{id}", handlers.Query(m.svc.GetDraft))

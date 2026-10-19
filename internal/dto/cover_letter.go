@@ -20,14 +20,47 @@ type CoverLetterJobQuery struct {
 }
 
 type CoverLetter struct {
-	ID             string    `json:"id"`
-	JobID          string    `json:"jobId"`
-	SourceDocID    string    `json:"sourceDocId"`
-	SourceTabID    string    `json:"sourceTabId"`
-	TabURL         string    `json:"tabUrl"`
-	AchievementIDs []string  `json:"achievementIds"`
-	Cost           float64   `json:"cost"`
-	CreatedAt      time.Time `json:"createdAt"`
+	ID             string     `json:"id"`
+	JobID          string     `json:"jobId"`
+	SourceDocID    string     `json:"sourceDocId"`
+	SourceTabID    string     `json:"sourceTabId"`
+	TabURL         string     `json:"tabUrl"`
+	AchievementIDs []string   `json:"achievementIds"`
+	Cost           float64    `json:"cost"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	DoneAt         *time.Time `json:"doneAt"`
+}
+
+type CoverLetterTab struct {
+	CoverLetter
+	ScaffoldTabID string
+}
+
+type LetterFindingKind string
+
+const (
+	FindingLeftoverBullet      LetterFindingKind = "leftover_bullet"
+	FindingLeftoverGap         LetterFindingKind = "leftover_gap"
+	FindingLength              LetterFindingKind = "length"
+	FindingAITell              LetterFindingKind = "ai_tell"
+	FindingRestatesAchievement LetterFindingKind = "restates_achievement"
+	FindingMissingCompany      LetterFindingKind = "missing_company"
+	FindingMissingRole         LetterFindingKind = "missing_role"
+)
+
+type LetterFinding struct {
+	Kind          LetterFindingKind `json:"kind"`
+	Text          string            `json:"text"`
+	AchievementID string            `json:"achievementId,omitempty"`
+}
+
+type CoverLetterQuery struct {
+	ID string `json:"-" path:"id"`
+}
+
+type LetterCheck struct {
+	Words    int             `json:"words"`
+	Findings []LetterFinding `json:"findings"`
 }
 
 type NewCoverLetter struct {

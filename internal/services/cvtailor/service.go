@@ -52,6 +52,8 @@ type Store interface {
 	JobBrief(ctx context.Context, jobID string) (dto.JobBrief, error)
 	CreateCoverLetter(ctx context.Context, userID string, in dto.NewCoverLetter) (dto.CoverLetter, error)
 	ListJobCoverLetters(ctx context.Context, userID, jobID string) ([]dto.CoverLetter, error)
+	GetCoverLetter(ctx context.Context, userID, id string) (dto.CoverLetterTab, error)
+	MarkCoverLetterDone(ctx context.Context, userID, id string) (dto.CoverLetter, error)
 }
 
 type Service struct {

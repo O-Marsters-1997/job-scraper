@@ -17,9 +17,32 @@ export const coverLetterSchema = z.object({
 	achievementIds: z.array(z.string()),
 	cost: z.number(),
 	createdAt: z.string(),
+	doneAt: z.string().nullable(),
 });
 
 export type CoverLetter = z.infer<typeof coverLetterSchema>;
+
+export const letterFindingSchema = z.object({
+	kind: z.enum([
+		"leftover_bullet",
+		"leftover_gap",
+		"length",
+		"ai_tell",
+		"restates_achievement",
+		"missing_company",
+		"missing_role",
+	]),
+	text: z.string(),
+	achievementId: z.string().optional(),
+});
+
+export const letterCheckSchema = z.object({
+	words: z.number(),
+	findings: z.array(letterFindingSchema),
+});
+
+export type LetterFinding = z.infer<typeof letterFindingSchema>;
+export type LetterCheck = z.infer<typeof letterCheckSchema>;
 
 export type ScaffoldInput = {
 	jobId: string;

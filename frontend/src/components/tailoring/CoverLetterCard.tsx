@@ -5,17 +5,30 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
+	useCheckCoverLetter,
 	useCoverLetterAchievements,
 	useCoverLetters,
 	useCreateCoverLetter,
+	useMarkCoverLetterDone,
 } from "@/hooks/useCoverLetters";
 import { useCVTemplates } from "@/hooks/useCVTemplates";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { formatDate } from "@/lib/datetime";
 import { loadedData } from "@/lib/queryData";
+import type { CoverLetter, LetterFinding } from "@/types/coverLetter";
 
 const TOP_ACHIEVEMENTS = 8;
 const checkbox = "size-4 cursor-pointer align-middle accent-primary";
+
+const findingLabels: Record<LetterFinding["kind"], string> = {
+	leftover_bullet: "Leftover bullet",
+	leftover_gap: "Leftover gap",
+	length: "Length",
+	ai_tell: "AI phrase",
+	restates_achievement: "Restates an achievement",
+	missing_company: "Company not named",
+	missing_role: "Role not named",
+};
 
 function errorMessage(err: unknown): string {
 	if (err instanceof ApiError) {
@@ -23,6 +36,80 @@ function errorMessage(err: unknown): string {
 		if (msg) return msg;
 	}
 	return "Could not write the cover letter. Please try again.";
+}
+
+function LetterRow(props: { letter: CoverLetter }) {
+	const check = useCheckCoverLetter();
+	const done = useMarkCoverLetterDone();
+
+	return (
+		<div class="grid gap-1.5 rounded-md px-2 py-1.5 text-xs">
+			<div class="flex items-center justify-between gap-3">
+				<span class="font-mono tabular-nums text-faint">
+					{formatDate(props.letter.createdAt)}
+				</span>
+				<a
+					href={props.letter.tabUrl}
+					target="_blank"
+					rel="noreferrer"
+					class="text-foreground hover:underline"
+				>
+					Open tab
+				</a>
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={() => check.mutate(props.letter.id)}
+					disabled={check.isPending}
+				>
+					{check.isPending ? "Checking…" : "Check letter"}
+				</Button>
+				<Show
+					when={props.letter.doneAt}
+					fallback={
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => done.mutate(props.letter.id)}
+							disabled={done.isPending}
+						>
+							Mark done
+						</Button>
+					}
+				>
+					{(at) => <span class="text-muted">Done {formatDate(at())}</span>}
+				</Show>
+			</div>
+			<Show when={check.isError || done.isError}>
+				<p class="text-destructive">
+					{errorMessage(check.isError ? check.error : done.error)}
+				</p>
+			</Show>
+			<Show when={check.data}>
+				{(result) => (
+					<div class="grid gap-1">
+						<p class="text-muted">{result().words} words</p>
+						<Show
+							when={result().findings.length > 0}
+							fallback={<p class="text-foreground">No problems found.</p>}
+						>
+							<ul class="grid gap-1">
+								<For each={result().findings}>
+									{(f) => (
+										<li class="text-foreground">
+											<span class="font-medium">{findingLabels[f.kind]}</span>
+											{": "}
+											{f.text}
+										</li>
+									)}
+								</For>
+							</ul>
+						</Show>
+					</div>
+				)}
+			</Show>
+		</div>
+	);
 }
 
 export function CoverLetterCard(props: { jobId: string }) {
@@ -67,21 +154,7 @@ export function CoverLetterCard(props: { jobId: string }) {
 				<CardTitle>Cover letters</CardTitle>
 			</CardHeader>
 			<CardContent class="gap-3">
-				<For each={loadedData(letters)}>
-					{(l) => (
-						<a
-							href={l.tabUrl}
-							target="_blank"
-							rel="noreferrer"
-							class="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-surface-muted"
-						>
-							<span class="font-mono tabular-nums text-faint">
-								{formatDate(l.createdAt)}
-							</span>
-							<span class="text-foreground">Open tab</span>
-						</a>
-					)}
-				</For>
+				<For each={loadedData(letters)}>{(l) => <LetterRow letter={l} />}</For>
 				<Show
 					when={visibleSources().length > 0}
 					fallback={
