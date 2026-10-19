@@ -19,6 +19,7 @@ const (
 const (
 	RoleATS       = "ats"
 	RoleDiscovery = "discovery"
+	RoleLinkOnly  = "link_only"
 )
 
 // FilterField describes a structured filter parameter accepted by a kindFilter source.
@@ -190,6 +191,7 @@ var entries = []registryEntry{
 	}},
 	{name: "remoteok", label: "RemoteOK", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://remoteok.com", cardComplete: true},
 	{name: "remotive", label: "Remotive", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://remotive.com", cardComplete: true},
+	{name: "other", label: "Other", kind: kindURL, role: RoleLinkOnly},
 }
 
 func Sources() []SourceInfo {

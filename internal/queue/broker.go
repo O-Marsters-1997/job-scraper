@@ -117,6 +117,9 @@ func declareTopology(ch *amqp.Channel) error {
 		return fmt.Errorf("bind dead queue: %w", err)
 	}
 	for _, src := range sourcespec.Sources() {
+		if src.Role == sourcespec.RoleLinkOnly {
+			continue
+		}
 		name := "source." + src.Name
 		args := amqp.Table{
 			"x-queue-type":              "quorum",
@@ -220,6 +223,9 @@ func (e *DeferError) Unwrap() error { return e.Err }
 func (b *Broker) Consume(ctx context.Context, handler func(context.Context, Task) error, terminal func(context.Context, Task) error) error {
 	var wg sync.WaitGroup
 	for _, source := range sourcespec.Sources() {
+		if source.Role == sourcespec.RoleLinkOnly {
+			continue
+		}
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()

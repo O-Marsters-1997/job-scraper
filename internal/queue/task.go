@@ -50,6 +50,9 @@ func (t Task) Validate() error {
 	if !ok {
 		return fmt.Errorf("unknown source %q", t.Source)
 	}
+	if role == sourcespec.RoleLinkOnly {
+		return fmt.Errorf("source %q has no queue", t.Source)
+	}
 	if (t.TargetID == "") != (t.RunID == "") || t.TargetID != "" && (uuid.Validate(t.TargetID) != nil || uuid.Validate(t.RunID) != nil) {
 		return errors.New("invalid target/run ID pair")
 	}
