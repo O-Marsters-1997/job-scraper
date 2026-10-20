@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,22 +29,41 @@ const (
 	workExchange = "source.work"
 	deadExchange = "source.dead.exchange"
 	deadQueue    = "source.dead"
+
+	rabbitContainer = "job-scraper-rabbitmqtest-v1"
+	rabbitUser      = "jobs"
+	rabbitPass      = "testpass"
 )
+
+const rabbitEntrypoint = `
+(
+	idle=0
+	while sleep 10; do
+		n=$(cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | awk '$2 ~ /:1628$/ && $4 == "01"' | wc -l)
+		if [ "$n" -eq 0 ]; then idle=$((idle + 10)); else idle=0; fi
+		if [ "$idle" -ge 300 ]; then kill -TERM 1; fi
+	done
+) &
+exec docker-entrypoint.sh "$@"
+`
 
 func TestRabbitMQWorkQueue(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires Docker")
 	}
 	ctx := t.Context()
+	t.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true")
 	container, err := testcontainers.Run(ctx, "rabbitmq:4.3.6-management",
-		testcontainers.WithEnv(map[string]string{"RABBITMQ_DEFAULT_USER": "jobs", "RABBITMQ_DEFAULT_PASS": "testpass"}),
+		testcontainers.WithReuseByName(rabbitContainer),
+		testcontainers.WithEntrypoint("sh", "-c", rabbitEntrypoint, "rabbitmqtest"),
+		testcontainers.WithCmd("rabbitmq-server"),
+		testcontainers.WithEnv(map[string]string{"RABBITMQ_DEFAULT_USER": rabbitUser, "RABBITMQ_DEFAULT_PASS": rabbitPass}),
 		testcontainers.WithExposedPorts("5672/tcp", "15672/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForLog("Server startup complete")),
+		testcontainers.WithWaitStrategy(wait.ForHTTP("/api/overview").WithPort("15672/tcp").WithBasicAuth(rabbitUser, rabbitPass)),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = container.Terminate(context.WithoutCancel(ctx)) })
 	host, err := container.Host(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -52,12 +72,20 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	managementPort, err := container.MappedPort(ctx, "15672/tcp")
-	if err != nil {
-		t.Fatal(err)
+	managementURL := func() string {
+		t.Helper()
+		managementPort, err := container.MappedPort(context.WithoutCancel(ctx), "15672/tcp")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fmt.Sprintf("http://%s:%s", host, managementPort.Port())
 	}
-	t.Setenv("RABBITMQ_MANAGEMENT_URL", fmt.Sprintf("http://%s:%s", host, managementPort.Port()))
-	url := fmt.Sprintf("amqp://jobs:testpass@%s:%s/", host, port.Port())
+	t.Setenv("RABBITMQ_MANAGEMENT_URL", managementURL())
+	vhost := "test-" + uuid.NewString()
+	manage(t, http.MethodPut, managementURL()+"/api/vhosts/"+vhost, nil)
+	t.Cleanup(func() { manage(t, http.MethodDelete, managementURL()+"/api/vhosts/"+vhost, nil) })
+	manage(t, http.MethodPut, managementURL()+"/api/permissions/"+vhost+"/"+rabbitUser, map[string]string{"configure": ".*", "write": ".*", "read": ".*"})
+	url := fmt.Sprintf("amqp://%s:%s@%s:%s/%s", rabbitUser, rabbitPass, host, port.Port(), vhost)
 	broker, err := queue.NewBroker(url)
 	if err != nil {
 		t.Fatal(err)
@@ -537,7 +565,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		restartedURL := fmt.Sprintf("amqp://jobs:testpass@%s:%s/", host, restartedPort.Port())
+		restartedURL := fmt.Sprintf("amqp://%s:%s@%s:%s/%s", rabbitUser, rabbitPass, host, restartedPort.Port(), vhost)
 		waitFor(t, 30*time.Second, func() error {
 			fresh, err := amqp.Dial(restartedURL)
 			if err != nil {
@@ -584,6 +612,28 @@ func waitFor(t *testing.T, timeout time.Duration, check func() error) {
 			t.Fatalf("timed out after %s: %v", timeout, err)
 		}
 		<-ticker.C
+	}
+}
+
+func manage(t *testing.T, method, endpoint string, body any) {
+	t.Helper()
+	payload, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(context.WithoutCancel(t.Context()), method, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SetBasicAuth(rabbitUser, rabbitPass)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= http.StatusMultipleChoices {
+		t.Fatalf("%s %s = %s", method, endpoint, resp.Status)
 	}
 }
 

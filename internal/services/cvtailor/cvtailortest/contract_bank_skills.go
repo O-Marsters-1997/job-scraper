@@ -41,6 +41,7 @@ func runBankSkillContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 
 	t.Run("create appends and update renames and recategorises", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		add(t, f, f.UserID, "Go", "Languages")
 		sk := add(t, f, f.UserID, "Postgress", "")
@@ -57,6 +58,7 @@ func runBankSkillContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a duplicate name ignoring case is a conflict", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		add(t, f, f.UserID, "Go", "")
 		other := add(t, f, f.UserID, "Rust", "")
@@ -70,6 +72,7 @@ func runBankSkillContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("reorder moves skills and rejects an incomplete list", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		a := add(t, f, f.UserID, "A", "")
 		b := add(t, f, f.UserID, "B", "")
@@ -84,6 +87,7 @@ func runBankSkillContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("delete removes a skill", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		sk := add(t, f, f.UserID, "Go", "")
 		if err := f.Store.DeleteBankSkill(ctx, f.UserID, sk.ID); err != nil {
@@ -96,6 +100,7 @@ func runBankSkillContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("bulk set category and delete are all or nothing", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		a := add(t, f, f.UserID, "Go", "")
 		b := add(t, f, f.UserID, "Rust", "")
@@ -126,6 +131,7 @@ func runBankSkillContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("another user's skills are invisible and untouchable", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		sk := add(t, f, f.UserID, "Go", "")
 		if got := names(t, f, f.Other); len(got) != 0 {

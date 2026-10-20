@@ -66,6 +66,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
 
 	t.Run("create returns the task with its type", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		got := createTask(t, f, dto.CreateTaskInput{JobID: &f.JobID, Link: "https://example.com/x", Notes: "call back"})
 		want := dto.Task{
@@ -82,6 +83,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("create without job, link or notes leaves them empty", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		got := createTask(t, f, dto.CreateTaskInput{})
 		if got.JobID != nil || got.Link != "" || got.Notes != "" {
@@ -90,6 +92,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("create with another user's type returns not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		_, err := f.Store.CreateTask(t.Context(), f.UserID, dto.CreateTaskInput{TypeID: f.OtherTypeID})
 		if !errors.Is(err, data.ErrNotFound) {
@@ -98,6 +101,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("list types returns only the user's", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		got, err := f.Store.ListTaskTypes(t.Context(), f.UserID)
 		if err != nil {
@@ -109,6 +113,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("task types are created, renamed and recoloured with their task count", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created, err := f.Store.CreateTaskType(t.Context(), f.UserID, dto.TaskTypeInput{Name: "Offer", Colour: "#15803d"})
 		if err != nil {
@@ -135,6 +140,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("task type names are unique per user", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		if _, err := f.Store.CreateTaskType(t.Context(), f.UserID, dto.TaskTypeInput{Name: "Apply", Colour: "#000000"}); !errors.Is(err, store.ErrTaskTypeExists) {
 			t.Errorf("CreateTaskType(duplicate) err = %v, want ErrTaskTypeExists", err)
@@ -155,6 +161,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("deleting a task type deletes its tasks", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		createTask(t, f, dto.CreateTaskInput{})
 		if err := f.Store.DeleteTaskType(t.Context(), f.UserID, f.TypeID); err != nil {
@@ -170,6 +177,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("changing another user's or a missing task type returns not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		in := dto.TaskTypeInput{ID: f.OtherTypeID, Name: "Hijack", Colour: "#000000"}
 		if _, err := f.Store.UpdateTaskType(t.Context(), f.UserID, in); !errors.Is(err, data.ErrNotFound) {
@@ -184,6 +192,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("list returns open tasks newest first", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		first := createTask(t, f, dto.CreateTaskInput{})
 		second := createTask(t, f, dto.CreateTaskInput{})
@@ -206,6 +215,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("list filters by type and job", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		withJob := createTask(t, f, dto.CreateTaskInput{JobID: &f.JobID})
 		plain := createTask(t, f, dto.CreateTaskInput{})
@@ -225,6 +235,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("list pages with a total", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		oldest := createTask(t, f, dto.CreateTaskInput{})
 		createTask(t, f, dto.CreateTaskInput{})
@@ -240,6 +251,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("list never returns another user's tasks", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		if _, err := f.Store.CreateTask(t.Context(), f.OtherUserID, dto.CreateTaskInput{TypeID: f.OtherTypeID}); err != nil {
 			t.Fatalf("CreateTask(other user) err = %v", err)
@@ -250,6 +262,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("set done stamps the time and set not done clears it", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createTask(t, f, dto.CreateTaskInput{})
 		now := time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)
@@ -278,6 +291,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("set done on a missing or another user's task returns not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createTask(t, f, dto.CreateTaskInput{})
 		if _, err := f.Store.SetTaskDone(t.Context(), f.UserID, missingID, true, time.Now()); !errors.Is(err, data.ErrNotFound) {
@@ -289,6 +303,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("update changes type, link and notes but never the job", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createTask(t, f, dto.CreateTaskInput{JobID: &f.JobID, Link: "https://example.com/a", Notes: "old"})
 		other, err := f.Store.CreateTaskType(t.Context(), f.UserID, dto.TaskTypeInput{Name: "Prep", Colour: "#64748b"})
@@ -318,6 +333,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("update with a missing task, another user's task or another user's type returns not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createTask(t, f, dto.CreateTaskInput{Notes: "keep"})
 		cases := map[string]struct {
