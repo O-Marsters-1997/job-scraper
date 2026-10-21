@@ -100,12 +100,18 @@ export function useDismissJob() {
 			showFor({ jobId: job.ID, title: job.Title, reasons: [] });
 		},
 		dismissMany: async (jobs: { ID: string }[]) => {
-			const jobIds = jobs.map((j) => j.ID);
-			await Promise.all(
-				jobIds.map((jobId) =>
-					set.mutateAsync({ jobId, grade: "no", reasons: [] }),
+			const results = await Promise.allSettled(
+				jobs.map((j) =>
+					set.mutateAsync({ jobId: j.ID, grade: "no", reasons: [] }),
 				),
 			);
+			const jobIds = jobs.flatMap((j, i) =>
+				results[i]?.status === "fulfilled" ? [j.ID] : [],
+			);
+			if (jobIds.length === 0) {
+				announceNotice("Could not dismiss jobs.");
+				return;
+			}
 			await markSeen(jobIds);
 			for (const subject_id of jobIds) {
 				recordEvent({ type: "job_dismissed", subject_id });
