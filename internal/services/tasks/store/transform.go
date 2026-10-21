@@ -1,6 +1,8 @@
 package store
 
 import (
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/tasks/store/sqlc"
@@ -16,6 +18,13 @@ func toTaskTypeDTO(t sqlc.ListTaskTypesRow) dto.TaskType {
 	}
 }
 
+func uuidPtr(u pgtype.UUID) *string {
+	if !u.Valid {
+		return nil
+	}
+	return new(u.String())
+}
+
 func toTaskDTO(r sqlc.PageTasksRow) dto.Task {
 	var jobID *string
 	if r.JobID.Valid {
@@ -29,6 +38,8 @@ func toTaskDTO(r sqlc.PageTasksRow) dto.Task {
 		JobID:          jobID,
 		JobTitle:       r.JobTitle.String,
 		JobCompanySlug: r.JobCompanySlug.String,
+		JobCompanyID:   uuidPtr(r.JobCompanyID),
+		ApplicationID:  uuidPtr(r.ApplicationID),
 		JobPostedAt:    data.TimePtr(r.JobPostedAt),
 		Link:           r.Link.String,
 		Notes:          r.Notes.String,
