@@ -145,6 +145,16 @@ var entries = []registryEntry{
 			{Value: "95000", Label: "£95,000+"},
 			{Value: "100000", Label: "£100,000+"},
 		}},
+		{Name: "date_posted", Param: "f", Label: "Date posted", Options: []FilterOption{
+			{Value: "1", Label: "Past 24 hours"},
+			{Value: "3", Label: "Past 3 days"},
+			{Value: "7", Label: "Past week"},
+		}},
+		{Name: "sort", Label: "Sort by", Options: []FilterOption{
+			{Value: "date", Label: "Most recent"},
+			{Value: "salary_high", Label: "Highest salary"},
+			{Value: "salary_low", Label: "Lowest salary"},
+		}},
 	}},
 	{name: "linkedin", label: "LinkedIn", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://www.linkedin.com/jobs", filters: []FilterField{
 		{Name: "location", Param: "location", Label: "Location"},

@@ -46,7 +46,7 @@ func TestParseSearchURL(t *testing.T) {
 			},
 		},
 		{
-			name: "wis keeps filters, ignores paging, sort and f, drops w",
+			name: "wis keeps filters, sort and date posted, ignores paging, drops w",
 			url:  "https://workinstartups.com/search?q=product+engineer&w=uk&p=3&per_page=50&loc=86384&cat=2&remote_only=1&cty=permanent&cti=full_time&sf=30000&sb=date&sd=down&f=3",
 			want: detect.SearchURL{
 				Source: "wis",
@@ -54,9 +54,30 @@ func TestParseSearchURL(t *testing.T) {
 				Filters: map[string]string{
 					"loc": "86384", "category": "2", "remote_only": "1",
 					"contract": "permanent", "hours": "full_time", "salary_from": "30000",
+					"sort": "date", "date_posted": "3",
 				},
 				Dropped: []string{"w"},
 			},
+		},
+		{
+			name: "wis salary sort pair maps to a sort filter",
+			url:  "https://workinstartups.com/search?q=go&sb=salary&sd=up",
+			want: detect.SearchURL{Source: "wis", Value: "go", Filters: map[string]string{"sort": "salary_low"}, Dropped: []string{}},
+		},
+		{
+			name: "wis unrecognised sort pair is dropped",
+			url:  "https://workinstartups.com/search?q=go&sb=date&sd=up",
+			want: detect.SearchURL{Source: "wis", Value: "go", Filters: map[string]string{}, Dropped: []string{"sb", "sd"}},
+		},
+		{
+			name: "wis lone sb is dropped",
+			url:  "https://workinstartups.com/search?q=go&sb=salary",
+			want: detect.SearchURL{Source: "wis", Value: "go", Filters: map[string]string{}, Dropped: []string{"sb"}},
+		},
+		{
+			name: "wis unknown location and date window are dropped",
+			url:  "https://workinstartups.com/search?q=go&loc=99999&f=30",
+			want: detect.SearchURL{Source: "wis", Value: "go", Filters: map[string]string{}, Dropped: []string{"f", "loc"}},
 		},
 		{
 			name: "indeed tracking params are dropped and filters named",
@@ -187,7 +208,9 @@ func TestBuildSearchURL(t *testing.T) {
 			{"wis every filter", "wis", "product engineer", map[string]string{
 				"loc": "86384", "category": "2", "remote_only": "1",
 				"contract": "permanent", "hours": "full_time", "salary_from": "30000",
+				"sort": "date", "date_posted": "7",
 			}},
+			{"wis salary sort", "wis", "go", map[string]string{"sort": "salary_high"}},
 			{"wis keywords only", "wis", "go", map[string]string{}},
 		}
 		for _, tt := range tests {
