@@ -114,6 +114,7 @@ function JobsPage() {
 						selectedJobs={table.selectedItems()}
 						bulkActions={[
 							{ label: "Grade", icon: "check", onSelect: track.openGrade },
+							{ label: "Not for me", onSelect: track.bulkDismiss },
 							{
 								label: "Mark seen",
 								onSelect: (jobs) => track.bulkSeen(jobs, true),
