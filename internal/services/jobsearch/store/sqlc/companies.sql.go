@@ -140,7 +140,7 @@ func (q *Queries) GetCompanyForUser(ctx context.Context, arg GetCompanyForUserPa
 const keepNewTrackedCompany = `-- name: KeepNewTrackedCompany :exec
 UPDATE tracked_companies
 SET review_state = 'kept', updated_at = NOW()
-WHERE user_id = $1 AND company_id = $2 AND review_state = 'new'
+WHERE user_id = $1 AND company_id = $2 AND review_state <> 'kept'
 `
 
 type KeepNewTrackedCompanyParams struct {
@@ -473,6 +473,22 @@ type RenameCompanyParams struct {
 
 func (q *Queries) RenameCompany(ctx context.Context, arg RenameCompanyParams) error {
 	_, err := q.db.Exec(ctx, renameCompany, arg.ID, arg.Name)
+	return err
+}
+
+const resetTrackedCompanyInterval = `-- name: ResetTrackedCompanyInterval :exec
+UPDATE tracked_companies
+SET check_interval_minutes = 360, updated_at = NOW()
+WHERE user_id = $1 AND company_id = $2
+`
+
+type ResetTrackedCompanyIntervalParams struct {
+	UserID    pgtype.UUID
+	CompanyID pgtype.UUID
+}
+
+func (q *Queries) ResetTrackedCompanyInterval(ctx context.Context, arg ResetTrackedCompanyIntervalParams) error {
+	_, err := q.db.Exec(ctx, resetTrackedCompanyInterval, arg.UserID, arg.CompanyID)
 	return err
 }
 
