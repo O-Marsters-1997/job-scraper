@@ -20,7 +20,9 @@ function NoteEditor(props: { jobId: string; initial: string }) {
 		const text = body();
 		if (text === saved()) return;
 		setSaved(text);
-		save.mutate(text, { onError: () => setSaved(undefined) });
+		save.mutateAsync(text).catch(() => {
+			if (saved() === text) setSaved(undefined);
+		});
 	};
 	onCleanup(flush);
 
