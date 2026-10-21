@@ -1,11 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { createEffect, For, on, Show, untrack } from "solid-js";
+import { createEffect, createSignal, For, on, Show, untrack } from "solid-js";
 import type { CompanyPoster, CompanySort } from "@/api/companies";
+import { CompanyFiltersDialog } from "@/components/companies/CompanyFiltersDialog";
 import { FavouriteStar } from "@/components/FavouriteStar";
+import { Icon } from "@/components/Icon";
 import { PageHeading } from "@/components/PageHeading";
 import { Pager } from "@/components/Pager";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { TableShortcuts } from "@/components/TableShortcuts";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,15 +34,19 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { useTableKeyNav } from "@/hooks/useTableKeyNav";
 import {
+	activeCompanyFilterCount,
 	type CompanyListState,
 	companySearchPatch,
 	parseCompanySearch,
 } from "@/lib/companyFilters";
 import { formatDate } from "@/lib/datetime";
+import { pageCount } from "@/lib/serverTable";
 import {
 	COMPANY_PAGE_SIZE,
 	companyPageQuery,
+	useCompanyAtsCounts,
 	useCompanyPages,
 	useSetCompanyFavourite,
 	useSetCompanyTracking,
@@ -66,6 +74,7 @@ const POSTER_OPTIONS: PosterOption[] = [
 const SORT_OPTIONS: { value: CompanySort; label: string }[] = [
 	{ value: "relevance", label: "Relevance" },
 	{ value: "alphabetical", label: "Alphabetical" },
+	{ value: "open_jobs", label: "Open jobs" },
 ];
 
 function CompaniesPage() {
@@ -81,12 +90,24 @@ function CompaniesPage() {
 		}),
 	);
 	const query = table.query;
+	const nav = useTableKeyNav({
+		rowIds: () => table.items().map((c) => c.ID),
+		data: table.items,
+		page: table.page,
+		lastPage: () => pageCount(table.total(), COMPANY_PAGE_SIZE),
+		onPage: table.setPage,
+		rowUrl: (id) => `/companies/${encodeURIComponent(id)}`,
+	});
 
 	createEffect(
 		on(term, (q) => table.setFilters({ q }), {
 			defer: true,
 		}),
 	);
+
+	const [filtersOpen, setFiltersOpen] = createSignal(false);
+	const filterCount = () => activeCompanyFilterCount(state());
+	const atsCounts = useCompanyAtsCounts();
 
 	const trackMutation = useSetCompanyTracking();
 	const favouriteMutation = useSetCompanyFavourite();
@@ -112,12 +133,29 @@ function CompaniesPage() {
 						Search companies
 					</Label>
 					<Input
+						ref={nav.searchRef}
 						id="companies-search"
+						aria-keyshortcuts="/"
+						onKeyDown={nav.onSearchKeyDown}
 						placeholder="Search companies…"
 						value={untrack(() => state().q)}
 						onInput={(e) => search(e.currentTarget.value)}
 					/>
 				</div>
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={() => setFiltersOpen(true)}
+					class="relative shrink-0"
+				>
+					<Icon name="filter" size={14} />
+					Filters
+					<Show when={filterCount() > 0}>
+						<Badge class="ml-0.5 h-4 min-w-4 justify-center px-1 py-0 text-2xs leading-none">
+							{filterCount()}
+						</Badge>
+					</Show>
+				</Button>
 				<Switch
 					checked={state().favourite}
 					onChange={(favourite) => table.setFilters({ favourite })}
@@ -194,10 +232,22 @@ function CompaniesPage() {
 				</div>
 			</div>
 
+			<CompanyFiltersDialog
+				open={filtersOpen()}
+				onOpenChange={setFiltersOpen}
+				ats={state().ats}
+				atsCounts={atsCounts.data ?? []}
+				onChange={table.setFilters}
+			/>
+
 			<QueryBoundary query={query} fallbackRows={6}>
 				{(data) => (
 					<>
-						<Card class="overflow-hidden">
+						<p class="mb-2 text-xs text-muted">
+							{data().verifiedBoardCompanies} of {data().allCompanies} companies
+							have a verified board
+						</p>
+						<Card ref={nav.containerRef} class="overflow-hidden">
 							<Table>
 								<TableHeader>
 									<TableRow>
@@ -214,7 +264,10 @@ function CompaniesPage() {
 								<TableBody>
 									<For each={data().items}>
 										{(c) => (
-											<TableRow>
+											<TableRow
+												{...nav.rowProps(c.ID)}
+												class="data-[active]:bg-accent-subtle"
+											>
 												<TableCell>
 													<FavouriteStar
 														favourite={c.Favourite ?? false}
@@ -280,9 +333,11 @@ function CompaniesPage() {
 								page={table.page()}
 								pageSize={COMPANY_PAGE_SIZE}
 								noun="companies"
+								keyHints
 								onPage={table.setPage}
 							/>
 						</Card>
+						<TableShortcuts noun="company" />
 					</>
 				)}
 			</QueryBoundary>

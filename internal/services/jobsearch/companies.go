@@ -75,6 +75,7 @@ func (s *Service) ListCompanies(ctx context.Context, userID string, q dto.Compan
 		NoBoardOnly:   q.NoBoard == "1",
 		Sort:          sort,
 		Poster:        poster,
+		ATSSources:    splitCSV(q.ATS),
 	}
 
 	page, err := s.store.PageCompaniesForUser(ctx, userID, options)
@@ -88,6 +89,20 @@ func (s *Service) ListCompanies(ctx context.Context, userID string, q dto.Compan
 		page.Items = []dto.Company{}
 	}
 	return page, nil
+}
+
+func (s *Service) CompanyATSCounts(ctx context.Context, _ string) ([]dto.ATSCount, error) {
+	return s.store.CountCompaniesByATS(ctx)
+}
+
+func splitCSV(raw string) []string {
+	var out []string
+	for part := range strings.SplitSeq(raw, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func parsePageOffset(raw string) (int, error) {
@@ -114,10 +129,10 @@ func parseCompanySort(raw string) (dto.CompanySort, error) {
 	switch sort := dto.CompanySort(raw); sort {
 	case "":
 		return dto.CompanySortRelevance, nil
-	case dto.CompanySortRelevance, dto.CompanySortAlphabetical:
+	case dto.CompanySortRelevance, dto.CompanySortAlphabetical, dto.CompanySortOpenJobs:
 		return sort, nil
 	default:
-		return "", apperr.Invalid("sort must be relevance or alphabetical")
+		return "", apperr.Invalid("sort must be relevance, alphabetical or open_jobs")
 	}
 }
 

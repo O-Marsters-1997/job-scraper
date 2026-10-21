@@ -449,7 +449,10 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			return out
 		}
 		if got, want := names(dto.CompanySortRelevance), []string{"Delta", "Gamma", "Beta", "Alpha"}; !slices.Equal(got, want) {
-			t.Errorf("relevance = %v, want %v (favouriting tracks, so favourites lead tracked companies)", got, want)
+			t.Errorf("relevance = %v, want %v (favourites lead tracked companies)", got, want)
+		}
+		if got, want := names(dto.CompanySortOpenJobs), []string{"Alpha", "Beta", "Delta", "Gamma"}; !slices.Equal(got, want) {
+			t.Errorf("open jobs = %v, want %v (no jobs, so ties fall back to name)", got, want)
 		}
 		if got, want := names(dto.CompanySortAlphabetical), []string{"Alpha", "Beta", "Delta", "Gamma"}; !slices.Equal(got, want) {
 			t.Errorf("alphabetical = %v, want %v", got, want)
@@ -473,6 +476,76 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, NoBoardOnly: true})
 		if err != nil || len(page.Items) != 1 || page.Items[0].Slug != "bare" || page.Total != 1 {
 			t.Fatalf("PageCompaniesForUser(no board) = %+v, %v, want only bare with total 1", page, err)
+		}
+	})
+
+	t.Run("ats filter and counts consider verified boards only and skip wttj", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		for _, b := range []struct{ slug, source string }{
+			{"gh-co", "greenhouse"}, {"gh-co", "lever"}, {"lever-co", "lever"}, {"wttj-co", "wttj"},
+		} {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: b.slug, Name: b.slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", b.slug, err)
+			}
+			if _, err := st.UpsertCandidateBoard(ctx, c.ID, b.source, b.slug); err != nil {
+				t.Fatalf("UpsertCandidateBoard(%q, %q) = %v", b.slug, b.source, err)
+			}
+			if _, err := st.VerifyCompanyBoard(ctx, c.ID, b.source, b.slug, "test", "test"); err != nil {
+				t.Fatalf("VerifyCompanyBoard(%q, %q) = %v", b.slug, b.source, err)
+			}
+		}
+		candidate, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "candidate-co", Name: "candidate-co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(candidate) = %v", err)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, candidate.ID, "greenhouse", "candidate-co"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(candidate) = %v", err)
+		}
+
+		counts, err := st.CountCompaniesByATS(ctx)
+		want := []dto.ATSCount{{Source: "greenhouse", Companies: 1}, {Source: "lever", Companies: 2}}
+		if err != nil || !slices.Equal(counts, want) {
+			t.Fatalf("CountCompaniesByATS() = %+v, %v, want %+v", counts, err, want)
+		}
+
+		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, ATSSources: []string{"greenhouse"}})
+		if err != nil || len(page.Items) != 1 || page.Items[0].Slug != "gh-co" || page.Total != 1 {
+			t.Fatalf("PageCompaniesForUser(ats greenhouse) = %+v, %v, want only gh-co", page, err)
+		}
+		page, err = st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, ATSSources: []string{"greenhouse", "lever"}})
+		if err != nil || page.Total != 2 {
+			t.Fatalf("PageCompaniesForUser(ats greenhouse+lever) = %+v, %v, want gh-co and lever-co once each", page, err)
+		}
+	})
+
+	t.Run("board coverage counts verified non-WTTJ companies regardless of filters", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		for _, slug := range []string{"verified", "wttj-only", "candidate", "bare"} {
+			if _, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug, Name: slug}); err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", slug, err)
+			}
+		}
+		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10})
+		if err != nil {
+			t.Fatalf("PageCompaniesForUser(...) = %v", err)
+		}
+		ids := map[string]string{}
+		for _, c := range page.Items {
+			ids[c.Slug] = c.ID
+		}
+		verifyBoard(t, st, ids["verified"], "greenhouse")
+		verifyBoard(t, st, ids["wttj-only"], "wttj")
+		if _, err := st.UpsertCandidateBoard(ctx, ids["candidate"], "greenhouse", "candidate"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		page, err = st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, Search: "bare"})
+		if err != nil || page.Total != 1 || page.AllCompanies != 4 || page.VerifiedBoardCompanies != 1 {
+			t.Fatalf("PageCompaniesForUser(search bare) = %+v, %v, want total 1, 1 of 4 verified", page, err)
 		}
 	})
 

@@ -56,9 +56,18 @@ export const companiesKindResultSchema = z.object({ updated: z.number() });
 export const companyPageSchema = z.object({
 	items: z.array(companySchema),
 	total: z.number(),
+	allCompanies: z.number(),
+	verifiedBoardCompanies: z.number(),
 });
 
 export type CompanyPage = z.infer<typeof companyPageSchema>;
+
+export const atsCountSchema = z.object({
+	source: z.string(),
+	companies: z.number(),
+});
+
+export type ATSCount = z.infer<typeof atsCountSchema>;
 
 export const companyTrackingSchema = z.object({
 	CompanyID: z.string(),

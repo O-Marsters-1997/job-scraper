@@ -27,6 +27,58 @@ func (q *Queries) AddCompanyFavourite(ctx context.Context, arg AddCompanyFavouri
 	return err
 }
 
+const countCompaniesByATS = `-- name: CountCompaniesByATS :many
+SELECT source, COUNT(DISTINCT company_id)::bigint AS companies
+FROM company_boards
+WHERE status = 'verified' AND source <> 'wttj'
+GROUP BY source
+ORDER BY source
+`
+
+type CountCompaniesByATSRow struct {
+	Source    string
+	Companies int64
+}
+
+func (q *Queries) CountCompaniesByATS(ctx context.Context) ([]CountCompaniesByATSRow, error) {
+	rows, err := q.db.Query(ctx, countCompaniesByATS)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountCompaniesByATSRow
+	for rows.Next() {
+		var i CountCompaniesByATSRow
+		if err := rows.Scan(&i.Source, &i.Companies); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countCompanyBoardCoverage = `-- name: CountCompanyBoardCoverage :one
+SELECT COUNT(*)::bigint AS all_companies,
+    COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_boards cb
+        WHERE cb.company_id = c.id AND cb.status = 'verified' AND cb.source <> 'wttj'))::bigint AS verified_companies
+FROM companies c
+`
+
+type CountCompanyBoardCoverageRow struct {
+	AllCompanies      int64
+	VerifiedCompanies int64
+}
+
+func (q *Queries) CountCompanyBoardCoverage(ctx context.Context) (CountCompanyBoardCoverageRow, error) {
+	row := q.db.QueryRow(ctx, countCompanyBoardCoverage)
+	var i CountCompanyBoardCoverageRow
+	err := row.Scan(&i.AllCompanies, &i.VerifiedCompanies)
+	return i, err
+}
+
 const deleteCompanyTracking = `-- name: DeleteCompanyTracking :execrows
 DELETE FROM tracked_companies WHERE user_id = $1 AND company_id = $2
 `
@@ -75,8 +127,9 @@ SELECT c.id, c.slug, c.name,
      ORDER BY cb.source = 'wttj', cb.verified_at, cb.id LIMIT 1), '')::text AS ats_source,
     c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at, c.kind,
-    (SELECT COUNT(*) FROM jobs j
-     WHERE j.company_id = c.id AND j.closed_at IS NULL) AS job_count,
+    (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
+     WHERE j.company_id = c.id AND j.closed_at IS NULL
+       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
     EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1 AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
@@ -339,9 +392,7 @@ SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name,
      ORDER BY cb.source = 'wttj', cb.verified_at, cb.id LIMIT 1), '')::text AS ats_source,
     c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at, c.kind,
-    (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
-     WHERE j.company_id = c.id AND j.closed_at IS NULL
-       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
+    jc.n AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
     EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
@@ -351,6 +402,11 @@ SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name,
      WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
 FROM companies c
 LEFT JOIN tracked_companies tc ON tc.user_id = $1::uuid AND tc.company_id = c.id
+CROSS JOIN LATERAL (
+    SELECT COUNT(*) AS n FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
+    WHERE j.company_id = c.id AND j.closed_at IS NULL
+      AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
+) jc
 WHERE ($2::text = ''
        OR strpos(lower(c.name), lower($2::text)) > 0
        OR strpos(c.slug, lower($2::text)) > 0)
@@ -359,13 +415,18 @@ WHERE ($2::text = ''
   AND (NOT $5::bool OR NOT EXISTS (SELECT 1 FROM company_boards cb WHERE cb.company_id = c.id))
   AND ($6::text = ''
        OR ($6::text = 'agency') = (c.kind IN ('agency', 'likely_agency')))
+  AND (COALESCE(cardinality($7::text[]), 0) = 0
+       OR EXISTS (SELECT 1 FROM company_boards cb
+                  WHERE cb.company_id = c.id AND cb.status = 'verified'
+                    AND cb.source = ANY($7::text[])))
 ORDER BY
-    CASE WHEN $7::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
-    CASE WHEN $7::text = 'relevance' AND COALESCE(tc.enabled, FALSE)
+    CASE WHEN $8::text = 'relevance'
           AND EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id)
          THEN 0 ELSE 1 END,
+    CASE WHEN $8::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
+    CASE WHEN $8::text IN ('relevance', 'open_jobs') THEN jc.n ELSE 0 END DESC,
     c.name, c.id
-LIMIT $9::int OFFSET $8::int
+LIMIT $10::int OFFSET $9::int
 `
 
 type PageCompaniesForUserParams struct {
@@ -375,6 +436,7 @@ type PageCompaniesForUserParams struct {
 	FavouriteOnly bool
 	NoBoardOnly   bool
 	Poster        string
+	AtsSources    []string
 	Sort          string
 	PageOffset    int32
 	PageLimit     int32
@@ -408,6 +470,7 @@ func (q *Queries) PageCompaniesForUser(ctx context.Context, arg PageCompaniesFor
 		arg.FavouriteOnly,
 		arg.NoBoardOnly,
 		arg.Poster,
+		arg.AtsSources,
 		arg.Sort,
 		arg.PageOffset,
 		arg.PageLimit,

@@ -1,5 +1,6 @@
 import type {
 	AddCompanyPayload,
+	ATSCount,
 	CompaniesExclusion,
 	Company,
 	CompanyBoard,
@@ -10,6 +11,7 @@ import type {
 	TrackedCompany,
 } from "../types/company";
 import {
+	atsCountSchema,
 	companiesExclusionSchema,
 	companiesKindResultSchema,
 	companyBoardSchema,
@@ -34,7 +36,7 @@ export class UnresolvableBoardError extends Error {
 	}
 }
 
-export type CompanySort = "relevance" | "alphabetical";
+export type CompanySort = "relevance" | "alphabetical" | "open_jobs";
 
 export type CompanyPoster = "agency" | "direct";
 
@@ -44,6 +46,7 @@ export type CompanyPageParams = {
 	tracked?: boolean;
 	favourite?: boolean;
 	noBoard?: boolean;
+	ats?: string[];
 	sort?: CompanySort;
 	offset?: number;
 	limit?: number;
@@ -60,12 +63,20 @@ export async function fetchCompanyPage(
 			if (params.tracked) query.set("tracked", "1");
 			if (params.favourite) query.set("favourite", "1");
 			if (params.noBoard) query.set("no_board", "1");
+			if (params.ats?.length) query.set("ats", params.ats.join(","));
 			if (params.sort) query.set("sort", params.sort);
 			if (params.poster) query.set("poster", params.poster);
 			if (params.offset) query.set("offset", String(params.offset));
 			if (params.limit) query.set("limit", String(params.limit));
 			return apiFetch(`/companies?${query}`, companyPageSchema);
 		},
+	);
+}
+
+export async function fetchCompanyAtsCounts(): Promise<ATSCount[]> {
+	return mocked(
+		(db) => db.getCompanyAtsCounts(),
+		() => apiFetch("/companies/ats-counts", atsCountSchema.array()),
 	);
 }
 

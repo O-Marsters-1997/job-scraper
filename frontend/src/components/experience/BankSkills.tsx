@@ -1,5 +1,6 @@
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
+import { MultiCombobox } from "@/components/MultiCombobox";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { loadedData } from "@/lib/queryData";
 import {
 	useBankSkills,
 	useCreateBankSkill,
@@ -21,6 +23,7 @@ import {
 	useSetBankSkillsCategory,
 	useUpdateBankSkill,
 } from "../../hooks/useBankSkills";
+import { useScoringOptions } from "../../hooks/useScoringOptions";
 import type { BankSkill } from "../../types/experience";
 
 const iconButton =
@@ -38,16 +41,23 @@ function swapIds(all: BankSkill[], a: BankSkill, b: BankSkill): string[] {
 export function BankSkills() {
 	const query = useBankSkills();
 	const create = useCreateBankSkill();
-	const [name, setName] = createSignal("");
 	const [category, setCategory] = createSignal("");
+	const techOptions = useScoringOptions();
+	const haveNames = createMemo(
+		() => new Set((loadedData(query) ?? []).map((s) => s.name.toLowerCase())),
+	);
+	const suggestions = createMemo(() =>
+		(loadedData(techOptions)?.options ?? []).filter(
+			(o) => o.dimension === "tech" && !haveNames().has(o.label.toLowerCase()),
+		),
+	);
 
-	const add = (e: SubmitEvent) => {
-		e.preventDefault();
-		if (!name().trim()) return;
-		create.mutate(
-			{ name: name().trim(), category: category().trim() },
-			{ onSuccess: () => setName("") },
-		);
+	const add = (ids: string[]) => {
+		const picked = ids[0];
+		if (!picked || create.isPending) return;
+		const name = suggestions().find((o) => o.id === picked)?.label ?? picked;
+		if (haveNames().has(name.trim().toLowerCase())) return;
+		create.mutate({ name: name.trim(), category: category().trim() });
 	};
 
 	return (
@@ -63,29 +73,26 @@ export function BankSkills() {
 				delete them together.
 			</p>
 			<Card class="p-4" data-testid="bank-skills">
-				<form onSubmit={add} class="flex gap-2">
+				<div class="flex items-end gap-2">
+					<div class="flex-1">
+						<MultiCombobox
+							label="New skill name"
+							placeholder="Search skills, e.g. Go"
+							options={suggestions()}
+							value={[]}
+							onChange={add}
+							creatable
+						/>
+					</div>
 					<Input
-						aria-label="New skill name"
-						placeholder="Skill, e.g. Go"
-						value={name()}
-						onInput={(e) => setName(e.currentTarget.value)}
-					/>
-					<Input
+						class="w-56"
 						aria-label="New skill category (optional)"
 						placeholder="Category (optional)"
 						list={CATEGORY_LIST_ID}
 						value={category()}
 						onInput={(e) => setCategory(e.currentTarget.value)}
 					/>
-					<Button
-						type="submit"
-						variant="secondary"
-						disabled={!name().trim() || create.isPending}
-					>
-						<Icon name="plus" size={12} strokeWidth={2.5} />
-						Add
-					</Button>
-				</form>
+				</div>
 				<Show when={create.error}>
 					{(err) => (
 						<p role="alert" class="mt-2 text-sm text-destructive-strong">

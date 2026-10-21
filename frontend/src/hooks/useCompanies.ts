@@ -8,6 +8,7 @@ import {
 	addCompanyBoard,
 	excludeCompanies,
 	fetchCompany,
+	fetchCompanyAtsCounts,
 	fetchCompanyBoards,
 	fetchCompanyPage,
 	fetchNewCompanies,
@@ -36,6 +37,7 @@ export const companyPageQuery = (s: CompanyListState) => ({
 			q: s.q,
 			favourite: s.favourite,
 			noBoard: s.noBoard,
+			ats: s.ats,
 			sort: s.sort,
 			offset: ((s.page ?? 1) - 1) * COMPANY_PAGE_SIZE,
 			limit: COMPANY_PAGE_SIZE,
@@ -53,6 +55,13 @@ export function useCompanyPages(
 		query: companyPageQuery,
 		rowId: (company) => company.ID,
 	});
+}
+
+export function useCompanyAtsCounts() {
+	return createQuery(() => ({
+		queryKey: keys.companies.atsCounts,
+		queryFn: fetchCompanyAtsCounts,
+	}));
 }
 
 const PICKER_LIMIT = 20;

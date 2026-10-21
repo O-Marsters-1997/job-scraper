@@ -392,6 +392,9 @@ func (f *FakeStore) PageCompaniesForUser(_ context.Context, userID string, optio
 		if options.NoBoardOnly && f.hasBoard(c.ID) {
 			continue
 		}
+		if len(options.ATSSources) > 0 && !f.hasVerifiedBoardOn(c.ID, options.ATSSources) {
+			continue
+		}
 		if options.Poster != "" && (options.Poster == dto.PosterAgency) != (c.Kind == dto.KindAgency || c.Kind == dto.KindLikelyAgency) {
 			continue
 		}
@@ -412,7 +415,43 @@ func (f *FakeStore) PageCompaniesForUser(_ context.Context, userID string, optio
 	if limit := int(options.Limit); limit > 0 && limit < len(items) {
 		items = items[:limit]
 	}
-	return dto.CompanyPage{Items: items, Total: total}, nil
+	verified := map[string]bool{}
+	for _, b := range f.boards {
+		if b.Status == dto.BoardVerified && b.Source != "wttj" {
+			verified[b.CompanyID] = true
+		}
+	}
+	return dto.CompanyPage{Items: items, Total: total, AllCompanies: len(f.companies), VerifiedBoardCompanies: len(verified)}, nil
+}
+
+func (f *FakeStore) hasVerifiedBoardOn(companyID string, sources []string) bool {
+	for _, b := range f.boards {
+		if b.CompanyID == companyID && b.Status == dto.BoardVerified && slices.Contains(sources, b.Source) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *FakeStore) CountCompaniesByATS(context.Context) ([]dto.ATSCount, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	companies := map[string]map[string]bool{}
+	for _, b := range f.boards {
+		if b.Status != dto.BoardVerified || b.Source == "wttj" {
+			continue
+		}
+		if companies[b.Source] == nil {
+			companies[b.Source] = map[string]bool{}
+		}
+		companies[b.Source][b.CompanyID] = true
+	}
+	counts := make([]dto.ATSCount, 0, len(companies))
+	for source, ids := range companies {
+		counts = append(counts, dto.ATSCount{Source: source, Companies: len(ids)})
+	}
+	slices.SortFunc(counts, func(a, b dto.ATSCount) int { return cmp.Compare(a.Source, b.Source) })
+	return counts, nil
 }
 
 func (f *FakeStore) hasBoard(companyID string) bool {

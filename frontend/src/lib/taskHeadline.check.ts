@@ -10,6 +10,8 @@ const base: Task = {
 	JobID: null,
 	JobTitle: "",
 	JobCompanySlug: "",
+	JobCompanyID: null,
+	ApplicationID: null,
 	JobPostedAt: null,
 	Link: "",
 	Notes: "",
