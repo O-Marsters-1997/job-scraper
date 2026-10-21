@@ -486,6 +486,16 @@ func (f *FakeStore) SetCompanyFavourite(_ context.Context, userID, companyID str
 		return nil
 	}
 	f.favourites[key] = true
+	hasATS := false
+	for _, b := range f.boards {
+		role, _ := sourcespec.SourceRole(b.Source)
+		if b.CompanyID == companyID && b.Status == dto.BoardVerified && role == sourcespec.RoleATS {
+			hasATS = true
+		}
+	}
+	if !hasATS {
+		return nil
+	}
 	t.UserID, t.CompanyID, t.Enabled, t.CheckIntervalMinutes = userID, companyID, true, 60
 	t.ReviewState = "kept"
 	f.tracking[key] = t
