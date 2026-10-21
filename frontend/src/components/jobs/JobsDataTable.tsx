@@ -251,7 +251,7 @@ export function JobsDataTable<TData extends Job>(
 						<Icon name="filter" size={14} />
 						Filters
 						<Show when={filterCount() > 0}>
-							<Badge class="ml-0.5 h-4 min-w-4 justify-center px-1 py-0 text-[10px] leading-none">
+							<Badge class="ml-0.5 h-4 min-w-4 justify-center px-1 py-0 text-2xs leading-none">
 								{filterCount()}
 							</Badge>
 						</Show>
