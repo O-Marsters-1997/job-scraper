@@ -144,17 +144,21 @@ export function JobHeader(props: {
 					</div>
 
 					<div class="flex shrink-0 items-start gap-2">
-						<Button
-							size="sm"
-							onClick={() =>
-								navigate({
-									to: "/jobs/$id/tailor",
-									params: { id: props.job.ID },
-								})
-							}
-						>
-							Tailor CV
-						</Button>
+						<Show when={props.app}>
+							{(a) => (
+								<Button
+									size="sm"
+									onClick={() =>
+										navigate({
+											to: "/applications/$id",
+											params: { id: a().ID },
+										})
+									}
+								>
+									Open application
+								</Button>
+							)}
+						</Show>
 						<JobActionsMenu
 							job={props.job}
 							appSummary={props.appSummary}

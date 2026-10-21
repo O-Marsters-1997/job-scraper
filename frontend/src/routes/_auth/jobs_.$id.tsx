@@ -7,8 +7,6 @@ import { JobActionBar } from "@/components/jobs/JobActionBar";
 import { SuitabilityPanel } from "@/components/jobs/SuitabilityPanel";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { QueryBoundary } from "@/components/QueryBoundary";
-import { CoverLetterCard } from "@/components/tailoring/CoverLetterCard";
-import { JobDrafts } from "@/components/tailoring/JobDrafts";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,10 +20,7 @@ import { gradeQueryOptions } from "../../hooks/useGrades";
 import { jobCommentsQueryOptions } from "../../hooks/useJobComments";
 import { jobNotesQueryOptions } from "../../hooks/useJobNotes";
 import { jobQueryOptions, useJob, useMarkJobsSeen } from "../../hooks/useJobs";
-import {
-	experienceMatchQueryOptions,
-	jobDraftsQueryOptions,
-} from "../../hooks/useTailoring";
+import { experienceMatchQueryOptions } from "../../hooks/useTailoring";
 import { jobOpenTasksQueryOptions } from "../../hooks/useTasks";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
@@ -39,7 +34,6 @@ import { RecruiterContactsCard } from "./-jobs-detail/RecruiterContactsCard";
 
 export const Route = createFileRoute("/_auth/jobs_/$id")({
 	loader: ({ params }) => {
-		void queryClient.prefetchQuery(jobDraftsQueryOptions(params.id));
 		void queryClient.prefetchQuery(jobNotesQueryOptions(params.id));
 		void queryClient.prefetchQuery(jobCommentsQueryOptions(params.id));
 		void queryClient.prefetchQuery(jobOpenTasksQueryOptions(params.id));
@@ -184,14 +178,6 @@ function JobDetailPage() {
 
 									<div class="max-md:order-1">
 										<SuitabilityPanel job={j()} />
-									</div>
-
-									<div id="job-drafts" class="max-md:order-4">
-										<JobDrafts jobId={params().id} />
-									</div>
-
-									<div class="max-md:order-4">
-										<CoverLetterCard jobId={params().id} />
 									</div>
 
 									<div class="max-md:order-4">
