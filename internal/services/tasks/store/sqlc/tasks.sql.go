@@ -86,7 +86,7 @@ WITH created AS (
     SELECT $1::uuid, tt.id, $2::uuid, $3::text, $4::text
     FROM task_types tt
     WHERE tt.id = $5::uuid AND tt.user_id = $1::uuid
-    RETURNING id, type_id, job_id, link, notes, completed_at, created_at, updated_at
+    RETURNING id, user_id, type_id, job_id, link, notes, completed_at, created_at, updated_at
 )
 SELECT
     t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
@@ -94,10 +94,13 @@ SELECT
     tt.colour AS type_colour,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
+    j.company_id   AS job_company_id,
+    a.id           AS application_id,
     COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) AS job_posted_at
 FROM created t
 JOIN task_types tt ON tt.id = t.type_id
 LEFT JOIN jobs j ON j.id = t.job_id
+LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id
 `
 
 type CreateTaskParams struct {
@@ -121,6 +124,8 @@ type CreateTaskRow struct {
 	TypeColour     string
 	JobTitle       pgtype.Text
 	JobCompanySlug pgtype.Text
+	JobCompanyID   pgtype.UUID
+	ApplicationID  pgtype.UUID
 	JobPostedAt    pgtype.Timestamptz
 }
 
@@ -146,6 +151,8 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 		&i.TypeColour,
 		&i.JobTitle,
 		&i.JobCompanySlug,
+		&i.JobCompanyID,
+		&i.ApplicationID,
 		&i.JobPostedAt,
 	)
 	return i, err
@@ -276,10 +283,13 @@ SELECT
     tt.colour AS type_colour,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
+    j.company_id   AS job_company_id,
+    a.id           AS application_id,
     COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) AS job_posted_at
 FROM tasks t
 JOIN task_types tt ON tt.id = t.type_id
 LEFT JOIN jobs j ON j.id = t.job_id
+LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id
 WHERE t.user_id = $1::uuid
   AND ($2::uuid IS NULL OR t.type_id = $2::uuid)
   AND ($3::uuid IS NULL OR t.job_id = $3::uuid)
@@ -314,6 +324,8 @@ type PageTasksRow struct {
 	TypeColour     string
 	JobTitle       pgtype.Text
 	JobCompanySlug pgtype.Text
+	JobCompanyID   pgtype.UUID
+	ApplicationID  pgtype.UUID
 	JobPostedAt    pgtype.Timestamptz
 }
 
@@ -347,6 +359,8 @@ func (q *Queries) PageTasks(ctx context.Context, arg PageTasksParams) ([]PageTas
 			&i.TypeColour,
 			&i.JobTitle,
 			&i.JobCompanySlug,
+			&i.JobCompanyID,
+			&i.ApplicationID,
 			&i.JobPostedAt,
 		); err != nil {
 			return nil, err
@@ -379,7 +393,7 @@ WITH updated AS (
     SET completed_at = CASE WHEN $1::bool THEN COALESCE(completed_at, $2::timestamptz) END,
         updated_at = $2::timestamptz
     WHERE id = $3::uuid AND user_id = $4::uuid
-    RETURNING id, type_id, job_id, link, notes, completed_at, created_at, updated_at
+    RETURNING id, user_id, type_id, job_id, link, notes, completed_at, created_at, updated_at
 )
 SELECT
     t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
@@ -387,10 +401,13 @@ SELECT
     tt.colour AS type_colour,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
+    j.company_id   AS job_company_id,
+    a.id           AS application_id,
     COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) AS job_posted_at
 FROM updated t
 JOIN task_types tt ON tt.id = t.type_id
 LEFT JOIN jobs j ON j.id = t.job_id
+LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id
 `
 
 type SetTaskDoneParams struct {
@@ -413,6 +430,8 @@ type SetTaskDoneRow struct {
 	TypeColour     string
 	JobTitle       pgtype.Text
 	JobCompanySlug pgtype.Text
+	JobCompanyID   pgtype.UUID
+	ApplicationID  pgtype.UUID
 	JobPostedAt    pgtype.Timestamptz
 }
 
@@ -437,6 +456,8 @@ func (q *Queries) SetTaskDone(ctx context.Context, arg SetTaskDoneParams) (SetTa
 		&i.TypeColour,
 		&i.JobTitle,
 		&i.JobCompanySlug,
+		&i.JobCompanyID,
+		&i.ApplicationID,
 		&i.JobPostedAt,
 	)
 	return i, err
@@ -452,7 +473,7 @@ WITH updated AS (
     FROM task_types tt
     WHERE tasks.id = $4::uuid AND tasks.user_id = $5::uuid
       AND tt.id = $6::uuid AND tt.user_id = $5::uuid
-    RETURNING tasks.id, tasks.type_id, tasks.job_id, tasks.link, tasks.notes, tasks.completed_at, tasks.created_at, tasks.updated_at
+    RETURNING tasks.id, tasks.user_id, tasks.type_id, tasks.job_id, tasks.link, tasks.notes, tasks.completed_at, tasks.created_at, tasks.updated_at
 )
 SELECT
     t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
@@ -460,10 +481,13 @@ SELECT
     tt.colour AS type_colour,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
+    j.company_id   AS job_company_id,
+    a.id           AS application_id,
     COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) AS job_posted_at
 FROM updated t
 JOIN task_types tt ON tt.id = t.type_id
 LEFT JOIN jobs j ON j.id = t.job_id
+LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id
 `
 
 type UpdateTaskParams struct {
@@ -488,6 +512,8 @@ type UpdateTaskRow struct {
 	TypeColour     string
 	JobTitle       pgtype.Text
 	JobCompanySlug pgtype.Text
+	JobCompanyID   pgtype.UUID
+	ApplicationID  pgtype.UUID
 	JobPostedAt    pgtype.Timestamptz
 }
 
@@ -514,6 +540,8 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateT
 		&i.TypeColour,
 		&i.JobTitle,
 		&i.JobCompanySlug,
+		&i.JobCompanyID,
+		&i.ApplicationID,
 		&i.JobPostedAt,
 	)
 	return i, err
