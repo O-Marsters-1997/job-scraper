@@ -60,6 +60,25 @@ func (q *Queries) CountCompaniesByATS(ctx context.Context) ([]CountCompaniesByAT
 	return items, nil
 }
 
+const countCompanyBoardCoverage = `-- name: CountCompanyBoardCoverage :one
+SELECT COUNT(*)::bigint AS all_companies,
+    COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_boards cb
+        WHERE cb.company_id = c.id AND cb.status = 'verified' AND cb.source <> 'wttj'))::bigint AS verified_companies
+FROM companies c
+`
+
+type CountCompanyBoardCoverageRow struct {
+	AllCompanies      int64
+	VerifiedCompanies int64
+}
+
+func (q *Queries) CountCompanyBoardCoverage(ctx context.Context) (CountCompanyBoardCoverageRow, error) {
+	row := q.db.QueryRow(ctx, countCompanyBoardCoverage)
+	var i CountCompanyBoardCoverageRow
+	err := row.Scan(&i.AllCompanies, &i.VerifiedCompanies)
+	return i, err
+}
+
 const deleteCompanyTracking = `-- name: DeleteCompanyTracking :execrows
 DELETE FROM tracked_companies WHERE user_id = $1 AND company_id = $2
 `

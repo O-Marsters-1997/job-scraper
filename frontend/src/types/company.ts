@@ -56,6 +56,8 @@ export const companiesKindResultSchema = z.object({ updated: z.number() });
 export const companyPageSchema = z.object({
 	items: z.array(companySchema),
 	total: z.number(),
+	allCompanies: z.number(),
+	verifiedBoardCompanies: z.number(),
 });
 
 export type CompanyPage = z.infer<typeof companyPageSchema>;
