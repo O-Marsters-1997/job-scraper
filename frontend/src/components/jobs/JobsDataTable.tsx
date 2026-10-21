@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/solid-router";
 import {
 	type ColumnDef,
 	createSolidTable,
@@ -46,6 +47,7 @@ import {
 	SORT_OPTIONS,
 } from "@/lib/jobFilters";
 import { pageCount } from "@/lib/serverTable";
+import { cn } from "@/lib/utils";
 import type { Job } from "@/types/job";
 
 export interface BulkAction<TData> {
@@ -157,20 +159,47 @@ export function JobsDataTable<TData extends Job>(
 	let tableContainer: HTMLDivElement | undefined;
 	let focusAfterPaging = false;
 
+	const navigate = useNavigate();
+	const [activeRow, setActiveRow] = createSignal<string | null>(null);
+	const rowIds = () => table.getRowModel().rows.map((row) => row.id);
+
 	const focusFirstRow = () => {
 		tableContainer?.scrollIntoView({ block: "start" });
+		setActiveRow(rowIds()[0] ?? null);
+	};
+
+	const moveActive = (step: 1 | -1) => {
+		const ids = rowIds();
+		const current = activeRow();
+		const from = current === null ? -1 : ids.indexOf(current);
+		const next = from === -1 ? (step === 1 ? 0 : ids.length - 1) : from + step;
+		const id = ids[next];
+		if (id === undefined) return;
+		setActiveRow(id);
 		tableContainer
-			?.querySelector<HTMLElement>("tbody tr a")
-			?.focus({ preventScroll: true });
+			?.querySelector(`tr[data-row-id="${CSS.escape(id)}"]`)
+			?.scrollIntoView({ block: "nearest" });
+	};
+
+	const openActive = (e: KeyboardEvent) => {
+		const id = activeRow();
+		const interactive =
+			e.target instanceof Element &&
+			e.target.closest("a, button, [role=checkbox]") !== null;
+		if (id === null || interactive) return false;
+		void navigate({ to: "/jobs/$id", params: { id } });
 	};
 
 	createEffect(
 		on(
 			() => props.data,
 			() => {
-				if (!focusAfterPaging) return;
-				focusAfterPaging = false;
-				focusFirstRow();
+				if (focusAfterPaging) {
+					focusAfterPaging = false;
+					focusFirstRow();
+				} else if (!rowIds().includes(activeRow() ?? "")) {
+					setActiveRow(null);
+				}
 			},
 			{ defer: true },
 		),
@@ -186,6 +215,11 @@ export function JobsDataTable<TData extends Job>(
 	);
 
 	useShortcuts({
+		ArrowDown: () => moveActive(1),
+		j: () => moveActive(1),
+		ArrowUp: () => moveActive(-1),
+		k: () => moveActive(-1),
+		Enter: openActive,
 		"/": () => {
 			searchInput?.scrollIntoView({ block: "nearest" });
 			searchInput?.focus();
@@ -233,6 +267,7 @@ export function JobsDataTable<TData extends Job>(
 								if (e.key !== "Enter" || e.isComposing) return;
 								if (table.getRowModel().rows.length === 0) return;
 								e.preventDefault();
+								searchInput?.blur();
 								focusFirstRow();
 							}}
 							class="pr-3 pl-9"
@@ -390,10 +425,20 @@ export function JobsDataTable<TData extends Job>(
 								{(row) => (
 									<>
 										<TableRow
+											data-row-id={row.id}
 											data-state={row.getIsSelected() ? "selected" : undefined}
-											class={
-												row.getIsSelected() ? "bg-accent-subtle/40" : undefined
-											}
+											data-active={activeRow() === row.id ? "" : undefined}
+											class={cn(
+												row.getIsSelected() && "bg-accent-subtle/40",
+												"data-[active]:shadow-[inset_2px_0_0_var(--color-accent-text)]",
+											)}
+											onClick={(e) => {
+												const target = e.target as Element;
+												if (
+													!target.closest("a, button, input, [role=checkbox]")
+												)
+													setActiveRow(row.id);
+											}}
 											data-feedback-job={
 												row.original.SuitabilityScore == null
 													? undefined

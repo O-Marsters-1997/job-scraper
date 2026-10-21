@@ -12,15 +12,14 @@ function shouldIgnore(e: KeyboardEvent) {
 }
 
 export function useShortcuts(
-	shortcuts: Record<string, (e: KeyboardEvent) => void>,
+	shortcuts: Record<string, (e: KeyboardEvent) => unknown>,
 ) {
 	const onKeyDown = (e: KeyboardEvent) => {
 		const handler = Object.hasOwn(shortcuts, e.key)
 			? shortcuts[e.key]
 			: undefined;
 		if (!handler || shouldIgnore(e)) return;
-		e.preventDefault();
-		handler(e);
+		if (handler(e) !== false) e.preventDefault();
 	};
 	onMount(() => document.addEventListener("keydown", onKeyDown));
 	onCleanup(() => document.removeEventListener("keydown", onKeyDown));
