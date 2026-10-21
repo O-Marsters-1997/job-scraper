@@ -13,7 +13,7 @@ interface TableKeyNavOptions {
 	extraShortcuts?: Record<string, (e: KeyboardEvent) => unknown>;
 }
 
-export function isInteractive(target: EventTarget | null) {
+function isInteractive(target: EventTarget | null) {
 	return (
 		target instanceof Element &&
 		target.closest("a, button, input, [role=checkbox]") !== null
@@ -100,7 +100,6 @@ export function useTableKeyNav(opts: TableKeyNavOptions) {
 
 	return {
 		activeRow,
-		setActiveRow,
 		containerRef: (el: HTMLElement) => {
 			container = el;
 		},
