@@ -52,6 +52,34 @@ func TestParseURLsAt(t *testing.T) {
 	}
 }
 
+func TestParseURLs_CountryOnlyLocationIsRemote(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		location string
+		want     string
+	}{
+		{"United Kingdom", "remote"},
+		{"London Area, United Kingdom", ""},
+		{"Northern Ireland, United Kingdom", ""},
+		{"Glasgow City, Scotland, United Kingdom", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.location, func(t *testing.T) {
+			t.Parallel()
+			html := `<div class="base-search-card" data-entity-urn="urn:li:jobPosting:1"><h3 class="base-search-card__title">Engineer</h3>` +
+				`<span class="job-search-card__location">` + tt.location + `</span></div>`
+			jobs, err := linkedin.ParseURLs(strings.NewReader(html))
+			if err != nil || len(jobs) != 1 {
+				t.Fatalf("ParseURLs(...) = %v, %v, want one card", jobs, err)
+			}
+			if got := jobs[0].WorkArrangement; got != tt.want {
+				t.Errorf("WorkArrangement for %q = %q, want %q", tt.location, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSnapshots(t *testing.T) {
 	sourcetest.RunSnapshotTests(t, linkedin.New("", nil, "", noGap()))
 }
@@ -258,6 +286,45 @@ func TestGetDetails_RemoteCheck(t *testing.T) {
 			t.Errorf("WorkArrangement = %q, want remote", job.WorkArrangement)
 		}
 	})
+}
+
+func TestGetDetails_RemoteCheckJSONLD(t *testing.T) {
+	const (
+		slugPage = "https://uk.linkedin.com/jobs/view/engineer-at-acme-1"
+		cardURL  = "https://www.linkedin.com/jobs/view/1"
+		title    = `<h1 class="top-card-layout__title topcard__title">Engineer</h1>`
+	)
+	ld := func(body string) string {
+		return `<script type="application/ld+json">` + body + `</script>`
+	}
+	tests := []struct {
+		name       string
+		page       string
+		wantRemote bool
+	}{
+		{"no JSON-LD block", title, false},
+		{"JobPosting without jobLocationType", title + ld(`{"@type":"JobPosting"}`), false},
+		{"TELECOMMUTE in the second block only", title + ld(`{"@type":"Organization"}`) + ld(`{"@type":"JobPosting","jobLocationType":"TELECOMMUTE"}`), true},
+		{"TELECOMMUTE on a block that is not a JobPosting", title + ld(`{"@type":"Organization","jobLocationType":"TELECOMMUTE"}`), false},
+		{"malformed block is skipped", title + ld(`{not json`) + ld(`{"@type":"JobPosting","jobLocationType":"TELECOMMUTE"}`), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
+			src := linkedin.New("", nil, "", noGap())
+			src.Client().Transport = sourcetest.Respond(tt.page)
+			job, err := src.GetDetails(t.Context(), dto.Job{URL: cardURL, RemoteCheckURL: slugPage})
+			if tt.wantRemote {
+				if err != nil || job.WorkArrangement != "remote" {
+					t.Errorf("GetDetails() = %q, %v, want remote", job.WorkArrangement, err)
+				}
+				return
+			}
+			if !errors.Is(err, sources.ErrNotRemote) {
+				t.Errorf("GetDetails() err = %v, want ErrNotRemote", err)
+			}
+		})
+	}
 }
 
 type stampedResponder struct {
