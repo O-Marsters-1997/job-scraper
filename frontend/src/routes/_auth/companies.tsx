@@ -198,6 +198,10 @@ function CompaniesPage() {
 			<QueryBoundary query={query} fallbackRows={6}>
 				{(data) => (
 					<>
+						<p class="mb-2 text-xs text-muted">
+							{data().verifiedBoardCompanies} of {data().allCompanies} companies
+							have a verified board
+						</p>
 						<Card class="overflow-hidden">
 							<Table>
 								<TableHeader>

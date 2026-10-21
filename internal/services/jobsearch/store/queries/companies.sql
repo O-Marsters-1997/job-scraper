@@ -55,6 +55,12 @@ ORDER BY
     c.name, c.id
 LIMIT sqlc.arg(page_limit)::int OFFSET sqlc.arg(page_offset)::int;
 
+-- name: CountCompanyBoardCoverage :one
+SELECT COUNT(*)::bigint AS all_companies,
+    COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_boards cb
+        WHERE cb.company_id = c.id AND cb.status = 'verified' AND cb.source <> 'wttj'))::bigint AS verified_companies
+FROM companies c;
+
 -- name: GetCompanyForUser :one
 SELECT c.id, c.slug, c.name,
     COALESCE((SELECT cb.source FROM company_boards cb

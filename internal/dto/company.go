@@ -56,6 +56,9 @@ type CompanyPageOptions struct {
 type CompanyPage struct {
 	Items []Company `json:"items"`
 	Total int       `json:"total"`
+
+	AllCompanies           int `json:"allCompanies"`
+	VerifiedBoardCompanies int `json:"verifiedBoardCompanies"`
 }
 
 type CompanyTracking struct {

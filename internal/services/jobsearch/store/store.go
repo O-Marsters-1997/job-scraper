@@ -609,6 +609,11 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 			ReviewState: r.ReviewState, CheckIntervalMinutes: r.CheckIntervalMinutes, LastCheckedAt: r.LastCheckedAt,
 		})
 	}
+	coverage, err := s.queries.CountCompanyBoardCoverage(ctx)
+	if err != nil {
+		return dto.CompanyPage{}, fmt.Errorf("store.PageCompaniesForUser coverage: %w", err)
+	}
+	page.AllCompanies, page.VerifiedBoardCompanies = int(coverage.AllCompanies), int(coverage.VerifiedCompanies)
 	return page, nil
 }
 
