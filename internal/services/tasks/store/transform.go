@@ -26,16 +26,12 @@ func uuidPtr(u pgtype.UUID) *string {
 }
 
 func toTaskDTO(r sqlc.PageTasksRow) dto.Task {
-	var jobID *string
-	if r.JobID.Valid {
-		jobID = new(r.JobID.String())
-	}
 	return dto.Task{
 		ID:             r.ID.String(),
 		TypeID:         r.TypeID.String(),
 		TypeName:       r.TypeName,
 		TypeColour:     r.TypeColour,
-		JobID:          jobID,
+		JobID:          uuidPtr(r.JobID),
 		JobTitle:       r.JobTitle.String,
 		JobCompanySlug: r.JobCompanySlug.String,
 		JobCompanyID:   uuidPtr(r.JobCompanyID),
