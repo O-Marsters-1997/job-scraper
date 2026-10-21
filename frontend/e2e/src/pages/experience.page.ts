@@ -45,8 +45,10 @@ export class ExperiencePage {
 
 	async addBankSkill(name: string, category: string) {
 		await this.page.getByLabel("New skill category").fill(category);
-		await this.page.getByLabel("New skill name").fill(name);
-		await this.page.getByRole("option", { name }).first().click();
+		await this.page
+			.getByRole("combobox", { name: "New skill name" })
+			.fill(name);
+		await this.page.getByRole("option", { name: `Add “${name}”` }).click();
 	}
 
 	async deleteBankSkill(name: string) {
