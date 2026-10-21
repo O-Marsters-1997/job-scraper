@@ -73,6 +73,9 @@ func (s *Service) slotCounts(ctx context.Context, userID string, q dto.Suggestio
 func rankSuggestions(positions []dto.Position, answers map[string]dto.Answer, slots map[string]int) []dto.Suggestion {
 	out := []dto.Suggestion{}
 	for _, p := range positions {
+		if _, mapped := slots[p.ID]; slots != nil && !mapped {
+			continue
+		}
 		ranked := make([]dto.Suggestion, len(p.Achievements))
 		for i, a := range p.Achievements {
 			ans := answers[achievementQuestion(a.Text)]
