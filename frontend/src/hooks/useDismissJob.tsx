@@ -16,6 +16,7 @@ interface Dismissal {
 }
 
 interface BulkGrading {
+	verb?: string;
 	jobIds: string[];
 	priors: Record<string, Grade | null>;
 }
@@ -97,6 +98,19 @@ export function useDismissJob() {
 			await markSeen([job.ID]);
 			recordEvent({ type: "job_dismissed", subject_id: job.ID });
 			showFor({ jobId: job.ID, title: job.Title, reasons: [] });
+		},
+		dismissMany: async (jobs: { ID: string }[]) => {
+			const jobIds = jobs.map((j) => j.ID);
+			await Promise.all(
+				jobIds.map((jobId) =>
+					set.mutateAsync({ jobId, grade: "no", reasons: [] }),
+				),
+			);
+			await markSeen(jobIds);
+			for (const subject_id of jobIds) {
+				recordEvent({ type: "job_dismissed", subject_id });
+			}
+			announceBulkGrading({ verb: "Dismissed", jobIds, priors: {} });
 		},
 		undo: async (jobId: string) => {
 			await clear.mutateAsync(jobId);
@@ -195,7 +209,9 @@ function BulkGradeToast() {
 		<Show when={bulkGrading()}>
 			{(b) => (
 				<output class="fixed inset-x-4 bottom-20 z-50 flex items-center gap-3 rounded-lg border border-border-strong bg-surface px-4 py-3 text-sm text-foreground shadow-md md:bottom-4 md:left-auto md:max-w-sm">
-					<span class="truncate">Graded {b().jobIds.length} jobs.</span>
+					<span class="truncate">
+						{b().verb ?? "Graded"} {b().jobIds.length} jobs.
+					</span>
 					<button
 						type="button"
 						onClick={() => undo(b())}

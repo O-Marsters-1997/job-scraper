@@ -96,6 +96,10 @@ export function useTrackJobs(
 	};
 
 	const dismiss = useDismissJob();
+	const bulkDismiss = async (target: Job[]) => {
+		await dismiss.dismissMany(target);
+		clearSelection();
+	};
 	const setFavourite = useSetCompanyFavourite();
 	const exclude = useExcludeJobCompany();
 	const setKind = useSetCompanyKind();
@@ -138,6 +142,7 @@ export function useTrackJobs(
 		setGradeOpen,
 		openGrade,
 		bulkSeen,
+		bulkDismiss,
 		markAllSeen,
 		bulkExcludeCompanies: bulkExclude.exclude,
 		bulkMarkRecruiters: (target: Job[]) => bulkSetKind(target, "agency"),
