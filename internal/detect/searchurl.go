@@ -48,7 +48,7 @@ var searchBoards = []boardSpec{
 		paths:         []string{"/search"},
 		canonical:     "https://workinstartups.com/search",
 		keywordsParam: "q",
-		silent:        []string{"p", "per_page", "sb", "sd", "sorting", "f"},
+		silent:        []string{"p", "per_page", "sorting"},
 	},
 	{
 		source:        "indeed",
@@ -164,6 +164,7 @@ func (b boardSpec) parse(u *neturl.URL) SearchURL {
 		value := values[0]
 		switch {
 		case param == b.keywordsParam, slices.Contains(b.silent, param), value == "":
+		case b.source == "wis" && (param == "sb" || param == "sd"):
 		case slices.Contains(b.dropped, param), strings.HasPrefix(param, "utm_"):
 			out.Dropped = append(out.Dropped, param)
 		default:
@@ -175,10 +176,40 @@ func (b boardSpec) parse(u *neturl.URL) SearchURL {
 			out.Filters[filter] = value
 		}
 	}
+	if b.source == "wis" {
+		out.parseWISSort(query)
+	}
 	slices.Sort(out.Dropped)
 
 	out.Value = query.Get(b.keywordsParam)
 	return out
+}
+
+func wisSorts() map[string][2]string {
+	return map[string][2]string{
+		"date":        {"date", "down"},
+		"salary_high": {"salary", "down"},
+		"salary_low":  {"salary", "up"},
+	}
+}
+
+func (s *SearchURL) parseWISSort(query neturl.Values) {
+	sb, sd := query.Get("sb"), query.Get("sd")
+	if sb == "" && sd == "" {
+		return
+	}
+	for name, pair := range wisSorts() {
+		if pair == [2]string{sb, sd} {
+			s.Filters["sort"] = name
+			return
+		}
+	}
+	if sb != "" {
+		s.Dropped = append(s.Dropped, "sb")
+	}
+	if sd != "" {
+		s.Dropped = append(s.Dropped, "sd")
+	}
 }
 
 // BuildSearchURL returns the board page for a search, or "" for a source with
@@ -196,6 +227,10 @@ func BuildSearchURL(source, value string, filters map[string]string) string {
 			if f := filters[p.filter]; f != "" {
 				v.Set(p.param, f)
 			}
+		}
+		if pair, ok := wisSorts()[filters["sort"]]; ok && source == "wis" {
+			v.Set("sb", pair[0])
+			v.Set("sd", pair[1])
 		}
 		if len(v) == 0 {
 			return b.canonical

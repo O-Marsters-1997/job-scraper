@@ -81,7 +81,7 @@ func newRegistry() map[string]entry {
 				return wis.New(wis.Search{
 					Keywords: t.Value,
 					Filters:  t.Filters,
-					Recency:  wis.Recency(t.LastSucceededAt, time.Now()),
+					Recency:  wis.Recency(t.Filters["date_posted"], t.LastSucceededAt, time.Now()),
 				}, wisGate)
 			},
 			detail: wis.New(wis.Search{}, wisGate),
