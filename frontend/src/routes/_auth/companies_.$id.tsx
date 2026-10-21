@@ -191,8 +191,8 @@ function CompanyDetailPage() {
 						</CardContent>
 					</Card>
 
-					<div class="grid grid-cols-1 items-start lg:grid-cols-[1fr_284px] gap-4">
-						<Card>
+					<div class="grid grid-cols-1 items-start lg:grid-cols-[minmax(0,1fr)_284px] gap-4">
+						<Card class="min-w-0">
 							<CardHeader>
 								<CardTitle>Jobs at {c().Name}</CardTitle>
 							</CardHeader>
