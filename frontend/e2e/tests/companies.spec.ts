@@ -27,6 +27,23 @@ test.describe("Companies", () => {
 			.toBe(true);
 	});
 
+	test("moves the active row with j/k and opens it in a new tab with Enter", async ({
+		page,
+		companiesPage,
+	}) => {
+		await expect(companiesPage.rows.first()).toBeVisible();
+		await page.keyboard.press("j");
+		await expect(companiesPage.rows.first()).toHaveAttribute("data-active", "");
+		await page.keyboard.press("j");
+		await expect(companiesPage.rows.nth(1)).toHaveAttribute("data-active", "");
+		await page.keyboard.press("k");
+		await expect(companiesPage.rows.first()).toHaveAttribute("data-active", "");
+
+		const popup = page.waitForEvent("popup");
+		await page.keyboard.press("Enter");
+		expect((await popup).url()).toMatch(/\/companies\/.+/);
+	});
+
 	test("should navigate to company detail when clicking a company name", async ({
 		page,
 		companiesPage,
