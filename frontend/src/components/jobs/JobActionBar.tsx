@@ -15,7 +15,6 @@ interface JobActionBarProps {
 	job: Pick<Job, "ID" | "URL">;
 	app: ApplicationWithDetails | undefined;
 	onCv: () => void;
-	onTrack: () => void;
 	onDismiss: () => void;
 }
 
@@ -26,10 +25,7 @@ export function JobActionBar(props: JobActionBarProps) {
 
 	const applied = useFormSubmit(async () => {
 		const status = loadedData(statuses)?.find((s) => s.SystemKey === "applied");
-		if (!status) {
-			props.onTrack();
-			return;
-		}
+		if (!status) return;
 		const applied_at = dayKey(new Date());
 		const app = props.app;
 		if (!app) {

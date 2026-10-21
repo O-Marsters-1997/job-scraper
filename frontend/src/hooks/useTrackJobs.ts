@@ -53,6 +53,7 @@ export function useTrackJobs(
 		!!loadedData(applications)?.some((a) => a.JobID === jobId);
 
 	const openTrack = async (jobId: string) => {
+		if (!loadedData(applications)) return;
 		if (isTracked(jobId)) {
 			setTrackingJobId(jobId);
 			setModalOpen(true);
