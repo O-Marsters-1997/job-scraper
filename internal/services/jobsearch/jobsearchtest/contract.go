@@ -449,7 +449,10 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			return out
 		}
 		if got, want := names(dto.CompanySortRelevance), []string{"Delta", "Gamma", "Beta", "Alpha"}; !slices.Equal(got, want) {
-			t.Errorf("relevance = %v, want %v (favouriting tracks, so favourites lead tracked companies)", got, want)
+			t.Errorf("relevance = %v, want %v (favourites lead tracked companies)", got, want)
+		}
+		if got, want := names(dto.CompanySortOpenJobs), []string{"Alpha", "Beta", "Delta", "Gamma"}; !slices.Equal(got, want) {
+			t.Errorf("open jobs = %v, want %v (no jobs, so ties fall back to name)", got, want)
 		}
 		if got, want := names(dto.CompanySortAlphabetical), []string{"Alpha", "Beta", "Delta", "Gamma"}; !slices.Equal(got, want) {
 			t.Errorf("alphabetical = %v, want %v", got, want)

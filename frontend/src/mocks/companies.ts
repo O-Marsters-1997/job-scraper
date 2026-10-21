@@ -108,11 +108,12 @@ export function getCompanyPage(params: CompanyPageParams): {
 	const byName = (a: Company, b: Company) =>
 		a.Name.localeCompare(b.Name) || a.ID.localeCompare(b.ID);
 	const rank = (first: boolean) => (first ? 0 : 1);
+	const byJobs = (a: Company, b: Company) =>
+		b.JobCount - a.JobCount || byName(a, b);
 	const byRelevance = (a: Company, b: Company) =>
+		rank(Boolean(a.Favourite)) - rank(Boolean(b.Favourite)) ||
 		rank(a.Tracked) - rank(b.Tracked) ||
-		rank(Boolean(a.Favourite) && a.Tracked) -
-			rank(Boolean(b.Favourite) && b.Tracked) ||
-		byName(a, b);
+		byJobs(a, b);
 	const matches = getCompanies()
 		.filter((c) => !params.tracked || c.Tracked)
 		.filter((c) => !params.favourite || c.Favourite)
@@ -137,7 +138,13 @@ export function getCompanyPage(params: CompanyPageParams): {
 			(c) =>
 				c.Name.toLowerCase().includes(q) || c.Slug.toLowerCase().includes(q),
 		)
-		.sort(params.sort === "alphabetical" ? byName : byRelevance);
+		.sort(
+			params.sort === "alphabetical"
+				? byName
+				: params.sort === "open_jobs"
+					? byJobs
+					: byRelevance,
+		);
 	const start = params.offset ?? 0;
 	return {
 		items: matches.slice(start, start + (params.limit ?? 50)),

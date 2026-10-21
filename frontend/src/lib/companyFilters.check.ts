@@ -38,6 +38,7 @@ assert.equal(activeCompanyFilterCount(parseCompanySearch({})), 0);
 assert.equal(activeCompanyFilterCount(parseCompanySearch({ ats: "x" })), 1);
 
 assert.equal(parseCompanySearch({ sort: "bogus" }).sort, "relevance");
+assert.equal(parseCompanySearch({ sort: "open_jobs" }).sort, "open_jobs");
 assert.equal(parseCompanySearch({ poster: "x" }).poster, undefined);
 assert.equal(parseCompanySearch({ page: "1" }).page, undefined);
 assert.equal(parseCompanySearch({ page: "abc" }).page, undefined);

@@ -35,8 +35,17 @@ export function parseCompanySearch(
 		q: typeof raw.q === "string" ? raw.q : "",
 		favourite: raw.favourite === true || raw.favourite === "true",
 		noBoard: raw.noBoard === true || raw.noBoard === "true",
+<<<<<<< HEAD
 		ats: parseAts(raw.ats),
 		sort: raw.sort === "alphabetical" ? "alphabetical" : "relevance",
+||||||| dcb0d81e
+		sort: raw.sort === "alphabetical" ? "alphabetical" : "relevance",
+=======
+		sort:
+			raw.sort === "alphabetical" || raw.sort === "open_jobs"
+				? raw.sort
+				: "relevance",
+>>>>>>> origin/issue-1133/companies-open-jobs-sort
 		poster:
 			raw.poster === "agency" || raw.poster === "direct"
 				? raw.poster

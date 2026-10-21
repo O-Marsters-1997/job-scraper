@@ -71,6 +71,7 @@ const POSTER_OPTIONS: PosterOption[] = [
 const SORT_OPTIONS: { value: CompanySort; label: string }[] = [
 	{ value: "relevance", label: "Relevance" },
 	{ value: "alphabetical", label: "Alphabetical" },
+	{ value: "open_jobs", label: "Open jobs" },
 ];
 
 function CompaniesPage() {

@@ -23,9 +23,7 @@ SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name,
      ORDER BY cb.source = 'wttj', cb.verified_at, cb.id LIMIT 1), '')::text AS ats_source,
     c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at, c.kind,
-    (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
-     WHERE j.company_id = c.id AND j.closed_at IS NULL
-       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
+    jc.n AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
     EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = sqlc.arg(user_id)::uuid AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
@@ -35,6 +33,11 @@ SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name,
      WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
 FROM companies c
 LEFT JOIN tracked_companies tc ON tc.user_id = sqlc.arg(user_id)::uuid AND tc.company_id = c.id
+CROSS JOIN LATERAL (
+    SELECT COUNT(*) AS n FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
+    WHERE j.company_id = c.id AND j.closed_at IS NULL
+      AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
+) jc
 WHERE (sqlc.arg(search)::text = ''
        OR strpos(lower(c.name), lower(sqlc.arg(search)::text)) > 0
        OR strpos(c.slug, lower(sqlc.arg(search)::text)) > 0)
@@ -48,10 +51,11 @@ WHERE (sqlc.arg(search)::text = ''
                   WHERE cb.company_id = c.id AND cb.status = 'verified'
                     AND cb.source = ANY(sqlc.arg(ats_sources)::text[])))
 ORDER BY
-    CASE WHEN sqlc.arg(sort)::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
-    CASE WHEN sqlc.arg(sort)::text = 'relevance' AND COALESCE(tc.enabled, FALSE)
+    CASE WHEN sqlc.arg(sort)::text = 'relevance'
           AND EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = sqlc.arg(user_id)::uuid AND cf.company_id = c.id)
          THEN 0 ELSE 1 END,
+    CASE WHEN sqlc.arg(sort)::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
+    CASE WHEN sqlc.arg(sort)::text IN ('relevance', 'open_jobs') THEN jc.n ELSE 0 END DESC,
     c.name, c.id
 LIMIT sqlc.arg(page_limit)::int OFFSET sqlc.arg(page_offset)::int;
 
