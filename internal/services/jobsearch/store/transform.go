@@ -56,6 +56,7 @@ func toPageJobDTO(row sqlc.PageJobsRow) (dto.Job, error) {
 	j.Seen = row.Seen
 	j.CompanyFavourite = row.CompanyFavourite
 	j.CompanyKind = dto.CompanyKind(row.CompanyKind)
+	j.DiscoveredVia = row.DiscoveredVia
 	j.CompanyID = row.CompanyID.String()
 	j.BoardID = row.PrimaryBoardID.String()
 	j.ProviderPostingID = row.ProviderPostingID.String
@@ -88,6 +89,7 @@ func toGetJobDTO(row sqlc.GetJobRow) (dto.Job, error) {
 	j.Seen = row.Seen
 	j.CompanyFavourite = row.CompanyFavourite
 	j.CompanyKind = dto.CompanyKind(row.CompanyKind)
+	j.DiscoveredVia = row.DiscoveredVia
 	j.CompanyID = row.CompanyID.String()
 	j.BoardID = row.PrimaryBoardID.String()
 	j.ProviderPostingID = row.ProviderPostingID.String

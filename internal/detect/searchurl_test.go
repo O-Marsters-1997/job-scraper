@@ -99,6 +99,26 @@ func TestParseSearchURL(t *testing.T) {
 				Dropped: []string{},
 			},
 		},
+		{
+			name: "wellfound role and location",
+			url:  "https://wellfound.com/role/l/software-engineer/london",
+			want: detect.SearchURL{Source: "wellfound", Value: "software-engineer", Filters: map[string]string{"location": "london"}, Dropped: []string{}},
+		},
+		{
+			name: "wellfound role only on www host",
+			url:  "https://www.wellfound.com/role/software-engineer",
+			want: detect.SearchURL{Source: "wellfound", Value: "software-engineer", Filters: map[string]string{}, Dropped: []string{}},
+		},
+		{
+			name: "wellfound location only",
+			url:  "https://wellfound.com/location/london",
+			want: detect.SearchURL{Source: "wellfound", Filters: map[string]string{"location": "london"}, Dropped: []string{}},
+		},
+		{
+			name: "wellfound drops paging silently and reports other params",
+			url:  "https://wellfound.com/role/l/software-engineer/london?page=2&utm_source=x",
+			want: detect.SearchURL{Source: "wellfound", Value: "software-engineer", Filters: map[string]string{"location": "london"}, Dropped: []string{"utm_source"}},
+		},
 	}
 	t.Run("parses", func(t *testing.T) {
 		for _, tt := range tests {
@@ -123,6 +143,10 @@ func TestParseSearchURL(t *testing.T) {
 			"https://www.linkedin.com/jobs/collections/recommended/",
 			"https://www.indeed.com/viewjob?jk=abc",
 			"https://remoteok.com/remote-golang-jobs",
+			"https://wellfound.com/company/acme/jobs",
+			"https://wellfound.com/jobs/123-acme",
+			"https://wellfound.com/role/l/software-engineer",
+			"https://wellfound.com/role/Software%2FEngineer",
 		} {
 			t.Run(raw, func(t *testing.T) {
 				if got, ok := detect.ParseSearchURL(raw); ok {
@@ -182,6 +206,9 @@ func TestBuildSearchURL(t *testing.T) {
 			source: "hiringcafe", value: `{"sortBy":"date"}`,
 			want: "https://hiringcafe.com/?searchState=%7B%22sortBy%22%3A%22date%22%7D",
 		},
+		{name: "wellfound role and location", source: "wellfound", value: "software-engineer", filters: map[string]string{"location": "london"}, want: "https://wellfound.com/role/l/software-engineer/london"},
+		{name: "wellfound role only", source: "wellfound", value: "software-engineer", want: "https://wellfound.com/role/software-engineer"},
+		{name: "wellfound location only", source: "wellfound", filters: map[string]string{"location": "london"}, want: "https://wellfound.com/location/london"},
 		{name: "source without a search page", source: "greenhouse", value: "acme", want: ""},
 	}
 	for _, tt := range tests {
@@ -212,6 +239,9 @@ func TestBuildSearchURL(t *testing.T) {
 			}},
 			{"wis salary sort", "wis", "go", map[string]string{"sort": "salary_high"}},
 			{"wis keywords only", "wis", "go", map[string]string{}},
+			{"wellfound role and location", "wellfound", "software-engineer", map[string]string{"location": "london"}},
+			{"wellfound role only", "wellfound", "software-engineer", map[string]string{}},
+			{"wellfound location only", "wellfound", "", map[string]string{"location": "london"}},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -253,6 +283,8 @@ func FuzzParseSearchURL(f *testing.F) {
 		"https://uk.indeed.com/jobs?q=golang&l=London&vjk=abc123&start=10&fromage=7",
 		"https://www.linkedin.com/jobs/view/1234567890",
 		"https://remoteok.com/remote-golang-jobs",
+		"https://wellfound.com/role/l/software-engineer/london?page=2",
+		"https://wellfound.com/location/london",
 	} {
 		f.Add(seed)
 	}

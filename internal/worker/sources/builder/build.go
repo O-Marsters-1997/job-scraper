@@ -24,6 +24,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/remotive"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/smartrecruiters"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/teamtailor"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/wellfound"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/workable"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
@@ -42,9 +43,11 @@ type Builder struct {
 	registry map[string]entry
 }
 
-func New() *Builder { return &Builder{registry: newRegistry()} }
+func New(wellfoundGate *sources.Gate) *Builder {
+	return &Builder{registry: newRegistry(wellfoundGate)}
+}
 
-func newRegistry() map[string]entry {
+func newRegistry(wellfoundGate *sources.Gate) map[string]entry {
 	linkedinGate := linkedin.NewGate()
 	hiringcafeChrome := hiringcafe.NewChrome(hiringcafe.NewGate())
 	workableGate := workable.NewGate()
@@ -76,6 +79,9 @@ func newRegistry() map[string]entry {
 		},
 		"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
 		"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
+		"wellfound": {build: func(t dto.SourceTarget) sources.Source {
+			return wellfound.New(wellfound.Search{Role: t.Value, Location: t.Filters["location"]}, wellfoundGate)
+		}},
 		"wis": {
 			build: func(t dto.SourceTarget) sources.Source {
 				return wis.New(wis.Search{

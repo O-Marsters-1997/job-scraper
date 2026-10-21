@@ -139,6 +139,9 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 		}
 		page.Items[i] = job
 	}
+	if err := s.attachListings(ctx, page.Items, rows); err != nil {
+		return dto.JobPage{}, err
+	}
 
 	if len(rows) > 0 && len(rows) < int(options.Limit) {
 		page.Total = int(options.Offset) + len(rows)
@@ -249,6 +252,29 @@ func (s *Store) ListJobListings(ctx context.Context, jobID string) ([]dto.JobLis
 		listings[i] = dto.JobListing{Source: row.Source, URL: row.NormalizedUrl, FirstSeenAt: row.FirstSeenAt.Time}
 	}
 	return listings, nil
+}
+
+func (s *Store) attachListings(ctx context.Context, jobs []dto.Job, rows []sqlc.PageJobsRow) error {
+	if len(jobs) == 0 {
+		return nil
+	}
+	ids := make([]pgtype.UUID, len(rows))
+	for i, row := range rows {
+		ids[i] = row.ID
+	}
+	listings, err := s.queries.ListJobListingsForJobs(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("list job listings: %w", err)
+	}
+	byJob := make(map[string][]dto.JobListing, len(jobs))
+	for _, l := range listings {
+		id := l.JobID.String()
+		byJob[id] = append(byJob[id], dto.JobListing{Source: l.Source, URL: l.NormalizedUrl, FirstSeenAt: l.FirstSeenAt.Time})
+	}
+	for i := range jobs {
+		jobs[i].Listings = byJob[jobs[i].ID]
+	}
+	return nil
 }
 
 func (s *Store) MarkJobsSeen(ctx context.Context, userID string, jobIDs []string, seen bool) error {

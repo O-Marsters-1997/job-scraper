@@ -382,6 +382,55 @@ func sorted(ids []string) []string {
 	return slices.Sorted(slices.Values(ids))
 }
 
+func TestPage_DiscoveredViaAndListings(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newUserStore(t)
+	companyID := insertCompany(t, pool, "acme")
+	var boardID string
+	if err := pool.QueryRow(t.Context(),
+		`INSERT INTO company_boards (company_id, source, board_token, discovered_via) VALUES ($1, 'ashby', 'acme', 'wellfound') RETURNING id`,
+		companyID).Scan(&boardID); err != nil {
+		t.Fatalf("insert board: %v", err)
+	}
+	viaBoard := insertListing(t, pool, userID, 1, listing{score: new(50), companyID: companyID})
+	plain := insertListing(t, pool, userID, 2, listing{score: new(50), slug: "globex"})
+	if _, err := pool.Exec(t.Context(), `UPDATE jobs SET primary_board_id = $2 WHERE id = $1`, viaBoard, boardID); err != nil {
+		t.Fatalf("link board: %v", err)
+	}
+	if _, err := pool.Exec(t.Context(),
+		`INSERT INTO job_urls (job_id, normalized_url, source, first_seen_at) VALUES ($1, 'https://a.example/1', 'linkedin', $2), ($1, 'https://a.example/2', 'ashby', $3)`,
+		viaBoard, daysAgo(2), daysAgo(1)); err != nil {
+		t.Fatalf("insert listings: %v", err)
+	}
+
+	got := map[string]dto.Job{}
+	for _, j := range pageOf(t, st, userID, nil).Items {
+		got[j.ID] = j
+	}
+	if got[viaBoard].DiscoveredVia != "wellfound" {
+		t.Errorf("DiscoveredVia on board job = %q, want wellfound", got[viaBoard].DiscoveredVia)
+	}
+	if got[plain].DiscoveredVia != "" {
+		t.Errorf("DiscoveredVia without board = %q, want empty", got[plain].DiscoveredVia)
+	}
+	for id, want := range map[string]string{viaBoard: "wellfound", plain: ""} {
+		job, err := st.GetJob(t.Context(), id, userID)
+		if err != nil {
+			t.Fatalf("GetJob(%s) err = %v", id, err)
+		}
+		if job.DiscoveredVia != want {
+			t.Errorf("GetJob(%s).DiscoveredVia = %q, want %q", id, job.DiscoveredVia, want)
+		}
+	}
+	var sources []string
+	for _, l := range got[viaBoard].Listings {
+		sources = append(sources, l.Source)
+	}
+	if diff := cmp.Diff([]string{"linkedin", "ashby"}, sources); diff != "" {
+		t.Errorf("Page() listing sources (-want +got):\n%s", diff)
+	}
+}
+
 func TestStore_JobStats(t *testing.T) {
 	t.Parallel()
 	st, pool, userID := newUserStore(t)
