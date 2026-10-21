@@ -15,7 +15,7 @@ import {
 	useApplications,
 } from "@/hooks/useApplications";
 import { jobCommentsQueryOptions } from "@/hooks/useJobComments";
-import { jobNotesQueryOptions } from "@/hooks/useJobNotes";
+import { jobNoteQueryOptions } from "@/hooks/useJobNotes";
 import { jobQueryOptions, useJob } from "@/hooks/useJobs";
 import { jobDraftsQueryOptions } from "@/hooks/useTailoring";
 import { jobOpenTasksQueryOptions } from "@/hooks/useTasks";
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_auth/applications_/$id")({
 		void queryClient.prefetchQuery(jobQueryOptions(jobId));
 		void queryClient.prefetchQuery(jobDraftsQueryOptions(jobId));
 		void queryClient.prefetchQuery(jobOpenTasksQueryOptions(jobId));
-		void queryClient.prefetchQuery(jobNotesQueryOptions(jobId));
+		void queryClient.prefetchQuery(jobNoteQueryOptions(jobId));
 		void queryClient.prefetchQuery(jobCommentsQueryOptions(jobId));
 	},
 	component: ApplicationDetailPage,
