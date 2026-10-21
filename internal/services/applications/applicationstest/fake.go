@@ -159,7 +159,7 @@ func (f *FakeStore) UpdateApplication(_ context.Context, userID, id string, in d
 	return app, nil
 }
 
-func (f *FakeStore) MarkApplied(_ context.Context, _ pgx.Tx, userID, jobID string) error {
+func (f *FakeStore) MarkApplied(_ context.Context, _ pgx.Tx, userID, jobID string, now time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var appliedID string
@@ -174,7 +174,6 @@ func (f *FakeStore) MarkApplied(_ context.Context, _ pgx.Tx, userID, jobID strin
 		}
 		a.StatusID, a.ChaseBy = appliedID, nil
 		if a.AppliedAt == nil {
-			now := time.Now()
 			a.AppliedAt = &now
 		}
 		f.apps[id] = a

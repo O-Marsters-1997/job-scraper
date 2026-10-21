@@ -64,7 +64,7 @@ func (s *Store) syncTasks(ctx context.Context, tx pgx.Tx, userID string, a dto.A
 	return s.tasks.ApplicationApplied(ctx, tx, userID, a.JobID)
 }
 
-func (s *Store) MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string) error {
+func (s *Store) MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func (s *Store) MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string
 		return err
 	}
 	row, err := s.queries.WithTx(tx).MarkApplicationApplied(ctx, sqlc.MarkApplicationAppliedParams{
-		UserID: uid, JobID: jid, Today: pgtype.Date{Time: time.Now(), Valid: true},
+		UserID: uid, JobID: jid, Now: pgtype.Timestamptz{Time: now, Valid: true},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil

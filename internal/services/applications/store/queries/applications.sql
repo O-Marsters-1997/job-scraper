@@ -80,9 +80,9 @@ WITH applied AS (
 )
 UPDATE applications a
 SET status_id = applied.id,
-    applied_at = COALESCE(a.applied_at, sqlc.arg(today)::date),
+    applied_at = COALESCE(a.applied_at, sqlc.arg(now)::timestamptz::date),
     chase_by = NULL,
-    updated_at = NOW()
+    updated_at = sqlc.arg(now)::timestamptz
 FROM applied, target
 WHERE a.id = target.id AND a.status_id IS DISTINCT FROM applied.id
 RETURNING a.id, target.from_status_id, applied.id AS to_status_id;

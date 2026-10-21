@@ -267,16 +267,16 @@ WITH applied AS (
 )
 UPDATE applications a
 SET status_id = applied.id,
-    applied_at = COALESCE(a.applied_at, $1::date),
+    applied_at = COALESCE(a.applied_at, $1::timestamptz::date),
     chase_by = NULL,
-    updated_at = NOW()
+    updated_at = $1::timestamptz
 FROM applied, target
 WHERE a.id = target.id AND a.status_id IS DISTINCT FROM applied.id
 RETURNING a.id, target.from_status_id, applied.id AS to_status_id
 `
 
 type MarkApplicationAppliedParams struct {
-	Today  pgtype.Date
+	Now    pgtype.Timestamptz
 	UserID pgtype.UUID
 	JobID  pgtype.UUID
 }
@@ -288,7 +288,7 @@ type MarkApplicationAppliedRow struct {
 }
 
 func (q *Queries) MarkApplicationApplied(ctx context.Context, arg MarkApplicationAppliedParams) (MarkApplicationAppliedRow, error) {
-	row := q.db.QueryRow(ctx, markApplicationApplied, arg.Today, arg.UserID, arg.JobID)
+	row := q.db.QueryRow(ctx, markApplicationApplied, arg.Now, arg.UserID, arg.JobID)
 	var i MarkApplicationAppliedRow
 	err := row.Scan(&i.ID, &i.FromStatusID, &i.ToStatusID)
 	return i, err

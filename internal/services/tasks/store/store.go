@@ -19,7 +19,7 @@ import (
 var ErrTaskTypeExists = errors.New("task type name already exists")
 
 type ApplicationSync interface {
-	MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string) error
+	MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error
 }
 
 type DB interface {
@@ -225,7 +225,7 @@ func (s *Store) SetTaskDone(ctx context.Context, userID, id string, done bool, n
 		if !done || before.CompletedAt.Valid || !before.IsApply || !before.JobID.Valid {
 			return nil
 		}
-		return s.applications.MarkApplied(ctx, tx, userID, before.JobID.String())
+		return s.applications.MarkApplied(ctx, tx, userID, before.JobID.String(), now)
 	})
 	if err != nil {
 		return dto.Task{}, data.QueryErr("SetTaskDone", err)
