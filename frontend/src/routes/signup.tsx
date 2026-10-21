@@ -14,7 +14,6 @@ function SignupPage() {
 				heading: "Create your account",
 				subtext: "Start gathering every fresh role in one place.",
 				buttonText: "Create account",
-				loadingText: "Creating account…",
 				passwordAutocomplete: "new-password",
 				statusMessages: { 409: "That username is already taken." },
 				defaultErrorMessage: "Something went wrong. Please try again.",

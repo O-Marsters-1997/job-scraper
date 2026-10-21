@@ -198,14 +198,8 @@ function TrackApplicationForm(props: {
 				<Button type="button" variant="outline" onClick={props.onClose}>
 					Cancel
 				</Button>
-				<Button type="submit" disabled={pending()}>
-					{pending()
-						? isEdit
-							? "Updating…"
-							: "Saving…"
-						: isEdit
-							? "Update"
-							: "Save"}
+				<Button type="submit" loading={pending()}>
+					{isEdit ? "Update" : "Save"}
 				</Button>
 			</DialogFooter>
 		</form>

@@ -122,8 +122,8 @@ function SkeletonForm(props: { initial: LetterSkeleton }) {
 				/>
 			</div>
 			<div>
-				<Button type="submit" disabled={save.isPending}>
-					{save.isPending ? "Saving…" : "Save skeleton"}
+				<Button type="submit" loading={save.isPending}>
+					Save skeleton
 				</Button>
 			</div>
 		</form>

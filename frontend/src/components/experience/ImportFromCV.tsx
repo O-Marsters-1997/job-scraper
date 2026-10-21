@@ -89,7 +89,11 @@ export function ImportFromCV(props: { onDone: () => void }) {
 							</For>
 						</select>
 					</div>
-					<Button onClick={load} disabled={!selected() || preview.isPending}>
+					<Button
+						onClick={load}
+						disabled={!selected()}
+						loading={preview.isPending}
+					>
 						Preview import
 					</Button>
 					<Button variant="ghost" onClick={props.onDone}>

@@ -60,9 +60,9 @@ function LetterRow(props: { letter: CoverLetter }) {
 					variant="outline"
 					size="sm"
 					onClick={() => check.mutate(props.letter.id)}
-					disabled={check.isPending}
+					loading={check.isPending}
 				>
-					{check.isPending ? "Checking…" : "Check letter"}
+					Check letter
 				</Button>
 				<Show
 					when={props.letter.doneAt}

@@ -82,7 +82,7 @@ export function HeadingsStep(props: {
 						<Button variant="outline" onClick={props.onBack}>
 							Back
 						</Button>
-						<Button disabled={save.isPending} onClick={() => submit(data())}>
+						<Button loading={save.isPending} onClick={() => submit(data())}>
 							Save and continue
 						</Button>
 					</div>

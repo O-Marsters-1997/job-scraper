@@ -100,7 +100,7 @@ function SkillsForm(props: {
 					{save.error?.message ?? "Saving the skills failed."}
 				</p>
 			</Show>
-			<Button disabled={!valid() || save.isPending} onClick={submit}>
+			<Button disabled={!valid()} loading={save.isPending} onClick={submit}>
 				Save skills
 			</Button>
 		</div>
