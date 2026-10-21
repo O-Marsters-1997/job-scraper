@@ -413,6 +413,15 @@ func TestPage_DiscoveredViaAndListings(t *testing.T) {
 	if got[plain].DiscoveredVia != "" {
 		t.Errorf("DiscoveredVia without board = %q, want empty", got[plain].DiscoveredVia)
 	}
+	for id, want := range map[string]string{viaBoard: "wellfound", plain: ""} {
+		job, err := st.GetJob(t.Context(), id, userID)
+		if err != nil {
+			t.Fatalf("GetJob(%s) err = %v", id, err)
+		}
+		if job.DiscoveredVia != want {
+			t.Errorf("GetJob(%s).DiscoveredVia = %q, want %q", id, job.DiscoveredVia, want)
+		}
+	}
 	var sources []string
 	for _, l := range got[viaBoard].Listings {
 		sources = append(sources, l.Source)
