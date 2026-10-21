@@ -55,6 +55,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 
 	t.Run("add tracks the doc", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		Track(t, f.Store, f.UserID, "docA")
 		if err := f.Store.RemoveTrackedDoc(t.Context(), f.UserID, "docA"); err != nil {
@@ -63,6 +64,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("add twice keeps one doc", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		first := Track(t, f.Store, f.UserID, "docA")
 		if second := Track(t, f.Store, f.UserID, "docA"); second != first {
@@ -78,6 +80,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("remove deletes the doc", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		Track(t, f.Store, f.UserID, "docA")
 		if err := f.Store.RemoveTrackedDoc(t.Context(), f.UserID, "docA"); err != nil {
@@ -93,12 +96,14 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("remove missing doc returns not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		err := f.Store.RemoveTrackedDoc(t.Context(), f.UserID, "no-such-doc")
 		wantNotFound(t, "RemoveTrackedDoc(missing)", err)
 	})
 
 	t.Run("remove another user's doc returns not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		Track(t, f.Store, f.UserID, "docA")
 		err := f.Store.RemoveTrackedDoc(t.Context(), f.Other, "docA")
@@ -106,6 +111,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("list returns only the user's docs", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		id := Track(t, f.Store, f.UserID, "docA")
 		Track(t, f.Store, f.Other, "docB")
@@ -119,6 +125,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("list filters by kind", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		cvID := TrackKind(t, f.Store, f.UserID, "docCV", dto.TrackedDocCV)
 		letterID := TrackKind(t, f.Store, f.UserID, "docLetter", dto.TrackedDocLetter)
@@ -134,18 +141,21 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("hide missing tab returns not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		err := f.Store.SetTabVisible(t.Context(), f.UserID, "docA", "t-missing", false)
 		wantNotFound(t, "SetTabVisible(missing, false)", err)
 	})
 
 	t.Run("show missing tab returns not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		err := f.Store.SetTabVisible(t.Context(), f.UserID, "docA", "t-missing", true)
 		wantNotFound(t, "SetTabVisible(missing, true)", err)
 	})
 
 	t.Run("hide then show restores visibility", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		id := Track(t, f.Store, f.UserID, "docA")
 		ensure(t, f.Store, id, "t1")
@@ -161,6 +171,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("another user cannot hide or show the tab", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		id := Track(t, f.Store, f.UserID, "docA")
 		ensure(t, f.Store, id, "t1")
@@ -175,6 +186,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("ensure tabs inserts default-visible rows", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		id := Track(t, f.Store, f.UserID, "docA")
 		ensure(t, f.Store, id, "t1", "t2")
@@ -186,6 +198,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("ensure tabs is idempotent", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		id := Track(t, f.Store, f.UserID, "docA")
 		ensure(t, f.Store, id, "t1")
@@ -200,6 +213,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("ensure tabs does not unhide a hidden tab", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		id := Track(t, f.Store, f.UserID, "docA")
 		ensure(t, f.Store, id, "t1")
@@ -211,6 +225,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("ensure tabs is a no-op for an empty tab list", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		id := Track(t, f.Store, f.UserID, "docA")
 		if err := f.Store.EnsureTabs(t.Context(), id, nil, nil); err != nil {
@@ -226,6 +241,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("list tabs is empty for an untracked doc", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		got, err := f.Store.ListTabs(t.Context(), missingID)
 		if err != nil {

@@ -17,4 +17,4 @@ One Postgres container per test binary, removed by Ryuk, means a `go test ./...`
 
 - A full `go test ./...` runs one Postgres container no matter how many packages or sessions run at once, and the first run after an idle spell pays for one container start and one migration.
 - Postgres tests get a fresh database, not a fresh server. Anything server-wide (roles, `pg_stat_activity`, advisory locks) is shared across binaries, so filter by `current_database()`.
-- The RabbitMQ broker test keeps Ryuk and a real disk, because it restarts the broker and expects messages to survive.
+- The RabbitMQ broker test reuses `job-scraper-rabbitmqtest-v1` the same way: Ryuk off, a watchdog that stops the broker after 5 minutes with no AMQP connections, and a fresh vhost per run, deleted on cleanup. It keeps a real disk and no AutoRemove, because it restarts the broker and expects messages to survive. That restart drops every client of the shared broker, so two broker test runs overlapping in that window can fail each other.

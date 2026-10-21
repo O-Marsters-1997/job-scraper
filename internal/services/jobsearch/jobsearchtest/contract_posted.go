@@ -27,6 +27,7 @@ func runCardDatesContract(t *testing.T, newStore func(t *testing.T) (Store, stri
 	}
 
 	t.Run("a re-sighting of a held job runs the date rule and a later date sets the repost", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "sighting", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -48,6 +49,7 @@ func runCardDatesContract(t *testing.T, newStore func(t *testing.T) (Store, stri
 	})
 
 	t.Run("a board card fills a missing posted date or moves it earlier on exactly one match", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		saved, _, err := st.SaveCanonical(ctx, job("https://jobs.example.com/card-co/1", nil))
@@ -70,6 +72,7 @@ func runCardDatesContract(t *testing.T, newStore func(t *testing.T) (Store, stri
 	})
 
 	t.Run("a board card matching several jobs applies nothing", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		first, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Platform Engineer", Location: "London", CompanySlug: "card-co", URL: "https://jobs.example.com/card-co/a", Description: "a"})
@@ -93,6 +96,7 @@ func runCardDatesContract(t *testing.T, newStore func(t *testing.T) (Store, stri
 	})
 
 	t.Run("a board card kept before its job exists dates the job when it is inserted", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		if err := st.ApplyBoardCards(ctx, "linkedin", []dto.Job{card("https://www.linkedin.com/jobs/view/505", posted)}); err != nil {
@@ -114,6 +118,7 @@ func runPostedContract(t *testing.T, newStore func(t *testing.T) (Store, string)
 	runCardDatesContract(t, newStore)
 
 	t.Run("a later save fills a missing posted date and a missing date never overwrites it", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		posted := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
@@ -142,6 +147,7 @@ func runPostedContract(t *testing.T, newStore func(t *testing.T) (Store, string)
 	})
 
 	t.Run("an earlier date wins and a date over two days later is a repost", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		posted := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
@@ -179,6 +185,7 @@ func runPostedContract(t *testing.T, newStore func(t *testing.T) (Store, string)
 	})
 
 	t.Run("a job first seen after a completed poll carries that poll as its lower bound", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "range-co", Name: "Range Co"})

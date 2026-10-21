@@ -37,6 +37,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 
 	t.Run("a created Draft is pending and private to its owner", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		if d.Status != "pending" {
@@ -52,6 +53,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a Draft is claimed once and carries its request", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
@@ -68,6 +70,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a claim carries the Draft's skill swaps", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		in := input(f)
 		in.SkillSwaps = []dto.SkillSwap{{BankSkillID: "b1", Line: 1, Replaces: "SQL"}}
@@ -80,6 +83,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("completing records the result and the Doc", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
@@ -105,6 +109,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("saving edits replaces the edit set and findings for the owner only", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		if err := f.Store.CompleteDraft(ctx, claim(t, f), dto.DraftResult{EditSet: json.RawMessage(`{"positions":[]}`), DraftDocID: "doc-copy"}); err != nil {
@@ -133,6 +138,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a terminal failure is failed with its reason and no Doc", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
@@ -149,6 +155,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a retryable failure backs off instead of being re-claimed at once", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
@@ -165,6 +172,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a Job's Drafts list newest first and only for their owner", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		first, second := create(t, f), create(t, f)
 		got, err := f.Store.ListJobDrafts(ctx, f.UserID, f.JobID)
@@ -181,6 +189,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a Job keeps at most one Draft", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		first, second := create(t, f), create(t, f)
 		kept, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeKept)
@@ -200,6 +209,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("discarding drops the Doc id and keeps the row", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
@@ -229,6 +239,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 
 	t.Run("keeping a ready Draft queues it and the claim completes the keep", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := ready(t, f)
 		queued, err := f.Store.QueueKeep(ctx, f.UserID, d.ID)
@@ -258,6 +269,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a failed keep backs off instead of being re-claimed at once", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := ready(t, f)
 		if _, err := f.Store.QueueKeep(ctx, f.UserID, d.ID); err != nil {
@@ -277,6 +289,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a terminal keep failure returns the Draft to ready unkept with the error", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := ready(t, f)
 		if _, err := f.Store.QueueKeep(ctx, f.UserID, d.ID); err != nil {
