@@ -15,7 +15,11 @@ import {
 } from "@/components/ui/switch";
 import { agencyRollup, isAgencyKind } from "@/lib/agencyRollup";
 import { formatDate } from "@/lib/datetime";
-import { activeFilterCount, DEFAULT_FILTERS } from "@/lib/jobFilters";
+import {
+	activeFilterCount,
+	DEFAULT_FILTERS,
+	type JobFilters,
+} from "@/lib/jobFilters";
 import { outcomeLabels } from "@/types/recruiterContact";
 import {
 	companyQueryOptions,
@@ -32,6 +36,8 @@ import { queryClient } from "../../lib/queryClient";
 import { CompanyBoardsCard } from "./-companies-detail/CompanyBoardsCard";
 import { CompanyDetailsCard } from "./-companies-detail/CompanyDetailsCard";
 
+const COMPANY_FILTERS: JobFilters = { ...DEFAULT_FILTERS, poster: "all" };
+
 export const Route = createFileRoute("/_auth/companies_/$id")({
 	loader: ({ params }) =>
 		queryClient.prefetchQuery(companyQueryOptions(params.id)),
@@ -47,11 +53,11 @@ function CompanyDetailPage() {
 	const company = () =>
 		companyQuery.isSuccess ? (companyQuery.data ?? undefined) : undefined;
 
-	const [localFilters, setLocalFilters] = createSignal(DEFAULT_FILTERS);
+	const [localFilters, setLocalFilters] = createSignal(COMPANY_FILTERS);
 	createEffect(
 		on(
 			() => params().id,
-			() => setLocalFilters(DEFAULT_FILTERS),
+			() => setLocalFilters(COMPANY_FILTERS),
 			{ defer: true },
 		),
 	);
@@ -218,6 +224,7 @@ function CompanyDetailPage() {
 												onPage={table.setPage}
 												filters={filters()}
 												onChange={table.setFilters}
+												hidePosterFilter
 												sourceOptions={sourceOptions()}
 												selection={table.rowSelection()}
 												onSelectionChange={table.select}

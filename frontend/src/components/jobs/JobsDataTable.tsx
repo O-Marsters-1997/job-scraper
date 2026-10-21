@@ -70,6 +70,7 @@ interface JobsDataTableProps<TData extends Job> {
 	selectedJobs: TData[];
 	bulkActions?: BulkAction<TData>[];
 	onMarkAllSeen?: (jobs: TData[]) => void;
+	hidePosterFilter?: boolean;
 }
 
 const SORT_CHOICES = SORT_OPTIONS.map((value) => ({
@@ -268,17 +269,19 @@ export function JobsDataTable<TData extends Job>(
 					</Show>
 				</div>
 				<div class="ml-auto flex shrink-0 items-center gap-2">
-					<For each={POSTER_CHIPS}>
-						{(chip) => (
-							<ToggleChip
-								solid
-								active={props.filters.poster === chip.value}
-								onClick={() => props.onChange({ poster: chip.value })}
-							>
-								{chip.label}
-							</ToggleChip>
-						)}
-					</For>
+					<Show when={!props.hidePosterFilter}>
+						<For each={POSTER_CHIPS}>
+							{(chip) => (
+								<ToggleChip
+									solid
+									active={props.filters.poster === chip.value}
+									onClick={() => props.onChange({ poster: chip.value })}
+								>
+									{chip.label}
+								</ToggleChip>
+							)}
+						</For>
+					</Show>
 					<Show when={props.sortControl}>
 						<Select
 							options={SORT_CHOICES}
@@ -437,7 +440,13 @@ export function JobsDataTable<TData extends Job>(
 				open={filtersOpen()}
 				onOpenChange={setFiltersOpen}
 				filters={props.filters}
-				onChange={props.onChange}
+				onChange={(patch) =>
+					props.onChange(
+						props.hidePosterFilter
+							? { ...patch, poster: props.filters.poster }
+							: patch,
+					)
+				}
 				sourceOptions={props.sourceOptions}
 			/>
 		</div>
