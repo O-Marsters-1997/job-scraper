@@ -106,6 +106,7 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 			return nil
 		}
 		if errors.Is(err, sources.ErrNotRemote) {
+			p.logDetail(ctx, task, "not_remote")
 			p.forgetFetches(ctx, fetches)
 			return nil
 		}
@@ -121,6 +122,7 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 		if err := p.exporter.Export(ctx, job); err != nil {
 			return err
 		}
+		p.logDetail(ctx, task, "exported")
 		p.forgetFetches(ctx, fetches)
 		return nil
 	case queue.ListingPageTask:
@@ -139,6 +141,13 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 	default:
 		return fmt.Errorf("unsupported task kind %s", task.Kind)
 	}
+}
+
+func (p *Processor) logDetail(ctx context.Context, task queue.Task, outcome string) {
+	p.log.InfoContext(ctx, "detail fetched",
+		slog.String(logger.KeySource, task.Source),
+		slog.Bool("remote_check", task.Card.RemoteCheckURL != ""),
+		slog.String(logger.KeyOutcome, outcome))
 }
 
 func (p *Processor) forgetFetches(ctx context.Context, c *proxy.Collector) {
