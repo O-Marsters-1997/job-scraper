@@ -31,7 +31,7 @@ export const keys = {
 		forJob: (jobId: string) => [...tasksAll, "job", jobId] as const,
 	},
 	statuses: ["application-statuses"] as const,
-	jobNotes: (jobId: string) => ["job-notes", jobId] as const,
+	jobNote: (jobId: string) => ["job-note", jobId] as const,
 	jobComments: (jobId: string) => ["job-comments", jobId] as const,
 	recruiterContacts: (jobId: string) => ["recruiter-contacts", jobId] as const,
 	recruiterContactSummaries: {

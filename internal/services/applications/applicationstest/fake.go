@@ -24,20 +24,21 @@ type FakeStore struct {
 	apps     map[string]dto.Application
 	statuses map[string]dto.ApplicationStatus
 	contacts map[string][]dto.RecruiterContact
-	notes    map[string][]dto.JobNote
+	notes    map[noteKey]string
 	comments map[string][]dto.JobComment
 
 	nextContact int
-	nextNote    int
 	nextComment int
 }
+
+type noteKey struct{ userID, jobID string }
 
 func NewFakeStore() *FakeStore {
 	return &FakeStore{
 		apps:     make(map[string]dto.Application),
 		statuses: make(map[string]dto.ApplicationStatus),
 		contacts: make(map[string][]dto.RecruiterContact),
-		notes:    make(map[string][]dto.JobNote),
+		notes:    make(map[noteKey]string),
 		comments: make(map[string][]dto.JobComment),
 	}
 }
@@ -261,51 +262,17 @@ func (f *FakeStore) ListRecruiterContacts(_ context.Context, userID, jobID strin
 	return out, nil
 }
 
-func (f *FakeStore) CreateJobNote(_ context.Context, userID string, in dto.CreateJobNoteInput) (dto.JobNote, error) {
+func (f *FakeStore) GetJobNote(_ context.Context, userID, jobID string) (dto.JobNote, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	now := time.Now()
-	f.nextNote++
-	n := dto.JobNote{ID: fmt.Sprintf("note-%d", f.nextNote), JobID: in.JobID, Body: in.Body, CreatedAt: now, UpdatedAt: now}
-	f.notes[userID] = append(f.notes[userID], n)
-	return n, nil
+	return dto.JobNote{JobID: jobID, Body: f.notes[noteKey{userID, jobID}]}, nil
 }
 
-func (f *FakeStore) ListJobNotes(_ context.Context, userID, jobID string) ([]dto.JobNote, error) {
+func (f *FakeStore) PutJobNote(_ context.Context, userID string, in dto.PutJobNoteInput) (dto.JobNote, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := []dto.JobNote{}
-	for _, n := range f.notes[userID] {
-		if n.JobID == jobID {
-			out = append(out, n)
-		}
-	}
-	slices.Reverse(out)
-	return out, nil
-}
-
-func (f *FakeStore) UpdateJobNote(_ context.Context, userID string, in dto.UpdateJobNoteInput) (dto.JobNote, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for i, n := range f.notes[userID] {
-		if n.ID == in.ID {
-			n.Body, n.UpdatedAt = in.Body, time.Now()
-			f.notes[userID][i] = n
-			return n, nil
-		}
-	}
-	return dto.JobNote{}, data.ErrNotFound
-}
-
-func (f *FakeStore) DeleteJobNote(_ context.Context, userID, id string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	before := len(f.notes[userID])
-	f.notes[userID] = slices.DeleteFunc(f.notes[userID], func(n dto.JobNote) bool { return n.ID == id })
-	if len(f.notes[userID]) == before {
-		return data.ErrNotFound
-	}
-	return nil
+	f.notes[noteKey{userID, in.JobID}] = in.Body
+	return dto.JobNote(in), nil
 }
 
 func (f *FakeStore) CreateJobComment(_ context.Context, userID string, in dto.CreateJobCommentInput) (dto.JobComment, error) {

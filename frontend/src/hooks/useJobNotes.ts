@@ -1,40 +1,27 @@
-import { createQuery, queryOptions } from "@tanstack/solid-query";
 import {
-	createJobNote,
-	deleteJobNote,
-	fetchJobNotes,
-	updateJobNote,
-} from "../api/jobNotes";
+	createMutation,
+	createQuery,
+	queryOptions,
+	useQueryClient,
+} from "@tanstack/solid-query";
+import { fetchJobNote, saveJobNote } from "../api/jobNotes";
 import { keys } from "../api/keys";
-import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
-export const jobNotesQueryOptions = (jobId: string) =>
+export const jobNoteQueryOptions = (jobId: string) =>
 	queryOptions({
-		queryKey: keys.jobNotes(jobId),
-		queryFn: () => fetchJobNotes(jobId),
+		queryKey: keys.jobNote(jobId),
+		queryFn: () => fetchJobNote(jobId),
 	});
 
-export function useJobNotes(jobId: () => string) {
-	return createQuery(() => jobNotesQueryOptions(jobId()));
+export function useJobNote(jobId: () => string) {
+	return createQuery(() => jobNoteQueryOptions(jobId()));
 }
 
-export function useCreateJobNote(jobId: () => string) {
-	return useInvalidatingMutation(
-		(body: string) => createJobNote(jobId(), body),
-		(note) => [keys.jobNotes(note.JobID)],
-	);
-}
-
-export function useUpdateJobNote(jobId: () => string) {
-	return useInvalidatingMutation(
-		(v: { id: string; body: string }) => updateJobNote(v.id, v.body),
-		() => [keys.jobNotes(jobId())],
-	);
-}
-
-export function useDeleteJobNote(jobId: () => string) {
-	return useInvalidatingMutation(
-		(id: string) => deleteJobNote(id),
-		() => [keys.jobNotes(jobId())],
-	);
+export function useSaveJobNote(jobId: () => string) {
+	const queryClient = useQueryClient();
+	return createMutation(() => ({
+		mutationFn: (body: string) => saveJobNote(jobId(), body),
+		onSuccess: (note) =>
+			queryClient.setQueryData(keys.jobNote(note.JobID), note),
+	}));
 }
