@@ -5,6 +5,7 @@ import { FavouriteStar } from "@/components/FavouriteStar";
 import { PageHeading } from "@/components/PageHeading";
 import { Pager } from "@/components/Pager";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { TableShortcuts } from "@/components/TableShortcuts";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,12 +31,14 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { useTableKeyNav } from "@/hooks/useTableKeyNav";
 import {
 	type CompanyListState,
 	companySearchPatch,
 	parseCompanySearch,
 } from "@/lib/companyFilters";
 import { formatDate } from "@/lib/datetime";
+import { pageCount } from "@/lib/serverTable";
 import {
 	COMPANY_PAGE_SIZE,
 	companyPageQuery,
@@ -82,6 +85,14 @@ function CompaniesPage() {
 		}),
 	);
 	const query = table.query;
+	const nav = useTableKeyNav({
+		rowIds: () => table.items().map((c) => c.ID),
+		data: table.items,
+		page: table.page,
+		lastPage: () => pageCount(table.total(), COMPANY_PAGE_SIZE),
+		onPage: table.setPage,
+		rowUrl: (id) => `/companies/${encodeURIComponent(id)}`,
+	});
 
 	createEffect(
 		on(term, (q) => table.setFilters({ q }), {
@@ -113,7 +124,10 @@ function CompaniesPage() {
 						Search companies
 					</Label>
 					<Input
+						ref={nav.searchRef}
 						id="companies-search"
+						aria-keyshortcuts="/"
+						onKeyDown={nav.onSearchKeyDown}
 						placeholder="Search companies…"
 						value={untrack(() => state().q)}
 						onInput={(e) => search(e.currentTarget.value)}
@@ -202,7 +216,7 @@ function CompaniesPage() {
 							{data().verifiedBoardCompanies} of {data().allCompanies} companies
 							have a verified board
 						</p>
-						<Card class="overflow-hidden">
+						<Card ref={nav.containerRef} class="overflow-hidden">
 							<Table>
 								<TableHeader>
 									<TableRow>
@@ -219,7 +233,10 @@ function CompaniesPage() {
 								<TableBody>
 									<For each={data().items}>
 										{(c) => (
-											<TableRow>
+											<TableRow
+												{...nav.rowProps(c.ID)}
+												class="data-[active]:bg-accent-subtle"
+											>
 												<TableCell>
 													<FavouriteStar
 														favourite={c.Favourite ?? false}
@@ -285,9 +302,11 @@ function CompaniesPage() {
 								page={table.page()}
 								pageSize={COMPANY_PAGE_SIZE}
 								noun="companies"
+								keyHints
 								onPage={table.setPage}
 							/>
 						</Card>
+						<TableShortcuts noun="company" />
 					</>
 				)}
 			</QueryBoundary>

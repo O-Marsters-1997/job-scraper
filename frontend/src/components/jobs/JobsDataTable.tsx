@@ -12,15 +12,10 @@ import { JobPreviewDialog } from "@/components/jobs/JobPreviewDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
 import { Kbd } from "@/components/Kbd";
 import { Pager } from "@/components/Pager";
+import { TableShortcuts } from "@/components/TableShortcuts";
 import { ToggleChip } from "@/components/ToggleChip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -45,7 +40,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { useDebouncedTerm } from "@/hooks/useDebouncedTerm";
-import { useShortcuts } from "@/hooks/useShortcuts";
+import { useTableKeyNav } from "@/hooks/useTableKeyNav";
 import {
 	activeFilterCount,
 	type JobFilters,
@@ -84,20 +79,10 @@ interface JobsDataTableProps<TData extends Job> {
 	onDismiss?: (job: TData) => void;
 }
 
-const JUMP = 5;
-
-const SHORTCUT_KEYS = [
-	[["j", "↓"], "Next row"],
-	[["k", "↑"], "Previous row"],
-	[["⇧ ↓"], "Down 5 rows"],
-	[["⇧ ↑"], "Up 5 rows"],
-	[["Enter"], "Open job in a new tab"],
+const JOB_SHORTCUTS = [
 	[["p"], "Preview description"],
 	[["y"], "Track application"],
 	[["n"], "Not for me"],
-	[["/"], "Search"],
-	[["]", "→"], "Next page (→ needs an active row)"],
-	[["[", "←"], "Previous page (← needs an active row)"],
 ] as const;
 
 const SORT_CHOICES = SORT_OPTIONS.map((value) => ({
@@ -181,67 +166,35 @@ export function JobsDataTable<TData extends Job>(
 		},
 	});
 
-	let tableContainer: HTMLDivElement | undefined;
-	let focusAfterPaging = false;
-
-	const [activeRow, setActiveRow] = createSignal<string | null>(null);
-	const rowIds = () => table.getRowModel().rows.map((row) => row.id);
-
-	const isInteractive = (target: EventTarget | null) =>
-		target instanceof Element &&
-		target.closest("a, button, input, [role=checkbox]") !== null;
-
-	createEffect(() => props.onActiveRowChange?.(activeRow()));
-
-	const activateFirstRow = () => {
-		if (document.activeElement instanceof HTMLElement) {
-			document.activeElement.blur();
-		}
-		tableContainer?.scrollIntoView({ block: "start" });
-		setActiveRow(rowIds()[0] ?? null);
-	};
-
-	const moveActive = (step: number) => {
-		const ids = rowIds();
-		const current = activeRow();
-		const from = current === null ? -1 : ids.indexOf(current);
-		const next =
-			from === -1 ? 0 : Math.min(Math.max(from + step, 0), ids.length - 1);
-		const id = ids[next];
-		if (id === undefined) return;
-		setActiveRow(id);
-		tableContainer
-			?.querySelector(`tr[data-row-id="${CSS.escape(id)}"]`)
-			?.scrollIntoView({ block: "nearest" });
-	};
-
-	const openActive = (e: KeyboardEvent) => {
-		const id = activeRow();
-		if (id === null || isInteractive(e.target)) return false;
-		window.open(`/jobs/${encodeURIComponent(id)}`, "_blank", "noopener");
-	};
-
-	const [keysOpen, setKeysOpen] = createSignal(false);
-	const activeJob = () => props.data.find((job) => job.ID === activeRow());
-
 	const [previewId, setPreviewId] = createSignal<string | null>(null);
-
-	createEffect(
-		on(
-			() => props.data,
-			() => {
-				if (focusAfterPaging) {
-					focusAfterPaging = false;
-					activateFirstRow();
-				} else if (!rowIds().includes(activeRow() ?? "")) {
-					setActiveRow(null);
-				}
+	const nav = useTableKeyNav({
+		rowIds: () => table.getRowModel().rows.map((row) => row.id),
+		data: () => props.data,
+		page: () => props.page,
+		lastPage,
+		onPage: (page) => props.onPage(page),
+		rowUrl: (id) => `/jobs/${encodeURIComponent(id)}`,
+		extraShortcuts: {
+			p: () => {
+				const id = nav.activeRow();
+				if (id === null) return false;
+				setPreviewId(id);
 			},
-			{ defer: true },
-		),
-	);
+			y: () => {
+				const id = nav.activeRow();
+				if (id === null || !props.onTrack) return false;
+				props.onTrack(id);
+			},
+			n: () => {
+				const job = props.data.find((j) => j.ID === nav.activeRow());
+				if (!job || !props.onDismiss) return false;
+				props.onDismiss(job);
+			},
+		},
+	});
 
-	let searchInput: HTMLInputElement | undefined;
+	createEffect(() => props.onActiveRowChange?.(nav.activeRow()));
+
 	const [searchFocused, setSearchFocused] = createSignal(false);
 	const [searchTerm, search] = useDebouncedTerm();
 	createEffect(
@@ -249,49 +202,6 @@ export function JobsDataTable<TData extends Job>(
 			defer: true,
 		}),
 	);
-
-	const nextPage = () => {
-		if (props.page >= lastPage()) return;
-		focusAfterPaging = true;
-		props.onPage(props.page + 1);
-	};
-	const prevPage = () => {
-		if (props.page <= 1) return;
-		focusAfterPaging = true;
-		props.onPage(props.page - 1);
-	};
-
-	useShortcuts({
-		ArrowDown: (e) => moveActive(e.shiftKey ? JUMP : 1),
-		j: () => moveActive(1),
-		ArrowUp: (e) => moveActive(e.shiftKey ? -JUMP : -1),
-		k: () => moveActive(-1),
-		Enter: openActive,
-		p: () => {
-			const id = activeRow();
-			if (id === null) return false;
-			setPreviewId(id);
-		},
-		y: () => {
-			const id = activeRow();
-			if (id === null || !props.onTrack) return false;
-			props.onTrack(id);
-		},
-		n: () => {
-			const job = activeJob();
-			if (!job || !props.onDismiss) return false;
-			props.onDismiss(job);
-		},
-		"/": () => {
-			searchInput?.scrollIntoView({ block: "nearest" });
-			searchInput?.focus();
-			searchInput?.select();
-		},
-		"]": nextPage,
-		"[": prevPage,
-		ArrowRight: () => (activeRow() === null ? false : nextPage()),
-		ArrowLeft: () => (activeRow() === null ? false : prevPage()),
-	});
 
 	const unseenJobs = () => props.data.filter((job) => !job.Seen);
 	const filterCount = () => activeFilterCount(props.filters);
@@ -310,7 +220,7 @@ export function JobsDataTable<TData extends Job>(
 							Search jobs
 						</Label>
 						<Input
-							ref={searchInput}
+							ref={nav.searchRef}
 							id="jobs-search"
 							aria-keyshortcuts="/"
 							type="search"
@@ -319,12 +229,7 @@ export function JobsDataTable<TData extends Job>(
 							onInput={(e) => search(e.currentTarget.value)}
 							onFocus={() => setSearchFocused(true)}
 							onBlur={() => setSearchFocused(false)}
-							onKeyDown={(e) => {
-								if (e.key !== "Enter" || e.isComposing) return;
-								if (table.getRowModel().rows.length === 0) return;
-								e.preventDefault();
-								activateFirstRow();
-							}}
+							onKeyDown={nav.onSearchKeyDown}
 							class="pr-3 pl-9"
 						/>
 						<Show when={!searchFocused() && props.filters.q === ""}>
@@ -437,7 +342,7 @@ export function JobsDataTable<TData extends Job>(
 			</div>
 
 			<div
-				ref={tableContainer}
+				ref={nav.containerRef}
 				class="overflow-hidden rounded-xl border border-border bg-surface"
 				data-feedback-collection={props.data.map((job) => job.ID).join(",")}
 			>
@@ -480,16 +385,12 @@ export function JobsDataTable<TData extends Job>(
 								{(row) => (
 									<>
 										<TableRow
-											data-row-id={row.id}
+											{...nav.rowProps(row.id)}
 											data-state={row.getIsSelected() ? "selected" : undefined}
-											data-active={activeRow() === row.id ? "" : undefined}
 											class={cn(
 												row.getIsSelected() && "bg-accent-subtle/40",
 												"data-[active]:bg-accent-subtle",
 											)}
-											onClick={(e) => {
-												if (!isInteractive(e.target)) setActiveRow(row.id);
-											}}
 											data-feedback-job={
 												row.original.SuitabilityScore == null
 													? undefined
@@ -532,31 +433,7 @@ export function JobsDataTable<TData extends Job>(
 				</Show>
 			</div>
 
-			<div class="flex justify-end">
-				<Button variant="ghost" size="sm" onClick={() => setKeysOpen(true)}>
-					Shortcuts
-				</Button>
-			</div>
-
-			<Dialog open={keysOpen()} onOpenChange={setKeysOpen}>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Keyboard shortcuts</DialogTitle>
-					</DialogHeader>
-					<dl class="flex flex-col gap-2 text-sm">
-						<For each={SHORTCUT_KEYS}>
-							{([keys, label]) => (
-								<div class="flex items-center justify-between gap-4">
-									<dt class="text-muted">{label}</dt>
-									<dd class="flex gap-1">
-										<For each={keys}>{(k) => <Kbd>{k}</Kbd>}</For>
-									</dd>
-								</div>
-							)}
-						</For>
-					</dl>
-				</DialogContent>
-			</Dialog>
+			<TableShortcuts noun="job" extra={JOB_SHORTCUTS} />
 
 			<JobPreviewDialog
 				jobId={previewId()}
