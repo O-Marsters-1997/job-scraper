@@ -38,7 +38,7 @@ func (b *Broker) DeadLetters(ctx context.Context, count int) ([]DeadLetter, erro
 	if vhost == "" {
 		vhost = "/"
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"/api/queues/"+url.PathEscape(vhost)+"/"+deadQueue+"/get", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"/api/queues/"+url.PathEscape(vhost)+"/"+deadQueue+"/get", bytes.NewReader(body)) //nolint:gosec // G704: endpoint is operator config (RABBITMQ_MANAGEMENT_URL), not request input
 	if err != nil {
 		return nil, err
 	}
