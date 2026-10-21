@@ -173,6 +173,7 @@ export function useTrackJobs(
 		openGrade,
 		bulkSeen,
 		bulkDismiss,
+		dismissJob: dismiss.dismiss,
 		markAllSeen,
 		bulkExcludeCompanies: bulkExclude.exclude,
 		bulkMarkRecruiters: (target: Job[]) => bulkSetKind(target, "agency"),

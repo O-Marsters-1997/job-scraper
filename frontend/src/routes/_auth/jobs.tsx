@@ -134,6 +134,8 @@ function JobsPage() {
 							},
 						]}
 						onMarkAllSeen={track.markAllSeen}
+						onTrack={track.openTrack}
+						onDismiss={track.dismissJob}
 					/>
 				)}
 			</QueryBoundary>
