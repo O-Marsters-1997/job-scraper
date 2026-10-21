@@ -73,19 +73,31 @@ type Search struct {
 
 const recencyMargin = time.Hour
 
-// Recency returns the smallest f value (days) covering the time since lastSucceeded
-// plus a margin. It returns "" on a first run or when more than 7 days have passed.
-func Recency(lastSucceeded *time.Time, now time.Time) string {
+func Recency(configured string, lastSucceeded *time.Time, now time.Time) string {
 	if lastSucceeded == nil {
 		return ""
 	}
 	elapsed := max(now.Sub(*lastSucceeded), 0) + recencyMargin
 	for _, days := range []int{1, 3, 7} {
-		if elapsed <= time.Duration(days)*24*time.Hour {
-			return strconv.Itoa(days)
+		if elapsed > time.Duration(days)*24*time.Hour {
+			continue
 		}
+		if n, err := strconv.Atoi(configured); err == nil && days >= n {
+			return ""
+		}
+		return strconv.Itoa(days)
 	}
 	return ""
+}
+
+func sortParams(sort string) (sb, sd string, newestFirst bool) {
+	switch sort {
+	case "salary_high":
+		return "salary", "down", false
+	case "salary_low":
+		return "salary", "up", false
+	}
+	return "date", "down", true
 }
 
 func (s Search) startURL() string {
@@ -94,7 +106,7 @@ func (s Search) startURL() string {
 	fields, _ := sourcespec.LookupFilterFields("wis")
 	for _, f := range fields {
 		value := s.Filters[f.Name]
-		if value == "" {
+		if value == "" || f.Param == "" {
 			continue
 		}
 		if !sourcespec.ValidFilterValue("wis", f.Name, value) {
@@ -103,8 +115,9 @@ func (s Search) startURL() string {
 		}
 		v.Set(f.Param, value)
 	}
-	v.Set("sb", "date")
-	v.Set("sd", "down")
+	sb, sd, _ := sortParams(s.Filters["sort"])
+	v.Set("sb", sb)
+	v.Set("sd", sd)
 	if s.Recency != "" {
 		v.Set("f", s.Recency)
 	}
@@ -130,13 +143,14 @@ var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 
 func New(search Search, gate *sources.Gate) *Scraper {
+	_, _, newestFirst := sortParams(search.Filters["sort"])
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:        "wis",
 			Route:       sources.RouteResidential,
 			Header:      browserHeader,
 			Cookies:     true,
-			NewestFirst: true,
+			NewestFirst: newestFirst,
 		}),
 		search: search,
 		gate:   gate,

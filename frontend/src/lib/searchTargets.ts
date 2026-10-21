@@ -54,10 +54,72 @@ export interface FilterChip {
 	display: string;
 }
 
+const HIRINGCAFE_TITLE = "hiring.cafe search";
+
+interface HiringCafeState {
+	searchText?: unknown;
+	locations?: unknown;
+	sortBy?: unknown;
+	dateFetchedPastNDays?: unknown;
+}
+
+function hiringCafeState(target: SourceTarget): HiringCafeState | undefined {
+	if (target.Source !== "hiringcafe") return undefined;
+	try {
+		const state: unknown = JSON.parse(target.Value);
+		return state && typeof state === "object" ? state : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+export function searchTitle(target: SourceTarget): string {
+	const state = hiringCafeState(target);
+	if (!state) return target.Value;
+	const text =
+		typeof state.searchText === "string" ? state.searchText.trim() : "";
+	return text || HIRINGCAFE_TITLE;
+}
+
+function describeHiringCafe(state: HiringCafeState): FilterChip[] {
+	const chips: FilterChip[] = [];
+	const add = (key: string, label: string, value: string) =>
+		chips.push({ key, label, display: `${label}: ${value}` });
+	if (typeof state.searchText === "string" && state.searchText.trim()) {
+		add("searchText", "Keyword", state.searchText.trim());
+	}
+	if (Array.isArray(state.locations)) {
+		for (const loc of state.locations) {
+			const name = loc?.formatted_address ?? loc?.name;
+			if (typeof name === "string" && name) {
+				add(`location:${name}`, "Location", name);
+			}
+		}
+	}
+	if (typeof state.sortBy === "string" && state.sortBy) {
+		add(
+			"sortBy",
+			"Sort",
+			state.sortBy === "date" ? "Newest first" : state.sortBy,
+		);
+	}
+	const days = state.dateFetchedPastNDays;
+	if (typeof days === "number" && days > 0) {
+		add(
+			"dateFetchedPastNDays",
+			"Posted",
+			`Past ${days} ${days === 1 ? "day" : "days"}`,
+		);
+	}
+	return chips;
+}
+
 export function describeFilters(
 	target: SourceTarget,
 	info: SourceInfo | undefined,
 ): FilterChip[] {
+	const state = hiringCafeState(target);
+	if (state) return describeHiringCafe(state);
 	return Object.entries(target.Filters)
 		.filter(([, value]) => value !== "")
 		.map(([key, value]) => {
@@ -76,7 +138,7 @@ export function matchesSearch(
 	const needle = params.q?.trim().toLowerCase();
 	if (needle) {
 		const haystack = [
-			target.Value,
+			searchTitle(target),
 			...describeFilters(target, info).map((f) => f.display),
 		]
 			.join(" ")
@@ -104,7 +166,8 @@ export function sortTargets(
 	if (sort !== "search" && sort !== "lastRun") return targets;
 	const by =
 		sort === "search"
-			? (a: SourceTarget, b: SourceTarget) => a.Value.localeCompare(b.Value)
+			? (a: SourceTarget, b: SourceTarget) =>
+					searchTitle(a).localeCompare(searchTitle(b))
 			: (a: SourceTarget, b: SourceTarget) =>
 					new Date(a.LastRunAt ?? 0).getTime() -
 					new Date(b.LastRunAt ?? 0).getTime();
