@@ -49,6 +49,7 @@
 				"src/api/companies.ts",
 				"src/components/MultiCombobox.tsx",
 				"src/components/tailoring/DraftEditor.tsx",
+				"src/lib/searchTargets.ts",
 				"src/lib/sse.ts",
 				"src/mocks/jobPage.ts"
 			],
