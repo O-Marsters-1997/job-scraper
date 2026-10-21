@@ -249,7 +249,9 @@ func seededStatus(t *testing.T, st *applicationstest.FakeStore, key string) dto.
 }
 
 func TestSystemStatuses(t *testing.T) {
+	t.Parallel()
 	t.Run("cannot be deleted", func(t *testing.T) {
+		t.Parallel()
 		svc, st := newService(t)
 		draft := seededStatus(t, st, "draft")
 		if err := svc.DeleteStatus(t.Context(), userID, draft.ID); !apperr.IsKind(err, apperr.KindInvalid) {
@@ -258,6 +260,7 @@ func TestSystemStatuses(t *testing.T) {
 	})
 
 	t.Run("cannot be renamed", func(t *testing.T) {
+		t.Parallel()
 		svc, st := newService(t)
 		applied := seededStatus(t, st, "applied")
 		in := dto.ApplicationStatusInput{ID: applied.ID, Name: "Sent", Colour: "#6366f1"}
@@ -267,6 +270,7 @@ func TestSystemStatuses(t *testing.T) {
 	})
 
 	t.Run("can be recoloured", func(t *testing.T) {
+		t.Parallel()
 		svc, st := newService(t)
 		applied := seededStatus(t, st, "applied")
 		in := dto.ApplicationStatusInput{ID: applied.ID, Name: applied.Name, Colour: "#000000"}
@@ -281,6 +285,7 @@ func TestSystemStatuses(t *testing.T) {
 }
 
 func TestCreateDefaultsToDraft(t *testing.T) {
+	t.Parallel()
 	svc, st := newService(t)
 	draft := seededStatus(t, st, "draft")
 
