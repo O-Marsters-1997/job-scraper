@@ -3,7 +3,7 @@ import { keys } from "../api/keys";
 import { fetchLetterSkeleton, saveLetterSkeleton } from "../api/letterSkeleton";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
-export const letterSkeletonQueryOptions = queryOptions({
+const letterSkeletonQueryOptions = queryOptions({
 	queryKey: keys.letterSkeleton,
 	queryFn: fetchLetterSkeleton,
 });

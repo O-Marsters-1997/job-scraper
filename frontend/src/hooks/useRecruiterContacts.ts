@@ -12,7 +12,7 @@ import {
 import type { LogRecruiterContactPayload } from "../types/recruiterContact";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
-export const recruiterContactsQueryOptions = (jobId: string) =>
+const recruiterContactsQueryOptions = (jobId: string) =>
 	queryOptions({
 		queryKey: keys.recruiterContacts(jobId),
 		queryFn: () => fetchRecruiterContacts(jobId),

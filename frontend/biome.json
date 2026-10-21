@@ -32,9 +32,35 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"recommended": true
+			"recommended": true,
+			"correctness": {
+				"noUnusedVariables": "error",
+				"noUnusedImports": "error",
+				"noUnusedFunctionParameters": "error"
+			},
+			"complexity": {
+				"noExcessiveCognitiveComplexity": "error"
+			}
 		}
 	},
+	"overrides": [
+		{
+			"includes": [
+				"src/api/companies.ts",
+				"src/components/MultiCombobox.tsx",
+				"src/components/tailoring/DraftEditor.tsx",
+				"src/lib/sse.ts",
+				"src/mocks/jobPage.ts"
+			],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noExcessiveCognitiveComplexity": "off"
+					}
+				}
+			}
+		}
+	],
 	"css": {
 		"parser": {
 			"cssModules": false,

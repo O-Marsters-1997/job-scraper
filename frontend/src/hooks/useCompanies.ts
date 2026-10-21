@@ -7,7 +7,6 @@ import {
 	addCompany,
 	addCompanyBoard,
 	excludeCompanies,
-	excludeCompany,
 	fetchCompany,
 	fetchCompanyBoards,
 	fetchCompanyPage,
@@ -19,7 +18,6 @@ import {
 	setCompanyReview,
 	setCompanyTracking,
 	unexcludeCompanies,
-	unexcludeCompany,
 } from "../api/companies";
 import { keys } from "../api/keys";
 import type { CompanyListState } from "../lib/companyFilters";
@@ -169,18 +167,6 @@ const excludeInvalidations = [
 	keys.jobs.all,
 	keys.scoringConfig,
 ];
-
-export function useExcludeCompany() {
-	return useInvalidatingMutation(excludeCompany, excludeInvalidations);
-}
-
-export function useUnexcludeCompany() {
-	return useInvalidatingMutation(
-		({ id, removeName }: { id: string; removeName: boolean }) =>
-			unexcludeCompany(id, removeName),
-		excludeInvalidations,
-	);
-}
 
 export function useExcludeCompanies() {
 	return useInvalidatingMutation(excludeCompanies, excludeInvalidations);

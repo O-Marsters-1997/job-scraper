@@ -8,6 +8,9 @@ linters:
     - ineffassign # unused assignments
     - staticcheck # static analysis
     - unused # unused code
+    - unparam
+    - dupl
+    - interfacebloat
     - misspell # spelling
     - exhaustive # exhaustive enum switches
     - depguard # internal/api, internal/worker and shared package boundaries; test-double leakage

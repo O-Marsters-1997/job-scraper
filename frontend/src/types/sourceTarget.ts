@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const runWindowSchema = z.object({
+const runWindowSchema = z.object({
 	interval_minutes: z.number().nullable(),
 	weekdays: z
 		.array(z.number())

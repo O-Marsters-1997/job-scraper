@@ -112,7 +112,7 @@ export function preselectedPicks(data: SkillSuggestions): SkillPick[] {
 	);
 }
 
-export function nextReplaces(
+function nextReplaces(
 	line: SkillLineSuggestion,
 	lineIndex: number,
 	picks: SkillPick[],

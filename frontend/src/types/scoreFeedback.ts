@@ -13,8 +13,6 @@ const feedbackOptionSchema = z.object({
 	known: z.boolean(),
 });
 
-export type FeedbackOption = z.infer<typeof feedbackOptionSchema>;
-
 const rankedJobSchema = z.object({
 	rank: z.number(),
 	jobId: z.string(),

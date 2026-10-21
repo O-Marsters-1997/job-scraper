@@ -24,17 +24,3 @@ export async function subscribePush(
 		() => apiFetchVoid("/push/subscriptions", jsonInit("POST", sub)),
 	);
 }
-
-export async function unsubscribePush(endpoint: string): Promise<void> {
-	return mocked(
-		(db) => db.removePushSubscription(endpoint),
-		() => apiFetchVoid("/push/subscriptions", jsonInit("DELETE", { endpoint })),
-	);
-}
-
-export async function sendTestPush(): Promise<void> {
-	return mocked(
-		() => undefined,
-		() => apiFetchVoid("/push/test", { method: "POST" }),
-	);
-}

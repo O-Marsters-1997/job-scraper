@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const commentQuoteSchema = z.object({
+const commentQuoteSchema = z.object({
 	exact: z.string(),
 	prefix: z.string(),
 	suffix: z.string(),

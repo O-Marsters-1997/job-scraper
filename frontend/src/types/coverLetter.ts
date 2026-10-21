@@ -22,7 +22,7 @@ export const coverLetterSchema = z.object({
 
 export type CoverLetter = z.infer<typeof coverLetterSchema>;
 
-export const letterFindingSchema = z.object({
+const letterFindingSchema = z.object({
 	kind: z.enum([
 		"leftover_bullet",
 		"leftover_gap",

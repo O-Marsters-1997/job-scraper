@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-export const contactChannelSchema = z.enum([
+const contactChannelSchema = z.enum([
 	"linkedin_message",
 	"email",
 	"call",
 	"inbound",
 ]);
-export const contactOutcomeSchema = z.enum([
+const contactOutcomeSchema = z.enum([
 	"no_reply",
 	"rejected",
 	"spoke",
