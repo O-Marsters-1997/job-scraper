@@ -849,6 +849,44 @@ func TestProcessBoardDiscover(t *testing.T) {
 	})
 }
 
+func TestProcessLogsDetailFetch(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		err         error
+		remoteCheck bool
+		want        []string
+	}{
+		{"a fragment fetch is exported", nil, false, []string{"remote_check=false", "outcome=exported"}},
+		{"a slug page without TELECOMMUTE is not remote", sources.ErrNotRemote, true, []string{"remote_check=true", "outcome=not_remote"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newFixture(t, http.StatusOK, "")
+			var logs bytes.Buffer
+			p := worker.NewProcessor(worker.Deps{
+				JS:        jobsearch.Build(jobsearchtest.NewDeps(f.store)),
+				Exporter:  scraper.NewAPIExporter(f.ingest.server.URL, "token").WithInitialBackoff(0),
+				Detailers: map[string]sources.DetailFetcher{"linkedin": detailStub{err: tt.err}},
+				Logger:    slog.New(slog.NewTextHandler(&logs, nil)),
+			})
+			task := queuetest.DetailTask("linkedin")
+			if tt.remoteCheck {
+				task.Card.RemoteCheckURL = "https://uk.linkedin.com/jobs/view/engineer-at-acme-1"
+			}
+			if err := p.Process(t.Context(), task); err != nil {
+				t.Fatalf("Process() = %v, want nil", err)
+			}
+			for _, want := range append(tt.want, "source=linkedin") {
+				if !strings.Contains(logs.String(), want) {
+					t.Errorf("logs = %q, want %q", logs.String(), want)
+				}
+			}
+		})
+	}
+}
+
 func TestProcessKeyRejection(t *testing.T) {
 	ctx := t.Context()
 	scrape := func(t *testing.T, f fixture, source string) (dto.SourceTarget, error) {
