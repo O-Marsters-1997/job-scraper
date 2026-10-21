@@ -17,27 +17,34 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 )
 
-var defaultStatusNames = []string{"Saved", "Applied", "Interviewing", "Offer", "Rejected"}
+var defaultStatuses = []dto.ApplicationStatus{
+	{Name: "Draft", SystemKey: "draft"},
+	{Name: "Applied", SystemKey: "applied"},
+	{Name: "Interviewing"},
+	{Name: "Rejected"},
+	{Name: "Offer"},
+}
 
 type FakeStore struct {
 	mu       sync.Mutex
 	apps     map[string]dto.Application
 	statuses map[string]dto.ApplicationStatus
 	contacts map[string][]dto.RecruiterContact
-	notes    map[string][]dto.JobNote
+	notes    map[noteKey]string
 	comments map[string][]dto.JobComment
 
 	nextContact int
-	nextNote    int
 	nextComment int
 }
+
+type noteKey struct{ userID, jobID string }
 
 func NewFakeStore() *FakeStore {
 	return &FakeStore{
 		apps:     make(map[string]dto.Application),
 		statuses: make(map[string]dto.ApplicationStatus),
 		contacts: make(map[string][]dto.RecruiterContact),
-		notes:    make(map[string][]dto.JobNote),
+		notes:    make(map[noteKey]string),
 		comments: make(map[string][]dto.JobComment),
 	}
 }
@@ -48,11 +55,19 @@ func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.C
 	if !f.ownsStatus(userID, in.StatusID) {
 		return dto.Application{}, data.ErrNotFound
 	}
+	statusID := in.StatusID
+	if statusID == "" {
+		for _, s := range f.statuses {
+			if s.UserID == userID && s.SystemKey == "draft" {
+				statusID = s.ID
+			}
+		}
+	}
 	app := dto.Application{
 		ID:         fmt.Sprintf("app-%d", len(f.apps)+1),
 		UserID:     userID,
 		JobID:      in.JobID,
-		StatusID:   in.StatusID,
+		StatusID:   statusID,
 		AppliedAt:  parseDate(in.AppliedAt),
 		SalaryInfo: in.SalaryInfo,
 	}
@@ -144,6 +159,28 @@ func (f *FakeStore) UpdateApplication(_ context.Context, userID, id string, in d
 	return app, nil
 }
 
+func (f *FakeStore) MarkApplied(_ context.Context, _ pgx.Tx, userID, jobID string, now time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var appliedID string
+	for _, s := range f.statuses {
+		if s.UserID == userID && s.SystemKey == "applied" {
+			appliedID = s.ID
+		}
+	}
+	for id, a := range f.apps {
+		if a.UserID != userID || a.JobID != jobID || a.StatusID == appliedID {
+			continue
+		}
+		a.StatusID, a.ChaseBy = appliedID, nil
+		if a.AppliedAt == nil {
+			a.AppliedAt = &now
+		}
+		f.apps[id] = a
+	}
+	return nil
+}
+
 // DeleteApplication is a no-op for an unknown id, matching the real store's
 // unconditional DELETE.
 func (f *FakeStore) DeleteApplication(_ context.Context, _, id string) error {
@@ -225,8 +262,8 @@ func (f *FakeStore) ListApplicationStatusesByUser(_ context.Context, userID stri
 func (f *FakeStore) SeedDefaultStatuses(_ context.Context, _ pgx.Tx, userID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for _, name := range defaultStatusNames {
-		s := dto.ApplicationStatus{ID: fmt.Sprintf("status-%d", len(f.statuses)+1), UserID: userID, Name: name}
+	for _, s := range defaultStatuses {
+		s.ID, s.UserID = fmt.Sprintf("status-%d", len(f.statuses)+1), userID
 		f.statuses[s.ID] = s
 	}
 	return nil
@@ -261,51 +298,17 @@ func (f *FakeStore) ListRecruiterContacts(_ context.Context, userID, jobID strin
 	return out, nil
 }
 
-func (f *FakeStore) CreateJobNote(_ context.Context, userID string, in dto.CreateJobNoteInput) (dto.JobNote, error) {
+func (f *FakeStore) GetJobNote(_ context.Context, userID, jobID string) (dto.JobNote, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	now := time.Now()
-	f.nextNote++
-	n := dto.JobNote{ID: fmt.Sprintf("note-%d", f.nextNote), JobID: in.JobID, Body: in.Body, CreatedAt: now, UpdatedAt: now}
-	f.notes[userID] = append(f.notes[userID], n)
-	return n, nil
+	return dto.JobNote{JobID: jobID, Body: f.notes[noteKey{userID, jobID}]}, nil
 }
 
-func (f *FakeStore) ListJobNotes(_ context.Context, userID, jobID string) ([]dto.JobNote, error) {
+func (f *FakeStore) PutJobNote(_ context.Context, userID string, in dto.PutJobNoteInput) (dto.JobNote, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := []dto.JobNote{}
-	for _, n := range f.notes[userID] {
-		if n.JobID == jobID {
-			out = append(out, n)
-		}
-	}
-	slices.Reverse(out)
-	return out, nil
-}
-
-func (f *FakeStore) UpdateJobNote(_ context.Context, userID string, in dto.UpdateJobNoteInput) (dto.JobNote, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for i, n := range f.notes[userID] {
-		if n.ID == in.ID {
-			n.Body, n.UpdatedAt = in.Body, time.Now()
-			f.notes[userID][i] = n
-			return n, nil
-		}
-	}
-	return dto.JobNote{}, data.ErrNotFound
-}
-
-func (f *FakeStore) DeleteJobNote(_ context.Context, userID, id string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	before := len(f.notes[userID])
-	f.notes[userID] = slices.DeleteFunc(f.notes[userID], func(n dto.JobNote) bool { return n.ID == id })
-	if len(f.notes[userID]) == before {
-		return data.ErrNotFound
-	}
-	return nil
+	f.notes[noteKey{userID, in.JobID}] = in.Body
+	return dto.JobNote(in), nil
 }
 
 func (f *FakeStore) CreateJobComment(_ context.Context, userID string, in dto.CreateJobCommentInput) (dto.JobComment, error) {

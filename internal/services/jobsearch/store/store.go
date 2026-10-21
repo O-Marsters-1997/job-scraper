@@ -905,6 +905,8 @@ func (s *Store) SuggestCompanyKind(ctx context.Context, companyID string, kind d
 	return n > 0, nil
 }
 
+const favouriteCheckIntervalMinutes = 60
+
 func (s *Store) SetCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) error {
 	uid, err := data.UUID(userID)
 	if err != nil {
@@ -924,17 +926,51 @@ func (s *Store) SetCompanyFavourite(ctx context.Context, userID, companyID strin
 		if err := queries.AddCompanyFavourite(ctx, sqlc.AddCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
 			return fmt.Errorf("store.SetCompanyFavourite: %w", err)
 		}
-		if err := queries.KeepNewTrackedCompany(ctx, sqlc.KeepNewTrackedCompanyParams{UserID: uid, CompanyID: cid}); err != nil {
-			return fmt.Errorf("store.SetCompanyFavourite keep: %w", err)
+		boards, err := queries.ListCompanyBoards(ctx, cid)
+		if err != nil {
+			return fmt.Errorf("store.SetCompanyFavourite boards: %w", err)
 		}
-	} else if err := queries.RemoveCompanyFavourite(ctx, sqlc.RemoveCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
-		return fmt.Errorf("store.SetCompanyFavourite: %w", err)
+		if slices.ContainsFunc(boards, isVerifiedATSBoard) {
+			if err := s.trackFavourite(ctx, tx, queries, userID, companyID, uid, cid); err != nil {
+				return err
+			}
+		}
+	} else {
+		if err := queries.RemoveCompanyFavourite(ctx, sqlc.RemoveCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
+			return fmt.Errorf("store.SetCompanyFavourite: %w", err)
+		}
+		if err := queries.ResetTrackedCompanyInterval(ctx, sqlc.ResetTrackedCompanyIntervalParams{UserID: uid, CompanyID: cid}); err != nil {
+			return fmt.Errorf("store.SetCompanyFavourite reset interval: %w", err)
+		}
 	}
 	if err := s.scoring.CompanyFavouriteChanged(ctx, tx, userID, companyID); err != nil {
 		return fmt.Errorf("scoring.CompanyFavouriteChanged: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit company favourite: %w", err)
+	}
+	return nil
+}
+
+func isVerifiedATSBoard(b sqlc.CompanyBoard) bool {
+	role, ok := sourcespec.SourceRole(b.Source)
+	return ok && role == sourcespec.RoleATS && b.Status == string(dto.BoardVerified)
+}
+
+func (s *Store) trackFavourite(ctx context.Context, tx pgx.Tx, queries *sqlc.Queries, userID, companyID string, uid, cid pgtype.UUID) error {
+	if _, err := queries.SetCompanyTracking(ctx, sqlc.SetCompanyTrackingParams{
+		UserID: uid, CompanyID: cid, Enabled: true, CheckIntervalMinutes: favouriteCheckIntervalMinutes,
+	}); err != nil {
+		return fmt.Errorf("store.SetCompanyFavourite track: %w", err)
+	}
+	if err := queries.KeepNewTrackedCompany(ctx, sqlc.KeepNewTrackedCompanyParams{UserID: uid, CompanyID: cid}); err != nil {
+		return fmt.Errorf("store.SetCompanyFavourite keep: %w", err)
+	}
+	if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
+		return fmt.Errorf("backfill tracked company jobs: %w", err)
+	}
+	if err := s.scoring.CompanyTracked(ctx, tx, userID, companyID); err != nil {
+		return fmt.Errorf("scoring.CompanyTracked: %w", err)
 	}
 	return nil
 }

@@ -18,8 +18,9 @@ behaviour.
   "Comment" label) that opens an inline composer next to the selection. A saved comment shows a muted
   outline or underline on its passage. Hover or click opens a popover with the comment and edit/delete.
 - **One comment per anchor, no threads, no resolve.** Add these if a real need appears.
-- **Notes stay plain text** (no markdown, as the PRD says). They move from the sidebar card into a
-  Description | Notes tab on the job page and also show on the application details page.
+- **There is one note per (user, Job).** It is plain text (no markdown, as the PRD says), edited in a single
+  textarea that autosaves (`GET`/`PUT /jobs/{id}/note`). It lives only in the Notes tab of the job page and
+  on the application details page. Earlier notes were merged oldest-first, blank-line separated.
 
 ## Consequences
 

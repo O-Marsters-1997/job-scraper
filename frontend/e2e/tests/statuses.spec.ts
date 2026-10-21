@@ -10,7 +10,7 @@ test.describe("Statuses", () => {
 	}) => {
 		const newName = `Renamed Status ${Date.now()}`;
 
-		await statusesPage.renameFirstStatus(newName);
+		await statusesPage.renameFirstCustomStatus(newName);
 
 		await expect(statusesPage.statusText(newName)).toBeVisible();
 	});

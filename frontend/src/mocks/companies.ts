@@ -217,9 +217,17 @@ export function setCompanyFavourite(id: string, favourite: boolean): Company {
 	const company = companies.find((c) => c.ID === id);
 	if (!company) throw new Error("Company not found");
 	setCompanyFavouriteFlag(id, favourite);
-	const updated: Company =
-		favourite && company.ReviewState === "new"
-			? { ...company, ReviewState: "kept" }
+	const hourly = favourite && company.ATSSource !== "";
+	if (hourly) trackedCompanyIds.add(id);
+	const updated: Company = hourly
+		? {
+				...company,
+				Tracked: true,
+				CheckIntervalMinutes: 60,
+				ReviewState: "kept",
+			}
+		: !favourite && trackedCompanyIds.has(id)
+			? { ...company, CheckIntervalMinutes: 360 }
 			: company;
 	companies = companies.map((c) => (c.ID === id ? updated : c));
 	return withFavourite(updated);

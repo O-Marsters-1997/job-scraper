@@ -29,7 +29,10 @@ func (q *Queries) ClearApplicationChase(ctx context.Context, arg ClearApplicatio
 
 const createApplication = `-- name: CreateApplication :one
 INSERT INTO applications (user_id, job_id, status_id, applied_at, salary_info)
-SELECT $1::uuid, $2::uuid, $3::uuid,
+SELECT $1::uuid, $2::uuid,
+       COALESCE($3::uuid,
+                (SELECT d.id FROM application_statuses d
+                 WHERE d.user_id = $1::uuid AND d.system_key = 'draft')),
        $4::date, $5::text
 WHERE $3::uuid IS NULL
    OR EXISTS (SELECT 1 FROM application_statuses s
@@ -156,6 +159,20 @@ func (q *Queries) GetApplicationsForJobs(ctx context.Context, arg GetApplication
 	return items, nil
 }
 
+const isAppliedStatus = `-- name: IsAppliedStatus :one
+SELECT EXISTS (
+    SELECT 1 FROM application_statuses s
+    WHERE s.id = $1::uuid AND s.system_key = 'applied'
+)
+`
+
+func (q *Queries) IsAppliedStatus(ctx context.Context, id pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, isAppliedStatus, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listApplications = `-- name: ListApplications :many
 SELECT
     a.id, a.user_id, a.job_id, a.status_id,
@@ -238,6 +255,43 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const markApplicationApplied = `-- name: MarkApplicationApplied :one
+WITH applied AS (
+    SELECT s.id FROM application_statuses s
+    WHERE s.user_id = $2::uuid AND s.system_key = 'applied'
+), target AS (
+    SELECT a.id, a.status_id AS from_status_id FROM applications a
+    WHERE a.user_id = $2::uuid AND a.job_id = $3::uuid
+)
+UPDATE applications a
+SET status_id = applied.id,
+    applied_at = COALESCE(a.applied_at, $1::timestamptz::date),
+    chase_by = NULL,
+    updated_at = $1::timestamptz
+FROM applied, target
+WHERE a.id = target.id AND a.status_id IS DISTINCT FROM applied.id
+RETURNING a.id, target.from_status_id, applied.id AS to_status_id
+`
+
+type MarkApplicationAppliedParams struct {
+	Now    pgtype.Timestamptz
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+}
+
+type MarkApplicationAppliedRow struct {
+	ID           pgtype.UUID
+	FromStatusID pgtype.UUID
+	ToStatusID   pgtype.UUID
+}
+
+func (q *Queries) MarkApplicationApplied(ctx context.Context, arg MarkApplicationAppliedParams) (MarkApplicationAppliedRow, error) {
+	row := q.db.QueryRow(ctx, markApplicationApplied, arg.Now, arg.UserID, arg.JobID)
+	var i MarkApplicationAppliedRow
+	err := row.Scan(&i.ID, &i.FromStatusID, &i.ToStatusID)
+	return i, err
 }
 
 const setApplicationChase = `-- name: SetApplicationChase :one

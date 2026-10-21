@@ -53,15 +53,17 @@ export function StatusRow(props: {
 						>
 							Edit
 						</Button>
-						<Button
-							type="button"
-							onClick={() => props.onDelete()}
-							variant="ghost"
-							size="sm"
-							class="h-auto px-2 py-1 text-xs text-destructive-strong hover:bg-destructive-subtle hover:text-destructive-strong"
-						>
-							Delete
-						</Button>
+						<Show when={!props.status.SystemKey}>
+							<Button
+								type="button"
+								onClick={() => props.onDelete()}
+								variant="ghost"
+								size="sm"
+								class="h-auto px-2 py-1 text-xs text-destructive-strong hover:bg-destructive-subtle hover:text-destructive-strong"
+							>
+								Delete
+							</Button>
+						</Show>
 					</>
 				}
 			>
@@ -70,6 +72,7 @@ export function StatusRow(props: {
 					<Input
 						class="flex-1"
 						aria-label="Status name"
+						disabled={!!props.status.SystemKey}
 						value={props.name}
 						onInput={(e) => props.onName(e.currentTarget.value)}
 					/>

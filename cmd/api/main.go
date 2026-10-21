@@ -85,8 +85,8 @@ func run(ctx context.Context) error {
 
 	scoringFacade := scoring.NewFacade(pool)
 	eventsModule := events.New(pool, scoringFacade)
-	apps := applications.New(pool, eventsModule)
-	taskModule := tasks.New(pool)
+	apps := applications.New(pool, eventsModule, tasks.NewFacade(pool))
+	taskModule := tasks.New(pool, apps)
 	idm, err := identity.New(pool, []identity.Seeder{apps, taskModule}, os.Getenv("SESSION_SECRET"),
 		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
 	if err != nil {

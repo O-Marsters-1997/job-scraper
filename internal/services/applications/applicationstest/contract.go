@@ -487,12 +487,12 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
-	t.Run("job comments round-trip their quote and stay out of the notes list", func(t *testing.T) {
+	t.Run("job comments round-trip their quote and stay out of the note", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
 		quote := dto.CommentQuote{Exact: "Go", Prefix: "we use ", Suffix: " daily"}
-		if _, err := f.Store.CreateJobNote(t.Context(), f.UserID, dto.CreateJobNoteInput{JobID: f.JobID, Body: "general"}); err != nil {
-			t.Fatalf("CreateJobNote(...) err = %v", err)
+		if _, err := f.Store.PutJobNote(t.Context(), f.UserID, dto.PutJobNoteInput{JobID: f.JobID, Body: "general"}); err != nil {
+			t.Fatalf("PutJobNote(...) err = %v", err)
 		}
 		created, err := f.Store.CreateJobComment(t.Context(), f.UserID, dto.CreateJobCommentInput{JobID: f.JobID, Body: "ask about Go", Quote: quote})
 		if err != nil {
@@ -508,9 +508,9 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if diff := cmp.Diff(quote, got[0].Quote); diff != "" {
 			t.Errorf("ListJobComments(...) quote mismatch (-want +got):\n%s", diff)
 		}
-		notes, err := f.Store.ListJobNotes(t.Context(), f.UserID, f.JobID)
-		if err != nil || len(notes) != 1 || notes[0].Body != "general" {
-			t.Errorf("ListJobNotes(...) = %+v, %v, want only the general note", notes, err)
+		note, err := f.Store.GetJobNote(t.Context(), f.UserID, f.JobID)
+		if err != nil || note.Body != "general" {
+			t.Errorf("GetJobNote(...) = %+v, %v, want the general note", note, err)
 		}
 		other, err := f.Store.ListJobComments(t.Context(), missingID, f.JobID)
 		if err != nil || len(other) != 0 {
@@ -546,63 +546,35 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
-	t.Run("job notes list newest first and are scoped to the user", func(t *testing.T) {
+	t.Run("job note is empty until put, then overwritten in place and scoped to the user", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
+		got, err := f.Store.GetJobNote(t.Context(), f.UserID, f.JobID)
+		if err != nil || got.Body != "" || got.JobID != f.JobID {
+			t.Fatalf("GetJobNote(before put) = %+v, %v, want empty note for the job", got, err)
+		}
 		for _, body := range []string{"first", "second"} {
-			if _, err := f.Store.CreateJobNote(t.Context(), f.UserID, dto.CreateJobNoteInput{JobID: f.JobID, Body: body}); err != nil {
-				t.Fatalf("CreateJobNote(%q) err = %v", body, err)
+			if _, err := f.Store.PutJobNote(t.Context(), f.UserID, dto.PutJobNoteInput{JobID: f.JobID, Body: body}); err != nil {
+				t.Fatalf("PutJobNote(%q) err = %v", body, err)
 			}
 		}
-		got, err := f.Store.ListJobNotes(t.Context(), f.UserID, f.JobID)
-		if err != nil {
-			t.Fatalf("ListJobNotes(...) err = %v", err)
+		got, err = f.Store.GetJobNote(t.Context(), f.UserID, f.JobID)
+		if err != nil || got.Body != "second" {
+			t.Errorf("GetJobNote(...) = %+v, %v, want body second", got, err)
 		}
-		var bodies []string
-		for _, n := range got {
-			bodies = append(bodies, n.Body)
+		if _, err := f.Store.PutJobNote(t.Context(), f.UserID, dto.PutJobNoteInput{JobID: f.JobID, Body: ""}); err != nil {
+			t.Fatalf("PutJobNote(empty) err = %v", err)
 		}
-		if diff := cmp.Diff([]string{"second", "first"}, bodies); diff != "" {
-			t.Errorf("ListJobNotes(...) bodies mismatch (-want +got):\n%s", diff)
+		got, err = f.Store.GetJobNote(t.Context(), f.UserID, f.JobID)
+		if err != nil || got.Body != "" {
+			t.Errorf("GetJobNote(after clearing) = %+v, %v, want empty body", got, err)
 		}
-		other, err := f.Store.ListJobNotes(t.Context(), missingID, f.JobID)
-		if err != nil {
-			t.Fatalf("ListJobNotes(other user) err = %v", err)
+		if _, err := f.Store.PutJobNote(t.Context(), f.UserID, dto.PutJobNoteInput{JobID: f.JobID, Body: "mine"}); err != nil {
+			t.Fatalf("PutJobNote(mine) err = %v", err)
 		}
-		if len(other) != 0 {
-			t.Errorf("ListJobNotes(other user) = %+v, want none", other)
-		}
-	})
-
-	t.Run("job note update and delete are scoped to the user", func(t *testing.T) {
-		t.Parallel()
-		f := newStore(t)
-		note, err := f.Store.CreateJobNote(t.Context(), f.UserID, dto.CreateJobNoteInput{JobID: f.JobID, Body: "before"})
-		if err != nil {
-			t.Fatalf("CreateJobNote(...) err = %v", err)
-		}
-		if _, err := f.Store.UpdateJobNote(t.Context(), missingID, dto.UpdateJobNoteInput{ID: note.ID, Body: "hijack"}); !errors.Is(err, data.ErrNotFound) {
-			t.Errorf("UpdateJobNote(other user) err = %v, want ErrNotFound", err)
-		}
-		if err := f.Store.DeleteJobNote(t.Context(), missingID, note.ID); !errors.Is(err, data.ErrNotFound) {
-			t.Errorf("DeleteJobNote(other user) err = %v, want ErrNotFound", err)
-		}
-		got, err := f.Store.UpdateJobNote(t.Context(), f.UserID, dto.UpdateJobNoteInput{ID: note.ID, Body: "after"})
-		if err != nil {
-			t.Fatalf("UpdateJobNote(...) err = %v", err)
-		}
-		if got.Body != "after" || !got.UpdatedAt.After(got.CreatedAt) {
-			t.Errorf("UpdateJobNote(...) = %+v, want body after and updated_at past created_at", got)
-		}
-		if err := f.Store.DeleteJobNote(t.Context(), f.UserID, note.ID); err != nil {
-			t.Fatalf("DeleteJobNote(...) err = %v", err)
-		}
-		if err := f.Store.DeleteJobNote(t.Context(), f.UserID, note.ID); !errors.Is(err, data.ErrNotFound) {
-			t.Errorf("DeleteJobNote(again) err = %v, want ErrNotFound", err)
-		}
-		left, err := f.Store.ListJobNotes(t.Context(), f.UserID, f.JobID)
-		if err != nil || len(left) != 0 {
-			t.Errorf("ListJobNotes(after delete) = %+v, %v, want none", left, err)
+		other, err := f.Store.GetJobNote(t.Context(), missingID, f.JobID)
+		if err != nil || other.Body != "" {
+			t.Errorf("GetJobNote(other user) = %+v, %v, want empty note", other, err)
 		}
 	})
 }

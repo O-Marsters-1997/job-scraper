@@ -67,6 +67,7 @@ func toApplicationStatusDTO(s sqlc.ApplicationStatus) dto.ApplicationStatus {
 		Name:            s.Name,
 		Colour:          s.Colour,
 		ReplyWindowDays: fromInt4(s.ReplyWindowDays),
+		SystemKey:       s.SystemKey.String,
 		CreatedAt:       s.CreatedAt.Time,
 	}
 }
@@ -97,11 +98,8 @@ func fromInt4(n pgtype.Int4) *int {
 
 func toJobNoteDTO(n sqlc.JobNote) dto.JobNote {
 	return dto.JobNote{
-		ID:        n.ID.String(),
-		JobID:     n.JobID.String(),
-		Body:      n.Body,
-		CreatedAt: n.CreatedAt.Time,
-		UpdatedAt: n.UpdatedAt.Time,
+		JobID: n.JobID.String(),
+		Body:  n.Body,
 	}
 }
 

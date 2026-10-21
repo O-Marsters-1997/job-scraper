@@ -414,7 +414,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
-	t.Run("relevance puts tracked companies first then their favourites, alphabetical ignores both", func(t *testing.T) {
+	t.Run("relevance puts favourites first, then tracked companies, alphabetical ignores both", func(t *testing.T) {
 		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
@@ -432,6 +432,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			}
 		}
 		for _, name := range []string{"Gamma", "Delta"} {
+			verifyBoard(t, st, ids[name], "greenhouse")
 			if err := st.SetCompanyFavourite(ctx, userID, ids[name], true); err != nil {
 				t.Fatalf("SetCompanyFavourite(%q) = %v", name, err)
 			}
@@ -447,8 +448,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			}
 			return out
 		}
-		if got, want := names(dto.CompanySortRelevance), []string{"Gamma", "Beta", "Alpha", "Delta"}; !slices.Equal(got, want) {
-			t.Errorf("relevance = %v, want %v (an untracked favourite gets no boost)", got, want)
+		if got, want := names(dto.CompanySortRelevance), []string{"Delta", "Gamma", "Beta", "Alpha"}; !slices.Equal(got, want) {
+			t.Errorf("relevance = %v, want %v (favouriting tracks, so favourites lead tracked companies)", got, want)
 		}
 		if got, want := names(dto.CompanySortAlphabetical), []string{"Alpha", "Beta", "Delta", "Gamma"}; !slices.Equal(got, want) {
 			t.Errorf("alphabetical = %v, want %v", got, want)
@@ -853,7 +854,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
-	t.Run("favouriting an untracked company stars it without tracking it", func(t *testing.T) {
+	t.Run("favouriting an untracked company stars and tracks it hourly, unfavouriting goes back to six hours", func(t *testing.T) {
 		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
@@ -861,6 +862,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if err != nil {
 			t.Fatalf("UpsertCompany(...) = %v", err)
 		}
+		verifyBoard(t, st, c.ID, "greenhouse")
 		job, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/star", CompanySlug: "star-co"})
 		if err != nil {
 			t.Fatalf("SaveCanonical(...) = %v", err)
@@ -871,8 +873,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			}
 		}
 		got, err := st.GetCompanyForUser(ctx, userID, c.ID)
-		if err != nil || !got.Favourite || got.Tracked {
-			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want favourite and untracked", got, err)
+		if err != nil || !got.Favourite || !got.Tracked || got.CheckIntervalMinutes != 60 {
+			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want favourite, tracked, every 60 minutes", got, err)
 		}
 		gotJob, err := st.GetJob(ctx, job.ID, userID)
 		if err != nil || !gotJob.CompanyFavourite {
@@ -882,17 +884,58 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if err != nil || len(page.Items) != 1 || page.Items[0].ID != c.ID {
 			t.Fatalf("PageCompaniesForUser(favourite only) = %+v, %v, want Star Co", page, err)
 		}
-		if tracked, err := st.ListTrackedCompaniesForUser(ctx, userID); err != nil || len(tracked) != 0 {
-			t.Fatalf("ListTrackedCompaniesForUser(...) = %+v, %v, want none", tracked, err)
-		}
 		for range 2 {
 			if err := st.SetCompanyFavourite(ctx, userID, c.ID, false); err != nil {
 				t.Fatalf("SetCompanyFavourite(false) = %v", err)
 			}
 		}
+		got, err = st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || got.Favourite || !got.Tracked || got.CheckIntervalMinutes != 360 {
+			t.Fatalf("GetCompanyForUser(...) after unstar = %+v, %v, want unfavourited, tracked, every 360 minutes", got, err)
+		}
 		page, err = st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, FavouriteOnly: true})
 		if err != nil || len(page.Items) != 0 {
 			t.Fatalf("PageCompaniesForUser(favourite only) after unstar = %+v, %v, want none", page, err)
+		}
+		if _, err := st.SetCompanyReviewState(ctx, userID, c.ID, "dismissed"); err != nil {
+			t.Fatalf("SetCompanyReviewState(dismissed) = %v", err)
+		}
+		if err := st.SetCompanyFavourite(ctx, userID, c.ID, true); err != nil {
+			t.Fatalf("SetCompanyFavourite(true) = %v", err)
+		}
+		got, err = st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || !got.Tracked || got.ReviewState != "kept" {
+			t.Fatalf("GetCompanyForUser(...) after favouriting a dismissed company = %+v, %v, want tracked and kept", got, err)
+		}
+	})
+
+	t.Run("favouriting a company without a verified ats board stars it and leaves tracking alone", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		for _, tc := range []struct{ slug, source, board string }{
+			{"no-board-co", "", ""},
+			{"candidate-co", "greenhouse", "candidate"},
+			{"discovery-co", "linkedin", "verified"},
+		} {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: tc.slug, Name: tc.slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", tc.slug, err)
+			}
+			switch tc.board {
+			case "candidate":
+				if _, err := st.UpsertCandidateBoard(ctx, c.ID, tc.source, tc.slug); err != nil {
+					t.Fatalf("UpsertCandidateBoard(%q) = %v", tc.slug, err)
+				}
+			case "verified":
+				verifyBoard(t, st, c.ID, tc.source)
+			}
+			if err := st.SetCompanyFavourite(ctx, userID, c.ID, true); err != nil {
+				t.Fatalf("SetCompanyFavourite(%q) = %v", tc.slug, err)
+			}
+			got, err := st.GetCompanyForUser(ctx, userID, c.ID)
+			if err != nil || !got.Favourite || got.Tracked {
+				t.Fatalf("GetCompanyForUser(%q) = %+v, %v, want favourite and untracked", tc.slug, got, err)
+			}
 		}
 	})
 
@@ -995,6 +1038,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if _, err := st.TrackDiscoveredCompany(ctx, userID, c.ID); err != nil {
 			t.Fatalf("TrackDiscoveredCompany(...) = %v", err)
 		}
+		verifyBoard(t, st, c.ID, "greenhouse")
 		if err := st.SetCompanyFavourite(ctx, userID, c.ID, true); err != nil {
 			t.Fatalf("SetCompanyFavourite(true) = %v", err)
 		}
@@ -1484,3 +1528,14 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 }
 
 const missingID = "00000000-0000-0000-0000-000000000000"
+
+func verifyBoard(t *testing.T, st Store, companyID, source string) {
+	t.Helper()
+	ctx := t.Context()
+	if _, err := st.UpsertCandidateBoard(ctx, companyID, source, companyID); err != nil {
+		t.Fatalf("UpsertCandidateBoard(%q) = %v", source, err)
+	}
+	if _, err := st.VerifyCompanyBoard(ctx, companyID, source, companyID, "discovered", ""); err != nil {
+		t.Fatalf("VerifyCompanyBoard(%q) = %v", source, err)
+	}
+}

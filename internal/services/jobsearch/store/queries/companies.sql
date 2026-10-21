@@ -147,7 +147,12 @@ DELETE FROM company_favourites WHERE user_id = $1 AND company_id = $2;
 -- name: KeepNewTrackedCompany :exec
 UPDATE tracked_companies
 SET review_state = 'kept', updated_at = NOW()
-WHERE user_id = $1 AND company_id = $2 AND review_state = 'new';
+WHERE user_id = $1 AND company_id = $2 AND review_state <> 'kept';
+
+-- name: ResetTrackedCompanyInterval :exec
+UPDATE tracked_companies
+SET check_interval_minutes = 360, updated_at = NOW()
+WHERE user_id = $1 AND company_id = $2;
 
 -- name: SetCompanyKind :execrows
 UPDATE companies SET kind = $2, updated_at = NOW() WHERE id = $1;

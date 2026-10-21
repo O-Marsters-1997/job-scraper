@@ -14,8 +14,8 @@ export class StatusesPage {
 		await this.heading.waitFor({ state: "visible" });
 	}
 
-	async renameFirstStatus(newName: string) {
-		await this.rows.first().click();
+	async renameFirstCustomStatus(newName: string) {
+		await this.rows.nth(2).click();
 		const nameInput = this.page.getByLabel("Status name");
 		await nameInput.fill(newName);
 		await this.page.getByRole("button", { name: "Save" }).click();

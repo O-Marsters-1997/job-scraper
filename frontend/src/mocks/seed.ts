@@ -28,13 +28,13 @@ import {
 faker.seed(1234);
 
 const STATUS_DEFINITIONS = [
-	{ name: "Saved", colour: "#64748b" },
-	{ name: "Applied", colour: "#2563eb" },
-	{ name: "Phone Screen", colour: "#7c3aed" },
-	{ name: "Interview", colour: "#d97706" },
-	{ name: "Offer", colour: "#059669" },
-	{ name: "Rejected", colour: "#dc2626" },
-];
+	{ name: "Draft", colour: "#64748b", systemKey: "draft" },
+	{ name: "Applied", colour: "#2563eb", systemKey: "applied" },
+	{ name: "Phone Screen", colour: "#7c3aed", systemKey: "" },
+	{ name: "Interview", colour: "#d97706", systemKey: "" },
+	{ name: "Offer", colour: "#059669", systemKey: "" },
+	{ name: "Rejected", colour: "#dc2626", systemKey: "" },
+] as const;
 
 const statuses: ApplicationStatus[] = STATUS_DEFINITIONS.map((s, i) => ({
 	ID: `status-${i + 1}`,
@@ -42,6 +42,7 @@ const statuses: ApplicationStatus[] = STATUS_DEFINITIONS.map((s, i) => ({
 	Name: s.name,
 	Colour: s.colour,
 	ReplyWindowDays: null,
+	SystemKey: s.systemKey,
 	CreatedAt: new Date("2024-01-01").toISOString(),
 }));
 

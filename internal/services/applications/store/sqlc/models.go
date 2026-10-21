@@ -184,6 +184,7 @@ type ApplicationStatus struct {
 	Colour          string
 	CreatedAt       pgtype.Timestamptz
 	ReplyWindowDays pgtype.Int4
+	SystemKey       pgtype.Text
 }
 
 type BankSkill struct {

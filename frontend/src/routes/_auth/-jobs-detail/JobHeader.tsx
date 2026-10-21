@@ -7,7 +7,6 @@ import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useSetCompanyKind } from "@/hooks/useCompanies";
 import { useSources } from "@/hooks/useSources";
 import { otherListings, sourceLabel } from "@/lib/listings";
 import { postedLabel } from "@/lib/postedLabel";
@@ -38,7 +37,6 @@ export function JobHeader(props: {
 }) {
 	const navigate = useNavigate();
 	const sources = useSources();
-	const setKind = useSetCompanyKind();
 	const others = () => otherListings(props.job);
 
 	return (
@@ -146,26 +144,26 @@ export function JobHeader(props: {
 					</div>
 
 					<div class="flex shrink-0 items-start gap-2">
-						<Button
-							size="sm"
-							onClick={() =>
-								navigate({
-									to: "/jobs/$id/tailor",
-									params: { id: props.job.ID },
-								})
-							}
-						>
-							Tailor CV
-						</Button>
+						<Show when={props.app}>
+							{(a) => (
+								<Button
+									size="sm"
+									onClick={() =>
+										navigate({
+											to: "/applications/$id",
+											params: { id: a().ID },
+										})
+									}
+								>
+									Open application
+								</Button>
+							)}
+						</Show>
 						<JobActionsMenu
 							job={props.job}
 							appSummary={props.appSummary}
 							onTrack={props.onTrack}
 							onAddTask={props.onAddTask}
-							onSetCompanyKind={(kind) => {
-								const id = props.job.CompanyID;
-								if (id) setKind.mutate({ id, kind });
-							}}
 						/>
 					</div>
 				</div>

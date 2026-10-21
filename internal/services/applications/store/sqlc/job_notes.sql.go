@@ -11,20 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createJobNote = `-- name: CreateJobNote :one
-INSERT INTO job_notes (user_id, job_id, body)
-VALUES ($1, $2, $3)
-RETURNING id, user_id, job_id, body, created_at, updated_at
+const getJobNote = `-- name: GetJobNote :one
+SELECT id, user_id, job_id, body, created_at, updated_at FROM job_notes
+WHERE user_id = $1 AND job_id = $2
 `
 
-type CreateJobNoteParams struct {
+type GetJobNoteParams struct {
 	UserID pgtype.UUID
 	JobID  pgtype.UUID
-	Body   string
 }
 
-func (q *Queries) CreateJobNote(ctx context.Context, arg CreateJobNoteParams) (JobNote, error) {
-	row := q.db.QueryRow(ctx, createJobNote, arg.UserID, arg.JobID, arg.Body)
+func (q *Queries) GetJobNote(ctx context.Context, arg GetJobNoteParams) (JobNote, error) {
+	row := q.db.QueryRow(ctx, getJobNote, arg.UserID, arg.JobID)
 	var i JobNote
 	err := row.Scan(
 		&i.ID,
@@ -37,76 +35,21 @@ func (q *Queries) CreateJobNote(ctx context.Context, arg CreateJobNoteParams) (J
 	return i, err
 }
 
-const deleteJobNote = `-- name: DeleteJobNote :execrows
-DELETE FROM job_notes WHERE id = $1 AND user_id = $2
-`
-
-type DeleteJobNoteParams struct {
-	ID     pgtype.UUID
-	UserID pgtype.UUID
-}
-
-func (q *Queries) DeleteJobNote(ctx context.Context, arg DeleteJobNoteParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteJobNote, arg.ID, arg.UserID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const listJobNotesForJob = `-- name: ListJobNotesForJob :many
-SELECT id, user_id, job_id, body, created_at, updated_at FROM job_notes
-WHERE user_id = $1 AND job_id = $2
-ORDER BY created_at DESC, id DESC
-LIMIT 1000
-`
-
-type ListJobNotesForJobParams struct {
-	UserID pgtype.UUID
-	JobID  pgtype.UUID
-}
-
-func (q *Queries) ListJobNotesForJob(ctx context.Context, arg ListJobNotesForJobParams) ([]JobNote, error) {
-	rows, err := q.db.Query(ctx, listJobNotesForJob, arg.UserID, arg.JobID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []JobNote
-	for rows.Next() {
-		var i JobNote
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.JobID,
-			&i.Body,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const updateJobNoteBody = `-- name: UpdateJobNoteBody :one
-UPDATE job_notes SET body = $3, updated_at = now()
-WHERE id = $1 AND user_id = $2
+const upsertJobNote = `-- name: UpsertJobNote :one
+INSERT INTO job_notes (user_id, job_id, body)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id, job_id) DO UPDATE SET body = EXCLUDED.body, updated_at = now()
 RETURNING id, user_id, job_id, body, created_at, updated_at
 `
 
-type UpdateJobNoteBodyParams struct {
-	ID     pgtype.UUID
+type UpsertJobNoteParams struct {
 	UserID pgtype.UUID
+	JobID  pgtype.UUID
 	Body   string
 }
 
-func (q *Queries) UpdateJobNoteBody(ctx context.Context, arg UpdateJobNoteBodyParams) (JobNote, error) {
-	row := q.db.QueryRow(ctx, updateJobNoteBody, arg.ID, arg.UserID, arg.Body)
+func (q *Queries) UpsertJobNote(ctx context.Context, arg UpsertJobNoteParams) (JobNote, error) {
+	row := q.db.QueryRow(ctx, upsertJobNote, arg.UserID, arg.JobID, arg.Body)
 	var i JobNote
 	err := row.Scan(
 		&i.ID,

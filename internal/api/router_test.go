@@ -47,8 +47,8 @@ func newApp(t *testing.T, extra ...api.Module) *app {
 	pool := pgtest.New(t)
 	scoringFacade := scoring.NewFacade(pool)
 	eventsModule := events.New(pool, scoringFacade)
-	apps := applications.New(pool, eventsModule)
-	taskModule := tasks.New(pool)
+	apps := applications.New(pool, eventsModule, tasks.NewFacade(pool))
+	taskModule := tasks.New(pool, apps)
 	idm, err := identity.New(pool, []identity.Seeder{apps, taskModule}, "test-session-secret", "", "", "")
 	if err != nil {
 		t.Fatalf("identity.New: %v", err)

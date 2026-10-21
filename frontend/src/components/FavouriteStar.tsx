@@ -6,6 +6,7 @@ interface FavouriteStarProps {
 	companyName: string;
 	onToggle: () => void;
 	disabled?: boolean;
+	hourly?: boolean;
 }
 
 export function FavouriteStar(props: FavouriteStarProps) {
@@ -14,6 +15,11 @@ export function FavouriteStar(props: FavouriteStarProps) {
 			type="button"
 			aria-pressed={props.favourite}
 			aria-label={`Favourite ${props.companyName}`}
+			title={
+				props.favourite && props.hourly
+					? "Checked for new jobs hourly"
+					: undefined
+			}
 			disabled={props.disabled}
 			onClick={() => props.onToggle()}
 			class={cn(

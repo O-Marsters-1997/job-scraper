@@ -114,6 +114,8 @@ function JobsPage() {
 						selectedJobs={table.selectedItems()}
 						bulkActions={[
 							{ label: "Grade", icon: "check", onSelect: track.openGrade },
+							{ label: "Not for me", onSelect: track.bulkDismiss },
+							{ label: "Track", icon: "plus", onSelect: track.bulkTrack },
 							{
 								label: "Mark seen",
 								onSelect: (jobs) => track.bulkSeen(jobs, true),
@@ -132,6 +134,8 @@ function JobsPage() {
 							},
 						]}
 						onMarkAllSeen={track.markAllSeen}
+						onTrack={track.openTrack}
+						onDismiss={track.dismissJob}
 					/>
 				)}
 			</QueryBoundary>

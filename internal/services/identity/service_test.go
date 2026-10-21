@@ -194,7 +194,7 @@ func TestSignup(t *testing.T) {
 		for _, s := range got {
 			names = append(names, s.Name)
 		}
-		wantNames := []string{"Saved", "Applied", "Interviewing", "Offer", "Rejected"}
+		wantNames := []string{"Draft", "Applied", "Interviewing", "Offer", "Rejected"}
 		if diff := cmp.Diff(wantNames, names, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
 			t.Errorf("seeded statuses mismatch (-want +got):\n%s", diff)
 		}

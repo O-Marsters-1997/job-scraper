@@ -23,19 +23,19 @@ test.describe("Jobs", () => {
 		expect(overflow).toBeLessThanOrEqual(0);
 	});
 
-	test("should page with ] and [ and focus the first row", async ({
+	test("should page with ] and [ and activate the first row", async ({
 		page,
 		jobsPage,
 	}) => {
 		const firstTitle = await jobsPage.firstJobTitleLink().textContent();
 		await jobsPage.pressPageKey("]");
 		await expect(page).toHaveURL(/page=2/);
-		await expect(jobsPage.firstJobTitleLink()).toBeFocused();
+		await expect(jobsPage.rows.first()).toHaveAttribute("data-active", "");
 		await expect(jobsPage.firstJobTitleLink()).not.toHaveText(firstTitle ?? "");
 
 		await jobsPage.pressPageKey("[");
 		await expect(jobsPage.firstJobTitleLink()).toHaveText(firstTitle ?? "");
-		await expect(jobsPage.firstJobTitleLink()).toBeFocused();
+		await expect(jobsPage.rows.first()).toHaveAttribute("data-active", "");
 	});
 
 	test("should ignore paging keys while the search box has focus", async ({
@@ -74,7 +74,7 @@ test.describe("Jobs", () => {
 		await jobsPage.focusSearchWithKey();
 		await page.keyboard.type(firstTitle);
 		await page.keyboard.press("Enter");
-		await expect(jobsPage.firstJobTitleLink()).toBeFocused();
+		await expect(jobsPage.rows.first()).toHaveAttribute("data-active", "");
 		await expect(jobsPage.firstJobTitleLink()).toContainText(firstTitle);
 
 		await page.keyboard.press("Enter");

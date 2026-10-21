@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { createEffect, createMemo, createSignal, on, Show } from "solid-js";
+import { FavouriteStar } from "@/components/FavouriteStar";
 import { GradeDialog } from "@/components/jobs/GradeDialog";
 import { JobsDataTable } from "@/components/jobs/JobsDataTable";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
@@ -15,11 +16,16 @@ import {
 } from "@/components/ui/switch";
 import { agencyRollup, isAgencyKind } from "@/lib/agencyRollup";
 import { formatDate } from "@/lib/datetime";
-import { activeFilterCount, DEFAULT_FILTERS } from "@/lib/jobFilters";
+import {
+	activeFilterCount,
+	DEFAULT_FILTERS,
+	type JobFilters,
+} from "@/lib/jobFilters";
 import { outcomeLabels } from "@/types/recruiterContact";
 import {
 	companyQueryOptions,
 	useCompany,
+	useSetCompanyFavourite,
 	useSetCompanyReview,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
@@ -32,6 +38,8 @@ import { queryClient } from "../../lib/queryClient";
 import { CompanyBoardsCard } from "./-companies-detail/CompanyBoardsCard";
 import { CompanyDetailsCard } from "./-companies-detail/CompanyDetailsCard";
 
+const COMPANY_FILTERS: JobFilters = { ...DEFAULT_FILTERS, poster: "all" };
+
 export const Route = createFileRoute("/_auth/companies_/$id")({
 	loader: ({ params }) =>
 		queryClient.prefetchQuery(companyQueryOptions(params.id)),
@@ -43,15 +51,16 @@ function CompanyDetailPage() {
 	const companyQuery = useCompany(() => params().id);
 	const trackMutation = useSetCompanyTracking();
 	const reviewMutation = useSetCompanyReview();
+	const favouriteMutation = useSetCompanyFavourite();
 
 	const company = () =>
 		companyQuery.isSuccess ? (companyQuery.data ?? undefined) : undefined;
 
-	const [localFilters, setLocalFilters] = createSignal(DEFAULT_FILTERS);
+	const [localFilters, setLocalFilters] = createSignal(COMPANY_FILTERS);
 	createEffect(
 		on(
 			() => params().id,
-			() => setLocalFilters(DEFAULT_FILTERS),
+			() => setLocalFilters(COMPANY_FILTERS),
 			{ defer: true },
 		),
 	);
@@ -191,10 +200,24 @@ function CompanyDetailPage() {
 						</CardContent>
 					</Card>
 
-					<div class="grid grid-cols-1 items-start lg:grid-cols-[1fr_284px] gap-4">
-						<Card>
+					<div class="grid grid-cols-1 items-start lg:grid-cols-[minmax(0,1fr)_284px] gap-4">
+						<Card class="min-w-0">
 							<CardHeader>
-								<CardTitle>Jobs at {c().Name}</CardTitle>
+								<div class="flex items-center gap-2">
+									<FavouriteStar
+										favourite={c().Favourite ?? false}
+										hourly={c().Tracked && c().CheckIntervalMinutes === 60}
+										companyName={c().Name}
+										disabled={favouriteMutation.isPending}
+										onToggle={() =>
+											favouriteMutation.mutate({
+												id: c().ID,
+												favourite: !c().Favourite,
+											})
+										}
+									/>
+									<CardTitle>Jobs at {c().Name}</CardTitle>
+								</div>
 							</CardHeader>
 							<CardContent class="gap-0">
 								<QueryBoundary query={table.query} fallbackRows={3}>
@@ -218,6 +241,7 @@ function CompanyDetailPage() {
 												onPage={table.setPage}
 												filters={filters()}
 												onChange={table.setFilters}
+												hidePosterFilter
 												sourceOptions={sourceOptions()}
 												selection={table.rowSelection()}
 												onSelectionChange={table.select}

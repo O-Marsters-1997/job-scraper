@@ -56,9 +56,10 @@ export function getApplications(
 }
 
 export function createApplication(data: CreateApplicationPayload): Application {
-	const status = data.status_id
-		? (statuses.find((s) => s.ID === data.status_id) ?? statuses[0]!)
-		: statuses[0]!;
+	const status =
+		statuses.find((s) => s.ID === data.status_id) ??
+		statuses.find((s) => s.SystemKey === "draft") ??
+		statuses[0]!;
 	const app: Application = {
 		ID: faker.string.uuid(),
 		UserID: "user-1",
@@ -131,6 +132,7 @@ export function createStatus(
 		Name: name,
 		Colour: colour,
 		ReplyWindowDays: replyWindowDays,
+		SystemKey: "",
 		CreatedAt: new Date().toISOString(),
 	};
 	statuses = [...statuses, status];

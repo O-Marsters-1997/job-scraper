@@ -79,8 +79,12 @@ CREATE TABLE IF NOT EXISTS application_statuses (
     name       TEXT        NOT NULL,
     colour     TEXT        NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    reply_window_days INT  CHECK (reply_window_days BETWEEN 1 AND 60)
+    reply_window_days INT  CHECK (reply_window_days BETWEEN 1 AND 60),
+    system_key TEXT        CHECK (system_key IN ('draft', 'applied'))
 );
+
+CREATE UNIQUE INDEX application_statuses_user_system_key_idx
+    ON application_statuses (user_id, system_key) WHERE system_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS notification_digests (
     id        UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -602,11 +606,12 @@ CREATE TABLE IF NOT EXISTS job_notes (
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     job_id     UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     body       TEXT        NOT NULL
-        CONSTRAINT job_notes_body_check CHECK (length(body) BETWEEN 1 AND 10000),
+        CONSTRAINT job_notes_body_check CHECK (length(body) <= 10000),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT job_notes_user_job_key UNIQUE (user_id, job_id)
 );
-CREATE INDEX job_notes_user_job_idx ON job_notes (user_id, job_id, created_at DESC);
+CREATE INDEX job_notes_job_idx ON job_notes (job_id);
 
 CREATE TABLE IF NOT EXISTS job_comments (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
