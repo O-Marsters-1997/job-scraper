@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, Show } from "solid-js";
+import { createSignal, onCleanup, Show, untrack } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,7 +21,7 @@ function NoteEditor(props: { jobId: string; initial: string }) {
 		if (text === saved()) return;
 		setSaved(text);
 		save.mutateAsync(text).catch(() => {
-			if (saved() === text) setSaved(undefined);
+			if (untrack(saved) === text) setSaved(undefined);
 		});
 	};
 	onCleanup(flush);
