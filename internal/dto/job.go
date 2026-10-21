@@ -29,6 +29,7 @@ type Job struct {
 	Seen               bool
 	CompanyFavourite   bool
 	CompanyKind        CompanyKind
+	DiscoveredVia      string
 	Breakdown          []ScoreRow
 	Listings           []JobListing
 }

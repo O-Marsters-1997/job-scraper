@@ -114,7 +114,7 @@ func (q *Queries) ExistingURLs(ctx context.Context, dollar_1 []string) ([]string
 }
 
 const getJob = `-- name: GetJob :one
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.reposted_at, j.scraped_at, j.first_discovered_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $2 AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite, COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id OR kc.slug = j.company_slug ORDER BY (kc.id = j.company_id) DESC LIMIT 1), 'unclassified')::text AS company_kind
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.reposted_at, j.scraped_at, j.first_discovered_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $2 AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite, COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id OR kc.slug = j.company_slug ORDER BY (kc.id = j.company_id) DESC LIMIT 1), 'unclassified')::text AS company_kind, COALESCE((SELECT cb.discovered_via FROM company_boards cb WHERE cb.id = j.primary_board_id), '')::text AS discovered_via
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2
 LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $2
@@ -152,6 +152,7 @@ type GetJobRow struct {
 	Seen               bool
 	CompanyFavourite   bool
 	CompanyKind        string
+	DiscoveredVia      string
 }
 
 func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, error) {
@@ -182,6 +183,7 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 		&i.Seen,
 		&i.CompanyFavourite,
 		&i.CompanyKind,
+		&i.DiscoveredVia,
 	)
 	return i, err
 }
@@ -265,6 +267,45 @@ func (q *Queries) ListJobListings(ctx context.Context, jobID pgtype.UUID) ([]Lis
 	return items, nil
 }
 
+const listJobListingsForJobs = `-- name: ListJobListingsForJobs :many
+SELECT job_id, source, normalized_url, first_seen_at
+FROM job_urls
+WHERE job_id = ANY($1::uuid[])
+ORDER BY first_seen_at, normalized_url
+`
+
+type ListJobListingsForJobsRow struct {
+	JobID         pgtype.UUID
+	Source        string
+	NormalizedUrl string
+	FirstSeenAt   pgtype.Timestamptz
+}
+
+func (q *Queries) ListJobListingsForJobs(ctx context.Context, dollar_1 []pgtype.UUID) ([]ListJobListingsForJobsRow, error) {
+	rows, err := q.db.Query(ctx, listJobListingsForJobs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListJobListingsForJobsRow
+	for rows.Next() {
+		var i ListJobListingsForJobsRow
+		if err := rows.Scan(
+			&i.JobID,
+			&i.Source,
+			&i.NormalizedUrl,
+			&i.FirstSeenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markJobsSeen = `-- name: MarkJobsSeen :exec
 INSERT INTO job_views (user_id, job_id)
 SELECT $1::uuid, j.id
@@ -299,7 +340,7 @@ func (q *Queries) MarkJobsUnseen(ctx context.Context, arg MarkJobsUnseenParams) 
 }
 
 const pageJobs = `-- name: PageJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.reposted_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))) AS company_favourite, COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified')::text AS company_kind
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.reposted_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))) AS company_favourite, COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified')::text AS company_kind, COALESCE((SELECT cb.discovered_via FROM company_boards cb WHERE cb.id = j.primary_board_id), '')::text AS discovered_via
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
 LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1::uuid
@@ -385,6 +426,7 @@ type PageJobsRow struct {
 	Seen               bool
 	CompanyFavourite   bool
 	CompanyKind        string
+	DiscoveredVia      string
 }
 
 func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsRow, error) {
@@ -443,6 +485,7 @@ func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsR
 			&i.Seen,
 			&i.CompanyFavourite,
 			&i.CompanyKind,
+			&i.DiscoveredVia,
 		); err != nil {
 			return nil, err
 		}
