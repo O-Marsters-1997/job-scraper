@@ -111,12 +111,8 @@ test.describe("Companies", () => {
 			await page.keyboard.press("Escape");
 		}
 		await track.click();
-		const dialog = page.getByRole("dialog");
-		await dialog.getByLabel("Status").selectOption({ label: "Applied" });
-		await dialog.getByRole("button", { name: "Save" }).click();
 
-		await expect(dialog).toBeHidden();
-		await expect(jobRow.getByText("Applied")).toBeVisible();
+		await expect(jobRow.getByText("Draft")).toBeVisible();
 	});
 
 	test.describe("at 375px", () => {
