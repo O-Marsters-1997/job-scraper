@@ -66,6 +66,7 @@ test.describe("Jobs", () => {
 
 	test("should jump to results with Enter and open the first job", async ({
 		page,
+		context,
 		jobsPage,
 	}) => {
 		const firstTitle = (await jobsPage.firstJobTitleLink().textContent())
@@ -77,9 +78,11 @@ test.describe("Jobs", () => {
 		await expect(jobsPage.rows.first()).toHaveAttribute("data-active", "");
 		await expect(jobsPage.firstJobTitleLink()).toContainText(firstTitle);
 
+		const opened = context.waitForEvent("page");
 		await page.keyboard.press("Enter");
-		await expect(page).toHaveURL(/\/jobs\/[^/?]+/);
-		await page.goBack();
+		const jobTab = await opened;
+		await expect(jobTab).toHaveURL(/\/jobs\/[^/?]+/);
+		await jobTab.close();
 		await expect(jobsPage.rows.first()).toBeVisible();
 
 		await jobsPage.focusSearchWithKey();
