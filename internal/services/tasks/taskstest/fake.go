@@ -228,3 +228,36 @@ func (f *FakeStore) SetTaskDone(_ context.Context, userID, id string, done bool,
 	f.tasks[id] = t
 	return t.Task, nil
 }
+
+func (f *FakeStore) CreateApplyTask(ctx context.Context, _ pgx.Tx, userID, jobID string) error {
+	f.mu.Lock()
+	var applyID string
+	for _, t := range f.types {
+		if t.userID == userID && t.Name == "Apply" {
+			applyID = t.ID
+		}
+	}
+	for _, t := range f.tasks {
+		if t.TypeID == applyID && t.JobID != nil && *t.JobID == jobID && t.CompletedAt == nil {
+			applyID = ""
+		}
+	}
+	f.mu.Unlock()
+	if applyID == "" {
+		return nil
+	}
+	_, err := f.CreateTask(ctx, userID, dto.CreateTaskInput{TypeID: applyID, JobID: &jobID})
+	return err
+}
+
+func (f *FakeStore) CompleteApplyTasks(_ context.Context, _ pgx.Tx, userID, jobID string, now time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, t := range f.tasks {
+		if t.userID == userID && t.TypeName == "Apply" && t.JobID != nil && *t.JobID == jobID && t.CompletedAt == nil {
+			t.CompletedAt = &now
+			f.tasks[id] = t
+		}
+	}
+	return nil
+}

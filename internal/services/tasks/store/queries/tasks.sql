@@ -117,3 +117,28 @@ SELECT
 FROM updated t
 JOIN task_types tt ON tt.id = t.type_id
 LEFT JOIN jobs j ON j.id = t.job_id;
+
+-- name: LockTask :one
+SELECT t.job_id, t.completed_at, (tt.name = 'Apply')::bool AS is_apply
+FROM tasks t
+JOIN task_types tt ON tt.id = t.type_id
+WHERE t.id = sqlc.arg(id)::uuid AND t.user_id = sqlc.arg(user_id)::uuid
+FOR UPDATE OF t;
+
+-- name: CreateApplyTask :exec
+INSERT INTO tasks (user_id, type_id, job_id)
+SELECT sqlc.arg(user_id)::uuid, tt.id, sqlc.arg(job_id)::uuid
+FROM task_types tt
+WHERE tt.user_id = sqlc.arg(user_id)::uuid AND tt.name = 'Apply'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t
+      WHERE t.type_id = tt.id AND t.job_id = sqlc.arg(job_id)::uuid AND t.completed_at IS NULL
+  );
+
+-- name: CompleteApplyTasks :exec
+UPDATE tasks t
+SET completed_at = sqlc.arg(now)::timestamptz, updated_at = sqlc.arg(now)::timestamptz
+FROM task_types tt
+WHERE tt.id = t.type_id AND tt.name = 'Apply'
+  AND t.user_id = sqlc.arg(user_id)::uuid AND t.job_id = sqlc.arg(job_id)::uuid
+  AND t.completed_at IS NULL;

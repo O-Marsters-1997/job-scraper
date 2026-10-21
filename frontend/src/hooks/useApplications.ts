@@ -36,6 +36,7 @@ export function useCreateApplication() {
 	return useInvalidatingMutation(createApplication, [
 		keys.applications.all,
 		keys.jobs.all,
+		keys.tasks.all,
 	]);
 }
 
@@ -43,7 +44,7 @@ export function useUpdateApplication() {
 	return useInvalidatingMutation(
 		({ id, data }: { id: string; data: UpdateApplicationPayload }) =>
 			updateApplication(id, data),
-		[keys.applications.all, keys.jobs.all],
+		[keys.applications.all, keys.jobs.all, keys.tasks.all],
 	);
 }
 

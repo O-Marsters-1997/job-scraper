@@ -89,8 +89,9 @@ func runCreateUser(args []string) {
 	pool := connectDB(ctx)
 	defer pool.Close()
 
-	apps := applications.New(pool, events.New(pool, scoring.NewFacade(pool)))
-	idm := identity.NewFacade(pool, []identity.Seeder{apps, tasks.New(pool)})
+	taskFacade := tasks.NewFacade(pool)
+	apps := applications.New(pool, events.New(pool, scoring.NewFacade(pool)), taskFacade)
+	idm := identity.NewFacade(pool, []identity.Seeder{apps, taskFacade})
 	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, Password: string(passwordBytes)})
 	if err != nil {
 		fatal("create user", err)

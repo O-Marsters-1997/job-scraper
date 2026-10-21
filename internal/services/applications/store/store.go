@@ -28,14 +28,62 @@ type EventRecorder interface {
 	RecordApplicationStatusChanged(ctx context.Context, tx pgx.Tx, userID, applicationID, jobID, fromStatusID, toStatusID string, snap *dto.JobScoreEvidence) error
 }
 
+type TaskSync interface {
+	ApplicationTracked(ctx context.Context, tx pgx.Tx, userID, jobID string) error
+	ApplicationApplied(ctx context.Context, tx pgx.Tx, userID, jobID string) error
+}
+
 type Store struct {
 	pool    *pgxpool.Pool
 	queries *sqlc.Queries
 	events  EventRecorder
+	tasks   TaskSync
 }
 
-func New(pool *pgxpool.Pool, events EventRecorder) *Store {
-	return &Store{pool: pool, queries: sqlc.New(pool), events: events}
+func New(pool *pgxpool.Pool, events EventRecorder, tasks TaskSync) *Store {
+	return &Store{pool: pool, queries: sqlc.New(pool), events: events, tasks: tasks}
+}
+
+func (s *Store) syncTasks(ctx context.Context, tx pgx.Tx, userID string, a dto.Application, tracked bool) error {
+	if tracked {
+		if err := s.tasks.ApplicationTracked(ctx, tx, userID, a.JobID); err != nil {
+			return err
+		}
+	}
+	if a.StatusID == "" {
+		return nil
+	}
+	sid, err := data.UUID(a.StatusID)
+	if err != nil {
+		return err
+	}
+	applied, err := s.queries.WithTx(tx).IsAppliedStatus(ctx, sid)
+	if err != nil || !applied {
+		return err
+	}
+	return s.tasks.ApplicationApplied(ctx, tx, userID, a.JobID)
+}
+
+func (s *Store) MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return err
+	}
+	row, err := s.queries.WithTx(tx).MarkApplicationApplied(ctx, sqlc.MarkApplicationAppliedParams{
+		UserID: uid, JobID: jid, Now: pgtype.Timestamptz{Time: now, Valid: true},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("store.MarkApplied: %w", err)
+	}
+	snap := s.events.Snapshot(ctx, userID, jobID)
+	return s.events.RecordApplicationStatusChanged(ctx, tx, userID, row.ID.String(), jobID, row.FromStatusID.String(), row.ToStatusID.String(), snap)
 }
 
 func parseOptionalDate(s *string) (pgtype.Date, error) {
@@ -83,7 +131,10 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 			return err
 		}
 		out = toApplicationDTO(a)
-		return s.events.RecordApplicationCreated(ctx, tx, userID, out.ID, out.JobID, snap)
+		if err := s.events.RecordApplicationCreated(ctx, tx, userID, out.ID, out.JobID, snap); err != nil {
+			return err
+		}
+		return s.syncTasks(ctx, tx, userID, out, true)
 	})
 	if err != nil {
 		if data.IsUniqueViolation(err) {
@@ -161,7 +212,10 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 		if !statusChanged {
 			return nil
 		}
-		return s.events.RecordApplicationStatusChanged(ctx, tx, userID, out.ID, out.JobID, before.StatusID.String(), out.StatusID, snap)
+		if err := s.events.RecordApplicationStatusChanged(ctx, tx, userID, out.ID, out.JobID, before.StatusID.String(), out.StatusID, snap); err != nil {
+			return err
+		}
+		return s.syncTasks(ctx, tx, userID, out, false)
 	})
 	if err != nil {
 		return dto.Application{}, data.QueryErr("UpdateApplication", err)

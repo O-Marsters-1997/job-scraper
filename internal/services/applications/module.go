@@ -4,6 +4,7 @@ package applications
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -24,8 +25,12 @@ func Build(deps Deps) *Module {
 	return &Module{service: NewService(deps.Store), store: deps.Store}
 }
 
-func New(pool *pgxpool.Pool, events store.EventRecorder) *Module {
-	return Build(Deps{Store: store.New(pool, events)})
+func New(pool *pgxpool.Pool, events store.EventRecorder, tasks store.TaskSync) *Module {
+	return Build(Deps{Store: store.New(pool, events, tasks)})
+}
+
+func (m *Module) MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error {
+	return m.store.MarkApplied(ctx, tx, userID, jobID, now)
 }
 
 // SeedDefaults seeds userID's default Statuses inside tx; identity's signup

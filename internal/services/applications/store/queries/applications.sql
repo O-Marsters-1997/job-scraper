@@ -69,3 +69,26 @@ WHERE a.user_id = $1 AND a.job_id = ANY($2::uuid[]);
 -- name: GetApplicationState :one
 SELECT job_id, status_id FROM applications
 WHERE id = $1 AND user_id = $2;
+
+-- name: MarkApplicationApplied :one
+WITH applied AS (
+    SELECT s.id FROM application_statuses s
+    WHERE s.user_id = sqlc.arg(user_id)::uuid AND s.system_key = 'applied'
+), target AS (
+    SELECT a.id, a.status_id AS from_status_id FROM applications a
+    WHERE a.user_id = sqlc.arg(user_id)::uuid AND a.job_id = sqlc.arg(job_id)::uuid
+)
+UPDATE applications a
+SET status_id = applied.id,
+    applied_at = COALESCE(a.applied_at, sqlc.arg(now)::timestamptz::date),
+    chase_by = NULL,
+    updated_at = sqlc.arg(now)::timestamptz
+FROM applied, target
+WHERE a.id = target.id AND a.status_id IS DISTINCT FROM applied.id
+RETURNING a.id, target.from_status_id, applied.id AS to_status_id;
+
+-- name: IsAppliedStatus :one
+SELECT EXISTS (
+    SELECT 1 FROM application_statuses s
+    WHERE s.id = sqlc.arg(id)::uuid AND s.system_key = 'applied'
+);
