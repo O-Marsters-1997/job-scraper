@@ -206,6 +206,7 @@ function CompanyDetailPage() {
 								<div class="flex items-center gap-2">
 									<FavouriteStar
 										favourite={c().Favourite ?? false}
+										hourly={c().Tracked && c().CheckIntervalMinutes === 60}
 										companyName={c().Name}
 										disabled={favouriteMutation.isPending}
 										onToggle={() =>
