@@ -412,7 +412,13 @@ func (f *FakeStore) PageCompaniesForUser(_ context.Context, userID string, optio
 	if limit := int(options.Limit); limit > 0 && limit < len(items) {
 		items = items[:limit]
 	}
-	return dto.CompanyPage{Items: items, Total: total}, nil
+	verified := map[string]bool{}
+	for _, b := range f.boards {
+		if b.Status == dto.BoardVerified && b.Source != "wttj" {
+			verified[b.CompanyID] = true
+		}
+	}
+	return dto.CompanyPage{Items: items, Total: total, AllCompanies: len(f.companies), VerifiedBoardCompanies: len(verified)}, nil
 }
 
 func (f *FakeStore) hasBoard(companyID string) bool {

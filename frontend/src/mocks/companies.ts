@@ -6,6 +6,7 @@ import type {
 	Company,
 	CompanyBoard,
 	CompanyExclusion,
+	CompanyPage,
 	CompanyTracking,
 	NewCompany,
 	ReviewState,
@@ -82,10 +83,7 @@ export function getCompanies(): Company[] {
 	return companies.map(withFavourite);
 }
 
-export function getCompanyPage(params: CompanyPageParams): {
-	items: Company[];
-	total: number;
-} {
+export function getCompanyPage(params: CompanyPageParams): CompanyPage {
 	failIfRequested("getCompanies");
 	const q = (params.q ?? "").toLowerCase();
 	const boardedCompanyIds = new Set(companyBoards.map((b) => b.CompanyID));
@@ -116,6 +114,12 @@ export function getCompanyPage(params: CompanyPageParams): {
 	return {
 		items: matches.slice(start, start + (params.limit ?? 50)),
 		total: matches.length,
+		allCompanies: companies.length,
+		verifiedBoardCompanies: new Set(
+			companyBoards
+				.filter((b) => b.Status === "verified" && b.Source !== "wttj")
+				.map((b) => b.CompanyID),
+		).size,
 	};
 }
 
