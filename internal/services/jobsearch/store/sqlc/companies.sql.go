@@ -75,8 +75,9 @@ SELECT c.id, c.slug, c.name,
      ORDER BY cb.source = 'wttj', cb.verified_at, cb.id LIMIT 1), '')::text AS ats_source,
     c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at, c.kind,
-    (SELECT COUNT(*) FROM jobs j
-     WHERE j.company_id = c.id AND j.closed_at IS NULL) AS job_count,
+    (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
+     WHERE j.company_id = c.id AND j.closed_at IS NULL
+       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
     EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1 AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
