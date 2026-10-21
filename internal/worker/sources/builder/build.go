@@ -53,7 +53,7 @@ func newRegistry(wellfoundGate *sources.Gate) map[string]entry {
 	workableGate := workable.NewGate()
 	recruiteeGate := recruitee.NewGate()
 	wisGate := wis.NewGate()
-	wttjShared := wttj.NewShared()
+	wttjClient := wttj.NewClient(2 * time.Second)
 	postings := smartrecruiters.NewPostingCache()
 	return map[string]entry{
 		"greenhouse":      boardEntry(func(v string) sources.Source { return greenhouse.New(v) }),
@@ -66,7 +66,7 @@ func newRegistry(wellfoundGate *sources.Gate) map[string]entry {
 		"teamtailor":      boardEntry(func(v string) sources.Source { return teamtailor.New(v) }),
 		"hibob":           boardEntry(func(v string) sources.Source { return hibob.New(v) }),
 		"smartrecruiters": boardEntry(func(v string) sources.Source { return smartrecruiters.New(v, postings) }),
-		"wttj":            {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now, wttjShared) }},
+		"wttj":            {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now, wttjClient) }},
 		"indeed": {build: func(t dto.SourceTarget) sources.Source {
 			return indeed.New(t.Value, t.Filters, indeed.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()))
 		}},

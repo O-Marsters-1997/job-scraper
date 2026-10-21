@@ -1,0 +1,2 @@
+{"data": {"company": {"name": "Acme US", "jobLocations": ["REMOTE_US", "NEW_YORK_US"], "sectorTags": [], "visaSponsorshipCountries": [], "fundingRounds": [],
+  "liveJobs": [{"externalId": "us-1", "locationPreferences": [{"location": "NEW_YORK_US"}], "function": {"value": "Software Engineering"}}]}}}

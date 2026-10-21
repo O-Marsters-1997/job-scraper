@@ -39,6 +39,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wellfound"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
 )
 
 var forceBoards = flag.Bool("scrape-now", false, "check active verified Boards without shifting cadence")
@@ -120,7 +121,7 @@ func run(ctx context.Context) error {
 	domainBase := sources.NewBase(sources.Config{Name: "domain-resolver"})
 	harvesters := []discover.Harvester{
 		commoncrawl.New(&http.Client{Timeout: 2 * time.Minute}, commoncrawl.CollinfoURL),
-		wttjharvest.New(&http.Client{Timeout: time.Minute}, wttjharvest.SitemapURL),
+		wttjharvest.New(&http.Client{Timeout: time.Minute}, wttjharvest.SitemapURL, wttj.NewClient(time.Second)),
 		untracked.New(js.Boards(), untracked.UK),
 		untracked.New(js.Boards(), untracked.Abroad),
 		workablesearch.New(&http.Client{Timeout: time.Minute}, workablesearch.SearchURL),
