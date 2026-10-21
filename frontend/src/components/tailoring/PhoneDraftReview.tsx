@@ -83,12 +83,13 @@ function Review(props: {
 					fallback={
 						<Button
 							class="w-full"
+							loading={props.draft.status === "keeping"}
 							disabled={
 								!open() || save.isPending || flow.keepMutation.isPending
 							}
 							onClick={() => flow.keep()}
 						>
-							{props.draft.status === "keeping" ? "Keeping…" : "Keep"}
+							Keep
 						</Button>
 					}
 				>

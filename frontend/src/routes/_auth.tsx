@@ -5,6 +5,7 @@ import { PushBanner } from "../components/PushBanner";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import TweaksPanel from "../components/TweaksPanel";
+import { FullPageSpinner } from "../components/ui/spinner";
 import { meQueryOptions } from "../hooks/useAuth";
 import {
 	createUsageWarning,
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/_auth")({
 			throw redirect({ to: "/login" });
 		}
 	},
+	pendingComponent: FullPageSpinner,
 	component: AuthLayout,
 });
 

@@ -53,9 +53,10 @@ export function ScheduleEditor(props: {
 				<Button
 					type="submit"
 					size="sm"
-					disabled={form.pending() || !!invalid()}
+					loading={form.pending()}
+					disabled={!!invalid()}
 				>
-					{form.pending() ? "Saving…" : "Save schedule"}
+					Save schedule
 				</Button>
 				<Button type="button" variant="ghost" size="sm" onClick={props.onDone}>
 					Cancel

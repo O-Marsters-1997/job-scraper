@@ -52,9 +52,9 @@ export function DeleteApplicationDialog(props: {
 						<Button
 							type="submit"
 							variant="destructive"
-							disabled={deleteForm.pending()}
+							loading={deleteForm.pending()}
 						>
-							{deleteForm.pending() ? "Deleting…" : "Delete application"}
+							Delete application
 						</Button>
 					</DialogFooter>
 				</form>

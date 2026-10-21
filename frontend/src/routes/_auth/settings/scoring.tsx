@@ -210,8 +210,8 @@ function ScoringForm(props: {
 					onDone={flash}
 					onError={setError}
 				/>
-				<Button size="sm" disabled={mutation.isPending} onClick={handleSave}>
-					{mutation.isPending ? "Saving…" : "Save"}
+				<Button size="sm" loading={mutation.isPending} onClick={handleSave}>
+					Save
 				</Button>
 			</SettingsActions>
 			<FormFeedback success={notice() ?? false} error={error()} />

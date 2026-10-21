@@ -63,8 +63,8 @@ export function GenerateStep(props: {
 									Back
 								</Button>
 								<Button
+									loading={create.isPending}
 									disabled={
-										create.isPending ||
 										!google.data?.canWrite ||
 										props.achievementIds().length === 0
 									}

@@ -15,7 +15,6 @@ export interface AuthFormMode {
 	heading: string;
 	subtext: string;
 	buttonText: string;
-	loadingText: string;
 	passwordAutocomplete: "current-password" | "new-password";
 	statusMessages: Record<number, string>;
 	defaultErrorMessage: string;
@@ -110,18 +109,11 @@ export function AuthForm(props: { mode: AuthFormMode }) {
 
 				<Button
 					type="submit"
-					disabled={loading()}
-					aria-busy={loading()}
+					loading={loading()}
 					class="mt-2 h-12 w-full rounded-xl text-auth-action"
 				>
-					{loading() ? (
-						props.mode.loadingText
-					) : (
-						<>
-							{props.mode.buttonText}
-							<Icon name="arrowRight" size={17} strokeWidth={2.2} />
-						</>
-					)}
+					{props.mode.buttonText}
+					<Icon name="arrowRight" size={17} strokeWidth={2.2} />
 				</Button>
 			</form>
 

@@ -29,9 +29,10 @@ Read `../DESIGN.md` before any UI change; it's the source of truth for colours, 
   2. Never read `query.data` in render before checking `isPending`/`isSuccess`; use
      `loadedData(query)` (`src/lib/queryData.ts`). Don't add `<Suspense>` for queries; the
      router owns the boundary (`defaultPendingComponent`, plus one around `<Outlet />`).
-  3. Mutations: `disabled={m.isPending}` on the triggering control, with an optional
-     "Saving…" label. No spinners.
-  4. Loading data gets a skeleton, never "Loading…" text. Text is only for
+  3. Mutations: `loading={m.isPending}` on the triggering `Button` (spinner, disabled,
+     fixed width); keep the label static. Icon-only controls use `disabled`.
+  4. Loading data gets a skeleton, never "Loading…" text. The `Spinner` is only for
+     shell-less loads (`FullPageSpinner` on the `_auth` pending state) and `Button`. Text is only for
      validate-as-you-type (`PasteBox`).
   5. Refetches keep stale data (`keepPreviousData`), with no indicator.
   6. A route with data gets a `loader` that `prefetchQuery`s it, so `defaultPreload: "intent"`
@@ -49,3 +50,5 @@ E2E: `bunx playwright test` (starts vite on :4444 with `VITE_MOCK=true`).
   e2e-covered page without a `useMocks()` branch; do add fake data to `src/mocks/db.ts`.
 - UI primitives (`src/components/ui/`) are vendored from the Zaidan registry. Don't use the
   shadcn CLI or hand-patch them; do run `bun run add-component <name>` to add or update one.
+  Exceptions: `ui/spinner.tsx` is local, and `ui/button.tsx` carries a local `loading` prop;
+  re-apply it after any `add-component button`.

@@ -72,8 +72,12 @@ function AiForm(props: { data: Accessor<AiPrefs> }) {
 								onInput={(e) => setApiKey(e.currentTarget.value)}
 								class="flex-1"
 							/>
-							<Button type="submit" disabled={mutation.isPending || !apiKey()}>
-								{mutation.isPending ? "Saving…" : "Save key"}
+							<Button
+								type="submit"
+								loading={mutation.isPending}
+								disabled={!apiKey()}
+							>
+								Save key
 							</Button>
 						</form>
 					}
@@ -85,12 +89,12 @@ function AiForm(props: { data: Accessor<AiPrefs> }) {
 						<Button
 							variant="outline"
 							size="sm"
-							disabled={mutation.isPending}
+							loading={mutation.isPending}
 							onClick={() =>
 								save(null, "Failed to clear API key. Please try again.")
 							}
 						>
-							{mutation.isPending ? "Clearing…" : "Clear"}
+							Clear
 						</Button>
 					</div>
 				</Show>

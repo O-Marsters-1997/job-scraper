@@ -60,9 +60,9 @@ function LetterRow(props: { letter: CoverLetter }) {
 					variant="outline"
 					size="sm"
 					onClick={() => check.mutate(props.letter.id)}
-					disabled={check.isPending}
+					loading={check.isPending}
 				>
-					{check.isPending ? "Checking…" : "Check letter"}
+					Check letter
 				</Button>
 				<Show
 					when={props.letter.doneAt}
@@ -200,9 +200,10 @@ export function CoverLetterCard(props: { jobId: string }) {
 					</fieldset>
 					<Button
 						onClick={() => void generate.submit()}
-						disabled={generate.pending() || !source() || chosen().length === 0}
+						loading={generate.pending()}
+						disabled={!source() || chosen().length === 0}
 					>
-						{generate.pending() ? "Writing…" : "Generate scaffold"}
+						Generate scaffold
 					</Button>
 				</Show>
 			</CardContent>

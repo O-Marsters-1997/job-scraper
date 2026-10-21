@@ -92,13 +92,14 @@ export function CvSheet(props: CvSheetProps) {
 											<span class="text-xs text-faint">{c.SourceDoc}</span>
 										</Button>
 										<Button
-											disabled={tailor.pending() || share.pending()}
+											loading={tailor.pending()}
+											disabled={share.pending()}
 											onClick={() => {
 												baseCv = c;
 												void tailor.submit();
 											}}
 										>
-											{tailor.pending() ? "Tailoring…" : "Tailor"}
+											Tailor
 										</Button>
 									</fieldset>
 								)}
