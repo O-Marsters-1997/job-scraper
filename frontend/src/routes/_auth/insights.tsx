@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, onMount, Show } from "solid-js";
 import { ApplicationPipelineChart } from "@/components/insights/ApplicationPipelineChart";
+import { FirstFoundByChart } from "@/components/insights/FirstFoundByChart";
 import { JobsBySourceChart } from "@/components/insights/JobsBySourceChart";
 import { JobsOverTimeChart } from "@/components/insights/JobsOverTimeChart";
 import { ScoreAndGateChart } from "@/components/insights/ScoreAndGateChart";
@@ -66,7 +67,10 @@ function InsightsPage() {
 
 				<ScoreAndGateChart jobs={jobs()} />
 
-				<SourceQualityChart jobs={jobs()} />
+				<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+					<SourceQualityChart jobs={jobs()} />
+					<FirstFoundByChart jobs={jobs()} />
+				</div>
 			</Show>
 		</div>
 	);

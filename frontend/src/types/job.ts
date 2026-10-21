@@ -58,6 +58,7 @@ export const jobSchema = z.object({
 	Seen: z.boolean().optional(),
 	CompanyFavourite: z.boolean().optional(),
 	CompanyKind: companyKindSchema.optional(),
+	DiscoveredVia: z.string().optional(),
 	Breakdown: z.array(scoreRowSchema).nullable().optional(),
 	Listings: z.array(jobListingSchema).nullable().optional(),
 	Description: z.string().optional(),
