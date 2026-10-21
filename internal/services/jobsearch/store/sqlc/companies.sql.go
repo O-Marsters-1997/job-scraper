@@ -340,9 +340,7 @@ SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name,
      ORDER BY cb.source = 'wttj', cb.verified_at, cb.id LIMIT 1), '')::text AS ats_source,
     c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at, c.kind,
-    (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
-     WHERE j.company_id = c.id AND j.closed_at IS NULL
-       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
+    jc.n AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
     EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
@@ -352,6 +350,11 @@ SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name,
      WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
 FROM companies c
 LEFT JOIN tracked_companies tc ON tc.user_id = $1::uuid AND tc.company_id = c.id
+CROSS JOIN LATERAL (
+    SELECT COUNT(*) AS n FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
+    WHERE j.company_id = c.id AND j.closed_at IS NULL
+      AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
+) jc
 WHERE ($2::text = ''
        OR strpos(lower(c.name), lower($2::text)) > 0
        OR strpos(c.slug, lower($2::text)) > 0)
@@ -361,10 +364,11 @@ WHERE ($2::text = ''
   AND ($6::text = ''
        OR ($6::text = 'agency') = (c.kind IN ('agency', 'likely_agency')))
 ORDER BY
-    CASE WHEN $7::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
-    CASE WHEN $7::text = 'relevance' AND COALESCE(tc.enabled, FALSE)
+    CASE WHEN $7::text = 'relevance'
           AND EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id)
          THEN 0 ELSE 1 END,
+    CASE WHEN $7::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
+    CASE WHEN $7::text IN ('relevance', 'open_jobs') THEN jc.n ELSE 0 END DESC,
     c.name, c.id
 LIMIT $9::int OFFSET $8::int
 `
