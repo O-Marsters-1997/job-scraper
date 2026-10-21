@@ -60,16 +60,16 @@ var _ sources.Source = (*Scraper)(nil)
 func NewGate() *sources.Gate { return sources.NewGate(gap, blockedFor) }
 
 func New(search Search, gate *sources.Gate) *Scraper {
-	return &Scraper{
-		PaginatedBase: sources.NewBase(sources.Config{
-			Name:    sourceName,
-			Route:   sources.RouteResidential,
-			Header:  browserHeader,
-			Cookies: true,
-		}),
-		search: search,
-		gate:   gate,
-	}
+	return &Scraper{PaginatedBase: newBase(), search: search, gate: gate}
+}
+
+func newBase() sources.PaginatedBase {
+	return sources.NewBase(sources.Config{
+		Name:    sourceName,
+		Route:   sources.RouteResidential,
+		Header:  browserHeader,
+		Cookies: true,
+	})
 }
 
 func (s Search) pageURL(page int) (string, error) {
@@ -155,6 +155,7 @@ type listing struct {
 	Slug         string   `json:"slug"`
 	Title        string   `json:"title"`
 	Description  string   `json:"description"`
+	ATSSource    string   `json:"atsSource"`
 	Compensation string   `json:"compensation"`
 	LiveStartAt  int64    `json:"liveStartAt"`
 	LocationName []string `json:"locationNames"`
@@ -165,13 +166,57 @@ type listing struct {
 }
 
 func parse(r io.Reader) ([]dto.Job, int, error) {
+	var jobs []dto.Job
+	pageCount, err := walk(r, func(st startup, l listing) { jobs = append(jobs, card(st, l)) })
+	if err != nil {
+		return nil, 0, err
+	}
+	return jobs, pageCount, nil
+}
+
+type ATSListing struct {
+	Company, ATSSource, URL string
+}
+
+func ParseATSListings(r io.Reader) ([]ATSListing, int, error) {
+	var out []ATSListing
+	pageCount, err := walk(r, func(st startup, l listing) {
+		if l.ATSSource != "" {
+			out = append(out, ATSListing{Company: st.Name, ATSSource: l.ATSSource, URL: listingURL(l)})
+		}
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return out, pageCount, nil
+}
+
+func LocationPageURL(location string, page int) (string, error) {
+	return Search{Location: location}.pageURL(page)
+}
+
+func NewPages(gate *sources.Gate) func(ctx context.Context, url string) ([]byte, error) {
+	base := newBase()
+	return func(ctx context.Context, url string) ([]byte, error) {
+		if err := gate.Wait(ctx); err != nil {
+			return nil, err
+		}
+		body, err := base.Get(ctx, url)
+		if errors.Is(err, proxy.ErrBlocked) {
+			gate.Block(blockedFor)
+		}
+		return body, err
+	}
+}
+
+func walk(r io.Reader, visit func(startup, listing)) (int, error) {
 	raw, err := io.ReadAll(r)
 	if err != nil {
-		return nil, 0, fmt.Errorf("read page: %w", err)
+		return 0, fmt.Errorf("read page: %w", err)
 	}
 	m := nextDataRe.FindSubmatch(raw)
 	if m == nil {
-		return nil, 0, fmt.Errorf("page has no __NEXT_DATA__, likely a DataDome challenge: %w", proxy.ErrBlocked)
+		return 0, fmt.Errorf("page has no __NEXT_DATA__, likely a DataDome challenge: %w", proxy.ErrBlocked)
 	}
 	var next struct {
 		Props struct {
@@ -183,7 +228,7 @@ func parse(r io.Reader) ([]dto.Job, int, error) {
 		} `json:"props"`
 	}
 	if err := json.Unmarshal(m[1], &next); err != nil {
-		return nil, 0, fmt.Errorf("decode __NEXT_DATA__: %w", err)
+		return 0, fmt.Errorf("decode __NEXT_DATA__: %w", err)
 	}
 	data := next.Props.PageProps.ApolloState.Data
 
@@ -191,7 +236,7 @@ func parse(r io.Reader) ([]dto.Job, int, error) {
 		Talent map[string]json.RawMessage `json:"talent"`
 	}
 	if err := json.Unmarshal(data["ROOT_QUERY"], &root); err != nil {
-		return nil, 0, fmt.Errorf("decode ROOT_QUERY: %w", err)
+		return 0, fmt.Errorf("decode ROOT_QUERY: %w", err)
 	}
 	var res results
 	found := false
@@ -200,37 +245,36 @@ func parse(r io.Reader) ([]dto.Job, int, error) {
 			continue
 		}
 		if err := json.Unmarshal(v, &res); err != nil {
-			return nil, 0, fmt.Errorf("decode search results: %w", err)
+			return 0, fmt.Errorf("decode search results: %w", err)
 		}
 		found = true
 		break
 	}
 	if !found {
-		return nil, 0, errors.New("search results not found in __NEXT_DATA__")
+		return 0, errors.New("search results not found in __NEXT_DATA__")
 	}
 
-	var jobs []dto.Job
 	for _, sref := range res.Startups {
 		var st startup
 		if err := json.Unmarshal(data[sref.Ref], &st); err != nil {
-			return nil, 0, fmt.Errorf("decode %s: %w", sref.Ref, err)
+			return 0, fmt.Errorf("decode %s: %w", sref.Ref, err)
 		}
 		for _, lref := range st.Listings {
 			var l listing
 			if err := json.Unmarshal(data[lref.Ref], &l); err != nil {
-				return nil, 0, fmt.Errorf("decode %s: %w", lref.Ref, err)
+				return 0, fmt.Errorf("decode %s: %w", lref.Ref, err)
 			}
-			jobs = append(jobs, card(st, l))
+			visit(st, l)
 		}
 	}
-	return jobs, res.PageCount, nil
+	return res.PageCount, nil
 }
 
 func card(st startup, l listing) dto.Job {
 	job := dto.Job{
 		Title:           l.Title,
 		Location:        strings.Join(l.LocationName, ", "),
-		URL:             fmt.Sprintf("%s/jobs/%s-%s", baseURL, l.ID, l.Slug),
+		URL:             listingURL(l),
 		CompanySlug:     slug.Company(st.Name),
 		Source:          sourceName,
 		Description:     l.Description,
@@ -242,6 +286,10 @@ func card(st startup, l listing) dto.Job {
 		job.PostedAt = &t
 	}
 	return job
+}
+
+func listingURL(l listing) string {
+	return fmt.Sprintf("%s/jobs/%s-%s", baseURL, l.ID, l.Slug)
 }
 
 func workArrangement(l listing) string {

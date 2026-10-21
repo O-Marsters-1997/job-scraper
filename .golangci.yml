@@ -181,7 +181,7 @@ linters:
         linters:
           - forbidigo
         text: 'os\.(Getenv|LookupEnv)|slog\.'
-      - path: ^internal/worker/discover/sluglist/
+      - path: ^internal/worker/discover/(sluglist|wellfound)/
         linters:
           - forbidigo
         text: 'slog\.'
@@ -222,7 +222,7 @@ linters:
       - path: ^internal/worker/(discover|sources)/
         linters:
           - gochecknoglobals
-        text: '\b(patterns|notBoards|workArrangements|salaryPeriods|Lists|apiHeaders|relativeUnit|browserHeader|ukLocations)\b'
+        text: '\b(patterns|notBoards|workArrangements|salaryPeriods|Lists|apiHeaders|relativeUnit|browserHeader|ukLocations|LocationPages)\b'
 
 formatters:
   enable:
