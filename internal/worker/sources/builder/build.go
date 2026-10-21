@@ -43,15 +43,16 @@ type Builder struct {
 	registry map[string]entry
 }
 
-func New() *Builder { return &Builder{registry: newRegistry()} }
+func New(wellfoundGate *sources.Gate) *Builder {
+	return &Builder{registry: newRegistry(wellfoundGate)}
+}
 
-func newRegistry() map[string]entry {
+func newRegistry(wellfoundGate *sources.Gate) map[string]entry {
 	linkedinGate := linkedin.NewGate()
 	hiringcafeChrome := hiringcafe.NewChrome(hiringcafe.NewGate())
 	workableGate := workable.NewGate()
 	recruiteeGate := recruitee.NewGate()
 	wisGate := wis.NewGate()
-	wellfoundGate := wellfound.NewGate()
 	wttjShared := wttj.NewShared()
 	postings := smartrecruiters.NewPostingCache()
 	return map[string]entry{

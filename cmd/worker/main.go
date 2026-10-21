@@ -30,6 +30,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/commoncrawl"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/sluglist"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/untracked"
+	wellfoundharvest "github.com/ollymarsters/job-scraper/internal/worker/discover/wellfound"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/workablesearch"
 	wttjharvest "github.com/ollymarsters/job-scraper/internal/worker/discover/wttj"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/yc"
@@ -37,6 +38,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/wellfound"
 )
 
 var forceBoards = flag.Bool("scrape-now", false, "check active verified Boards without shifting cadence")
@@ -101,7 +103,8 @@ func run(ctx context.Context) error {
 	proxy.SetCache(js)
 
 	exporter := scraper.NewAPIExporter(apiBaseURL, ingestToken)
-	sourceBuilder := builder.New()
+	wellfoundGate := wellfound.NewGate()
+	sourceBuilder := builder.New(wellfoundGate)
 	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{Build: sourceBuilder.BuildSource, Profiles: js}, exporter)
 	orch := scraper.New(js.Boards(), scoringModule, sourceBuilder.BuildSource, js.Targets())
 	processor := worker.NewProcessor(worker.Deps{
@@ -122,6 +125,7 @@ func run(ctx context.Context) error {
 		untracked.New(js.Boards(), untracked.Abroad),
 		workablesearch.New(&http.Client{Timeout: time.Minute}, workablesearch.SearchURL),
 		yc.New(&http.Client{Timeout: time.Minute}, yc.CompaniesURL, domainBase.Get),
+		wellfoundharvest.New(wellfound.NewPages(wellfoundGate), domainBase.Get, js.Boards(), wellfoundharvest.LocationPages),
 		sluglist.New(&http.Client{Timeout: time.Minute}, sluglist.Lists),
 	}
 	harvest := discover.NewRunner(harvesters, q, js.Boards(), js.Boards())
