@@ -36,7 +36,7 @@ export class UnresolvableBoardError extends Error {
 	}
 }
 
-export type CompanySort = "relevance" | "alphabetical";
+export type CompanySort = "relevance" | "alphabetical" | "open_jobs";
 
 export type CompanyPoster = "agency" | "direct";
 

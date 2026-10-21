@@ -114,10 +114,10 @@ func parseCompanySort(raw string) (dto.CompanySort, error) {
 	switch sort := dto.CompanySort(raw); sort {
 	case "":
 		return dto.CompanySortRelevance, nil
-	case dto.CompanySortRelevance, dto.CompanySortAlphabetical:
+	case dto.CompanySortRelevance, dto.CompanySortAlphabetical, dto.CompanySortOpenJobs:
 		return sort, nil
 	default:
-		return "", apperr.Invalid("sort must be relevance or alphabetical")
+		return "", apperr.Invalid("sort must be relevance, alphabetical or open_jobs")
 	}
 }
 
