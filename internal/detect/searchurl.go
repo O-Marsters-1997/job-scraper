@@ -105,8 +105,8 @@ func parseWellfound(u *neturl.URL) (SearchURL, bool) {
 	if location != "" {
 		out.Filters["location"] = location
 	}
-	for param, values := range u.Query() {
-		if param != "page" && values[0] != "" {
+	for param := range u.Query() {
+		if param != "page" {
 			out.Dropped = append(out.Dropped, param)
 		}
 	}
