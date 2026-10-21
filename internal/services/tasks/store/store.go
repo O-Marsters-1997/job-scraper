@@ -16,16 +16,25 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/tasks/store/sqlc"
 )
 
-type DBTX = sqlc.DBTX
-
 var ErrTaskTypeExists = errors.New("task type name already exists")
 
-type Store struct {
-	queries *sqlc.Queries
+type ApplicationSync interface {
+	MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string) error
 }
 
-func New(db DBTX) *Store {
-	return &Store{queries: sqlc.New(db)}
+type DB interface {
+	sqlc.DBTX
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+type Store struct {
+	db           DB
+	queries      *sqlc.Queries
+	applications ApplicationSync
+}
+
+func New(db DB, applications ApplicationSync) *Store {
+	return &Store{db: db, queries: sqlc.New(db), applications: applications}
 }
 
 func (s *Store) SeedDefaultTaskTypes(ctx context.Context, tx pgx.Tx, userID string) error {
@@ -199,13 +208,62 @@ func (s *Store) SetTaskDone(ctx context.Context, userID, id string, done bool, n
 	if err != nil {
 		return dto.Task{}, data.ErrNotFound
 	}
-	row, err := s.queries.SetTaskDone(ctx, sqlc.SetTaskDoneParams{
-		ID: tid, UserID: uid, Done: done, Now: pgtype.Timestamptz{Time: now, Valid: true},
+	var out dto.Task
+	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		q := s.queries.WithTx(tx)
+		before, err := q.LockTask(ctx, sqlc.LockTaskParams{ID: tid, UserID: uid})
+		if err != nil {
+			return err
+		}
+		row, err := q.SetTaskDone(ctx, sqlc.SetTaskDoneParams{
+			ID: tid, UserID: uid, Done: done, Now: pgtype.Timestamptz{Time: now, Valid: true},
+		})
+		if err != nil {
+			return err
+		}
+		out = toTaskDTO(sqlc.PageTasksRow(row))
+		if !done || before.CompletedAt.Valid || !before.IsApply || !before.JobID.Valid {
+			return nil
+		}
+		return s.applications.MarkApplied(ctx, tx, userID, before.JobID.String())
 	})
 	if err != nil {
 		return dto.Task{}, data.QueryErr("SetTaskDone", err)
 	}
-	return toTaskDTO(sqlc.PageTasksRow(row)), nil
+	return out, nil
+}
+
+func (s *Store) CreateApplyTask(ctx context.Context, tx pgx.Tx, userID, jobID string) error {
+	uid, jid, err := userAndJob(userID, jobID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.WithTx(tx).CreateApplyTask(ctx, sqlc.CreateApplyTaskParams{UserID: uid, JobID: jid}); err != nil {
+		return fmt.Errorf("store.CreateApplyTask: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) CompleteApplyTasks(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error {
+	uid, jid, err := userAndJob(userID, jobID)
+	if err != nil {
+		return err
+	}
+	err = s.queries.WithTx(tx).CompleteApplyTasks(ctx, sqlc.CompleteApplyTasksParams{
+		UserID: uid, JobID: jid, Now: pgtype.Timestamptz{Time: now, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("store.CompleteApplyTasks: %w", err)
+	}
+	return nil
+}
+
+func userAndJob(userID, jobID string) (uid, jid pgtype.UUID, err error) {
+	if uid, err = data.UUID(userID); err != nil {
+		return uid, jid, err
+	}
+	jid, err = data.UUID(jobID)
+	return uid, jid, err
 }
 
 func optionalUUID(s string) (pgtype.UUID, error) {

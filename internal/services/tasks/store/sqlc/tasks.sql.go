@@ -11,6 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const completeApplyTasks = `-- name: CompleteApplyTasks :exec
+UPDATE tasks t
+SET completed_at = $1::timestamptz, updated_at = $1::timestamptz
+FROM task_types tt
+WHERE tt.id = t.type_id AND tt.name = 'Apply'
+  AND t.user_id = $2::uuid AND t.job_id = $3::uuid
+  AND t.completed_at IS NULL
+`
+
+type CompleteApplyTasksParams struct {
+	Now    pgtype.Timestamptz
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+}
+
+func (q *Queries) CompleteApplyTasks(ctx context.Context, arg CompleteApplyTasksParams) error {
+	_, err := q.db.Exec(ctx, completeApplyTasks, arg.Now, arg.UserID, arg.JobID)
+	return err
+}
+
 const countTasks = `-- name: CountTasks :one
 SELECT count(*)
 FROM tasks t
@@ -37,6 +57,27 @@ func (q *Queries) CountTasks(ctx context.Context, arg CountTasksParams) (int64, 
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const createApplyTask = `-- name: CreateApplyTask :exec
+INSERT INTO tasks (user_id, type_id, job_id)
+SELECT $1::uuid, tt.id, $2::uuid
+FROM task_types tt
+WHERE tt.user_id = $1::uuid AND tt.name = 'Apply'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t
+      WHERE t.type_id = tt.id AND t.job_id = $2::uuid AND t.completed_at IS NULL
+  )
+`
+
+type CreateApplyTaskParams struct {
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+}
+
+func (q *Queries) CreateApplyTask(ctx context.Context, arg CreateApplyTaskParams) error {
+	_, err := q.db.Exec(ctx, createApplyTask, arg.UserID, arg.JobID)
+	return err
 }
 
 const createTask = `-- name: CreateTask :one
@@ -200,6 +241,32 @@ func (q *Queries) ListTaskTypes(ctx context.Context, userID pgtype.UUID) ([]List
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockTask = `-- name: LockTask :one
+SELECT t.job_id, t.completed_at, (tt.name = 'Apply')::bool AS is_apply
+FROM tasks t
+JOIN task_types tt ON tt.id = t.type_id
+WHERE t.id = $1::uuid AND t.user_id = $2::uuid
+FOR UPDATE OF t
+`
+
+type LockTaskParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+type LockTaskRow struct {
+	JobID       pgtype.UUID
+	CompletedAt pgtype.Timestamptz
+	IsApply     bool
+}
+
+func (q *Queries) LockTask(ctx context.Context, arg LockTaskParams) (LockTaskRow, error) {
+	row := q.db.QueryRow(ctx, lockTask, arg.ID, arg.UserID)
+	var i LockTaskRow
+	err := row.Scan(&i.JobID, &i.CompletedAt, &i.IsApply)
+	return i, err
 }
 
 const pageTasks = `-- name: PageTasks :many

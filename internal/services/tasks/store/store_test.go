@@ -19,7 +19,7 @@ import (
 func newStore(t *testing.T) (st *store.Store, pool *pgxpool.Pool, userID string) {
 	t.Helper()
 	pool = pgtest.New(t)
-	return store.New(pool), pool, pgtest.InsertUser(t, pool)
+	return store.New(pool, nil), pool, pgtest.InsertUser(t, pool)
 }
 
 func insertType(t *testing.T, pool *pgxpool.Pool, userID, name string) string {

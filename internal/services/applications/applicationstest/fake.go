@@ -159,6 +159,29 @@ func (f *FakeStore) UpdateApplication(_ context.Context, userID, id string, in d
 	return app, nil
 }
 
+func (f *FakeStore) MarkApplied(_ context.Context, _ pgx.Tx, userID, jobID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var appliedID string
+	for _, s := range f.statuses {
+		if s.UserID == userID && s.SystemKey == "applied" {
+			appliedID = s.ID
+		}
+	}
+	for id, a := range f.apps {
+		if a.UserID != userID || a.JobID != jobID || a.StatusID == appliedID {
+			continue
+		}
+		a.StatusID, a.ChaseBy = appliedID, nil
+		if a.AppliedAt == nil {
+			now := time.Now()
+			a.AppliedAt = &now
+		}
+		f.apps[id] = a
+	}
+	return nil
+}
+
 // DeleteApplication is a no-op for an unknown id, matching the real store's
 // unconditional DELETE.
 func (f *FakeStore) DeleteApplication(_ context.Context, _, id string) error {

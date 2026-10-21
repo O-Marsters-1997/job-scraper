@@ -24,8 +24,12 @@ func Build(deps Deps) *Module {
 	return &Module{service: NewService(deps.Store), store: deps.Store}
 }
 
-func New(pool *pgxpool.Pool, events store.EventRecorder) *Module {
-	return Build(Deps{Store: store.New(pool, events)})
+func New(pool *pgxpool.Pool, events store.EventRecorder, tasks store.TaskSync) *Module {
+	return Build(Deps{Store: store.New(pool, events, tasks)})
+}
+
+func (m *Module) MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string) error {
+	return m.store.MarkApplied(ctx, tx, userID, jobID)
 }
 
 // SeedDefaults seeds userID's default Statuses inside tx; identity's signup

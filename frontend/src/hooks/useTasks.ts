@@ -110,6 +110,6 @@ export function useUpdateTask() {
 export function useSetTaskDone() {
 	return useInvalidatingMutation(
 		({ id, done }: { id: string; done: boolean }) => setTaskDone(id, done),
-		[keys.tasks.all],
+		[keys.tasks.all, keys.applications.all, keys.jobs.all],
 	);
 }

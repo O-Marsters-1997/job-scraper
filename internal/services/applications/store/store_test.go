@@ -15,12 +15,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/applications/store"
 	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/events/eventstest"
+	"github.com/ollymarsters/job-scraper/internal/services/tasks"
 )
 
 func newStore(t *testing.T) (st *store.Store, pool *pgxpool.Pool, userID string) {
 	t.Helper()
 	pool = pgtest.New(t)
-	return store.New(pool, events.New(pool, eventstest.Unscored())), pool, pgtest.InsertUser(t, pool)
+	return store.New(pool, events.New(pool, eventstest.Unscored()), tasks.NewFacade(pool)), pool, pgtest.InsertUser(t, pool)
 }
 
 func TestStoreContract(t *testing.T) {
@@ -236,4 +237,99 @@ func TestCreateRecruiterContactMissingJobIsNotFound(t *testing.T) {
 	if _, err := st.CreateRecruiterContact(t.Context(), userID, in); !errors.Is(err, data.ErrNotFound) {
 		t.Errorf("CreateRecruiterContact(missing job) err = %v, want ErrNotFound", err)
 	}
+}
+
+func TestApplyTaskSync(t *testing.T) {
+	t.Parallel()
+
+	type env struct {
+		st      *store.Store
+		pool    *pgxpool.Pool
+		userID  string
+		jobID   string
+		applied string
+	}
+	setup := func(t *testing.T) env {
+		t.Helper()
+		st, pool, userID := newStore(t)
+		pgtest.InTx(t, pool, true, func(tx pgx.Tx) error {
+			if err := st.SeedDefaultStatuses(t.Context(), tx, userID); err != nil {
+				return err
+			}
+			return tasks.NewFacade(pool).SeedDefaults(t.Context(), tx, userID)
+		})
+		e := env{st: st, pool: pool, userID: userID, jobID: pgtest.InsertJob(t, pool, "Engineer", "Engineer")}
+		statuses, err := st.ListApplicationStatusesByUser(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("ListApplicationStatusesByUser err = %v", err)
+		}
+		for _, s := range statuses {
+			if s.SystemKey == "applied" {
+				e.applied = s.ID
+			}
+		}
+		return e
+	}
+	taskCounts := func(t *testing.T, e env) (open, done int) {
+		t.Helper()
+		err := e.pool.QueryRow(t.Context(), `SELECT count(*) FILTER (WHERE completed_at IS NULL),
+			count(*) FILTER (WHERE completed_at IS NOT NULL) FROM tasks WHERE user_id = $1 AND job_id = $2`,
+			e.userID, e.jobID).Scan(&open, &done)
+		if err != nil {
+			t.Fatalf("count tasks: %v", err)
+		}
+		return open, done
+	}
+
+	t.Run("tracking a job opens one Apply task", func(t *testing.T) {
+		t.Parallel()
+		e := setup(t)
+		if _, err := e.st.CreateApplication(t.Context(), e.userID, dto.CreateApplicationInput{JobID: e.jobID}); err != nil {
+			t.Fatalf("CreateApplication err = %v", err)
+		}
+		if open, done := taskCounts(t, e); open != 1 || done != 0 {
+			t.Errorf("open = %d, done = %d, want 1 and 0", open, done)
+		}
+	})
+
+	t.Run("tracking straight to Applied leaves the task done", func(t *testing.T) {
+		t.Parallel()
+		e := setup(t)
+		if _, err := e.st.CreateApplication(t.Context(), e.userID, dto.CreateApplicationInput{JobID: e.jobID, StatusID: e.applied}); err != nil {
+			t.Fatalf("CreateApplication err = %v", err)
+		}
+		if open, done := taskCounts(t, e); open != 0 || done != 1 {
+			t.Errorf("open = %d, done = %d, want 0 and 1", open, done)
+		}
+	})
+
+	t.Run("setting the application to Applied completes the task", func(t *testing.T) {
+		t.Parallel()
+		e := setup(t)
+		app, err := e.st.CreateApplication(t.Context(), e.userID, dto.CreateApplicationInput{JobID: e.jobID})
+		if err != nil {
+			t.Fatalf("CreateApplication err = %v", err)
+		}
+		if _, err := e.st.UpdateApplication(t.Context(), e.userID, app.ID, dto.UpdateApplicationInput{StatusID: e.applied}); err != nil {
+			t.Fatalf("UpdateApplication err = %v", err)
+		}
+		if open, done := taskCounts(t, e); open != 0 || done != 1 {
+			t.Errorf("open = %d, done = %d, want 0 and 1", open, done)
+		}
+	})
+
+	t.Run("moving to another status leaves the task open", func(t *testing.T) {
+		t.Parallel()
+		e := setup(t)
+		app, err := e.st.CreateApplication(t.Context(), e.userID, dto.CreateApplicationInput{JobID: e.jobID})
+		if err != nil {
+			t.Fatalf("CreateApplication err = %v", err)
+		}
+		if _, err := e.st.UpdateApplication(t.Context(), e.userID, app.ID, dto.UpdateApplicationInput{SalaryInfo: "50k", StatusID: app.StatusID}); err != nil {
+			t.Fatalf("UpdateApplication err = %v", err)
+		}
+		if open, done := taskCounts(t, e); open != 1 || done != 0 {
+			t.Errorf("open = %d, done = %d, want 1 and 0", open, done)
+		}
+	})
 }
