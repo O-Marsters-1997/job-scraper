@@ -1,52 +1,25 @@
 import { type JobNote, jobNoteSchema } from "../types/jobNote";
-import { apiFetch, apiFetchVoid, jsonInit } from "./client";
+import { apiFetch, jsonInit } from "./client";
 import { mocked } from "./config";
 
-export async function fetchJobNotes(jobId: string): Promise<JobNote[]> {
+export async function fetchJobNote(jobId: string): Promise<JobNote> {
 	return mocked(
-		(db) => db.getJobNotes(jobId),
-		() =>
-			apiFetch(
-				`/jobs/${encodeURIComponent(jobId)}/notes`,
-				jobNoteSchema.array(),
-			),
+		(db) => db.getJobNote(jobId),
+		() => apiFetch(`/jobs/${encodeURIComponent(jobId)}/note`, jobNoteSchema),
 	);
 }
 
-export async function createJobNote(
+export async function saveJobNote(
 	jobId: string,
 	body: string,
 ): Promise<JobNote> {
 	return mocked(
-		(db) => db.createJobNote(jobId, body),
+		(db) => db.saveJobNote(jobId, body),
 		() =>
 			apiFetch(
-				`/jobs/${encodeURIComponent(jobId)}/notes`,
+				`/jobs/${encodeURIComponent(jobId)}/note`,
 				jobNoteSchema,
-				jsonInit("POST", { body }),
+				jsonInit("PUT", { body }),
 			),
-	);
-}
-
-export async function updateJobNote(
-	id: string,
-	body: string,
-): Promise<JobNote> {
-	return mocked(
-		(db) => db.updateJobNote(id, body),
-		() =>
-			apiFetch(
-				`/notes/${encodeURIComponent(id)}`,
-				jobNoteSchema,
-				jsonInit("PATCH", { body }),
-			),
-	);
-}
-
-export async function deleteJobNote(id: string): Promise<void> {
-	return mocked(
-		(db) => db.deleteJobNote(id),
-		() =>
-			apiFetchVoid(`/notes/${encodeURIComponent(id)}`, { method: "DELETE" }),
 	);
 }

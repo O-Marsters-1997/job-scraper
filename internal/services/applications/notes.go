@@ -22,18 +22,11 @@ func validateBody(kind, body string) error {
 	return nil
 }
 
-func (s *Service) CreateJobNote(ctx context.Context, userID string, in dto.CreateJobNoteInput) (dto.JobNote, error) {
-	if err := validateBody("note", in.Body); err != nil {
-		return dto.JobNote{}, err
+func (s *Service) PutJobNote(ctx context.Context, userID string, in dto.PutJobNoteInput) (dto.JobNote, error) {
+	if utf8.RuneCountInString(in.Body) > maxBody {
+		return dto.JobNote{}, apperr.Invalid(fmt.Sprintf("note must be at most %d characters", maxBody))
 	}
-	return s.store.CreateJobNote(ctx, userID, in)
-}
-
-func (s *Service) UpdateJobNote(ctx context.Context, userID string, in dto.UpdateJobNoteInput) (dto.JobNote, error) {
-	if err := validateBody("note", in.Body); err != nil {
-		return dto.JobNote{}, err
-	}
-	return s.store.UpdateJobNote(ctx, userID, in)
+	return s.store.PutJobNote(ctx, userID, in)
 }
 
 func (s *Service) CreateJobComment(ctx context.Context, userID string, in dto.CreateJobCommentInput) (dto.JobComment, error) {

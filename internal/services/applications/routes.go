@@ -18,10 +18,8 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/jobs/{id}/recruiter-contacts", handlers.GetByID(m.store.ListRecruiterContacts))
 	r.Post("/jobs/{id}/recruiter-contacts", handlers.Create(m.service.LogRecruiterContact))
 
-	r.Get("/jobs/{id}/notes", handlers.GetByID(m.store.ListJobNotes))
-	r.Post("/jobs/{id}/notes", handlers.Create(m.service.CreateJobNote))
-	r.Patch("/notes/{id}", handlers.Update(m.service.UpdateJobNote))
-	r.Delete("/notes/{id}", handlers.Delete(m.store.DeleteJobNote))
+	r.Get("/jobs/{id}/note", handlers.GetByID(m.store.GetJobNote))
+	r.Put("/jobs/{id}/note", handlers.Update(m.service.PutJobNote))
 
 	r.Get("/jobs/{id}/comments", handlers.GetByID(m.store.ListJobComments))
 	r.Post("/jobs/{id}/comments", handlers.Create(m.service.CreateJobComment))

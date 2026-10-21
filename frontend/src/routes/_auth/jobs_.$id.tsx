@@ -18,7 +18,7 @@ import { applicationsQueryOptions } from "../../hooks/useApplications";
 import { DismissToast, useDismissJob } from "../../hooks/useDismissJob";
 import { gradeQueryOptions } from "../../hooks/useGrades";
 import { jobCommentsQueryOptions } from "../../hooks/useJobComments";
-import { jobNotesQueryOptions } from "../../hooks/useJobNotes";
+import { jobNoteQueryOptions } from "../../hooks/useJobNotes";
 import { jobQueryOptions, useJob, useMarkJobsSeen } from "../../hooks/useJobs";
 import { experienceMatchQueryOptions } from "../../hooks/useTailoring";
 import { jobOpenTasksQueryOptions } from "../../hooks/useTasks";
@@ -34,7 +34,7 @@ import { RecruiterContactsCard } from "./-jobs-detail/RecruiterContactsCard";
 
 export const Route = createFileRoute("/_auth/jobs_/$id")({
 	loader: ({ params }) => {
-		void queryClient.prefetchQuery(jobNotesQueryOptions(params.id));
+		void queryClient.prefetchQuery(jobNoteQueryOptions(params.id));
 		void queryClient.prefetchQuery(jobCommentsQueryOptions(params.id));
 		void queryClient.prefetchQuery(jobOpenTasksQueryOptions(params.id));
 		void queryClient.prefetchQuery(gradeQueryOptions(params.id));
@@ -202,7 +202,7 @@ function JobDetailPage() {
 								</div>
 							</div>
 						</TabsContent>
-						<TabsContent value="notes" forceMount>
+						<TabsContent value="notes">
 							<JobNotesCard jobId={params().id} />
 						</TabsContent>
 					</Tabs>

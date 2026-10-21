@@ -97,11 +97,8 @@ func fromInt4(n pgtype.Int4) *int {
 
 func toJobNoteDTO(n sqlc.JobNote) dto.JobNote {
 	return dto.JobNote{
-		ID:        n.ID.String(),
-		JobID:     n.JobID.String(),
-		Body:      n.Body,
-		CreatedAt: n.CreatedAt.Time,
-		UpdatedAt: n.UpdatedAt.Time,
+		JobID: n.JobID.String(),
+		Body:  n.Body,
 	}
 }
 
