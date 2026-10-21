@@ -212,7 +212,6 @@ function JobDetailPage() {
 						job={j()}
 						app={app()}
 						onCv={() => setCvOpen(true)}
-						onTrack={() => track.openTrack(params().id)}
 						onDismiss={() => void dismissAndLeave(j())}
 					/>
 					<DismissToast />

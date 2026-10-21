@@ -11,7 +11,7 @@ import { loadedData } from "@/lib/queryData";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import type { RecruiterContactSummary } from "@/types/recruiterContact";
-import { useApplications } from "./useApplications";
+import { useApplications, useCreateApplication } from "./useApplications";
 import {
 	useSetCompaniesKind,
 	useSetCompanyFavourite,
@@ -48,9 +48,38 @@ export function useTrackJobs(
 	const [modalOpen, setModalOpen] = createSignal(false);
 	const [trackingJobId, setTrackingJobId] = createSignal<string | null>(null);
 
-	const openTrack = (jobId: string) => {
-		setTrackingJobId(jobId);
-		setModalOpen(true);
+	const create = useCreateApplication();
+	const isTracked = (jobId: string) =>
+		!!loadedData(applications)?.some((a) => a.JobID === jobId);
+
+	const openTrack = async (jobId: string) => {
+		if (!loadedData(applications)) return;
+		if (isTracked(jobId)) {
+			setTrackingJobId(jobId);
+			setModalOpen(true);
+			return;
+		}
+		try {
+			await create.mutateAsync({ job_id: jobId });
+			announceNotice("Tracked as Draft.");
+		} catch {
+			announceNotice("Could not track application.");
+		}
+	};
+
+	const bulkTrack = async (target: Job[]) => {
+		const untracked = target.filter((j) => !isTracked(j.ID));
+		const results = await Promise.allSettled(
+			untracked.map((j) => create.mutateAsync({ job_id: j.ID })),
+		);
+		const failed = results.filter((r) => r.status === "rejected").length;
+		const tracked = untracked.length - failed;
+		announceNotice(
+			failed > 0
+				? `Tracked ${tracked} as Draft. ${failed} failed.`
+				: `Tracked ${tracked} as Draft.`,
+		);
+		clearSelection();
 	};
 
 	const currentJob = () => jobs().find((j) => j.ID === trackingJobId());
@@ -133,6 +162,7 @@ export function useTrackJobs(
 		applications,
 		appsForJobs,
 		openTrack,
+		bulkTrack,
 		modalOpen,
 		setModalOpen,
 		currentJob,

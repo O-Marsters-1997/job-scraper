@@ -150,6 +150,43 @@ func TestSeedDefaultStatuses(t *testing.T) {
 	}
 }
 
+func TestSeededSystemStatuses(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "Engineer")
+	pgtest.InTx(t, pool, true, func(tx pgx.Tx) error {
+		return st.SeedDefaultStatuses(t.Context(), tx, userID)
+	})
+
+	all, err := st.ListApplicationStatusesByUser(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ListApplicationStatusesByUser err = %v", err)
+	}
+	keys := map[string]string{}
+	for _, s := range all {
+		if s.SystemKey != "" {
+			keys[s.SystemKey] = s.Name
+		}
+	}
+	if diff := cmp.Diff(map[string]string{"draft": "Draft", "applied": "Applied"}, keys); diff != "" {
+		t.Errorf("seeded system keys mismatch (-want +got):\n%s", diff)
+	}
+
+	app, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: jobID})
+	if err != nil {
+		t.Fatalf("CreateApplication err = %v", err)
+	}
+	var got string
+	for _, s := range all {
+		if s.ID == app.StatusID {
+			got = s.Name
+		}
+	}
+	if got != "Draft" {
+		t.Errorf("CreateApplication(no status) status = %q, want Draft", got)
+	}
+}
+
 func TestApplicationEventsShareTheApplicationsTransaction(t *testing.T) {
 	t.Parallel()
 	st, pool, userID := newStore(t)

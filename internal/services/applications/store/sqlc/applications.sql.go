@@ -29,7 +29,10 @@ func (q *Queries) ClearApplicationChase(ctx context.Context, arg ClearApplicatio
 
 const createApplication = `-- name: CreateApplication :one
 INSERT INTO applications (user_id, job_id, status_id, applied_at, salary_info)
-SELECT $1::uuid, $2::uuid, $3::uuid,
+SELECT $1::uuid, $2::uuid,
+       COALESCE($3::uuid,
+                (SELECT d.id FROM application_statuses d
+                 WHERE d.user_id = $1::uuid AND d.system_key = 'draft')),
        $4::date, $5::text
 WHERE $3::uuid IS NULL
    OR EXISTS (SELECT 1 FROM application_statuses s

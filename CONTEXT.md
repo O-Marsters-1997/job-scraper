@@ -120,7 +120,7 @@ A user's tracked pursuit of a Job, moving through Statuses.
 _Avoid_: Submission, app
 
 **Status**:
-A stage in the application pipeline (saved, applied, phone, interview, offer, rejected, plus custom). Each user has their own set.
+A stage in the application pipeline, seeded as Draft, Applied, Interviewing, Rejected and Offer, plus custom. Each user has their own set. Draft and Applied are fixed (they carry a system key): they can be recoloured but not renamed or deleted. Tracking a Job creates its Application in Draft.
 _Avoid_: Stage, state, step
 
 ### Tasks

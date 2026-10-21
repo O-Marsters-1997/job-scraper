@@ -1,6 +1,9 @@
 -- name: CreateApplication :one
 INSERT INTO applications (user_id, job_id, status_id, applied_at, salary_info)
-SELECT sqlc.arg('user_id')::uuid, sqlc.arg('job_id')::uuid, sqlc.narg('status_id')::uuid,
+SELECT sqlc.arg('user_id')::uuid, sqlc.arg('job_id')::uuid,
+       COALESCE(sqlc.narg('status_id')::uuid,
+                (SELECT d.id FROM application_statuses d
+                 WHERE d.user_id = sqlc.arg('user_id')::uuid AND d.system_key = 'draft')),
        sqlc.narg('applied_at')::date, sqlc.narg('salary_info')::text
 WHERE sqlc.narg('status_id')::uuid IS NULL
    OR EXISTS (SELECT 1 FROM application_statuses s
