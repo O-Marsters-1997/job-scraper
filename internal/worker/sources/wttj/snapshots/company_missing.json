@@ -1,0 +1,1 @@
+{"data": {"company": null}, "errors": [{"message": "Company with id: gone-co does not exist", "path": ["company"]}]}
