@@ -476,15 +476,19 @@ func (f *FakeStore) SetCompanyFavourite(_ context.Context, userID, companyID str
 		return data.ErrNotFound
 	}
 	key := trackingKey(userID, companyID)
+	t, tracked := f.tracking[key]
 	if !favourite {
 		delete(f.favourites, key)
+		if tracked {
+			t.CheckIntervalMinutes = 360
+			f.tracking[key] = t
+		}
 		return nil
 	}
 	f.favourites[key] = true
-	if t, ok := f.tracking[key]; ok && t.ReviewState == "new" {
-		t.ReviewState = "kept"
-		f.tracking[key] = t
-	}
+	t.UserID, t.CompanyID, t.Enabled, t.CheckIntervalMinutes = userID, companyID, true, 60
+	t.ReviewState = "kept"
+	f.tracking[key] = t
 	return nil
 }
 

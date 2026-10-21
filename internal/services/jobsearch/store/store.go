@@ -905,6 +905,8 @@ func (s *Store) SuggestCompanyKind(ctx context.Context, companyID string, kind d
 	return n > 0, nil
 }
 
+const favouriteCheckIntervalMinutes = 60
+
 func (s *Store) SetCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) error {
 	uid, err := data.UUID(userID)
 	if err != nil {
@@ -924,11 +926,27 @@ func (s *Store) SetCompanyFavourite(ctx context.Context, userID, companyID strin
 		if err := queries.AddCompanyFavourite(ctx, sqlc.AddCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
 			return fmt.Errorf("store.SetCompanyFavourite: %w", err)
 		}
+		if _, err := queries.SetCompanyTracking(ctx, sqlc.SetCompanyTrackingParams{
+			UserID: uid, CompanyID: cid, Enabled: true, CheckIntervalMinutes: favouriteCheckIntervalMinutes,
+		}); err != nil {
+			return fmt.Errorf("store.SetCompanyFavourite track: %w", err)
+		}
 		if err := queries.KeepNewTrackedCompany(ctx, sqlc.KeepNewTrackedCompanyParams{UserID: uid, CompanyID: cid}); err != nil {
 			return fmt.Errorf("store.SetCompanyFavourite keep: %w", err)
 		}
-	} else if err := queries.RemoveCompanyFavourite(ctx, sqlc.RemoveCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
-		return fmt.Errorf("store.SetCompanyFavourite: %w", err)
+		if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
+			return fmt.Errorf("backfill tracked company jobs: %w", err)
+		}
+		if err := s.scoring.CompanyTracked(ctx, tx, userID, companyID); err != nil {
+			return fmt.Errorf("scoring.CompanyTracked: %w", err)
+		}
+	} else {
+		if err := queries.RemoveCompanyFavourite(ctx, sqlc.RemoveCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
+			return fmt.Errorf("store.SetCompanyFavourite: %w", err)
+		}
+		if err := queries.ResetTrackedCompanyInterval(ctx, sqlc.ResetTrackedCompanyIntervalParams{UserID: uid, CompanyID: cid}); err != nil {
+			return fmt.Errorf("store.SetCompanyFavourite reset interval: %w", err)
+		}
 	}
 	if err := s.scoring.CompanyFavouriteChanged(ctx, tx, userID, companyID); err != nil {
 		return fmt.Errorf("scoring.CompanyFavouriteChanged: %w", err)

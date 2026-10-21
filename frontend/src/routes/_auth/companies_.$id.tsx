@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { createEffect, createMemo, createSignal, on, Show } from "solid-js";
+import { FavouriteStar } from "@/components/FavouriteStar";
 import { GradeDialog } from "@/components/jobs/GradeDialog";
 import { JobsDataTable } from "@/components/jobs/JobsDataTable";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
@@ -24,6 +25,7 @@ import { outcomeLabels } from "@/types/recruiterContact";
 import {
 	companyQueryOptions,
 	useCompany,
+	useSetCompanyFavourite,
 	useSetCompanyReview,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
@@ -49,6 +51,7 @@ function CompanyDetailPage() {
 	const companyQuery = useCompany(() => params().id);
 	const trackMutation = useSetCompanyTracking();
 	const reviewMutation = useSetCompanyReview();
+	const favouriteMutation = useSetCompanyFavourite();
 
 	const company = () =>
 		companyQuery.isSuccess ? (companyQuery.data ?? undefined) : undefined;
@@ -200,7 +203,20 @@ function CompanyDetailPage() {
 					<div class="grid grid-cols-1 items-start lg:grid-cols-[minmax(0,1fr)_284px] gap-4">
 						<Card class="min-w-0">
 							<CardHeader>
-								<CardTitle>Jobs at {c().Name}</CardTitle>
+								<div class="flex items-center gap-2">
+									<FavouriteStar
+										favourite={c().Favourite ?? false}
+										companyName={c().Name}
+										disabled={favouriteMutation.isPending}
+										onToggle={() =>
+											favouriteMutation.mutate({
+												id: c().ID,
+												favourite: !c().Favourite,
+											})
+										}
+									/>
+									<CardTitle>Jobs at {c().Name}</CardTitle>
+								</div>
 							</CardHeader>
 							<CardContent class="gap-0">
 								<QueryBoundary query={table.query} fallbackRows={3}>
