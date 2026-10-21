@@ -100,12 +100,23 @@ func TestSuggestionsPreselectSlotCountOfMappedHeading(t *testing.T) {
 	}
 	preselected := map[string]int{}
 	for _, s := range got {
+		if s.PositionID == other.ID {
+			t.Errorf("Suggestions() offered %q from a Position unmapped in the tab", s.Text)
+		}
 		if s.Preselected {
 			preselected[s.PositionID]++
 		}
 	}
-	if preselected[acme.ID] != 2 || preselected[other.ID] != 3 {
-		t.Errorf("preselected per position = %v, want acme 2 (slot count), globex 3 (default)", preselected)
+	if preselected[acme.ID] != 2 {
+		t.Errorf("preselected per position = %v, want acme 2 (slot count)", preselected)
+	}
+
+	all, err := svc.Suggestions(t.Context(), userID, dto.SuggestionsQuery{JobID: "job-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 8 {
+		t.Errorf("Suggestions() without a tab returned %d, want all 8", len(all))
 	}
 }
 

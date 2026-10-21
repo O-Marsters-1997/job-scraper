@@ -38,6 +38,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	t.Helper()
 
 	t.Run("fetch cache round trips a redirect and forgets by url", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		want := dto.CachedResponse{URL: "https://x.test/a", Status: 302, Header: http.Header{"Location": {"https://x.test/b"}}, Body: []byte("body")}
@@ -63,6 +64,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("a recorded discover miss is seen only since before it", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		if err := st.RecordDiscoverMiss(ctx, "greenhouse", "acme"); err != nil {
@@ -88,6 +90,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("marking a board's UK jobs seen stamps it", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
@@ -107,6 +110,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("get an unknown job returns not found", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		_, err := st.GetJob(t.Context(), missingID, missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -115,6 +119,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("save then get a canonical job round trips", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		saved, status, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/1"})
@@ -128,6 +133,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("marking seen is idempotent and unseen clears it", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		saved, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/seen"})
@@ -162,6 +168,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("resaving the same content is unchanged, changed content is changed", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		job := dto.Job{Title: "Engineer", URL: "https://example.com/jobs/2"}
@@ -185,6 +192,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	runPostedContract(t, newStore)
 
 	t.Run("listings are every url of a job in first-seen order", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		posting := dto.Job{Title: "Engineer", BoardID: "33333333-3333-3333-3333-333333333333", ProviderPostingID: "p-1"}
@@ -220,6 +228,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("listings of an unknown job are empty", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		got, err := st.ListJobListings(t.Context(), missingID)
 		if err != nil || len(got) != 0 {
@@ -228,6 +237,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("FindJobByPosting finds a job by board posting or by url and reports a miss", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "find-co", Name: "Find Co"})
@@ -270,6 +280,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("urls differing only by tracking parameters are one job", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		first, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/9?gh_jid=7&utm_source=x&team=a"})
@@ -286,6 +297,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("new urls filters out known ones", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		if _, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/3"}); err != nil {
@@ -298,6 +310,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("upsert company then get round trips", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
@@ -311,6 +324,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("get an unknown company returns not found", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		_, err := st.GetCompany(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -319,6 +333,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("get company for user carries that user's tracking", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "tracked-co", Name: "Tracked Co"})
@@ -335,6 +350,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("get an unknown company for user returns not found", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		_, err := st.GetCompanyForUser(t.Context(), userID, missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -343,6 +359,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("set company tracking then list for user shows it", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "tracked-co", Name: "Tracked Co"})
@@ -359,6 +376,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("paging companies by offset visits each once in name then id order and reports the total", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		for _, c := range []dto.CompanyUpsert{
@@ -397,6 +415,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("relevance puts favourites first, then tracked companies, alphabetical ignores both", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		ids := map[string]string{}
@@ -438,6 +457,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("no-board filter keeps companies without any board and counts only them", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		withBoard, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "with-board", Name: "With Board"})
@@ -457,6 +477,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("poster filter splits agency and likely agency from everything else", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		kinds := map[string]dto.CompanyKind{
@@ -494,6 +515,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("companies search and tracked filters compose with the offset", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		var acme dto.Company
@@ -532,6 +554,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("list tracked companies returns only this user's, paused included, with boards", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		active, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "active-co", Name: "Active Co"})
@@ -575,6 +598,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("verifying a board records how it was discovered once", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "via-co", Name: "Via Co"})
@@ -598,6 +622,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("completing a board stores the reported and parsed counts", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "count-co", Name: "Count Co"})
@@ -635,6 +660,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("a published board check holds the board back until released", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "held-co", Name: "Held Co"})
@@ -679,6 +705,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("verified boards by slug skip candidates and flag enabled trackers and completed polls", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		boardIDs := map[string]string{}
@@ -724,6 +751,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("verified company slugs need a verified board", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		for _, tc := range []struct {
@@ -750,6 +778,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("delete company tracking removes it and keeps the company", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "untrack-co", Name: "Untrack Co"})
@@ -775,6 +804,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("dismiss keeps the row disabled, undo re-enables it as new", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "review-co", Name: "Review Co"})
@@ -802,6 +832,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("track discovered company inserts as new once and never overwrites", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "found-co", Name: "Found Co"})
@@ -824,6 +855,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("favouriting an untracked company stars and tracks it hourly, unfavouriting goes back to six hours", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "star-co", Name: "Star Co"})
@@ -908,6 +940,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("an upsert kind overrides a likely kind, never agency, and an empty kind keeps it", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co", Kind: dto.KindDirect})
@@ -932,6 +965,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("a company starts unclassified and its kind shows on the company and its jobs", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "kind-co", Name: "Kind Co"})
@@ -966,6 +1000,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("suggesting a company kind writes only over unclassified", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "suggest-co", Name: "Suggest Co"})
@@ -993,6 +1028,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("favouriting a new tracked company keeps it, and dismissing it removes the star", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "found-co", Name: "Found Co"})
@@ -1020,6 +1056,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("untracked discovered boards exclude tracked, dismissed, candidate and user-confirmed ones", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		cases := []struct {
@@ -1058,6 +1095,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("set company tracking without an interval keeps the existing one", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "keep-co", Name: "Keep Co"})
@@ -1074,6 +1112,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("saving a profile twice keeps one, shown on the new company card", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "profiled", Name: "Profiled"})
@@ -1102,6 +1141,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("new companies list only review state new, newest first, with their open jobs", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		var ids []string
@@ -1151,6 +1191,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("create then list source targets for a user", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "acme", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1164,6 +1205,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("create a duplicate source target returns already exists", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		if _, err := st.CreateSourceTarget(ctx, userID, "linkedin", "dup", true, map[string]string{}, dto.RunWindow{}, nil); err != nil {
@@ -1175,6 +1217,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("restarting a failed run clears its error", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "retry", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1195,6 +1238,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("disabling a source records the reason until the target is re-enabled", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		running, err := st.CreateSourceTargetWithRun(ctx, userID, "indeed", "go", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1229,6 +1273,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("starting a run clears the disabled reason", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "indeed", "go", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1245,6 +1290,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("update then delete a source target", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "update-me", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1266,6 +1312,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("a new source target is manual on the default window", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		target, err := st.CreateSourceTarget(t.Context(), userID, "linkedin", "defaults", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
@@ -1282,6 +1329,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("run window and next run round trip through create update and rerun", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		interval := 180
@@ -1329,6 +1377,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("get an unknown source target returns not found", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		_, err := st.GetSourceTarget(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -1337,6 +1386,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("save cards then list for user round trips", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "candidate-search", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1354,6 +1404,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("new urls counts saved candidates as known under any host or tracking params", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "known-search", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1375,6 +1426,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("list for user returns the full card only for complete sources", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		complete, err := st.CreateSourceTarget(ctx, userID, "remoteok", "complete-search", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1406,6 +1458,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("a card keeps its remote-check page and its discovering targets' filters", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		remote := map[string]string{"arrangement": "2"}
@@ -1448,6 +1501,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("assess a relevant candidate requests detail once", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "assess-search", true, map[string]string{}, dto.RunWindow{}, nil)

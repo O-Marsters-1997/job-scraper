@@ -21,6 +21,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	t.Helper()
 
 	t.Run("create user returns the user", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		got, err := st.CreateUser(t.Context(), "alice", "hash", "alice@example.com")
 		if err != nil {
@@ -32,6 +33,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("create user rejects duplicate username", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		if _, err := st.CreateUser(t.Context(), "bob", "hash", ""); err != nil {
 			t.Fatal(err)
@@ -42,6 +44,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("get user by username returns not found when missing", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		if _, err := st.GetUserByUsername(t.Context(), "nobody"); !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
@@ -49,6 +52,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("create session then get session returns it", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		user, session := newSession(t, st, "dana", time.Hour)
 		got, err := st.GetSessionByTokenHash(t.Context(), tokenHash("dana"))
@@ -61,6 +65,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("get session returns not found for an unknown token hash", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		newSession(t, st, "dana", time.Hour)
 		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("other")); !errors.Is(err, data.ErrNotFound) {
@@ -69,6 +74,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("new user is a user and SetRole makes them admin", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		newSession(t, st, "olly", time.Hour)
 		got, err := st.GetSessionByTokenHash(t.Context(), tokenHash("olly"))
@@ -91,6 +97,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("set role returns not found for an unknown username", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		if err := st.SetRole(t.Context(), "nobody", dto.RoleAdmin); !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("SetRole(nobody) err = %v, want ErrNotFound", err)
@@ -98,6 +105,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("set password hash replaces the stored hash", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		if _, err := st.CreateUser(t.Context(), "gina", "old-hash", ""); err != nil {
 			t.Fatal(err)
@@ -116,6 +124,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("set password hash returns not found for an unknown username", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		tx, err := st.Begin(t.Context())
 		if err != nil {
@@ -128,6 +137,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("delete user sessions removes only that user's sessions", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		hank, _ := newSession(t, st, "hank", time.Hour)
 		newSession(t, st, "ivy", time.Hour)
@@ -143,6 +153,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("get session returns not found when expired", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		newSession(t, st, "erin", -time.Second)
 		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("erin")); !errors.Is(err, data.ErrNotFound) {
@@ -151,6 +162,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("delete session removes it", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		_, session := newSession(t, st, "frank", time.Hour)
 		if err := st.DeleteSession(t.Context(), session.ID); err != nil {
@@ -162,6 +174,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("delete expired sessions leaves valid ones", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		user, _ := newSession(t, st, "grace", time.Hour)
 		if _, err := st.CreateSession(t.Context(), user.ID, tokenHash("grace-expired"), time.Now().Add(-time.Second)); err != nil {
@@ -176,6 +189,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("get profile returns username and email", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		ctx := t.Context()
 		user, err := st.CreateUser(ctx, "henry", "hash", "henry@example.com")
@@ -192,6 +206,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("get profile returns not found when missing", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		if _, err := st.GetProfile(t.Context(), missingID); !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
@@ -199,6 +214,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("update email changes the profile", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		ctx := t.Context()
 		user, err := st.CreateUser(ctx, "ivy", "hash", "ivy@example.com")
@@ -222,6 +238,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("update email returns not found when missing", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		if _, err := st.UpdateEmail(t.Context(), missingID, "a@example.com"); !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
@@ -229,6 +246,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("get ai credential returns not found before any is saved", func(t *testing.T) {
+		t.Parallel()
 		st, user := newUser(t, newStore(t), "judy")
 		if _, err := st.GetUserAICredential(t.Context(), user.ID, "anthropic"); !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
@@ -236,6 +254,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("upsert ai credential overwrites the key", func(t *testing.T) {
+		t.Parallel()
 		st, user := newUser(t, newStore(t), "judy")
 		for _, enc := range []string{"enc-1", "enc-2"} {
 			if err := st.UpsertUserAICredential(t.Context(), user.ID, "anthropic", enc); err != nil {
@@ -252,6 +271,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("list ai credential providers returns every saved provider", func(t *testing.T) {
+		t.Parallel()
 		st, user := newUser(t, newStore(t), "judy")
 		for _, provider := range []dto.Provider{dto.ProviderAnthropic, dto.ProviderOpenRouter} {
 			if err := st.UpsertUserAICredential(t.Context(), user.ID, provider, "enc"); err != nil {
@@ -268,6 +288,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	})
 
 	t.Run("delete ai credential removes it", func(t *testing.T) {
+		t.Parallel()
 		st, user := newUser(t, newStore(t), "judy")
 		if err := st.UpsertUserAICredential(t.Context(), user.ID, "anthropic", "enc"); err != nil {
 			t.Fatal(err)

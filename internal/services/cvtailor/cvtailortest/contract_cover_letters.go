@@ -12,6 +12,7 @@ func runCoverLetterContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	ctx := t.Context()
 
 	t.Run("only a tracked letter tab of the user is a letter tab", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		f.TrackLetterTab(t, f.UserID, "doc", "t.0")
 		for _, tc := range []struct {
@@ -32,6 +33,7 @@ func runCoverLetterContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("created letters list newest first and per user", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		in := dto.NewCoverLetter{JobID: f.JobID, SourceDocID: "doc", SourceTabID: "t.0", ScaffoldTabID: "t.1", AchievementIDs: []string{}, Model: "m", Cost: 0.5}
 		first, err := f.Store.CreateCoverLetter(ctx, f.UserID, in)
@@ -57,6 +59,7 @@ func runCoverLetterContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("marking done sets done_at once and only for the owner", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		in := dto.NewCoverLetter{JobID: f.JobID, SourceDocID: "doc", SourceTabID: "t.0", ScaffoldTabID: "t.1", AchievementIDs: []string{}, Model: "m"}
 		created, err := f.Store.CreateCoverLetter(ctx, f.UserID, in)
@@ -90,6 +93,7 @@ func runCoverLetterContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a missing job is not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		_, err := f.Store.CreateCoverLetter(ctx, f.UserID, dto.NewCoverLetter{JobID: missingID, AchievementIDs: []string{}})
 		if !apperr.IsKind(err, apperr.KindNotFound) {

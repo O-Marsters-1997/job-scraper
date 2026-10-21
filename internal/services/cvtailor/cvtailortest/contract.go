@@ -29,12 +29,22 @@ type Fixture struct {
 // whether it's the fake or the real store (ADR 0012).
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
-	t.Run("positions", func(t *testing.T) { runPositionContract(t, newStore) })
-	t.Run("bank skills", func(t *testing.T) { runBankSkillContract(t, newStore) })
-	t.Run("heading mappings", func(t *testing.T) { runHeadingMappingContract(t, newStore) })
-	t.Run("drafts", func(t *testing.T) { runDraftContract(t, newStore) })
-	t.Run("letter skeletons", func(t *testing.T) { runLetterSkeletonContract(t, newStore) })
-	t.Run("cover letters", func(t *testing.T) { runCoverLetterContract(t, newStore) })
+	for _, group := range []struct {
+		name string
+		run  func(*testing.T, func(t *testing.T) Fixture)
+	}{
+		{"positions", runPositionContract},
+		{"bank skills", runBankSkillContract},
+		{"heading mappings", runHeadingMappingContract},
+		{"drafts", runDraftContract},
+		{"letter skeletons", runLetterSkeletonContract},
+		{"cover letters", runCoverLetterContract},
+	} {
+		t.Run(group.name, func(t *testing.T) {
+			t.Parallel()
+			group.run(t, newStore)
+		})
+	}
 }
 
 func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
@@ -97,6 +107,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 
 	t.Run("list is empty for a user with no positions", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		got, err := f.Store.ListPositions(ctx, f.UserID)
 		if err != nil {
@@ -108,6 +119,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("create stores dates and puts the newest position first", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		start, end := "2020-01-01", "2022-06-30"
 		first, err := f.Store.CreatePosition(ctx, f.UserID, dto.PositionInput{
@@ -126,6 +138,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("update changes a position", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
 		got, err := f.Store.UpdatePosition(ctx, f.UserID, dto.PositionInput{ID: p.ID, Employer: "Acme Ltd", Title: "Lead"})
@@ -138,6 +151,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("achievements append and reorder", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
 		a := achievement(t, f, p.ID, "first")
@@ -155,6 +169,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("import adds positions with achievements above the existing ones in order", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		position(t, f, f.UserID, "Existing")
 		start := "2021-03-01"
@@ -177,6 +192,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("update achievement changes its text", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
 		a := achievement(t, f, p.ID, "before")
@@ -190,6 +206,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("set contexts writes context and leaves text, all or nothing", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
 		a := achievement(t, f, p.ID, "first")
@@ -216,6 +233,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("reorder positions", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		a := position(t, f, f.UserID, "A")
 		b := position(t, f, f.UserID, "B")
@@ -229,6 +247,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("reorder rejects an incomplete or foreign id list", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		a := position(t, f, f.UserID, "A")
 		position(t, f, f.UserID, "B")
@@ -239,6 +258,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("delete position cascades its achievements", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
 		a := achievement(t, f, p.ID, "gone")
@@ -252,6 +272,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("delete achievement removes it", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
 		a := achievement(t, f, p.ID, "keep")
@@ -265,6 +286,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("missing ids return not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		_, err := f.Store.UpdatePosition(ctx, f.UserID, dto.PositionInput{ID: missingID, Employer: "x", Title: "y"})
 		wantNotFound(t, "UpdatePosition(missing)", err)
@@ -278,6 +300,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("another user's position and achievements return not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.Other, "Theirs")
 		a, err := f.Store.CreateAchievement(ctx, f.Other, dto.AchievementInput{PositionID: p.ID, Text: "theirs"})

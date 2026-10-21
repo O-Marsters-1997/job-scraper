@@ -15,6 +15,7 @@ func runHeadingMappingContract(t *testing.T, newStore func(t *testing.T) Fixture
 	sortByText := cmpopts.SortSlices(func(a, b dto.HeadingMapping) bool { return a.HeadingText < b.HeadingText })
 
 	t.Run("saves, upserts and scopes by user and tab", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p, err := f.Store.CreatePosition(ctx, f.UserID, dto.PositionInput{Employer: "Acme", Title: "Engineer"})
 		if err != nil {

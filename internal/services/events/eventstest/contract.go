@@ -21,6 +21,7 @@ type Fixture struct {
 func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	t.Helper()
 	t.Run("lists inserted events oldest first with their subject and props", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		insert(t, f, f.UserID, events.JobOpened, f.SubjectID, `{"score":70}`)
 		insert(t, f, f.UserID, events.AlertOpened, "", `{}`)
@@ -44,6 +45,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("filters by type", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		insert(t, f, f.UserID, events.JobOpened, f.SubjectID, `{}`)
 		insert(t, f, f.UserID, events.JobDismissed, f.SubjectID, `{}`)
@@ -55,6 +57,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("never lists another user's events", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		insert(t, f, f.OtherUserID, events.JobOpened, f.SubjectID, `{}`)
 

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -29,15 +30,19 @@ func (b *Broker) DeadLetters(ctx context.Context, count int) ([]DeadLetter, erro
 		endpoint = "http://localhost:15672"
 	}
 	body, _ := json.Marshal(map[string]any{"count": count, "ackmode": "ack_requeue_true", "encoding": "auto"})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"/api/queues/%2F/"+deadQueue+"/get", bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
 	brokerURL, err := url.Parse(b.url)
 	if err != nil {
 		return nil, err
 	}
+	vhost := strings.TrimPrefix(brokerURL.Path, "/")
+	if vhost == "" {
+		vhost = "/"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"/api/queues/"+url.PathEscape(vhost)+"/"+deadQueue+"/get", bytes.NewReader(body)) //nolint:gosec // G704: endpoint is operator config (RABBITMQ_MANAGEMENT_URL), not request input
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
 	if brokerURL.User != nil {
 		password, _ := brokerURL.User.Password()
 		req.SetBasicAuth(brokerURL.User.Username(), password)

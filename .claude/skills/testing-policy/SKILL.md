@@ -119,7 +119,14 @@ case (e.g. oversized body) is added to `internal/handlers/handlerstest` once, no
 Call the consumer's handling function with a decoded message; don't start RabbitMQ. Every
 consumer covers: a poison message (dead-lettered, not requeued forever), a transient failure
 (requeued), and a redelivery of an already-processed message (no duplicate effect). Broker
-delivery itself is tested once in `internal/queue/broker_integration_test.go`.
+delivery itself is tested once in `internal/queue/broker_integration_test.go`:
+
+- It reuses `job-scraper-rabbitmqtest-v1` with a fresh vhost per run
+  ([ADR 0025](../../../docs/adr/0025-shared-self-destructing-test-database.md)). Don't start
+  another broker container.
+- A subtest that starts `Consume` cancels and drains it before it ends. An unacked message
+  survives a purge and comes back after the source queues' 10s delayed retry, into whichever
+  subtest is running by then.
 
 ## Naming
 

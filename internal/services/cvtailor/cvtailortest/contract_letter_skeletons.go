@@ -13,6 +13,7 @@ func runLetterSkeletonContract(t *testing.T, newStore func(t *testing.T) Fixture
 	ctx := t.Context()
 
 	t.Run("an unsaved user gets an empty skeleton", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		got, err := f.Store.GetLetterSkeleton(ctx, f.UserID)
 		if err != nil {
@@ -24,6 +25,7 @@ func runLetterSkeletonContract(t *testing.T, newStore func(t *testing.T) Fixture
 	})
 
 	t.Run("save upserts and is scoped to the user", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		first := dto.LetterSkeleton{Intro: "Dear ___,", Conclusion: "Thanks, ___", Sections: []string{"fit", "why"}}
 		if _, err := f.Store.SaveLetterSkeleton(ctx, f.UserID, first); err != nil {
