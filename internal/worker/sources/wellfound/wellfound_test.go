@@ -73,6 +73,60 @@ func TestScraper_FetchPage(t *testing.T) {
 	}
 }
 
+func TestScraper_FetchPage_Requests(t *testing.T) {
+	t.Parallel()
+	body, err := os.ReadFile("snapshots/list_location.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name     string
+		search   wellfound.Search
+		wantPath string
+	}{
+		{"role only", wellfound.Search{Role: "software-engineer"}, "/role/software-engineer"},
+		{"location only", wellfound.Search{Location: "london"}, "/location/london"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s := newScraper(tt.search)
+			tr := sourcetest.Respond(string(body))
+			s.Client().Transport = tr
+			if _, _, err := s.FetchPage(t.Context(), ""); err != nil {
+				t.Fatal(err)
+			}
+			if got := tr.Last.URL.RequestURI(); got != tt.wantPath {
+				t.Errorf("FetchPage() requested %q, want %q", got, tt.wantPath)
+			}
+		})
+	}
+
+	t.Run("an empty search is rejected", func(t *testing.T) {
+		t.Parallel()
+		if _, _, err := newScraper(wellfound.Search{}).FetchPage(t.Context(), ""); err == nil {
+			t.Error("FetchPage() error = nil, want an error")
+		}
+	})
+	t.Run("a bad cursor is rejected", func(t *testing.T) {
+		t.Parallel()
+		if _, _, err := newScraper(wellfound.Search{Location: "london"}).FetchPage(t.Context(), "abc"); err == nil {
+			t.Error("FetchPage() error = nil, want an error")
+		}
+	})
+	t.Run("a challenge page blocks the gate", func(t *testing.T) {
+		t.Parallel()
+		s := wellfound.New(wellfound.Search{Location: "london"}, sources.NewGate(0, time.Hour))
+		s.Client().Transport = sourcetest.Respond("<html>captcha</html>")
+		if _, _, err := s.FetchPage(t.Context(), ""); !errors.Is(err, proxy.ErrBlocked) {
+			t.Fatalf("FetchPage() error = %v, want ErrBlocked", err)
+		}
+		if _, _, err := s.FetchPage(t.Context(), ""); !errors.Is(err, sources.ErrDeferred) {
+			t.Errorf("second FetchPage() error = %v, want ErrDeferred", err)
+		}
+	})
+}
+
 func TestScraper_ParseURLs(t *testing.T) {
 	t.Parallel()
 	s := newScraper(wellfound.Search{})
