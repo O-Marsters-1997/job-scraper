@@ -40,6 +40,7 @@ type CompaniesQuery struct {
 	NoBoard   string `json:"no_board"`
 	Sort      string `json:"sort"`
 	Poster    string `json:"poster"`
+	ATS       string `json:"ats"`
 }
 
 type CompanyPageOptions struct {
@@ -51,6 +52,12 @@ type CompanyPageOptions struct {
 	NoBoardOnly   bool
 	Sort          CompanySort
 	Poster        Poster // empty means all
+	ATSSources    []string
+}
+
+type ATSCount struct {
+	Source    string `json:"source"`
+	Companies int    `json:"companies"`
 }
 
 type CompanyPage struct {

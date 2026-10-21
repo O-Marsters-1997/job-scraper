@@ -1,12 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { createEffect, For, on, Show, untrack } from "solid-js";
+import { createEffect, createSignal, For, on, Show, untrack } from "solid-js";
 import type { CompanyPoster, CompanySort } from "@/api/companies";
+import { CompanyFiltersDialog } from "@/components/companies/CompanyFiltersDialog";
 import { FavouriteStar } from "@/components/FavouriteStar";
+import { Icon } from "@/components/Icon";
 import { PageHeading } from "@/components/PageHeading";
 import { Pager } from "@/components/Pager";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { TableShortcuts } from "@/components/TableShortcuts";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +36,7 @@ import {
 } from "@/components/ui/table";
 import { useTableKeyNav } from "@/hooks/useTableKeyNav";
 import {
+	activeCompanyFilterCount,
 	type CompanyListState,
 	companySearchPatch,
 	parseCompanySearch,
@@ -42,6 +46,7 @@ import { pageCount } from "@/lib/serverTable";
 import {
 	COMPANY_PAGE_SIZE,
 	companyPageQuery,
+	useCompanyAtsCounts,
 	useCompanyPages,
 	useSetCompanyFavourite,
 	useSetCompanyTracking,
@@ -100,6 +105,10 @@ function CompaniesPage() {
 		}),
 	);
 
+	const [filtersOpen, setFiltersOpen] = createSignal(false);
+	const filterCount = () => activeCompanyFilterCount(state());
+	const atsCounts = useCompanyAtsCounts();
+
 	const trackMutation = useSetCompanyTracking();
 	const favouriteMutation = useSetCompanyFavourite();
 
@@ -133,6 +142,20 @@ function CompaniesPage() {
 						onInput={(e) => search(e.currentTarget.value)}
 					/>
 				</div>
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={() => setFiltersOpen(true)}
+					class="relative shrink-0"
+				>
+					<Icon name="filter" size={14} />
+					Filters
+					<Show when={filterCount() > 0}>
+						<Badge class="ml-0.5 h-4 min-w-4 justify-center px-1 py-0 text-2xs leading-none">
+							{filterCount()}
+						</Badge>
+					</Show>
+				</Button>
 				<Switch
 					checked={state().favourite}
 					onChange={(favourite) => table.setFilters({ favourite })}
@@ -208,6 +231,14 @@ function CompaniesPage() {
 					</Select>
 				</div>
 			</div>
+
+			<CompanyFiltersDialog
+				open={filtersOpen()}
+				onOpenChange={setFiltersOpen}
+				ats={state().ats}
+				atsCounts={atsCounts.data ?? []}
+				onChange={table.setFilters}
+			/>
 
 			<QueryBoundary query={query} fallbackRows={6}>
 				{(data) => (

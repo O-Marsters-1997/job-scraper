@@ -46,6 +46,10 @@ WHERE (sqlc.arg(search)::text = ''
   AND (NOT sqlc.arg(no_board_only)::bool OR NOT EXISTS (SELECT 1 FROM company_boards cb WHERE cb.company_id = c.id))
   AND (sqlc.arg(poster)::text = ''
        OR (sqlc.arg(poster)::text = 'agency') = (c.kind IN ('agency', 'likely_agency')))
+  AND (COALESCE(cardinality(sqlc.arg(ats_sources)::text[]), 0) = 0
+       OR EXISTS (SELECT 1 FROM company_boards cb
+                  WHERE cb.company_id = c.id AND cb.status = 'verified'
+                    AND cb.source = ANY(sqlc.arg(ats_sources)::text[])))
 ORDER BY
     CASE WHEN sqlc.arg(sort)::text = 'relevance'
           AND EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = sqlc.arg(user_id)::uuid AND cf.company_id = c.id)
@@ -54,6 +58,13 @@ ORDER BY
     CASE WHEN sqlc.arg(sort)::text IN ('relevance', 'open_jobs') THEN jc.n ELSE 0 END DESC,
     c.name, c.id
 LIMIT sqlc.arg(page_limit)::int OFFSET sqlc.arg(page_offset)::int;
+
+-- name: CountCompaniesByATS :many
+SELECT source, COUNT(DISTINCT company_id)::bigint AS companies
+FROM company_boards
+WHERE status = 'verified' AND source <> 'wttj'
+GROUP BY source
+ORDER BY source;
 
 -- name: CountCompanyBoardCoverage :one
 SELECT COUNT(*)::bigint AS all_companies,

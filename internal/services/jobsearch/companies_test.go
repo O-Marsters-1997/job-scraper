@@ -201,6 +201,28 @@ func TestListCompanies(t *testing.T) {
 		}
 	})
 
+	t.Run("ats accepts a comma-separated list and ignores blanks", func(t *testing.T) {
+		t.Parallel()
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		gh := seedCompany(t, st, dto.CompanyUpsert{Slug: "gh-co", Name: "GH Co"})
+		lever := seedCompany(t, st, dto.CompanyUpsert{Slug: "lever-co", Name: "Lever Co"})
+		other := seedCompany(t, st, dto.CompanyUpsert{Slug: "ashby-co", Name: "Ashby Co"})
+		for _, b := range []struct {
+			id, source string
+		}{{gh.ID, "greenhouse"}, {lever.ID, "lever"}, {other.ID, "ashby"}} {
+			if _, err := st.UpsertCandidateBoard(t.Context(), b.id, b.source, b.source); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := st.VerifyCompanyBoard(t.Context(), b.id, b.source, b.source, "test", "test"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		page, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{ATS: "greenhouse, lever,"})
+		if err != nil || page.Total != 2 {
+			t.Fatalf("ListCompanies(ats=greenhouse,lever) = %+v, %v, want GH Co and Lever Co", page, err)
+		}
+	})
+
 	t.Run("poster narrows the list to that bucket", func(t *testing.T) {
 		svc, st := newCompanyService(queuetest.NewRecorder())
 		agency := seedCompany(t, st, dto.CompanyUpsert{Slug: "recruit-co", Name: "Recruit Co"})

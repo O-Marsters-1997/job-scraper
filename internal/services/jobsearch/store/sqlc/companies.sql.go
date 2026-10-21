@@ -27,6 +27,39 @@ func (q *Queries) AddCompanyFavourite(ctx context.Context, arg AddCompanyFavouri
 	return err
 }
 
+const countCompaniesByATS = `-- name: CountCompaniesByATS :many
+SELECT source, COUNT(DISTINCT company_id)::bigint AS companies
+FROM company_boards
+WHERE status = 'verified' AND source <> 'wttj'
+GROUP BY source
+ORDER BY source
+`
+
+type CountCompaniesByATSRow struct {
+	Source    string
+	Companies int64
+}
+
+func (q *Queries) CountCompaniesByATS(ctx context.Context) ([]CountCompaniesByATSRow, error) {
+	rows, err := q.db.Query(ctx, countCompaniesByATS)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountCompaniesByATSRow
+	for rows.Next() {
+		var i CountCompaniesByATSRow
+		if err := rows.Scan(&i.Source, &i.Companies); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countCompanyBoardCoverage = `-- name: CountCompanyBoardCoverage :one
 SELECT COUNT(*)::bigint AS all_companies,
     COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM company_boards cb
@@ -382,14 +415,18 @@ WHERE ($2::text = ''
   AND (NOT $5::bool OR NOT EXISTS (SELECT 1 FROM company_boards cb WHERE cb.company_id = c.id))
   AND ($6::text = ''
        OR ($6::text = 'agency') = (c.kind IN ('agency', 'likely_agency')))
+  AND (COALESCE(cardinality($7::text[]), 0) = 0
+       OR EXISTS (SELECT 1 FROM company_boards cb
+                  WHERE cb.company_id = c.id AND cb.status = 'verified'
+                    AND cb.source = ANY($7::text[])))
 ORDER BY
-    CASE WHEN $7::text = 'relevance'
+    CASE WHEN $8::text = 'relevance'
           AND EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id)
          THEN 0 ELSE 1 END,
-    CASE WHEN $7::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
-    CASE WHEN $7::text IN ('relevance', 'open_jobs') THEN jc.n ELSE 0 END DESC,
+    CASE WHEN $8::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
+    CASE WHEN $8::text IN ('relevance', 'open_jobs') THEN jc.n ELSE 0 END DESC,
     c.name, c.id
-LIMIT $9::int OFFSET $8::int
+LIMIT $10::int OFFSET $9::int
 `
 
 type PageCompaniesForUserParams struct {
@@ -399,6 +436,7 @@ type PageCompaniesForUserParams struct {
 	FavouriteOnly bool
 	NoBoardOnly   bool
 	Poster        string
+	AtsSources    []string
 	Sort          string
 	PageOffset    int32
 	PageLimit     int32
@@ -432,6 +470,7 @@ func (q *Queries) PageCompaniesForUser(ctx context.Context, arg PageCompaniesFor
 		arg.FavouriteOnly,
 		arg.NoBoardOnly,
 		arg.Poster,
+		arg.AtsSources,
 		arg.Sort,
 		arg.PageOffset,
 		arg.PageLimit,

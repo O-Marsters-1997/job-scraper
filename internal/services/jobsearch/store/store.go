@@ -593,6 +593,7 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 		NoBoardOnly:   options.NoBoardOnly,
 		Sort:          string(options.Sort),
 		Poster:        string(options.Poster),
+		AtsSources:    options.ATSSources,
 		PageLimit:     options.Limit,
 		PageOffset:    options.Offset,
 	})
@@ -615,6 +616,18 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 	}
 	page.AllCompanies, page.VerifiedBoardCompanies = int(coverage.AllCompanies), int(coverage.VerifiedCompanies)
 	return page, nil
+}
+
+func (s *Store) CountCompaniesByATS(ctx context.Context) ([]dto.ATSCount, error) {
+	rows, err := s.queries.CountCompaniesByATS(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store.CountCompaniesByATS: %w", err)
+	}
+	counts := make([]dto.ATSCount, len(rows))
+	for i, r := range rows {
+		counts[i] = dto.ATSCount{Source: r.Source, Companies: int(r.Companies)}
+	}
+	return counts, nil
 }
 
 func (s *Store) GetCompanyForUser(ctx context.Context, userID, id string) (dto.Company, error) {

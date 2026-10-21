@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
-import { companySearchPatch, parseCompanySearch } from "./companyFilters";
+import {
+	activeCompanyFilterCount,
+	companySearchPatch,
+	parseCompanySearch,
+} from "./companyFilters";
 
 assert.deepEqual(parseCompanySearch({}), {
 	q: "",
 	favourite: false,
 	noBoard: false,
+	ats: [],
 	sort: "relevance",
 	poster: undefined,
 	page: undefined,
@@ -24,6 +29,13 @@ assert.equal(parsed.noBoard, true);
 assert.equal(parsed.sort, "alphabetical");
 assert.equal(parsed.poster, "agency");
 assert.equal(parsed.page, 3);
+
+assert.deepEqual(parseCompanySearch({ ats: "lever" }).ats, ["lever"]);
+assert.deepEqual(parseCompanySearch({ ats: ["lever", "", 3] }).ats, ["lever"]);
+assert.equal(companySearchPatch({ ats: [] }).ats, undefined);
+assert.deepEqual(companySearchPatch({ ats: ["lever"] }).ats, ["lever"]);
+assert.equal(activeCompanyFilterCount(parseCompanySearch({})), 0);
+assert.equal(activeCompanyFilterCount(parseCompanySearch({ ats: "x" })), 1);
 
 assert.equal(parseCompanySearch({ sort: "bogus" }).sort, "relevance");
 assert.equal(parseCompanySearch({ sort: "open_jobs" }).sort, "open_jobs");
