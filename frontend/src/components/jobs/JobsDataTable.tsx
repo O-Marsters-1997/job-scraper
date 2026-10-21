@@ -9,6 +9,7 @@ import {
 import { createEffect, createSignal, For, on, Show, untrack } from "solid-js";
 import { Icon, type IconName } from "@/components/Icon";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
+import { JobPreviewDialog } from "@/components/jobs/JobPreviewDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
 import { Kbd } from "@/components/Kbd";
 import { Pager } from "@/components/Pager";
@@ -197,6 +198,8 @@ export function JobsDataTable<TData extends Job>(
 		void navigate({ to: "/jobs/$id", params: { id } });
 	};
 
+	const [previewId, setPreviewId] = createSignal<string | null>(null);
+
 	createEffect(
 		on(
 			() => props.data,
@@ -227,6 +230,11 @@ export function JobsDataTable<TData extends Job>(
 		ArrowUp: () => moveActive(-1),
 		k: () => moveActive(-1),
 		Enter: openActive,
+		p: () => {
+			const id = activeRow();
+			if (id === null) return false;
+			setPreviewId(id);
+		},
 		"/": () => {
 			searchInput?.scrollIntoView({ block: "nearest" });
 			searchInput?.focus();
@@ -482,6 +490,11 @@ export function JobsDataTable<TData extends Job>(
 					/>
 				</Show>
 			</div>
+
+			<JobPreviewDialog
+				jobId={previewId()}
+				onClose={() => setPreviewId(null)}
+			/>
 
 			<JobFiltersDialog
 				open={filtersOpen()}
