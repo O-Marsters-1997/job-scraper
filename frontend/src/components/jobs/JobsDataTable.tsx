@@ -73,6 +73,7 @@ interface JobsDataTableProps<TData extends Job> {
 	bulkActions?: BulkAction<TData>[];
 	onMarkAllSeen?: (jobs: TData[]) => void;
 	hidePosterFilter?: boolean;
+	onActiveRowChange?: (id: string | null) => void;
 }
 
 const SORT_CHOICES = SORT_OPTIONS.map((value) => ({
@@ -163,7 +164,16 @@ export function JobsDataTable<TData extends Job>(
 	const [activeRow, setActiveRow] = createSignal<string | null>(null);
 	const rowIds = () => table.getRowModel().rows.map((row) => row.id);
 
-	const focusFirstRow = () => {
+	const isInteractive = (target: EventTarget | null) =>
+		target instanceof Element &&
+		target.closest("a, button, input, [role=checkbox]") !== null;
+
+	createEffect(() => props.onActiveRowChange?.(activeRow()));
+
+	const activateFirstRow = () => {
+		if (document.activeElement instanceof HTMLElement) {
+			document.activeElement.blur();
+		}
 		tableContainer?.scrollIntoView({ block: "start" });
 		setActiveRow(rowIds()[0] ?? null);
 	};
@@ -172,7 +182,7 @@ export function JobsDataTable<TData extends Job>(
 		const ids = rowIds();
 		const current = activeRow();
 		const from = current === null ? -1 : ids.indexOf(current);
-		const next = from === -1 ? (step === 1 ? 0 : ids.length - 1) : from + step;
+		const next = from === -1 ? 0 : from + step;
 		const id = ids[next];
 		if (id === undefined) return;
 		setActiveRow(id);
@@ -183,10 +193,7 @@ export function JobsDataTable<TData extends Job>(
 
 	const openActive = (e: KeyboardEvent) => {
 		const id = activeRow();
-		const interactive =
-			e.target instanceof Element &&
-			e.target.closest("a, button, [role=checkbox]") !== null;
-		if (id === null || interactive) return false;
+		if (id === null || isInteractive(e.target)) return false;
 		void navigate({ to: "/jobs/$id", params: { id } });
 	};
 
@@ -196,7 +203,7 @@ export function JobsDataTable<TData extends Job>(
 			() => {
 				if (focusAfterPaging) {
 					focusAfterPaging = false;
-					focusFirstRow();
+					activateFirstRow();
 				} else if (!rowIds().includes(activeRow() ?? "")) {
 					setActiveRow(null);
 				}
@@ -267,8 +274,7 @@ export function JobsDataTable<TData extends Job>(
 								if (e.key !== "Enter" || e.isComposing) return;
 								if (table.getRowModel().rows.length === 0) return;
 								e.preventDefault();
-								searchInput?.blur();
-								focusFirstRow();
+								activateFirstRow();
 							}}
 							class="pr-3 pl-9"
 						/>
@@ -430,14 +436,10 @@ export function JobsDataTable<TData extends Job>(
 											data-active={activeRow() === row.id ? "" : undefined}
 											class={cn(
 												row.getIsSelected() && "bg-accent-subtle/40",
-												"data-[active]:shadow-[inset_2px_0_0_var(--color-accent-text)]",
+												"data-[active]:bg-accent-subtle",
 											)}
 											onClick={(e) => {
-												const target = e.target as Element;
-												if (
-													!target.closest("a, button, input, [role=checkbox]")
-												)
-													setActiveRow(row.id);
+												if (!isInteractive(e.target)) setActiveRow(row.id);
 											}}
 											data-feedback-job={
 												row.original.SuitabilityScore == null
