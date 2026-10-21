@@ -1,6 +1,6 @@
 import type { LayoutBlock, LayoutBorder, LayoutRun } from "@/types/tailoring";
 
-export const SPARSE_LAST_LINE = 0.3;
+const SPARSE_LAST_LINE = 0.3;
 
 export type LineFit = { lines: number; lastLineFill: number };
 

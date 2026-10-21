@@ -10,10 +10,10 @@ export const SORT_LABELS: Record<JobSort, string> = {
 };
 
 export const GRADED_OPTIONS = ["all", "ungraded", "graded"] as const;
-export type GradedFilter = (typeof GRADED_OPTIONS)[number];
+type GradedFilter = (typeof GRADED_OPTIONS)[number];
 
 export const SEEN_OPTIONS = ["all", "unseen", "seen"] as const;
-export type SeenFilter = (typeof SEEN_OPTIONS)[number];
+type SeenFilter = (typeof SEEN_OPTIONS)[number];
 
 export interface JobFilters {
 	q: string;

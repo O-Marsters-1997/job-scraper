@@ -11,7 +11,7 @@ interface FeatureStatProps {
 	cta?: JSX.Element;
 }
 
-export function FeatureStat(props: FeatureStatProps) {
+function FeatureStat(props: FeatureStatProps) {
 	return (
 		<Card class="bg-accent-subtle/30 ring-1 ring-accent-border/40">
 			<div class="flex h-full flex-col p-5">

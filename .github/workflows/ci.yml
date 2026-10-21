@@ -161,6 +161,7 @@ jobs:
           bun install --frozen-lockfile
           bun run check
           bun run lint:solid
+          bun run knip
 
   build-frontend:
     needs: changes

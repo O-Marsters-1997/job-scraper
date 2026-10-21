@@ -56,7 +56,7 @@ import { pageCount } from "@/lib/serverTable";
 import { cn } from "@/lib/utils";
 import type { Job } from "@/types/job";
 
-export interface BulkAction<TData> {
+interface BulkAction<TData> {
 	label: string;
 	icon?: IconName;
 	onSelect: (jobs: TData[]) => void;

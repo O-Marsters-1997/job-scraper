@@ -2,7 +2,7 @@ import { z } from "zod";
 import { companyKindSchema } from "./company";
 import { GRADES } from "./grade";
 
-export const BANDS = ["great", "good", "fair", "poor"] as const;
+const BANDS = ["great", "good", "fair", "poor"] as const;
 export type Band = (typeof BANDS)[number];
 export const bandSchema = z.enum(BANDS).or(z.literal(""));
 
@@ -28,7 +28,7 @@ export const scoreRowSchema = z.object({
 
 export type ScoreRow = z.infer<typeof scoreRowSchema>;
 
-export const jobListingSchema = z.object({
+const jobListingSchema = z.object({
 	source: z.string(),
 	url: z.string(),
 	first_seen_at: z.string(),

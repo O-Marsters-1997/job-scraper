@@ -1,5 +1,5 @@
-export const MIN_REPLY_WINDOW_DAYS = 1;
-export const MAX_REPLY_WINDOW_DAYS = 60;
+const MIN_REPLY_WINDOW_DAYS = 1;
+const MAX_REPLY_WINDOW_DAYS = 60;
 
 export function addWorkingDays(date: Date, n: number): Date {
 	const result = new Date(date);

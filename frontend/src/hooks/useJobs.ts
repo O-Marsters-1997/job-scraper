@@ -13,7 +13,7 @@ import { patchJobPages } from "./patchJobPages";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 import { useServerTable } from "./useServerTable";
 
-export const JOBS_PAGE_SIZE = 25;
+const JOBS_PAGE_SIZE = 25;
 
 export const allJobsQueryOptions = queryOptions({
 	queryKey: keys.jobs.full(),

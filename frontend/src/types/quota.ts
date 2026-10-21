@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const usageLevelSchema = z.enum(["ok", "warn", "critical"]);
+const usageLevelSchema = z.enum(["ok", "warn", "critical"]);
 
 export type UsageLevel = z.infer<typeof usageLevelSchema>;
 

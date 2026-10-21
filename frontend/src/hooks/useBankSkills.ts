@@ -12,7 +12,7 @@ import { keys } from "../api/keys";
 import type { BankSkillInput } from "../types/experience";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
-export const bankSkillsQueryOptions = queryOptions({
+const bankSkillsQueryOptions = queryOptions({
 	queryKey: keys.bankSkills,
 	queryFn: fetchBankSkills,
 });

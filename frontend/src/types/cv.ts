@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const trackedDocKindSchema = z.enum(["cv", "letter"]);
+const trackedDocKindSchema = z.enum(["cv", "letter"]);
 
 export type TrackedDocKind = z.infer<typeof trackedDocKindSchema>;
 

@@ -9,7 +9,7 @@ export interface CompanyListState {
 	page?: number | undefined;
 }
 
-export const DEFAULT_COMPANY_STATE: CompanyListState = {
+const DEFAULT_COMPANY_STATE: CompanyListState = {
 	q: "",
 	favourite: false,
 	noBoard: false,

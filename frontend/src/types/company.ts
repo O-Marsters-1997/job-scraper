@@ -32,7 +32,7 @@ export const companySchema = z.object({
 
 export type Company = z.infer<typeof companySchema>;
 
-export const companyExclusionSchema = z.object({
+const companyExclusionSchema = z.object({
 	name: z.string(),
 	added: z.boolean(),
 });
@@ -114,7 +114,7 @@ const companyProfileEntrySchema = z.object({
 	total: z.number(),
 });
 
-export const companyProfileSchema = z.object({
+const companyProfileSchema = z.object({
 	sectors: z.array(z.string()).nullable(),
 	size: z.string(),
 	growth: z.string(),
