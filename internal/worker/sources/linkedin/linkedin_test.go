@@ -53,6 +53,7 @@ func TestParseURLsAt(t *testing.T) {
 }
 
 func TestParseURLs_CountryOnlyLocationIsRemote(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		location string
 		want     string
@@ -65,6 +66,7 @@ func TestParseURLs_CountryOnlyLocationIsRemote(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.location, func(t *testing.T) {
+			t.Parallel()
 			html := `<div class="base-search-card" data-entity-urn="urn:li:jobPosting:1"><h3 class="base-search-card__title">Engineer</h3>` +
 				`<span class="job-search-card__location">` + tt.location + `</span></div>`
 			jobs, err := linkedin.ParseURLs(strings.NewReader(html))
@@ -306,9 +308,9 @@ func TestGetDetails_RemoteCheckJSONLD(t *testing.T) {
 		{"TELECOMMUTE on a block that is not a JobPosting", title + ld(`{"@type":"Organization","jobLocationType":"TELECOMMUTE"}`), false},
 		{"malformed block is skipped", title + ld(`{not json`) + ld(`{"@type":"JobPosting","jobLocationType":"TELECOMMUTE"}`), true},
 	}
-	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
 			src := linkedin.New("", nil, "", noGap())
 			src.Client().Transport = sourcetest.Respond(tt.page)
 			job, err := src.GetDetails(t.Context(), dto.Job{URL: cardURL, RemoteCheckURL: slugPage})

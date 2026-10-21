@@ -1,11 +1,8 @@
 package sourcetargets_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"log/slog"
-	"strings"
 	"testing"
 	"time"
 
@@ -211,23 +208,6 @@ func TestCapturePage(t *testing.T) {
 					t.Errorf("queued card RemoteCheckURL = %q, want %q", jobs[0].Card.RemoteCheckURL, tt.wantCheck)
 				}
 			})
-		}
-	})
-
-	t.Run("a LinkedIn page logs how many cards were remote, verified and rejected", func(t *testing.T) {
-		var logs bytes.Buffer
-		prev := slog.Default()
-		slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
-		t.Cleanup(func() { slog.SetDefault(prev) })
-		svc, _, _ := newService(t)
-		config := dto.SearchConfig{UserID: userID, UpdatedAt: time.Now().UTC()}
-		if err := svc.CapturePage(t.Context(), linkedinTarget("target-l", remoteOnly), []dto.Job{countryCard, cityCard}, config); err != nil {
-			t.Fatalf("CapturePage() err = %v", err)
-		}
-		for _, want := range []string{"cards=2", "remote=1", "verify=0", "arrangement_rejected=1"} {
-			if !strings.Contains(logs.String(), want) {
-				t.Errorf("logs = %q, want %q", logs.String(), want)
-			}
 		}
 	})
 

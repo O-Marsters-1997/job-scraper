@@ -850,6 +850,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 }
 
 func TestProcessLogsDetailFetch(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		err         error
@@ -861,6 +862,7 @@ func TestProcessLogsDetailFetch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newFixture(t, http.StatusOK, "")
 			var logs bytes.Buffer
 			p := worker.NewProcessor(worker.Deps{

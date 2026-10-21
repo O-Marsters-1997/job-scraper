@@ -126,27 +126,9 @@ func (s *Service) assess(ctx context.Context, candidates []Candidate, config dto
 	if err != nil {
 		return fmt.Errorf("list candidate discoveries: %w", err)
 	}
-	var linkedin, remote, verify, arrangementRejected int
-	defer func() {
-		if linkedin > 0 {
-			slog.InfoContext(ctx, "linkedin cards assessed",
-				slog.Int("cards", linkedin), slog.Int("remote", remote), slog.Int("verify", verify), slog.Int("arrangement_rejected", arrangementRejected))
-		}
-	}()
 	for _, candidate := range candidates {
 		_, rejected := filter.Reject(candidate.Card, config)
 		card, wanted := detailCard(candidate.Card, discoveries[candidate.ID])
-		if card.Source == "linkedin" {
-			linkedin++
-			switch {
-			case !wanted:
-				arrangementRejected++
-			case card.RemoteCheckURL != "":
-				verify++
-			case card.WorkArrangement == "remote":
-				remote++
-			}
-		}
 		queueDetail, err := s.targets.Assess(ctx, candidate.ID, config.UserID, config.UpdatedAt, !rejected && wanted)
 		if err != nil {
 			return fmt.Errorf("assess candidate %s: %w", candidate.ID, err)
