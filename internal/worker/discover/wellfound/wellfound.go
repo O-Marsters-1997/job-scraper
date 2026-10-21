@@ -108,14 +108,14 @@ func (h *Harvester) candidates(ctx context.Context) ([]candidate, error) {
 			out = append(out, candidate{slug: companySlug, name: l.Company, listingURL: l.URL})
 		}
 	}
-	if len(errs) == len(h.locations) {
+	if len(errs) > 0 && len(errs) == len(h.locations) {
 		return nil, fmt.Errorf("read wellfound locations: %w", errors.Join(errs...))
 	}
 	return out, nil
 }
 
-func (h *Harvester) locationListings(ctx context.Context, location string) ([]source.Listing, error) {
-	var out []source.Listing
+func (h *Harvester) locationListings(ctx context.Context, location string) ([]source.ATSListing, error) {
+	var out []source.ATSListing
 	for page, pageCount := 1, 1; page <= pageCount; page++ {
 		pageURL, err := source.LocationPageURL(location, page)
 		if err != nil {
@@ -125,7 +125,7 @@ func (h *Harvester) locationListings(ctx context.Context, location string) ([]so
 		if err != nil {
 			return out, err
 		}
-		var listings []source.Listing
+		var listings []source.ATSListing
 		listings, pageCount, err = source.ParseATSListings(bytes.NewReader(body))
 		if err != nil {
 			return out, fmt.Errorf("parse %s: %w", pageURL, err)

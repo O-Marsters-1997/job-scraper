@@ -174,15 +174,15 @@ func parse(r io.Reader) ([]dto.Job, int, error) {
 	return jobs, pageCount, nil
 }
 
-type Listing struct {
+type ATSListing struct {
 	Company, ATSSource, URL string
 }
 
-func ParseATSListings(r io.Reader) ([]Listing, int, error) {
-	var out []Listing
+func ParseATSListings(r io.Reader) ([]ATSListing, int, error) {
+	var out []ATSListing
 	pageCount, err := walk(r, func(st startup, l listing) {
 		if l.ATSSource != "" {
-			out = append(out, Listing{Company: st.Name, ATSSource: l.ATSSource, URL: listingURL(l)})
+			out = append(out, ATSListing{Company: st.Name, ATSSource: l.ATSSource, URL: listingURL(l)})
 		}
 	})
 	if err != nil {

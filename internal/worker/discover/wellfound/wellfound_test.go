@@ -125,6 +125,25 @@ func TestHarvester_Harvest(t *testing.T) {
 		}
 	})
 
+	t.Run("keeps going when one location fails", func(t *testing.T) {
+		t.Parallel()
+		getPages := func(_ context.Context, url string) ([]byte, error) {
+			if strings.Contains(url, "/location/london") {
+				return nil, errors.New("blocked")
+			}
+			return searchPage(t, 1), nil
+		}
+
+		got, err := wellfound.New(getPages, nil, fakeVerified{}, []string{"london", "manchester"}).Harvest(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if diff := cmp.Diff(discover.Harvest{}, got); diff != "" {
+			t.Errorf("Harvest (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("fails when every location fails", func(t *testing.T) {
 		t.Parallel()
 		boom := errors.New("blocked")
