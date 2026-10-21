@@ -201,6 +201,10 @@ var entries = []registryEntry{
 	}},
 	{name: "remoteok", label: "RemoteOK", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://remoteok.com", cardComplete: true},
 	{name: "remotive", label: "Remotive", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://remotive.com", cardComplete: true},
+	{name: "wellfound", label: "Wellfound", kind: kindFilter, role: RoleDiscovery, incremental: true,
+		urlPrefix: "https://wellfound.com", cardComplete: true, filters: []FilterField{
+			{Name: "location", Label: "Location"},
+		}},
 	{name: "other", label: "Other", kind: kindURL, role: RoleLinkOnly},
 }
 
