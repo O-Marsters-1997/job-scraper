@@ -7,7 +7,6 @@ import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useSetCompanyKind } from "@/hooks/useCompanies";
 import { useSources } from "@/hooks/useSources";
 import { otherListings, sourceLabel } from "@/lib/listings";
 import { postedLabel } from "@/lib/postedLabel";
@@ -38,7 +37,6 @@ export function JobHeader(props: {
 }) {
 	const navigate = useNavigate();
 	const sources = useSources();
-	const setKind = useSetCompanyKind();
 	const others = () => otherListings(props.job);
 
 	return (
@@ -162,10 +160,6 @@ export function JobHeader(props: {
 							appSummary={props.appSummary}
 							onTrack={props.onTrack}
 							onAddTask={props.onAddTask}
-							onSetCompanyKind={(kind) => {
-								const id = props.job.CompanyID;
-								if (id) setKind.mutate({ id, kind });
-							}}
 						/>
 					</div>
 				</div>
