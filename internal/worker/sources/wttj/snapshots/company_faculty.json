@@ -1,0 +1,767 @@
+{
+  "data": {
+    "company": {
+      "fundingRounds": [
+        {
+          "id": "85815"
+        },
+        {
+          "id": "82442"
+        },
+        {
+          "id": "82443"
+        },
+        {
+          "id": "42927"
+        }
+      ],
+      "glassdoorRating": "3.90",
+      "jobLocations": [
+        "LONDON",
+        "REMOTE_UK"
+      ],
+      "liveJobs": [
+        {
+          "externalId": "a-1anGDH",
+          "function": {
+            "value": "Software Engineering"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "8-Y5adJl",
+          "function": {
+            "value": "Software Engineering"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "xhB0k6ZA",
+          "function": {
+            "value": "Software Engineering"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "2rFrm9ri",
+          "function": {
+            "value": "Software Engineering"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "Ukh53vH2",
+          "function": {
+            "value": "Software Engineering"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "s2RMKgfC",
+          "function": {
+            "value": "Software Engineering"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "UIfVvpUL",
+          "function": {
+            "value": "Software Engineering"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "FrsgYYyx",
+          "function": {
+            "value": "Software Engineering"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "qfY7oAQZ",
+          "function": {
+            "value": "Software Engineering"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "lE1uvpBc",
+          "function": {
+            "value": "Software Engineering"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "qKUlG5r6",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "Aa5tJw3V",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "zGC0O4FY",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "OWlKxESr",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "CjrPenDx",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "VXuRmrzB",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "GZQSTEen",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "Ec6E00-w",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "1yzgA6cI",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "amaFnqCe",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "DGfPmWwT",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "WXJkfqWQ",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "7_ma1fXn",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "D5xzzEs4",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "l4KDocUi",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "IpJCh7A4",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "8v_xHeCo",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "2OlhOnUv",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "dK3lDvpG",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "kTRXg8pn",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "Vkpltf90",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "QcBb8RsB",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "XV2HLyUc",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "Wn81v0EL",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "1jpUlRas",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "sCwnWInk",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "Thlohq_M",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "pNUbCe7f",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "REMOTE_UK"
+            },
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "ymstR1AS",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "2OzzOUFZ",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "24TfqxVC",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "JdBHHnYm",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "exKEWPCj",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "TS3CW6hz",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "0upmP054",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "jPnnHrKS",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "234TZ-pT",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "sbEvjNc8",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "zu9fx_ri",
+          "function": {
+            "value": "Data"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "-wxHMJg6",
+          "function": {
+            "value": "People, HR, Recruitment"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "u0N10bSD",
+          "function": {
+            "value": "Operations & Strategy"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "N0O51G3I",
+          "function": {
+            "value": "Operations & Strategy"
+          },
+          "locationPreferences": [
+            {
+              "location": "REMOTE_UK"
+            },
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "WeVWKLao",
+          "function": {
+            "value": "Product"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "5KfNBlaj",
+          "function": {
+            "value": "Product"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "H-T-9Kgn",
+          "function": {
+            "value": "Product"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "Xwz8uZvK",
+          "function": {
+            "value": "Product"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "IP1ggk8o",
+          "function": {
+            "value": "Product"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "h-q52-Cj",
+          "function": {
+            "value": "Product"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "7y4UoInJ",
+          "function": {
+            "value": "Product"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "QcvC4-Iw",
+          "function": {
+            "value": "Product"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "FuJIn28y",
+          "function": {
+            "value": "Product"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "iAeuv5y6",
+          "function": {
+            "value": "Design"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "L9NApoXp",
+          "function": {
+            "value": "Sales & Account Management"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        },
+        {
+          "externalId": "LCnM_TwN",
+          "function": {
+            "value": "Sales & Account Management"
+          },
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ]
+        }
+      ],
+      "mission": "The safe, widespread adoption of AI.",
+      "name": "Faculty",
+      "parsedHqAddress": "Old Street, London, UK",
+      "sectorTags": [
+        {
+          "value": "B2B"
+        },
+        {
+          "value": "Artificial Intelligence"
+        },
+        {
+          "value": "Big data"
+        },
+        {
+          "value": "Machine Learning"
+        }
+      ],
+      "size": {
+        "value": "201-500"
+      },
+      "totalFunding": {
+        "amount": "56150000"
+      },
+      "visaSponsorshipCountries": [
+        {
+          "location": "UK",
+          "offersVisa": true
+        }
+      ],
+      "yearEmployeeGrowthPercentage": 19
+    }
+  }
+}
