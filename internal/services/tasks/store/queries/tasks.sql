@@ -35,10 +35,13 @@ SELECT
     tt.colour AS type_colour,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
+    j.company_id   AS job_company_id,
+    a.id           AS application_id,
     COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) AS job_posted_at
 FROM tasks t
 JOIN task_types tt ON tt.id = t.type_id
 LEFT JOIN jobs j ON j.id = t.job_id
+LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id
 WHERE t.user_id = sqlc.arg(user_id)::uuid
   AND (sqlc.narg(type_id)::uuid IS NULL OR t.type_id = sqlc.narg(type_id)::uuid)
   AND (sqlc.narg(job_id)::uuid IS NULL OR t.job_id = sqlc.narg(job_id)::uuid)
@@ -63,7 +66,7 @@ WITH created AS (
     SELECT sqlc.arg(user_id)::uuid, tt.id, sqlc.narg(job_id)::uuid, sqlc.narg(link)::text, sqlc.narg(notes)::text
     FROM task_types tt
     WHERE tt.id = sqlc.arg(type_id)::uuid AND tt.user_id = sqlc.arg(user_id)::uuid
-    RETURNING id, type_id, job_id, link, notes, completed_at, created_at, updated_at
+    RETURNING id, user_id, type_id, job_id, link, notes, completed_at, created_at, updated_at
 )
 SELECT
     t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
@@ -71,10 +74,13 @@ SELECT
     tt.colour AS type_colour,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
+    j.company_id   AS job_company_id,
+    a.id           AS application_id,
     COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) AS job_posted_at
 FROM created t
 JOIN task_types tt ON tt.id = t.type_id
-LEFT JOIN jobs j ON j.id = t.job_id;
+LEFT JOIN jobs j ON j.id = t.job_id
+LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id;
 
 -- name: SetTaskDone :one
 WITH updated AS (
@@ -82,7 +88,7 @@ WITH updated AS (
     SET completed_at = CASE WHEN sqlc.arg(done)::bool THEN COALESCE(completed_at, sqlc.arg(now)::timestamptz) END,
         updated_at = sqlc.arg(now)::timestamptz
     WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid
-    RETURNING id, type_id, job_id, link, notes, completed_at, created_at, updated_at
+    RETURNING id, user_id, type_id, job_id, link, notes, completed_at, created_at, updated_at
 )
 SELECT
     t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
@@ -90,10 +96,13 @@ SELECT
     tt.colour AS type_colour,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
+    j.company_id   AS job_company_id,
+    a.id           AS application_id,
     COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) AS job_posted_at
 FROM updated t
 JOIN task_types tt ON tt.id = t.type_id
-LEFT JOIN jobs j ON j.id = t.job_id;
+LEFT JOIN jobs j ON j.id = t.job_id
+LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id;
 
 -- name: UpdateTask :one
 WITH updated AS (
@@ -105,7 +114,7 @@ WITH updated AS (
     FROM task_types tt
     WHERE tasks.id = sqlc.arg(id)::uuid AND tasks.user_id = sqlc.arg(user_id)::uuid
       AND tt.id = sqlc.arg(type_id)::uuid AND tt.user_id = sqlc.arg(user_id)::uuid
-    RETURNING tasks.id, tasks.type_id, tasks.job_id, tasks.link, tasks.notes, tasks.completed_at, tasks.created_at, tasks.updated_at
+    RETURNING tasks.id, tasks.user_id, tasks.type_id, tasks.job_id, tasks.link, tasks.notes, tasks.completed_at, tasks.created_at, tasks.updated_at
 )
 SELECT
     t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
@@ -113,10 +122,13 @@ SELECT
     tt.colour AS type_colour,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
+    j.company_id   AS job_company_id,
+    a.id           AS application_id,
     COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) AS job_posted_at
 FROM updated t
 JOIN task_types tt ON tt.id = t.type_id
-LEFT JOIN jobs j ON j.id = t.job_id;
+LEFT JOIN jobs j ON j.id = t.job_id
+LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id;
 
 -- name: LockTask :one
 SELECT t.job_id, t.completed_at, (tt.name = 'Apply')::bool AS is_apply

@@ -144,6 +144,36 @@ func TestListTasksJoinsJobAndSortsByJobPosted(t *testing.T) {
 	}
 }
 
+func TestListTasksCarriesApplicationID(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+	typeID := insertType(t, pool, userID, "Apply")
+	jobID := pgtest.InsertJob(t, pool, "Role", "Role")
+	if _, err := st.CreateTask(t.Context(), userID, dto.CreateTaskInput{TypeID: typeID, JobID: &jobID}); err != nil {
+		t.Fatalf("CreateTask err = %v", err)
+	}
+	list := func() dto.Task {
+		page, err := st.ListTasks(t.Context(), userID, dto.TaskPageOptions{Limit: 25})
+		if err != nil || len(page.Items) != 1 {
+			t.Fatalf("ListTasks = %d items, err %v, want 1 item", len(page.Items), err)
+		}
+		return page.Items[0]
+	}
+	if got := list().ApplicationID; got != nil {
+		t.Errorf("ApplicationID before tracking = %v, want nil", *got)
+	}
+
+	var applicationID string
+	err := pool.QueryRow(t.Context(),
+		`INSERT INTO applications (user_id, job_id) VALUES ($1, $2) RETURNING id`, userID, jobID).Scan(&applicationID)
+	if err != nil {
+		t.Fatalf("insert application: %v", err)
+	}
+	if got := list().ApplicationID; got == nil || *got != applicationID {
+		t.Errorf("ApplicationID after tracking = %v, want %q", got, applicationID)
+	}
+}
+
 func TestDeletingTheJobKeepsTheTask(t *testing.T) {
 	t.Parallel()
 	st, pool, userID := newStore(t)

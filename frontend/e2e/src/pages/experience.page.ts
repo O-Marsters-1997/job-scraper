@@ -44,12 +44,9 @@ export class ExperiencePage {
 	}
 
 	async addBankSkill(name: string, category: string) {
-		await this.page.getByLabel("New skill name").fill(name);
 		await this.page.getByLabel("New skill category").fill(category);
-		await this.page
-			.getByTestId("bank-skills")
-			.getByRole("button", { name: "Add", exact: true })
-			.click();
+		await this.page.getByLabel("New skill name").fill(name);
+		await this.page.getByRole("option", { name }).first().click();
 	}
 
 	async deleteBankSkill(name: string) {
