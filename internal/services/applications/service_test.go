@@ -230,6 +230,69 @@ func TestDeleteStatus(t *testing.T) {
 	})
 }
 
+func seededStatus(t *testing.T, st *applicationstest.FakeStore, key string) dto.ApplicationStatus {
+	t.Helper()
+	if err := st.SeedDefaultStatuses(t.Context(), nil, userID); err != nil {
+		t.Fatalf("SeedDefaultStatuses err = %v", err)
+	}
+	all, err := st.ListApplicationStatusesByUser(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ListApplicationStatusesByUser err = %v", err)
+	}
+	for _, s := range all {
+		if s.SystemKey == key {
+			return s
+		}
+	}
+	t.Fatalf("no seeded status with key %q", key)
+	return dto.ApplicationStatus{}
+}
+
+func TestSystemStatuses(t *testing.T) {
+	t.Run("cannot be deleted", func(t *testing.T) {
+		svc, st := newService(t)
+		draft := seededStatus(t, st, "draft")
+		if err := svc.DeleteStatus(t.Context(), userID, draft.ID); !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("DeleteStatus(draft) err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+
+	t.Run("cannot be renamed", func(t *testing.T) {
+		svc, st := newService(t)
+		applied := seededStatus(t, st, "applied")
+		in := dto.ApplicationStatusInput{ID: applied.ID, Name: "Sent", Colour: "#6366f1"}
+		if _, err := svc.UpdateStatus(t.Context(), userID, in); !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("UpdateStatus(rename applied) err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+
+	t.Run("can be recoloured", func(t *testing.T) {
+		svc, st := newService(t)
+		applied := seededStatus(t, st, "applied")
+		in := dto.ApplicationStatusInput{ID: applied.ID, Name: applied.Name, Colour: "#000000"}
+		got, err := svc.UpdateStatus(t.Context(), userID, in)
+		if err != nil {
+			t.Fatalf("UpdateStatus(recolour applied) err = %v", err)
+		}
+		if got.Colour != "#000000" {
+			t.Errorf("UpdateStatus(recolour applied) Colour = %q, want #000000", got.Colour)
+		}
+	})
+}
+
+func TestCreateDefaultsToDraft(t *testing.T) {
+	svc, st := newService(t)
+	draft := seededStatus(t, st, "draft")
+
+	got, err := svc.Create(t.Context(), userID, dto.CreateApplicationInput{JobID: "job-1"})
+	if err != nil {
+		t.Fatalf("Create(no status) err = %v", err)
+	}
+	if got.StatusID != draft.ID {
+		t.Errorf("Create(no status) StatusID = %q, want draft %q", got.StatusID, draft.ID)
+	}
+}
+
 func TestSetChase(t *testing.T) {
 	svc, st := newService(t)
 	created, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: "job-1"})

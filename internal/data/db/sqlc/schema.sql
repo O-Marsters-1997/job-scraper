@@ -79,8 +79,12 @@ CREATE TABLE IF NOT EXISTS application_statuses (
     name       TEXT        NOT NULL,
     colour     TEXT        NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    reply_window_days INT  CHECK (reply_window_days BETWEEN 1 AND 60)
+    reply_window_days INT  CHECK (reply_window_days BETWEEN 1 AND 60),
+    system_key TEXT        CHECK (system_key IN ('draft', 'applied'))
 );
+
+CREATE UNIQUE INDEX application_statuses_user_system_key_idx
+    ON application_statuses (user_id, system_key) WHERE system_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS notification_digests (
     id        UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

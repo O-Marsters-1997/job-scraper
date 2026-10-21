@@ -17,7 +17,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 )
 
-var defaultStatusNames = []string{"Saved", "Applied", "Interviewing", "Offer", "Rejected"}
+var defaultStatuses = []dto.ApplicationStatus{
+	{Name: "Draft", SystemKey: "draft"},
+	{Name: "Applied", SystemKey: "applied"},
+	{Name: "Interviewing"},
+	{Name: "Rejected"},
+	{Name: "Offer"},
+}
 
 type FakeStore struct {
 	mu       sync.Mutex
@@ -48,11 +54,19 @@ func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.C
 	if !f.ownsStatus(userID, in.StatusID) {
 		return dto.Application{}, data.ErrNotFound
 	}
+	statusID := in.StatusID
+	if statusID == "" {
+		for _, s := range f.statuses {
+			if s.UserID == userID && s.SystemKey == "draft" {
+				statusID = s.ID
+			}
+		}
+	}
 	app := dto.Application{
 		ID:         fmt.Sprintf("app-%d", len(f.apps)+1),
 		UserID:     userID,
 		JobID:      in.JobID,
-		StatusID:   in.StatusID,
+		StatusID:   statusID,
 		AppliedAt:  parseDate(in.AppliedAt),
 		SalaryInfo: in.SalaryInfo,
 	}
@@ -225,8 +239,8 @@ func (f *FakeStore) ListApplicationStatusesByUser(_ context.Context, userID stri
 func (f *FakeStore) SeedDefaultStatuses(_ context.Context, _ pgx.Tx, userID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for _, name := range defaultStatusNames {
-		s := dto.ApplicationStatus{ID: fmt.Sprintf("status-%d", len(f.statuses)+1), UserID: userID, Name: name}
+	for _, s := range defaultStatuses {
+		s.ID, s.UserID = fmt.Sprintf("status-%d", len(f.statuses)+1), userID
 		f.statuses[s.ID] = s
 	}
 	return nil

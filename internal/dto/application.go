@@ -38,6 +38,7 @@ type ApplicationStatus struct {
 	Name            string
 	Colour          string
 	ReplyWindowDays *int
+	SystemKey       string
 	CreatedAt       time.Time
 }
 

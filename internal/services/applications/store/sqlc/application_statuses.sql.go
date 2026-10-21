@@ -31,7 +31,7 @@ func (q *Queries) CountApplicationsUsingStatus(ctx context.Context, arg CountApp
 const createApplicationStatus = `-- name: CreateApplicationStatus :one
 INSERT INTO application_statuses (user_id, name, colour, reply_window_days)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, name, colour, created_at, reply_window_days
+RETURNING id, user_id, name, colour, created_at, reply_window_days, system_key
 `
 
 type CreateApplicationStatusParams struct {
@@ -56,6 +56,7 @@ func (q *Queries) CreateApplicationStatus(ctx context.Context, arg CreateApplica
 		&i.Colour,
 		&i.CreatedAt,
 		&i.ReplyWindowDays,
+		&i.SystemKey,
 	)
 	return i, err
 }
@@ -76,7 +77,7 @@ func (q *Queries) DeleteApplicationStatus(ctx context.Context, arg DeleteApplica
 }
 
 const listApplicationStatusesByUser = `-- name: ListApplicationStatusesByUser :many
-SELECT id, user_id, name, colour, created_at, reply_window_days FROM application_statuses
+SELECT id, user_id, name, colour, created_at, reply_window_days, system_key FROM application_statuses
 WHERE user_id = $1
 ORDER BY created_at ASC
 `
@@ -97,6 +98,7 @@ func (q *Queries) ListApplicationStatusesByUser(ctx context.Context, userID pgty
 			&i.Colour,
 			&i.CreatedAt,
 			&i.ReplyWindowDays,
+			&i.SystemKey,
 		); err != nil {
 			return nil, err
 		}
@@ -109,13 +111,13 @@ func (q *Queries) ListApplicationStatusesByUser(ctx context.Context, userID pgty
 }
 
 const seedDefaultStatuses = `-- name: SeedDefaultStatuses :exec
-INSERT INTO application_statuses (user_id, name, colour)
+INSERT INTO application_statuses (user_id, name, colour, system_key)
 VALUES
-    ($1, 'Draft',        '#64748b'),
-    ($1, 'Applied',      '#6366f1'),
-    ($1, 'Interviewing', '#f59e0b'),
-    ($1, 'Rejected',     '#ef4444'),
-    ($1, 'Offer',        '#22c55e')
+    ($1, 'Draft',        '#64748b', 'draft'),
+    ($1, 'Applied',      '#6366f1', 'applied'),
+    ($1, 'Interviewing', '#f59e0b', NULL),
+    ($1, 'Rejected',     '#ef4444', NULL),
+    ($1, 'Offer',        '#22c55e', NULL)
 `
 
 func (q *Queries) SeedDefaultStatuses(ctx context.Context, userID pgtype.UUID) error {
@@ -127,7 +129,7 @@ const updateApplicationStatus = `-- name: UpdateApplicationStatus :one
 UPDATE application_statuses
 SET name = $3, colour = $4, reply_window_days = $5
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, name, colour, created_at, reply_window_days
+RETURNING id, user_id, name, colour, created_at, reply_window_days, system_key
 `
 
 type UpdateApplicationStatusParams struct {
@@ -154,6 +156,7 @@ func (q *Queries) UpdateApplicationStatus(ctx context.Context, arg UpdateApplica
 		&i.Colour,
 		&i.CreatedAt,
 		&i.ReplyWindowDays,
+		&i.SystemKey,
 	)
 	return i, err
 }

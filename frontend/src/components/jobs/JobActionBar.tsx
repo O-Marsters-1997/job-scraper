@@ -25,9 +25,7 @@ export function JobActionBar(props: JobActionBarProps) {
 	const update = useUpdateApplication();
 
 	const applied = useFormSubmit(async () => {
-		const status = loadedData(statuses)?.find(
-			(s) => s.Name.trim().toLowerCase() === "applied",
-		);
+		const status = loadedData(statuses)?.find((s) => s.SystemKey === "applied");
 		if (!status) {
 			props.onTrack();
 			return;

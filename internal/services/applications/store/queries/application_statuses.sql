@@ -4,13 +4,13 @@ VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: SeedDefaultStatuses :exec
-INSERT INTO application_statuses (user_id, name, colour)
+INSERT INTO application_statuses (user_id, name, colour, system_key)
 VALUES
-    ($1, 'Draft',        '#64748b'),
-    ($1, 'Applied',      '#6366f1'),
-    ($1, 'Interviewing', '#f59e0b'),
-    ($1, 'Rejected',     '#ef4444'),
-    ($1, 'Offer',        '#22c55e');
+    ($1, 'Draft',        '#64748b', 'draft'),
+    ($1, 'Applied',      '#6366f1', 'applied'),
+    ($1, 'Interviewing', '#f59e0b', NULL),
+    ($1, 'Rejected',     '#ef4444', NULL),
+    ($1, 'Offer',        '#22c55e', NULL);
 
 -- name: ListApplicationStatusesByUser :many
 SELECT * FROM application_statuses

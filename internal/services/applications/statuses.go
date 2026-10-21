@@ -34,10 +34,37 @@ func (s *Service) UpdateStatus(ctx context.Context, userID string, in dto.Applic
 	if err := validateStatusInput(in); err != nil {
 		return dto.ApplicationStatus{}, err
 	}
+	current, err := s.statusOrZero(ctx, userID, in.ID)
+	if err != nil {
+		return dto.ApplicationStatus{}, err
+	}
+	if current.SystemKey != "" && in.Name != current.Name {
+		return dto.ApplicationStatus{}, apperr.Invalid(current.Name + " can't be renamed")
+	}
 	return s.store.UpdateApplicationStatus(ctx, in.ID, userID, in.Name, in.Colour, in.ReplyWindowDays)
 }
 
+func (s *Service) statusOrZero(ctx context.Context, userID, id string) (dto.ApplicationStatus, error) {
+	all, err := s.store.ListApplicationStatusesByUser(ctx, userID)
+	if err != nil {
+		return dto.ApplicationStatus{}, err
+	}
+	for _, st := range all {
+		if st.ID == id {
+			return st, nil
+		}
+	}
+	return dto.ApplicationStatus{}, nil
+}
+
 func (s *Service) DeleteStatus(ctx context.Context, userID, id string) error {
+	current, err := s.statusOrZero(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if current.SystemKey != "" {
+		return apperr.Invalid(current.Name + " can't be deleted")
+	}
 	count, err := s.store.CountApplicationsUsingStatus(ctx, id, userID)
 	if err != nil {
 		return err
