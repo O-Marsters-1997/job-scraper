@@ -14,12 +14,14 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/wellfound"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 )
 
 var parsers = map[string]sources.SnapshotSource{
-	"wis":      wis.New(wis.Search{}, wis.NewGate()),
-	"linkedin": linkedin.New("", nil, "", linkedin.NewGate()),
+	"wis":       wis.New(wis.Search{}, wis.NewGate()),
+	"linkedin":  linkedin.New("", nil, "", linkedin.NewGate()),
+	"wellfound": wellfound.New(wellfound.Search{}, wellfound.NewGate()),
 }
 
 func main() {
