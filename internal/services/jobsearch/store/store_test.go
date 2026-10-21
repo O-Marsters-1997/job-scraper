@@ -1068,6 +1068,48 @@ func TestPageCompaniesForUser(t *testing.T) {
 		}
 	})
 
+	t.Run("relevance groups favourites, tracked, rest by job count; open jobs sort ignores groups", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		jobs := map[string]int{"fav": 0, "tracked": 2, "plain": 1, "busy": 3}
+		n := 0
+		for slug, count := range jobs {
+			id := insertCompany(t, pool, slug)
+			for range count {
+				n++
+				scoreJob(t, pool, insertJob(t, pool, id, n, time.Now(), false), userID, `[]`)
+			}
+			switch slug {
+			case "fav":
+				if _, err := pool.Exec(ctx, `INSERT INTO company_favourites (user_id, company_id) VALUES ($1::uuid, $2::uuid)`, userID, id); err != nil {
+					t.Fatalf("insert favourite: %v", err)
+				}
+			case "tracked":
+				if _, err := st.SetCompanyTracking(ctx, userID, id, true, 180); err != nil {
+					t.Fatalf("SetCompanyTracking() err = %v", err)
+				}
+			}
+		}
+		names := func(sort dto.CompanySort) []string {
+			page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 100, Sort: sort})
+			if err != nil {
+				t.Fatalf("PageCompaniesForUser(%q) err = %v", sort, err)
+			}
+			var out []string
+			for _, c := range page.Items {
+				out = append(out, c.Name)
+			}
+			return out
+		}
+		if got, want := names(dto.CompanySortRelevance), []string{"fav", "tracked", "busy", "plain"}; !slices.Equal(got, want) {
+			t.Errorf("relevance = %v, want %v", got, want)
+		}
+		if got, want := names(dto.CompanySortOpenJobs), []string{"busy", "tracked", "plain", "fav"}; !slices.Equal(got, want) {
+			t.Errorf("open jobs = %v, want %v", got, want)
+		}
+	})
+
 	t.Run("GetCompanyForUser counts the same open scored non-blocked jobs as the list", func(t *testing.T) {
 		t.Parallel()
 		st, pool, userID := newUserStore(t)

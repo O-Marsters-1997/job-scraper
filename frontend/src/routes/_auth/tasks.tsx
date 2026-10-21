@@ -184,17 +184,52 @@ function TasksPage() {
 											/>
 											<div class="min-w-0 flex-1">
 												<p class="truncate text-sm font-medium text-foreground">
-													{taskHeadline(task)}
+													<Show when={task.JobID} fallback={taskHeadline(task)}>
+														{(jobId) => (
+															<Show
+																when={task.ApplicationID}
+																fallback={
+																	<Link
+																		to="/jobs/$id"
+																		params={{ id: jobId() }}
+																		target="_blank"
+																		class="hover:underline"
+																	>
+																		{taskHeadline(task)}
+																	</Link>
+																}
+															>
+																{(applicationId) => (
+																	<Link
+																		to="/applications/$id"
+																		params={{ id: applicationId() }}
+																		target="_blank"
+																		class="hover:underline"
+																	>
+																		{taskHeadline(task)}
+																	</Link>
+																)}
+															</Show>
+														)}
+													</Show>
 												</p>
 												<Show when={task.JobCompanySlug}>
 													<p class="text-xs text-faint">
-														<Link
-															to="/jobs/$id"
-															params={{ id: task.JobID ?? "" }}
-															class="hover:underline"
+														<Show
+															when={task.JobCompanyID}
+															fallback={task.JobCompanySlug}
 														>
-															{task.JobCompanySlug}
-														</Link>
+															{(companyId) => (
+																<Link
+																	to="/companies/$id"
+																	params={{ id: companyId() }}
+																	target="_blank"
+																	class="hover:underline"
+																>
+																	{task.JobCompanySlug}
+																</Link>
+															)}
+														</Show>
 														<Show when={task.JobPostedAt}>
 															{(posted) => (
 																<> · posted {formatRelative(posted())}</>

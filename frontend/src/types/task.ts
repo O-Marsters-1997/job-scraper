@@ -16,6 +16,8 @@ export const taskSchema = z.object({
 	JobID: z.string().nullable(),
 	JobTitle: z.string(),
 	JobCompanySlug: z.string(),
+	JobCompanyID: z.string().nullable(),
+	ApplicationID: z.string().nullable(),
 	JobPostedAt: z.string().nullable(),
 	Link: z.string(),
 	Notes: z.string(),

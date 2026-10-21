@@ -24,7 +24,10 @@ export function parseCompanySearch(
 		q: typeof raw.q === "string" ? raw.q : "",
 		favourite: raw.favourite === true || raw.favourite === "true",
 		noBoard: raw.noBoard === true || raw.noBoard === "true",
-		sort: raw.sort === "alphabetical" ? "alphabetical" : "relevance",
+		sort:
+			raw.sort === "alphabetical" || raw.sort === "open_jobs"
+				? raw.sort
+				: "relevance",
 		poster:
 			raw.poster === "agency" || raw.poster === "direct"
 				? raw.poster

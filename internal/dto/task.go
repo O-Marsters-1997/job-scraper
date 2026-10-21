@@ -31,6 +31,8 @@ type Task struct {
 	JobID          *string
 	JobTitle       string
 	JobCompanySlug string
+	JobCompanyID   *string
+	ApplicationID  *string
 	JobPostedAt    *time.Time
 	Link           string
 	Notes          string

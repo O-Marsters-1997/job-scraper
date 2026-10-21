@@ -26,6 +26,7 @@ assert.equal(parsed.poster, "agency");
 assert.equal(parsed.page, 3);
 
 assert.equal(parseCompanySearch({ sort: "bogus" }).sort, "relevance");
+assert.equal(parseCompanySearch({ sort: "open_jobs" }).sort, "open_jobs");
 assert.equal(parseCompanySearch({ poster: "x" }).poster, undefined);
 assert.equal(parseCompanySearch({ page: "1" }).page, undefined);
 assert.equal(parseCompanySearch({ page: "abc" }).page, undefined);

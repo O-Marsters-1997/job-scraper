@@ -28,6 +28,7 @@ type CompanySort string
 const (
 	CompanySortRelevance    CompanySort = "relevance"
 	CompanySortAlphabetical CompanySort = "alphabetical"
+	CompanySortOpenJobs     CompanySort = "open_jobs"
 )
 
 type CompaniesQuery struct {
