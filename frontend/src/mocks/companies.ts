@@ -2,6 +2,7 @@ import { faker } from "@faker-js/faker";
 import type { CompanyPageParams } from "@/api/companies";
 import { DEFAULT_RUN_WINDOW } from "@/lib/runWindow";
 import type {
+	ATSCount,
 	CompaniesExclusion,
 	Company,
 	CompanyBoard,
@@ -82,6 +83,21 @@ export function getCompanies(): Company[] {
 	return companies.map(withFavourite);
 }
 
+export function getCompanyAtsCounts(): ATSCount[] {
+	failIfRequested("getCompanies");
+	const bySource = new Map<string, Set<string>>();
+	for (const b of companyBoards) {
+		if (b.Status !== "verified" || b.Source === "wttj") continue;
+		bySource.set(
+			b.Source,
+			(bySource.get(b.Source) ?? new Set()).add(b.CompanyID),
+		);
+	}
+	return [...bySource]
+		.map(([source, ids]) => ({ source, companies: ids.size }))
+		.sort((a, b) => a.source.localeCompare(b.source));
+}
+
 export function getCompanyPage(params: CompanyPageParams): {
 	items: Company[];
 	total: number;
@@ -101,6 +117,16 @@ export function getCompanyPage(params: CompanyPageParams): {
 		.filter((c) => !params.tracked || c.Tracked)
 		.filter((c) => !params.favourite || c.Favourite)
 		.filter((c) => !params.noBoard || !boardedCompanyIds.has(c.ID))
+		.filter(
+			(c) =>
+				!params.ats?.length ||
+				companyBoards.some(
+					(b) =>
+						b.CompanyID === c.ID &&
+						b.Status === "verified" &&
+						params.ats?.includes(b.Source),
+				),
+		)
 		.filter(
 			(c) =>
 				!params.poster ||

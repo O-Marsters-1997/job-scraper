@@ -476,6 +476,48 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("ats filter and counts consider verified boards only and skip wttj", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		for _, b := range []struct{ slug, source string }{
+			{"gh-co", "greenhouse"}, {"gh-co", "lever"}, {"lever-co", "lever"}, {"wttj-co", "wttj"},
+		} {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: b.slug, Name: b.slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", b.slug, err)
+			}
+			if _, err := st.UpsertCandidateBoard(ctx, c.ID, b.source, b.slug); err != nil {
+				t.Fatalf("UpsertCandidateBoard(%q, %q) = %v", b.slug, b.source, err)
+			}
+			if _, err := st.VerifyCompanyBoard(ctx, c.ID, b.source, b.slug, "test", "test"); err != nil {
+				t.Fatalf("VerifyCompanyBoard(%q, %q) = %v", b.slug, b.source, err)
+			}
+		}
+		candidate, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "candidate-co", Name: "candidate-co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(candidate) = %v", err)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, candidate.ID, "greenhouse", "candidate-co"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(candidate) = %v", err)
+		}
+
+		counts, err := st.CountCompaniesByATS(ctx)
+		want := []dto.ATSCount{{Source: "greenhouse", Companies: 1}, {Source: "lever", Companies: 2}}
+		if err != nil || !slices.Equal(counts, want) {
+			t.Fatalf("CountCompaniesByATS() = %+v, %v, want %+v", counts, err, want)
+		}
+
+		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, ATSSources: []string{"greenhouse"}})
+		if err != nil || len(page.Items) != 1 || page.Items[0].Slug != "gh-co" || page.Total != 1 {
+			t.Fatalf("PageCompaniesForUser(ats greenhouse) = %+v, %v, want only gh-co", page, err)
+		}
+		page, err = st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, ATSSources: []string{"greenhouse", "lever"}})
+		if err != nil || page.Total != 2 {
+			t.Fatalf("PageCompaniesForUser(ats greenhouse+lever) = %+v, %v, want gh-co and lever-co once each", page, err)
+		}
+	})
+
 	t.Run("poster filter splits agency and likely agency from everything else", func(t *testing.T) {
 		t.Parallel()
 		st, userID := newStore(t)

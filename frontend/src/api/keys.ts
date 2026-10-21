@@ -44,6 +44,7 @@ export const keys = {
 		list: (params: object) => [...companiesAll, "list", params] as const,
 		search: (q: string) => [...companiesAll, "search", q] as const,
 		detail: (id: string) => [...companiesAll, "detail", id] as const,
+		atsCounts: [...companiesAll, "ats-counts"] as const,
 		tracked: [...companiesAll, "tracked"] as const,
 		new: [...companiesAll, "new"] as const,
 		boards: (id: string) => [...companiesAll, "boards", id] as const,
