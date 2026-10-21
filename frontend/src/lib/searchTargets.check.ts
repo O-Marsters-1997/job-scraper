@@ -7,6 +7,7 @@ import {
 	matchesSearch,
 	paginate,
 	parseSearchParams,
+	searchTitle,
 	sortTargets,
 } from "./searchTargets";
 
@@ -133,3 +134,28 @@ assert.deepEqual(
 	}),
 	false,
 );
+
+const cafe = (state: object) =>
+	target({ Source: "hiringcafe", Value: JSON.stringify(state) });
+const full = cafe({
+	searchText: "golang",
+	locations: [{ formatted_address: "London, UK" }],
+	sortBy: "date",
+	dateFetchedPastNDays: 7,
+});
+assert.equal(searchTitle(full), "golang");
+assert.deepEqual(
+	describeFilters(full, undefined).map((f) => f.display),
+	[
+		"Keyword: golang",
+		"Location: London, UK",
+		"Sort: Newest first",
+		"Posted: Past 7 days",
+	],
+);
+assert.equal(searchTitle(cafe({ locations: [] })), "hiring.cafe search");
+assert.equal(
+	searchTitle(target({ Source: "hiringcafe", Value: "not json" })),
+	"not json",
+);
+assert.equal(matchesSearch(full, undefined, { q: "london" }), true);
