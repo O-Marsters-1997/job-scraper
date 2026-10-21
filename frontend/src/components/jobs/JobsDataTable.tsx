@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/solid-router";
 import {
 	type ColumnDef,
 	createSolidTable,
@@ -46,6 +47,7 @@ import {
 	SORT_OPTIONS,
 } from "@/lib/jobFilters";
 import { pageCount } from "@/lib/serverTable";
+import { cn } from "@/lib/utils";
 import type { Job } from "@/types/job";
 
 export interface BulkAction<TData> {
@@ -71,6 +73,7 @@ interface JobsDataTableProps<TData extends Job> {
 	bulkActions?: BulkAction<TData>[];
 	onMarkAllSeen?: (jobs: TData[]) => void;
 	hidePosterFilter?: boolean;
+	onActiveRowChange?: (id: string | null) => void;
 }
 
 const SORT_CHOICES = SORT_OPTIONS.map((value) => ({
@@ -157,20 +160,53 @@ export function JobsDataTable<TData extends Job>(
 	let tableContainer: HTMLDivElement | undefined;
 	let focusAfterPaging = false;
 
-	const focusFirstRow = () => {
+	const navigate = useNavigate();
+	const [activeRow, setActiveRow] = createSignal<string | null>(null);
+	const rowIds = () => table.getRowModel().rows.map((row) => row.id);
+
+	const isInteractive = (target: EventTarget | null) =>
+		target instanceof Element &&
+		target.closest("a, button, input, [role=checkbox]") !== null;
+
+	createEffect(() => props.onActiveRowChange?.(activeRow()));
+
+	const activateFirstRow = () => {
+		if (document.activeElement instanceof HTMLElement) {
+			document.activeElement.blur();
+		}
 		tableContainer?.scrollIntoView({ block: "start" });
+		setActiveRow(rowIds()[0] ?? null);
+	};
+
+	const moveActive = (step: 1 | -1) => {
+		const ids = rowIds();
+		const current = activeRow();
+		const from = current === null ? -1 : ids.indexOf(current);
+		const next = from === -1 ? 0 : from + step;
+		const id = ids[next];
+		if (id === undefined) return;
+		setActiveRow(id);
 		tableContainer
-			?.querySelector<HTMLElement>("tbody tr a")
-			?.focus({ preventScroll: true });
+			?.querySelector(`tr[data-row-id="${CSS.escape(id)}"]`)
+			?.scrollIntoView({ block: "nearest" });
+	};
+
+	const openActive = (e: KeyboardEvent) => {
+		const id = activeRow();
+		if (id === null || isInteractive(e.target)) return false;
+		void navigate({ to: "/jobs/$id", params: { id } });
 	};
 
 	createEffect(
 		on(
 			() => props.data,
 			() => {
-				if (!focusAfterPaging) return;
-				focusAfterPaging = false;
-				focusFirstRow();
+				if (focusAfterPaging) {
+					focusAfterPaging = false;
+					activateFirstRow();
+				} else if (!rowIds().includes(activeRow() ?? "")) {
+					setActiveRow(null);
+				}
 			},
 			{ defer: true },
 		),
@@ -186,6 +222,11 @@ export function JobsDataTable<TData extends Job>(
 	);
 
 	useShortcuts({
+		ArrowDown: () => moveActive(1),
+		j: () => moveActive(1),
+		ArrowUp: () => moveActive(-1),
+		k: () => moveActive(-1),
+		Enter: openActive,
 		"/": () => {
 			searchInput?.scrollIntoView({ block: "nearest" });
 			searchInput?.focus();
@@ -233,7 +274,7 @@ export function JobsDataTable<TData extends Job>(
 								if (e.key !== "Enter" || e.isComposing) return;
 								if (table.getRowModel().rows.length === 0) return;
 								e.preventDefault();
-								focusFirstRow();
+								activateFirstRow();
 							}}
 							class="pr-3 pl-9"
 						/>
@@ -390,10 +431,16 @@ export function JobsDataTable<TData extends Job>(
 								{(row) => (
 									<>
 										<TableRow
+											data-row-id={row.id}
 											data-state={row.getIsSelected() ? "selected" : undefined}
-											class={
-												row.getIsSelected() ? "bg-accent-subtle/40" : undefined
-											}
+											data-active={activeRow() === row.id ? "" : undefined}
+											class={cn(
+												row.getIsSelected() && "bg-accent-subtle/40",
+												"data-[active]:bg-accent-subtle",
+											)}
+											onClick={(e) => {
+												if (!isInteractive(e.target)) setActiveRow(row.id);
+											}}
 											data-feedback-job={
 												row.original.SuitabilityScore == null
 													? undefined
