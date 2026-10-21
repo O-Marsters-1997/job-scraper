@@ -50,3 +50,5 @@ E2E: `bunx playwright test` (starts vite on :4444 with `VITE_MOCK=true`).
   e2e-covered page without a `useMocks()` branch; do add fake data to `src/mocks/db.ts`.
 - UI primitives (`src/components/ui/`) are vendored from the Zaidan registry. Don't use the
   shadcn CLI or hand-patch them; do run `bun run add-component <name>` to add or update one.
+  Exceptions: `ui/spinner.tsx` is local, and `ui/button.tsx` carries a local `loading` prop;
+  re-apply it after any `add-component button`.

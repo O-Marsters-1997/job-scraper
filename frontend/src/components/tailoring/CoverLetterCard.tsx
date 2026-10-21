@@ -200,9 +200,10 @@ export function CoverLetterCard(props: { jobId: string }) {
 					</fieldset>
 					<Button
 						onClick={() => void generate.submit()}
-						disabled={generate.pending() || !source() || chosen().length === 0}
+						loading={generate.pending()}
+						disabled={!source() || chosen().length === 0}
 					>
-						{generate.pending() ? "Writing…" : "Generate scaffold"}
+						Generate scaffold
 					</Button>
 				</Show>
 			</CardContent>

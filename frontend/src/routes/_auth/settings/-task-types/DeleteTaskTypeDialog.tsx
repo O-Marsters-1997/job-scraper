@@ -56,9 +56,9 @@ export function DeleteTaskTypeDialog(props: {
 						<Button
 							type="submit"
 							variant="destructive"
-							disabled={deleteForm.pending()}
+							loading={deleteForm.pending()}
 						>
-							{deleteForm.pending() ? "Deleting…" : "Delete task type"}
+							Delete task type
 						</Button>
 					</DialogFooter>
 				</form>

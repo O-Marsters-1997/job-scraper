@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-const F =
+const GLYPH =
 	"M9 6 L24 6 L24 10.5 L13.5 10.5 L13.5 14 L21 14 L21 18.5 L13.5 18.5 L13.5 26 L9 26 Z";
 
 export function Spinner(props: { class?: string; decorative?: boolean }) {
@@ -37,10 +37,14 @@ export function Spinner(props: { class?: string; decorative?: boolean }) {
 				<g transform="skewX(-13) translate(3.4 0)">
 					<path
 						class="spinner-outline spinner-comet-base"
-						d={F}
+						d={GLYPH}
 						pathLength="100"
 					/>
-					<path class="spinner-outline spinner-comet" d={F} pathLength="100" />
+					<path
+						class="spinner-outline spinner-comet"
+						d={GLYPH}
+						pathLength="100"
+					/>
 				</g>
 				<path class="spinner-line spinner-flick-1" d="M7 9 H2.5" />
 				<path class="spinner-line spinner-flick-2" d="M6.5 17 H2" />

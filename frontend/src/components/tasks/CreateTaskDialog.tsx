@@ -131,9 +131,10 @@ function CreateTaskForm(props: {
 				</Button>
 				<Button
 					type="submit"
-					disabled={form.pending() || selectedTypeId() === ""}
+					loading={form.pending()}
+					disabled={selectedTypeId() === ""}
 				>
-					{form.pending() ? "Saving…" : "Save"}
+					Save
 				</Button>
 			</DialogFooter>
 		</form>

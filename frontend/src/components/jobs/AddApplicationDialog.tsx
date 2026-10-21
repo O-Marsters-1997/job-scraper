@@ -131,8 +131,8 @@ function AddApplicationForm(props: {
 						<Button type="button" variant="outline" onClick={props.onClose}>
 							Cancel
 						</Button>
-						<Button type="submit" disabled={form.pending()}>
-							{form.pending() ? "Adding…" : "Add"}
+						<Button type="submit" loading={form.pending()}>
+							Add
 						</Button>
 					</DialogFooter>
 				</form>
