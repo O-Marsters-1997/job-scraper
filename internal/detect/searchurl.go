@@ -2,6 +2,7 @@ package detect
 
 import (
 	neturl "net/url"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -77,6 +78,42 @@ var unsupportedBoards = []struct {
 	{"Remotive", []string{"remotive.com", "remotive.io"}},
 }
 
+var wellfoundSlug = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+func parseWellfound(u *neturl.URL) (SearchURL, bool) {
+	if !hostMatches(u.Hostname(), "wellfound.com") {
+		return SearchURL{}, false
+	}
+	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+	var role, location string
+	switch {
+	case len(segs) == 4 && segs[0] == "role" && segs[1] == "l":
+		role, location = segs[2], segs[3]
+	case len(segs) == 2 && segs[0] == "role":
+		role = segs[1]
+	case len(segs) == 2 && segs[0] == "location":
+		location = segs[1]
+	default:
+		return SearchURL{}, false
+	}
+	for _, slug := range []string{role, location} {
+		if slug != "" && !wellfoundSlug.MatchString(slug) {
+			return SearchURL{}, false
+		}
+	}
+	out := SearchURL{Source: "wellfound", Value: role, Filters: map[string]string{}, Dropped: []string{}}
+	if location != "" {
+		out.Filters["location"] = location
+	}
+	for param, values := range u.Query() {
+		if param != "page" && values[0] != "" {
+			out.Dropped = append(out.Dropped, param)
+		}
+	}
+	slices.Sort(out.Dropped)
+	return out, true
+}
+
 func parseHTTP(raw string) (*neturl.URL, bool) {
 	u, err := neturl.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
@@ -148,6 +185,9 @@ func ParseSearchURL(raw string) (SearchURL, bool) {
 	if !ok {
 		return SearchURL{}, false
 	}
+	if out, ok := parseWellfound(u); ok {
+		return out, true
+	}
 	for _, b := range searchBoards {
 		if !b.matchesHost(u.Hostname()) || !b.matchesPath(u.Path) {
 			continue
@@ -212,9 +252,25 @@ func (s *SearchURL) parseWISSort(query neturl.Values) {
 	}
 }
 
+func buildWellfound(role, location string) string {
+	const base = "https://wellfound.com"
+	switch {
+	case role != "" && location != "":
+		return base + "/role/l/" + role + "/" + location
+	case role != "":
+		return base + "/role/" + role
+	case location != "":
+		return base + "/location/" + location
+	}
+	return ""
+}
+
 // BuildSearchURL returns the board page for a search, or "" for a source with
 // no search page. It inverts ParseSearchURL.
 func BuildSearchURL(source, value string, filters map[string]string) string {
+	if source == "wellfound" {
+		return buildWellfound(value, filters["location"])
+	}
 	for _, b := range searchBoards {
 		if b.source != source {
 			continue
