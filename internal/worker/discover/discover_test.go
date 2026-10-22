@@ -282,6 +282,88 @@ func TestRunner_CompanyWithVerifiedOtherBoardGetsNoCandidate(t *testing.T) {
 	}
 }
 
+type checkingHarvester struct {
+	fakeHarvester
+	recorded []string
+}
+
+func (h *checkingHarvester) RecordChecks(_ context.Context, ids []string) error {
+	h.recorded = append(h.recorded, ids...)
+	return nil
+}
+
+type failingPublisher struct{}
+
+func (failingPublisher) Publish(context.Context, queue.Task) error { return errors.New("broker down") }
+
+func TestRunner_PublishesChecks(t *testing.T) {
+	t.Parallel()
+	check := discover.Check{ID: "j1", Board: discover.Board{Source: "ashby", Token: "acme", ListingURL: "https://wttj/jobs/j1", ApplyURL: "https://jobs.ashbyhq.com/acme/1"}}
+	newHarvester := func() *checkingHarvester {
+		return &checkingHarvester{fakeHarvester: fakeHarvester{name: "wttj", interval: time.Hour, found: discover.Harvest{Checks: []discover.Check{check}}}}
+	}
+
+	t.Run("a verified board gets an urgent board_check carrying the listing", func(t *testing.T) {
+		t.Parallel()
+		catalog := jobsearchtest.NewFakeStore()
+		company, _ := catalog.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		_, _ = catalog.UpsertCandidateBoard(t.Context(), company.ID, "ashby", "acme")
+		board, _ := catalog.VerifyCompanyBoard(t.Context(), company.ID, "ashby", "acme", "ashby-origin", "")
+		h := newHarvester()
+
+		pub, err := runOnceWith(t, catalog, newFakeGate(), h)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		want := queue.Task{Version: 1, Source: "ashby", Kind: queue.BoardCheckTask, BoardID: board.ID, Via: "wttj", ListingURL: check.Board.ListingURL, ApplyURL: check.Board.ApplyURL, Urgent: true}
+		if len(pub.tasks) != 1 {
+			t.Fatalf("published = %+v, want one task", pub.tasks)
+		}
+		got := pub.tasks[0]
+		got.ID = ""
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("task (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([]string{"j1"}, h.recorded); diff != "" {
+			t.Errorf("recorded (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("an unknown board gets a board_discover carrying the listing", func(t *testing.T) {
+		t.Parallel()
+		h := newHarvester()
+
+		pub, err := runOnceWith(t, jobsearchtest.NewFakeStore(), newFakeGate(), h)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(pub.tasks) != 1 {
+			t.Fatalf("published = %+v, want one task", pub.tasks)
+		}
+		got := pub.tasks[0]
+		if got.Kind != queue.BoardDiscoverTask || got.Via != "wttj" || got.ListingURL != check.Board.ListingURL || got.Urgent {
+			t.Errorf("task = %+v, want a non-urgent board_discover with Via and ListingURL", got)
+		}
+		if diff := cmp.Diff([]string{"j1"}, h.recorded); diff != "" {
+			t.Errorf("recorded (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a failed publish leaves the check unrecorded", func(t *testing.T) {
+		t.Parallel()
+		h := newHarvester()
+		err := discover.NewRunner([]discover.Harvester{h}, failingPublisher{}, newFakeGate(), jobsearchtest.NewFakeStore()).RunOnce(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(h.recorded) != 0 {
+			t.Errorf("recorded = %v, want none", h.recorded)
+		}
+	})
+}
+
 func TestRunner_VerifiedHarvestedBoardIsSkippedUnlessRecheck(t *testing.T) {
 	for _, tt := range []struct {
 		name    string

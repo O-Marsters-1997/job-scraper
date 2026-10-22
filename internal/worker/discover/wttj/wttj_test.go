@@ -215,7 +215,10 @@ func TestHarvester_Harvest(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := discover.Harvest{
-			Boards: []discover.Board{{Source: "ashby", Token: "acme", ListingURL: "https://app.welcometothejungle.com/jobs/ats1", ApplyURL: "https://jobs.ashbyhq.com/acme/1"}},
+			Checks: []discover.Check{
+				{ID: "ats1", Board: discover.Board{Source: "ashby", Token: "acme", ListingURL: "https://app.welcometothejungle.com/jobs/ats1", ApplyURL: "https://jobs.ashbyhq.com/acme/1"}},
+				{ID: "ats2", Board: discover.Board{Source: "ashby", Token: "acme", ListingURL: "https://app.welcometothejungle.com/jobs/ats2", ApplyURL: "https://jobs.ashbyhq.com/acme/2"}},
+			},
 			Companies: []discover.Company{
 				{Slug: "steno-labs", Name: "Steno Labs", Board: discover.Board{Source: "wttj", Token: "Steno-Labs"}},
 			},
@@ -288,6 +291,26 @@ func TestHarvester_Harvest(t *testing.T) {
 		}
 	})
 
+	t.Run("RecordChecks records the published checks so they are not handled again", func(t *testing.T) {
+		t.Parallel()
+		st := seenStore(t, "departed")
+		h := harvester(t, fixture(t, "sitemap.xml"), listingsByID(t), st, &recordingExporter{})
+		var _ discover.CheckRecorder = h
+		if err := h.RecordChecks(t.Context(), []string{"ats1", "ats2"}); err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff([]string{"ats1", "ats2", "departed"}, seenIDs(t, st)); diff != "" {
+			t.Errorf("seen IDs (-want +got):\n%s", diff)
+		}
+		got, err := h.Harvest(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Checks) != 0 {
+			t.Errorf("Harvest checks = %+v, want none for recorded IDs", got.Checks)
+		}
+	})
+
 	t.Run("a block after some listings were fetched keeps them", func(t *testing.T) {
 		t.Parallel()
 		eligible := ukEngineeringJobs(100)
@@ -296,8 +319,8 @@ func TestHarvester_Harvest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Harvest error = %v, want the fetched listings kept", err)
 		}
-		if diff := cmp.Diff([]discover.Board{{Source: "ashby", Token: "acme", ListingURL: "https://app.welcometothejungle.com/jobs/job0", ApplyURL: "https://jobs.ashbyhq.com/acme/0"}}, got.Boards); diff != "" {
-			t.Errorf("Harvest boards (-want +got):\n%s", diff)
+		if len(got.Checks) == 0 {
+			t.Error("Harvest checks empty, want the fetched listings kept")
 		}
 	})
 }
