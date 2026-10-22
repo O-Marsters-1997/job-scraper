@@ -192,11 +192,10 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if err != nil {
 			t.Fatalf("ListTaskTypes err = %v", err)
 		}
-		var found bool
-		for _, tt := range types {
-			found = found || (tt.ID == f.SystemTypeID && tt.SystemKey == dto.TaskTypeApply)
-		}
-		if !found {
+		kept := slices.ContainsFunc(types, func(tt dto.TaskType) bool {
+			return tt.ID == f.SystemTypeID && tt.SystemKey == dto.TaskTypeApply
+		})
+		if !kept {
 			t.Errorf("ListTaskTypes(after rejected delete) = %+v, want the system type with its key", types)
 		}
 	})
