@@ -79,7 +79,20 @@ export function createDraftEditor(
 					setTexts(slotId, t);
 					setSaved(slotId, t);
 				}
-				setBlocks(next.blocks);
+				const merged = [...next.blocks];
+				const local = blocks();
+				local.forEach((b, i) => {
+					if (
+						!isAddedSlot(b.slotId) ||
+						merged.some((m) => m.slotId === b.slotId)
+					)
+						return;
+					const anchor = merged.findIndex(
+						(m) => m.slotId === local[i - 1]?.slotId,
+					);
+					merged.splice(anchor + 1, 0, b);
+				});
+				setBlocks(merged);
 			},
 			{ defer: true },
 		),
