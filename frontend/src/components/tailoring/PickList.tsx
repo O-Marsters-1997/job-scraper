@@ -1,7 +1,7 @@
 import { Index, type JSX, onMount, Show } from "solid-js";
 import { cn } from "@/lib/utils";
 
-export type PickItem = { id: string; body: JSX.Element; meta: string };
+type PickItem = { id: string; body: JSX.Element; meta: string };
 
 export type PickListProps = {
 	label: string;
