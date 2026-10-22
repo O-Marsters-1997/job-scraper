@@ -258,9 +258,14 @@ export function saveDraftSlots(
 	id: string,
 	slots: SlotEdit[],
 	skills?: SkillGroup[],
+	roles?: string[],
 ): Draft {
 	const entry = mockEntry(id);
 	if (!entry.draft.provenance) throw new Error(`mock draft ${id} is not ready`);
+	const order =
+		roles ?? entry.draft.provenance.positions.map((p) => p.positionId);
+	const byRole = <T extends { positionId: string }>(positions: T[]) =>
+		order.flatMap((r) => positions.filter((p) => p.positionId === r));
 	const chars = slots.reduce((n, s) => n + s.text.length, 0);
 	const findings = entry.draft.findings.filter((f) => f.check !== "page_count");
 	if (chars > MOCK_TWO_PAGES_CHARS)
@@ -269,14 +274,17 @@ export function saveDraftSlots(
 			severity: "block",
 			message: "the Draft is 2 pages; the base CV is 1",
 		});
-	const provenance = mockProvenance();
+	const base = mockProvenance();
+	const provenance = { ...base, positions: byRole(base.positions) };
 	const { content } = entry.draft;
+	const edited = content && applySlots(content, base, slots);
 	entry.draft = {
 		...entry.draft,
 		findings,
 		provenance,
-		content: content && {
-			...applySlots(content, provenance, slots),
+		content: edited && {
+			...edited,
+			positions: byRole(edited.positions),
 			...(skills && {
 				skills: skills.flatMap((g) => g.items),
 				skillGroups: skills,

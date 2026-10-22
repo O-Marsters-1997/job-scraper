@@ -151,14 +151,15 @@ export async function saveDraftSlots(
 	id: string,
 	slots: SlotEdit[],
 	skills?: SkillGroup[],
+	roles?: string[],
 ): Promise<Draft> {
 	return mocked(
-		(db) => db.saveDraftSlots(id, slots, skills),
+		(db) => db.saveDraftSlots(id, slots, skills, roles),
 		() =>
 			apiFetch(
 				`/tailoring/drafts/${id}/slots`,
 				draftSchema,
-				jsonInit("PUT", { slots, skills }),
+				jsonInit("PUT", { slots, skills, roles }),
 			),
 	);
 }
