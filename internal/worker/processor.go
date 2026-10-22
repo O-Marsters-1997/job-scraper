@@ -172,7 +172,7 @@ func (p *Processor) verifyBoard(ctx context.Context, task queue.Task) error {
 	if !task.Poll {
 		return nil
 	}
-	if err := p.boards.PollBoard(ctx, board.ID, true); err != nil {
+	if err := p.boards.PollBoard(ctx, board.ID, true, taskListing(task)); err != nil {
 		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
 			return &queue.DeferError{Until: until, Err: err}
 		}
@@ -270,7 +270,11 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 			return err
 		}
 	}
-	return p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0)
+	return p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0, taskListing(task))
+}
+
+func taskListing(task queue.Task) scraper.Listing {
+	return scraper.Listing{Via: task.Via, URL: task.ListingURL, ApplyURL: task.ApplyURL}
 }
 
 func hasUKJob(jobs []dto.Job) bool {
@@ -316,7 +320,7 @@ func (p *Processor) pivotToATS(ctx context.Context, source, via, companyID strin
 		case !errors.Is(err, data.ErrNotFound):
 			return false, err
 		}
-		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: atsSource, Kind: queue.BoardDiscoverTask, BoardToken: token, CompanyID: companyID, Via: via}
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: atsSource, Kind: queue.BoardDiscoverTask, BoardToken: token, CompanyID: companyID, Via: via, ListingURL: job.URL, ApplyURL: target}
 		if err := p.broker.Publish(ctx, task); err != nil {
 			return false, err
 		}
@@ -437,7 +441,7 @@ func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 			return err
 		}
 	}
-	if err := p.boards.PollBoard(ctx, task.BoardID, task.Manual); err != nil {
+	if err := p.boards.PollBoard(ctx, task.BoardID, task.Manual, taskListing(task)); err != nil {
 		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
 			return &queue.DeferError{Until: until, Err: err}
 		}

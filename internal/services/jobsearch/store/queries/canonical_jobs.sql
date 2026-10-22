@@ -17,7 +17,7 @@ LIMIT 1 FOR UPDATE OF j;
 -- name: InsertCanonicalJob :one
 INSERT INTO jobs (title, location, url, company_slug, source, posted_at, posted_after, description,
     salary_raw, salary_min, salary_max, work_arrangement, company_id, primary_board_id, provider_posting_id,
-    content_fingerprint, content_changed_at, match_title, match_location)
+    content_fingerprint, content_changed_at, match_title, match_location, discovered_via)
 VALUES (sqlc.arg(title), sqlc.arg(location), sqlc.arg(url), sqlc.arg(company_slug),
     sqlc.arg(source), sqlc.narg(posted_at)::timestamptz,
     (SELECT last_completed_at FROM board_poll_state WHERE board_id = sqlc.narg(board_id)::uuid),
@@ -25,7 +25,8 @@ VALUES (sqlc.arg(title), sqlc.arg(location), sqlc.arg(url), sqlc.arg(company_slu
     sqlc.narg(salary_min)::float8, sqlc.narg(salary_max)::float8,
     sqlc.arg(work_arrangement), COALESCE(sqlc.narg(company_id)::uuid, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug))),
     sqlc.narg(board_id)::uuid, sqlc.narg(posting_id),
-    sqlc.arg(fingerprint), NOW(), sqlc.arg(match_title), sqlc.arg(match_location))
+    sqlc.arg(fingerprint), NOW(), sqlc.arg(match_title), sqlc.arg(match_location),
+    NULLIF(sqlc.arg(discovered_via)::text, ''))
 RETURNING id;
 
 -- name: UpdateChangedCanonicalJob :exec

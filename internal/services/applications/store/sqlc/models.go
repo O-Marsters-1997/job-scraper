@@ -356,6 +356,13 @@ type HarvestRun struct {
 	LastSucceededAt pgtype.Timestamptz
 }
 
+type HarvestSeenID struct {
+	Source      string
+	ExternalID  string
+	Outcome     string
+	FirstSeenAt pgtype.Timestamptz
+}
+
 type Job struct {
 	ID                 pgtype.UUID
 	Title              string
@@ -381,6 +388,7 @@ type Job struct {
 	RepostedAt         pgtype.Timestamptz
 	SalaryMin          pgtype.Float8
 	SalaryMax          pgtype.Float8
+	DiscoveredVia      pgtype.Text
 }
 
 type JobCandidate struct {

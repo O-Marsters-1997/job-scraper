@@ -54,6 +54,7 @@ type FakeStore struct {
 	lastScraped map[string]time.Time
 	fetches     map[string]dto.CachedResponse
 	misses      map[string]time.Time
+	harvestSeen map[string]map[string]string
 	profiles    map[string]dto.CompanyProfile
 
 	sourceTargets map[string]dto.SourceTarget
@@ -82,6 +83,7 @@ func NewFakeStore() *FakeStore {
 		lastScraped:    make(map[string]time.Time),
 		fetches:        make(map[string]dto.CachedResponse),
 		misses:         make(map[string]time.Time),
+		harvestSeen:    make(map[string]map[string]string),
 		profiles:       make(map[string]dto.CompanyProfile),
 		sourceTargets:  make(map[string]dto.SourceTarget),
 		targetByKey:    make(map[string]string),
@@ -153,6 +155,13 @@ func (f *FakeStore) addListing(jobID string, job dto.Job) {
 	f.listings[jobID] = append(f.listings[jobID], dto.JobListing{Source: job.Source, URL: job.URL, FirstSeenAt: time.Now()})
 }
 
+func (f *FakeStore) addDiscoveryListing(jobID string, job dto.Job) {
+	if job.DiscoveredVia == "" || job.DiscoveryURL == "" {
+		return
+	}
+	f.addListing(jobID, dto.Job{Source: job.DiscoveredVia, URL: normalizeJobURL(job.DiscoveryURL)})
+}
+
 func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -176,6 +185,7 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 		f.jobOrder = append(f.jobOrder, id)
 		f.indexJob(job)
 		f.addListing(id, job)
+		f.addDiscoveryListing(id, job)
 		return job, "new", nil
 	}
 
@@ -189,6 +199,8 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 		status = "changed"
 	}
 	f.addListing(id, job)
+	f.addDiscoveryListing(id, job)
+	job.DiscoveredVia = prev.DiscoveredVia
 	job.PostedAt, job.RepostedAt = applyPostedAt(prev, job.PostedAt)
 	job.PostedAfter, job.FirstDiscoveredAt = prev.PostedAfter, prev.FirstDiscoveredAt
 	job.ID, job.ContentFingerprint, job.URL = id, fingerprint, prev.URL
@@ -1361,4 +1373,31 @@ func (f *FakeStore) DiscoverMissedSince(_ context.Context, source, token string,
 	defer f.mu.Unlock()
 	at, ok := f.misses[source+"/"+token]
 	return ok && !at.Before(since), nil
+}
+
+func (f *FakeStore) HarvestSeenIDs(_ context.Context, source string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Collect(maps.Keys(f.harvestSeen[source])), nil
+}
+
+func (f *FakeStore) RecordHarvestSeenIDs(_ context.Context, source, outcome string, ids []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.harvestSeen[source] == nil {
+		f.harvestSeen[source] = make(map[string]string)
+	}
+	for _, id := range ids {
+		f.harvestSeen[source][id] = outcome
+	}
+	return nil
+}
+
+func (f *FakeStore) RetireHarvestSeenIDs(_ context.Context, source string, ids []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, id := range ids {
+		delete(f.harvestSeen[source], id)
+	}
+	return nil
 }

@@ -121,7 +121,7 @@ func run(ctx context.Context) error {
 	domainBase := sources.NewBase(sources.Config{Name: "domain-resolver"})
 	harvesters := []discover.Harvester{
 		commoncrawl.New(&http.Client{Timeout: 2 * time.Minute}, commoncrawl.CollinfoURL),
-		wttjharvest.New(&http.Client{Timeout: time.Minute}, wttjharvest.SitemapURL, wttj.NewClient(time.Second)),
+		wttjharvest.New(&http.Client{Timeout: time.Minute}, wttjharvest.SitemapURL, wttj.NewClient(time.Second), js.Boards(), exporter),
 		untracked.New(js.Boards(), untracked.UK),
 		untracked.New(js.Boards(), untracked.Abroad),
 		workablesearch.New(&http.Client{Timeout: time.Minute}, workablesearch.SearchURL),

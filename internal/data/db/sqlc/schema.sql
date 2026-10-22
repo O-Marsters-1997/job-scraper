@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     posted_after        TIMESTAMPTZ,
     reposted_at         TIMESTAMPTZ,
     salary_min          DOUBLE PRECISION,
-    salary_max          DOUBLE PRECISION
+    salary_max          DOUBLE PRECISION,
+    discovered_via      TEXT
 );
 
 CREATE INDEX jobs_page_idx ON jobs (scraped_at DESC, id DESC);
@@ -457,6 +458,14 @@ CREATE INDEX IF NOT EXISTS candidate_discoveries_target_idx ON candidate_discove
 CREATE TABLE harvest_runs (
     harvester TEXT PRIMARY KEY,
     last_succeeded_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE harvest_seen_ids (
+    source        TEXT        NOT NULL,
+    external_id   TEXT        NOT NULL,
+    outcome       TEXT        NOT NULL CONSTRAINT harvest_seen_ids_outcome_check CHECK (outcome IN ('backfill', 'ineligible', 'exported')),
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (source, external_id)
 );
 
 CREATE TABLE IF NOT EXISTS candidate_assessments (
