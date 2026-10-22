@@ -3,12 +3,9 @@ import { createSignal, Show } from "solid-js";
 import { PageHeading } from "@/components/PageHeading";
 import { Button } from "@/components/ui/button";
 import type { CVRef } from "../../hooks/useTailoring";
-import type { SkillPick } from "../../types/tailoring";
-import { AchievementsStep } from "./-tailor/AchievementsStep";
 import { CvStep } from "./-tailor/CvStep";
 import { GenerateStep } from "./-tailor/GenerateStep";
 import { HeadingsStep } from "./-tailor/HeadingsStep";
-import { SkillsStep } from "./-tailor/SkillsStep";
 import { type Step, Stepper } from "./-tailor/Stepper";
 
 export const Route = createFileRoute("/_auth/jobs_/$id_/tailor")({
@@ -21,16 +18,9 @@ function TailorPage() {
 	const [cv, setCv] = createSignal<CVRef>();
 	const [step, setStep] = createSignal<Step>("cv");
 	const [skipped, setSkipped] = createSignal(false);
-	const [overrides, setOverrides] = createSignal<Record<string, boolean>>({});
-	const [order, setOrder] = createSignal<string[]>([]);
-	const [skillPicks, setSkillPicks] = createSignal<SkillPick[]>();
-	const [achievementIds, setAchievementIds] = createSignal<string[]>([]);
 
 	const pickCv = (ref: CVRef) => {
 		setCv(ref);
-		setOverrides({});
-		setOrder([]);
-		setSkillPicks(undefined);
 		setSkipped(false);
 		setStep("headings");
 	};
@@ -39,7 +29,7 @@ function TailorPage() {
 		<div class="px-7 py-6 pb-16">
 			<PageHeading
 				title="Tailor CV"
-				subtitle="Pick a base CV, confirm its roles, then choose the Achievements to feature"
+				subtitle="Pick a base CV, confirm its roles, then generate a draft"
 			>
 				<Button
 					variant="outline"
@@ -61,42 +51,16 @@ function TailorPage() {
 					cv={cv}
 					onDone={(wasSkipped) => {
 						setSkipped(wasSkipped);
-						setStep("achievements");
+						setStep("generate");
 					}}
 					onBack={() => setStep("cv")}
-				/>
-			</Show>
-			<Show when={step() === "achievements" && cv()}>
-				<AchievementsStep
-					jobId={() => params().id}
-					cv={cv}
-					overrides={overrides}
-					setOverrides={setOverrides}
-					order={order}
-					setOrder={setOrder}
-					onBack={() => setStep(skipped() ? "cv" : "headings")}
-					onContinue={(ids) => {
-						setAchievementIds(ids);
-						setStep("skills");
-					}}
-				/>
-			</Show>
-			<Show when={step() === "skills" && cv()}>
-				<SkillsStep
-					jobId={() => params().id}
-					cv={cv}
-					picks={skillPicks}
-					setPicks={setSkillPicks}
-					onBack={() => setStep("achievements")}
-					onContinue={() => setStep("generate")}
 				/>
 			</Show>
 			<Show when={step() === "generate" && cv()}>
 				<GenerateStep
 					jobId={() => params().id}
 					cv={cv}
-					achievementIds={achievementIds}
-					onBack={() => setStep("skills")}
+					onBack={() => setStep(skipped() ? "cv" : "headings")}
 				/>
 			</Show>
 		</div>
