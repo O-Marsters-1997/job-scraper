@@ -459,6 +459,14 @@ CREATE TABLE harvest_runs (
     last_succeeded_at TIMESTAMPTZ NOT NULL
 );
 
+CREATE TABLE harvest_seen_ids (
+    source        TEXT        NOT NULL,
+    external_id   TEXT        NOT NULL,
+    outcome       TEXT        NOT NULL CONSTRAINT harvest_seen_ids_outcome_check CHECK (outcome IN ('backfill', 'ineligible', 'exported')),
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (source, external_id)
+);
+
 CREATE TABLE IF NOT EXISTS candidate_assessments (
     candidate_id UUID NOT NULL REFERENCES job_candidates(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

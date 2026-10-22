@@ -110,6 +110,15 @@ func CompanyName(ctx context.Context, companyToken string) (string, error) {
 	return c.Name, err
 }
 
+func (c *Client) Jobs(ctx context.Context, ids []string) ([]dto.Job, error) {
+	details, err := c.jobs(ctx, ids, detailFields)
+	jobs := make([]dto.Job, len(details))
+	for i, d := range details {
+		jobs[i] = d.toJob()
+	}
+	return jobs, err
+}
+
 func (j apiJob) toJob() dto.Job {
 	l := j.listing()
 	places := make([]string, len(l.Locations))

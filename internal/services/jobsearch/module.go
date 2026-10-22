@@ -103,6 +103,9 @@ type Store interface {
 	MarkBoardUKJobsSeen(ctx context.Context, source, token string) error
 	RecordDiscoverMiss(ctx context.Context, source, token string) error
 	DiscoverMissedSince(ctx context.Context, source, token string, since time.Time) (bool, error)
+	HarvestSeenIDs(ctx context.Context, source string) ([]string, error)
+	RecordHarvestSeenIDs(ctx context.Context, source, outcome string, ids []string) error
+	RetireHarvestSeenIDs(ctx context.Context, source string, ids []string) error
 }
 
 type Deps struct {

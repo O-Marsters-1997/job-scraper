@@ -93,6 +93,29 @@ func TestStoreSatisfiesContract(t *testing.T) {
 	})
 }
 
+func TestStore_RetireHarvestSeenIDs(t *testing.T) {
+	t.Parallel()
+	st, pool := newStore(t)
+	ctx := t.Context()
+	wttjJob := baseJob
+	wttjJob.Source, wttjJob.URL, wttjJob.ProviderPostingID = "wttj", "https://app.welcometothejungle.com/jobs/gone", "gone"
+	otherJob := baseJob
+	otherJob.Source, otherJob.URL, otherJob.ProviderPostingID = "greenhouse", "https://boards.greenhouse.io/acme/jobs/gone", "gone"
+	otherJob.Title, otherJob.CompanySlug = "Data Analyst", "other"
+	wttjSaved, _ := saveJob(t, st, wttjJob)
+	otherSaved, _ := saveJob(t, st, otherJob)
+
+	if err := st.RetireHarvestSeenIDs(ctx, "wttj", []string{"gone"}); err != nil {
+		t.Fatal(err)
+	}
+	if !jobClosed(t, pool, wttjSaved.URL) {
+		t.Error("wttj job still open after its ID was retired")
+	}
+	if jobClosed(t, pool, otherSaved.URL) {
+		t.Error("another source's job with the same posting ID was closed")
+	}
+}
+
 func insertCompany(t *testing.T, pool *pgxpool.Pool, slug string) string {
 	t.Helper()
 	var id string
