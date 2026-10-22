@@ -146,6 +146,7 @@ type DraftClaim struct {
 	DocID          string
 	TabID          string
 	AchievementIDs []string
+	Roles          []string
 	SkillSwaps     []SkillSwap
 	Attempts       int
 	DraftDocID     string

@@ -1,9 +1,11 @@
+import { Show } from "solid-js";
+import { Button } from "@/components/ui/button";
 import type { Position } from "@/types/experience";
 import { Drawer, LineBudget } from "./Drawer";
 import { PickList, type PickListProps } from "./PickList";
 
 const HINT =
-	"Click a role's circle to remove it. Press 1–9 to move the selected role to that place. ↑ ↓ to move, Esc to deselect.";
+	"Click a role to add it, or its circle to remove it. Press 1–9 to move the selected role to that place. ↑ ↓ to move, Esc to deselect.";
 
 const shortDate = (iso: string | null) =>
 	iso
@@ -18,13 +20,25 @@ export function RolesDrawer(
 		positions: Position[];
 		usedLines: number;
 		budgetLines: number;
+		onChooseAchievements: (positionId: string) => void;
 		onClose: () => void;
 	},
 ) {
 	return (
 		<Drawer label="Roles" title="Roles" hint={HINT} onClose={props.onClose}>
-			<div class="border-b border-border px-5 py-2">
+			<div class="flex items-center justify-between border-b border-border px-5 py-2">
 				<LineBudget used={props.usedLines} budget={props.budgetLines} />
+				<Show when={props.selected && props.picked.includes(props.selected)}>
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={() => {
+							if (props.selected) props.onChooseAchievements(props.selected);
+						}}
+					>
+						Choose its Achievements
+					</Button>
+				</Show>
 			</div>
 			<PickList
 				label="Roles"

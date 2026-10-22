@@ -281,6 +281,8 @@ export function saveDraftSlots(
 ): Draft {
 	const entry = mockEntry(id);
 	if (!entry.draft.provenance) throw new Error(`mock draft ${id} is not ready`);
+	for (const { positionId } of positions) addMockRole(entry, positionId);
+	if (!entry.draft.provenance) throw new Error(`mock draft ${id} is not ready`);
 	const order =
 		roles ?? entry.draft.provenance.positions.map((p) => p.positionId);
 	const byRole = <T extends { positionId: string }>(positions: T[]) =>
@@ -312,6 +314,36 @@ export function saveDraftSlots(
 		},
 	};
 	return entry.draft;
+}
+
+function addMockRole(entry: ReturnType<typeof mockEntry>, positionId: string) {
+	const { provenance, content } = entry.draft;
+	const position = getExperience().find((p) => p.id === positionId);
+	if (
+		!provenance ||
+		!position ||
+		provenance.positions.some((p) => p.positionId === positionId)
+	)
+		return;
+	entry.draft = {
+		...entry.draft,
+		provenance: {
+			...provenance,
+			positions: [
+				...provenance.positions,
+				{
+					positionId,
+					employer: position.employer,
+					title: position.title,
+					bullets: [],
+				},
+			],
+		},
+		content: content && {
+			...content,
+			positions: [...content.positions, { positionId, bullets: [] }],
+		},
+	};
 }
 
 function replaceContent(

@@ -44,7 +44,11 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	cited, err := citedByReplacements(bank, edits, in.Positions)
+	roles := edits.Roles
+	if in.Roles != nil {
+		roles = in.Roles
+	}
+	cited, err := citedByReplacements(bank, edits, in.Positions, roles)
 	if err != nil {
 		return dto.Draft{}, err
 	}
@@ -55,7 +59,7 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 		}
 	}
 
-	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: chosen, SkillSwaps: draft.SkillSwaps}
+	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: chosen, Roles: roles, SkillSwaps: draft.SkillSwaps}
 	basePlan, err := s.plan(ctx, claim, claim.DocID)
 	if err != nil {
 		return dto.Draft{}, err
@@ -69,6 +73,14 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 		return dto.Draft{}, err
 	}
 	before := edits.Profile
+	var layout roleLayout
+	rebuilt := false
+	if in.Roles != nil {
+		edits, layout, rebuilt, err = s.applyRoles(ctx, claim, basePlan.structure, edits, in.Roles, bank)
+		if err != nil {
+			return dto.Draft{}, err
+		}
+	}
 	edits, err = basePlan.replaceBullets(edits, in.Positions)
 	if err != nil {
 		return dto.Draft{}, err
@@ -80,14 +92,6 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	edits, err = basePlan.overlaySkills(edits, in.Skills)
 	if err != nil {
 		return dto.Draft{}, err
-	}
-	var layout roleLayout
-	rebuilt := false
-	if in.Roles != nil {
-		edits, layout, rebuilt, err = s.applyRoles(ctx, claim, basePlan.structure, edits, in.Roles)
-		if err != nil {
-			return dto.Draft{}, err
-		}
 	}
 	docEdits := cvedit.EditSet{Positions: edits.Positions}
 	if edits.Profile != before {
@@ -133,7 +137,7 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	return s.GetDraft(ctx, userID, dto.DraftQuery{ID: draft.ID})
 }
 
-func citedByReplacements(bank []dto.Position, edits cvedit.EditSet, reps []dto.DraftPosition) ([]string, error) {
+func citedByReplacements(bank []dto.Position, edits cvedit.EditSet, reps []dto.DraftPosition, roles []string) ([]string, error) {
 	owner := map[string]string{}
 	for _, p := range bank {
 		for _, a := range p.Achievements {
@@ -142,7 +146,7 @@ func citedByReplacements(bank []dto.Position, edits cvedit.EditSet, reps []dto.D
 	}
 	var cited []string
 	for _, r := range reps {
-		if !slices.ContainsFunc(edits.Positions, func(pe cvedit.PositionEdit) bool { return pe.PositionID == r.PositionID }) {
+		if !slices.ContainsFunc(edits.Positions, func(pe cvedit.PositionEdit) bool { return pe.PositionID == r.PositionID }) && !slices.Contains(roles, r.PositionID) {
 			return nil, apperr.Invalid("unknown position")
 		}
 		if len(r.Bullets) == 0 {
@@ -166,7 +170,7 @@ func (pl plan) replaceBullets(edits cvedit.EditSet, reps []dto.DraftPosition) (c
 	for _, r := range reps {
 		ids := slotIDs[r.PositionID]
 		at := slices.IndexFunc(edits.Positions, func(pe cvedit.PositionEdit) bool { return pe.PositionID == r.PositionID })
-		if at < 0 || len(ids) == 0 {
+		if at < 0 {
 			return edits, apperr.Invalid("unknown position")
 		}
 		pe := cvedit.PositionEdit{PositionID: r.PositionID}

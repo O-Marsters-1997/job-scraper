@@ -125,6 +125,7 @@ func (pe PositionEdit) Lines() []Line {
 			}
 		}
 	}
+	follow("")
 	for _, b := range pe.Bullets {
 		out = append(out, Line{SlotID: b.SlotID, Text: b.Text, AchievementIDs: b.AchievementIDs})
 		follow(b.SlotID)

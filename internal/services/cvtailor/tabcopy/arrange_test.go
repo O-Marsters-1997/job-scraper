@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -14,6 +15,7 @@ import (
 
 type line struct {
 	style, text string
+	runs        []string
 	bullet      bool
 }
 
@@ -21,19 +23,36 @@ func h(text string) line { return line{style: "HEADING_2", text: text} }
 func b(text string) line { return line{style: "NORMAL_TEXT", text: text, bullet: true} }
 func p(text string) line { return line{style: "NORMAL_TEXT", text: text} }
 
+func hRuns(runs ...string) line {
+	return line{style: "HEADING_2", text: strings.Join(runs, ""), runs: runs}
+}
+
 func tabOf(lines ...line) json.RawMessage {
 	content := []string{`{"endIndex":1,"sectionBreak":{}}`}
 	idx := 1
 	for _, l := range lines {
-		end := idx + len(l.text) + 1
+		runs := l.runs
+		if runs == nil {
+			runs = []string{l.text}
+		}
+		var elements []string
+		at := idx
+		for i, r := range runs {
+			if i == len(runs)-1 {
+				r += "\n"
+			}
+			n := len(utf16.Encode([]rune(r)))
+			elements = append(elements, fmt.Sprintf(`{"startIndex":%d,"endIndex":%d,"textRun":{"content":%q,"textStyle":{"bold":%t}}}`, at, at+n, r, i == 0))
+			at += n
+		}
 		bullet := ""
 		if l.bullet {
 			bullet = `,"bullet":{"listId":"kix.l1"}`
 		}
 		content = append(content, fmt.Sprintf(
-			`{"startIndex":%d,"endIndex":%d,"paragraph":{"elements":[{"startIndex":%d,"endIndex":%d,"textRun":{"content":%q}}],"paragraphStyle":{"namedStyleType":%q}%s}}`,
-			idx, end, idx, end, l.text+"\n", l.style, bullet))
-		idx = end
+			`{"startIndex":%d,"endIndex":%d,"paragraph":{"elements":[%s],"paragraphStyle":{"namedStyleType":%q}%s}}`,
+			idx, at, strings.Join(elements, ","), l.style, bullet))
+		idx = at
 	}
 	return json.RawMessage(`{"documentTab":{"body":{"content":[` + strings.Join(content, ",") + `]}}}`)
 }
@@ -85,7 +104,7 @@ func TestArrange(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := tabcopy.Arrange(src, roleOf, tc.order)
+			got, _, err := tabcopy.Arrange(src, roleOf, tc.order, nil)
 			if err != nil {
 				t.Fatalf("Arrange() error = %v", err)
 			}
@@ -117,7 +136,7 @@ func TestArrange(t *testing.T) {
 
 	t.Run("reindexes so the moved paragraphs are contiguous", func(t *testing.T) {
 		t.Parallel()
-		got, err := tabcopy.Arrange(src, roleOf, []string{"globex", "acme", "widgets"})
+		got, _, err := tabcopy.Arrange(src, roleOf, []string{"globex", "acme", "widgets"}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -132,11 +151,99 @@ func TestArrange(t *testing.T) {
 
 	t.Run("a role mapped to two headings is ambiguous", func(t *testing.T) {
 		t.Parallel()
-		_, err := tabcopy.Arrange(src, map[string]string{"Acme 2020-2022": "x", "Widgets 2018-2020": "x"}, []string{"x"})
+		_, _, err := tabcopy.Arrange(src, map[string]string{"Acme 2020-2022": "x", "Widgets 2018-2020": "x"}, []string{"x"}, nil)
 		if err == nil {
 			t.Error("Arrange() error = nil, want an error")
 		}
 	})
+}
+
+func TestArrangeAddsRole(t *testing.T) {
+	t.Parallel()
+	iso := func(s string) *string { return &s }
+	acme := tabcopy.Role{Title: "Engineer", Employer: "Acme"}
+	widgets := tabcopy.Role{Title: "Analyst", Employer: "Widgets", Start: iso("2016-04-01"), End: iso("2018-05-31")}
+	current := widgets
+	current.End = nil
+
+	tests := []struct {
+		name        string
+		heading     []line
+		role        tabcopy.Role
+		wantHeading []string
+	}{
+		{
+			name:        "one-line heading in the CV's year style",
+			heading:     []line{hRuns("Engineer, Acme", "\t2020 - 2022")},
+			role:        widgets,
+			wantHeading: []string{"Analyst, Widgets\t2016 - 2018"},
+		},
+		{
+			name:        "short month style keeps the dash",
+			heading:     []line{hRuns("Engineer, Acme", "\tApr 2020 – May 2022")},
+			role:        widgets,
+			wantHeading: []string{"Analyst, Widgets\tApr 2016 – May 2018"},
+		},
+		{
+			name:        "long month style with a current role",
+			heading:     []line{hRuns("Engineer, Acme", "\tMarch 2020 - Present")},
+			role:        current,
+			wantHeading: []string{"Analyst, Widgets\tApril 2016 - Present"},
+		},
+		{
+			name:        "employer on its own line",
+			heading:     []line{h("Engineer"), hRuns("Acme", "\t2020 - 2022")},
+			role:        widgets,
+			wantHeading: []string{"Analyst", "Widgets\t2016 - 2018"},
+		},
+		{
+			name:        "heading that names neither the title nor the employer",
+			heading:     []line{hRuns("Backend lead", "\t2020 - 2022")},
+			role:        widgets,
+			wantHeading: []string{"Analyst, Widgets\t2016 - 2018"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			lines := append([]line{p("Jane Doe")}, tc.heading...)
+			lines = append(lines, b("a1"), b("a2"), h("Education"), p("BSc"))
+			src := tabOf(lines...)
+			mapped := tc.heading[len(tc.heading)-1].text
+			roleOf := map[string]string{mapped: "acme"}
+			roles := map[string]tabcopy.Role{"acme": acme, "widgets": tc.role}
+
+			got, headings, err := tabcopy.Arrange(src, roleOf, []string{"acme", "widgets"}, roles)
+			if err != nil {
+				t.Fatalf("Arrange() error = %v", err)
+			}
+
+			want := []string{"Jane Doe"}
+			for _, l := range tc.heading {
+				want = append(want, l.text)
+			}
+			want = append(want, "a1", "a2")
+			want = append(want, tc.wantHeading...)
+			want = append(want, "a1", "Education", "BSc")
+			if diff := cmp.Diff(want, textOf(t, got)); diff != "" {
+				t.Errorf("Arrange() text (-want +got):\n%s", diff)
+			}
+			if headings["widgets"] != tc.wantHeading[len(tc.wantHeading)-1] {
+				t.Errorf("Arrange() heading = %q, want %q", headings["widgets"], tc.wantHeading[len(tc.wantHeading)-1])
+			}
+			reqs, err := tabcopy.Requests(got, "t.1")
+			if err != nil {
+				t.Fatalf("Requests(Arrange()) error = %v", err)
+			}
+			var first map[string]map[string]any
+			if err := json.Unmarshal(reqs[1], &first); err != nil {
+				t.Fatal(err)
+			}
+			if body := strings.Join(want, "\n"); first["insertText"]["text"] != body {
+				t.Errorf("inserted text = %q, want %q", first["insertText"]["text"], body)
+			}
+		})
+	}
 }
 
 func TestClear(t *testing.T) {
