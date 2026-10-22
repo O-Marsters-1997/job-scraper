@@ -11,12 +11,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/tasks/store/sqlc"
 )
 
-var ErrTaskTypeExists = errors.New("task type name already exists")
+var (
+	ErrTaskTypeExists = errors.New("task type name already exists")
+
+	ErrSystemTaskType = apperr.Invalid("this task type is used by the app and can't be deleted")
+)
 
 type ApplicationSync interface {
 	MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error
@@ -100,6 +105,13 @@ func (s *Store) DeleteTaskType(ctx context.Context, userID, id string) error {
 	tid, err := data.UUID(id)
 	if err != nil {
 		return data.ErrNotFound
+	}
+	key, err := s.queries.GetTaskTypeSystemKey(ctx, sqlc.GetTaskTypeSystemKeyParams{ID: tid, UserID: uid})
+	if err != nil {
+		return data.QueryErr("DeleteTaskType", err)
+	}
+	if key.Valid {
+		return ErrSystemTaskType
 	}
 	n, err := s.queries.DeleteTaskType(ctx, sqlc.DeleteTaskTypeParams{ID: tid, UserID: uid})
 	if err != nil {

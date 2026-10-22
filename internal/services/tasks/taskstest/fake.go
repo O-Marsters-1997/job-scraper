@@ -46,6 +46,10 @@ func NewFakeStore() *FakeStore {
 // AddType creates a Task type for userID; the real store gets its types from
 // SeedDefaultTaskTypes or SQL fixtures.
 func (f *FakeStore) AddType(userID, name string) dto.TaskType {
+	return f.AddSystemType(userID, name, "")
+}
+
+func (f *FakeStore) AddSystemType(userID, name string, key dto.TaskTypeSystemKey) dto.TaskType {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.seq++
@@ -53,6 +57,7 @@ func (f *FakeStore) AddType(userID, name string) dto.TaskType {
 		ID:        fakeID(f.seq),
 		Name:      name,
 		Colour:    "#6366f1",
+		SystemKey: key,
 		CreatedAt: epoch.Add(time.Duration(f.seq) * time.Second),
 	}
 	f.types[t.ID] = ownedType{userID: userID, TaskType: t}
@@ -61,7 +66,11 @@ func (f *FakeStore) AddType(userID, name string) dto.TaskType {
 
 func (f *FakeStore) SeedDefaultTaskTypes(_ context.Context, _ pgx.Tx, userID string) error {
 	for _, name := range defaultTypeNames {
-		f.AddType(userID, name)
+		var key dto.TaskTypeSystemKey
+		if name == "Apply" {
+			key = dto.TaskTypeApply
+		}
+		f.AddSystemType(userID, name, key)
 	}
 	return nil
 }
@@ -143,6 +152,9 @@ func (f *FakeStore) DeleteTaskType(_ context.Context, userID, id string) error {
 	if !ok || t.userID != userID {
 		return data.ErrNotFound
 	}
+	if t.SystemKey != "" {
+		return store.ErrSystemTaskType
+	}
 	delete(f.types, id)
 	for taskID, task := range f.tasks {
 		if task.TypeID == id {
@@ -180,15 +192,16 @@ func (f *FakeStore) CreateTask(_ context.Context, userID string, in dto.CreateTa
 	f.seq++
 	at := epoch.Add(time.Duration(f.seq) * time.Second)
 	t := dto.Task{
-		ID:         fakeID(f.seq),
-		TypeID:     typ.ID,
-		TypeName:   typ.Name,
-		TypeColour: typ.Colour,
-		JobID:      in.JobID,
-		Link:       in.Link,
-		Notes:      in.Notes,
-		CreatedAt:  at,
-		UpdatedAt:  at,
+		ID:            fakeID(f.seq),
+		TypeID:        typ.ID,
+		TypeName:      typ.Name,
+		TypeColour:    typ.Colour,
+		TypeSystemKey: typ.SystemKey,
+		JobID:         in.JobID,
+		Link:          in.Link,
+		Notes:         in.Notes,
+		CreatedAt:     at,
+		UpdatedAt:     at,
 	}
 	f.tasks[t.ID] = ownedTask{userID: userID, Task: t}
 	return t, nil
@@ -205,7 +218,7 @@ func (f *FakeStore) UpdateTask(_ context.Context, userID string, in dto.UpdateTa
 	if !ok || typ.userID != userID {
 		return dto.Task{}, data.ErrNotFound
 	}
-	t.TypeID, t.TypeName, t.TypeColour = typ.ID, typ.Name, typ.Colour
+	t.TypeID, t.TypeName, t.TypeColour, t.TypeSystemKey = typ.ID, typ.Name, typ.Colour, typ.SystemKey
 	t.Link, t.Notes, t.UpdatedAt = in.Link, in.Notes, now
 	f.tasks[in.ID] = t
 	return t.Task, nil
@@ -233,7 +246,7 @@ func (f *FakeStore) CreateApplyTask(ctx context.Context, _ pgx.Tx, userID, jobID
 	f.mu.Lock()
 	var applyID string
 	for _, t := range f.types {
-		if t.userID == userID && t.Name == "Apply" {
+		if t.userID == userID && t.SystemKey == dto.TaskTypeApply {
 			applyID = t.ID
 		}
 	}
@@ -254,7 +267,7 @@ func (f *FakeStore) CompleteApplyTasks(_ context.Context, _ pgx.Tx, userID, jobI
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for id, t := range f.tasks {
-		if t.userID == userID && t.TypeName == "Apply" && t.JobID != nil && *t.JobID == jobID && t.CompletedAt == nil {
+		if t.userID == userID && t.TypeSystemKey == dto.TaskTypeApply && t.JobID != nil && *t.JobID == jobID && t.CompletedAt == nil {
 			t.CompletedAt = &now
 			f.tasks[id] = t
 		}

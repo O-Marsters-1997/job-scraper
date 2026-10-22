@@ -2,6 +2,7 @@ package taskstest
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -19,12 +20,13 @@ const missingID = "00000000-0000-0000-0000-000000000000"
 // Fixture is one user with one Task type, a second user with their own type,
 // and a Job both can reference.
 type Fixture struct {
-	Store       tasks.Store
-	UserID      string
-	OtherUserID string
-	TypeID      string
-	OtherTypeID string
-	JobID       string
+	Store        tasks.Store
+	UserID       string
+	OtherUserID  string
+	TypeID       string
+	OtherTypeID  string
+	SystemTypeID string
+	JobID        string
 }
 
 func createTask(t *testing.T, f Fixture, in dto.CreateTaskInput) dto.Task {
@@ -107,8 +109,12 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if err != nil {
 			t.Fatalf("ListTaskTypes(...) err = %v", err)
 		}
-		if len(got) != 1 || got[0].ID != f.TypeID {
-			t.Errorf("ListTaskTypes(...) = %+v, want only type %s", got, f.TypeID)
+		gotIDs := make([]string, len(got))
+		for i, tt := range got {
+			gotIDs[i] = tt.ID
+		}
+		if want := []string{f.TypeID, f.SystemTypeID}; !slices.Equal(gotIDs, want) {
+			t.Errorf("ListTaskTypes(...) ids = %v, want %v", gotIDs, want)
 		}
 	})
 
@@ -171,8 +177,27 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Errorf("ListTasks(after delete) = %+v, want empty", got)
 		}
 		types, err := f.Store.ListTaskTypes(t.Context(), f.UserID)
-		if err != nil || len(types) != 0 {
-			t.Errorf("ListTaskTypes(after delete) = %+v, %v, want none", types, err)
+		if err != nil || len(types) != 1 || types[0].ID != f.SystemTypeID {
+			t.Errorf("ListTaskTypes(after delete) = %+v, %v, want only the system type", types, err)
+		}
+	})
+
+	t.Run("deleting a system task type is rejected and keeps it", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		if err := f.Store.DeleteTaskType(t.Context(), f.UserID, f.SystemTypeID); !errors.Is(err, store.ErrSystemTaskType) {
+			t.Errorf("DeleteTaskType(system) err = %v, want ErrSystemTaskType", err)
+		}
+		types, err := f.Store.ListTaskTypes(t.Context(), f.UserID)
+		if err != nil {
+			t.Fatalf("ListTaskTypes err = %v", err)
+		}
+		var found bool
+		for _, tt := range types {
+			found = found || (tt.ID == f.SystemTypeID && tt.SystemKey == dto.TaskTypeApply)
+		}
+		if !found {
+			t.Errorf("ListTaskTypes(after rejected delete) = %+v, want the system type with its key", types)
 		}
 	})
 

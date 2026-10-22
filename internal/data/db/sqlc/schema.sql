@@ -637,8 +637,12 @@ CREATE TABLE IF NOT EXISTS task_types (
     name       TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 50),
     colour     TEXT        NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    system_key TEXT        CHECK (system_key IN ('apply')),
     UNIQUE (user_id, name)
 );
+
+CREATE UNIQUE INDEX task_types_user_system_key_idx
+    ON task_types (user_id, system_key) WHERE system_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS tasks (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
