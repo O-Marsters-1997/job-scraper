@@ -59,7 +59,7 @@ test.describe("Application page", () => {
 
 	test("adding a step lists it and offers no Apply type", async ({ page }) => {
 		await openFirstApplication(page);
-		await page.getByRole("button", { name: "Add a step" }).click();
+		await page.getByRole("button", { name: "Add task" }).click();
 		const dialog = page.getByRole("dialog");
 		await expect(
 			dialog.getByRole("option", { name: "Apply", exact: true }),
