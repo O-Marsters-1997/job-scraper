@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/solid-query";
 import {
 	type Accessor,
+	batch,
 	createEffect,
 	createMemo,
 	createSignal,
@@ -16,7 +17,12 @@ import { blockText } from "@/lib/docLayout";
 import { ADDED_PREFIX, isAddedSlot, slotsToSave } from "@/lib/draftSlots";
 import { createSaveLoop, type SaveStatus } from "@/lib/saveLoop";
 import { reviewFindings } from "@/lib/tailoring";
-import type { Draft, DraftLayout, LayoutBlock } from "@/types/tailoring";
+import type {
+	Draft,
+	DraftLayout,
+	DraftPositionEdit,
+	LayoutBlock,
+} from "@/types/tailoring";
 
 export const PROFILE_SLOT = "profile";
 
@@ -41,6 +47,8 @@ function readResolved(id: string): Record<string, boolean> {
 	}
 }
 
+type RoleEdit = { slots: string[]; ids: string[][] };
+
 export function createDraftEditor(
 	draft: Accessor<Draft>,
 	layout: Accessor<DraftLayout | null>,
@@ -59,7 +67,9 @@ export function createDraftEditor(
 		Object.fromEntries(
 			list.filter(isSlotBlock).map((b) => [b.slotId, blockText(b)]),
 		);
-	const original = slotTexts(layout()?.blocks ?? []);
+	const [original, setOriginal] = createStore<Record<string, string>>(
+		slotTexts(layout()?.blocks ?? []),
+	);
 
 	const [texts, setTexts] = createStore<Record<string, string>>({
 		...original,
@@ -75,7 +85,7 @@ export function createDraftEditor(
 				if (!next) return;
 				for (const [slotId, t] of Object.entries(slotTexts(next.blocks))) {
 					if (slotId in texts) continue;
-					original[slotId] = t;
+					setOriginal(slotId, t);
 					setTexts(slotId, t);
 					setSaved(slotId, t);
 				}
@@ -115,7 +125,96 @@ export function createDraftEditor(
 
 	const text = (slotId: string) => texts[slotId] ?? "";
 
+	const [roleEdits, setRoleEdits] = createSignal<Record<string, RoleEdit>>({});
+
+	const rekey = (
+		result: Draft,
+		sent: { positionId: string; slots: string[]; texts: string[] }[],
+	) => {
+		const renamed = new Map<string, string>();
+		const sentTexts: Record<string, string> = {};
+		for (const { positionId, slots, texts: sentAt } of sent) {
+			const bullets =
+				result.provenance?.positions.find((p) => p.positionId === positionId)
+					?.bullets ?? [];
+			slots.forEach((slot, i) => {
+				const next = bullets[i]?.slotId ?? slot;
+				renamed.set(slot, next);
+				sentTexts[next] = sentAt[i] ?? "";
+			});
+		}
+		const to = (slotId: string) => renamed.get(slotId) ?? slotId;
+		const move = (record: Record<string, string>) =>
+			Object.fromEntries(Object.entries(record).map(([k, v]) => [to(k), v]));
+		setRoleEdits((now) =>
+			Object.fromEntries(
+				Object.entries(now).map(([k, v]) => [
+					k,
+					{ ...v, slots: v.slots.map(to) },
+				]),
+			),
+		);
+		setBlocks(
+			blocks().map((b) =>
+				to(b.slotId) === b.slotId ? b : { ...b, slotId: to(b.slotId) },
+			),
+		);
+		setTexts(reconcile(move(unwrap(texts))));
+		setOriginal(reconcile(move(unwrap(original))));
+		const live = new Set([...slotIds(), ...removed()]);
+		setSaved(
+			reconcile(
+				Object.fromEntries(
+					Object.entries({ ...move(unwrap(saved)), ...sentTexts }).filter(
+						([k]) => live.has(k),
+					),
+				),
+			),
+		);
+	};
+
+	const sendRoles = async () => {
+		const edits = roleEdits();
+		const sent = Object.entries(edits).flatMap(([positionId, edit]) => {
+			const kept = edit.slots.flatMap((slot, i) => {
+				const body = text(slot).trim();
+				return body ? [{ slot, body, ids: edit.ids[i] ?? [] }] : [];
+			});
+			return kept.length
+				? [
+						{
+							positionId,
+							slots: kept.map((k) => k.slot),
+							texts: kept.map((k) => k.body),
+							bullets: kept.map((k) => ({
+								text: k.body,
+								achievementIds: k.ids,
+							})),
+						},
+					]
+				: [];
+		});
+		if (sent.length === 0) return false;
+		const positions: DraftPositionEdit[] = sent.map((s) => ({
+			positionId: s.positionId,
+			bullets: s.bullets,
+		}));
+		const result = await saveDraftSlots(id, [], undefined, positions);
+		batch(() => {
+			setRoleEdits((now) =>
+				Object.fromEntries(
+					Object.entries(now).filter(([k, v]) => edits[k] !== v),
+				),
+			);
+			rekey(result, sent);
+			setGoogleSaved(true);
+			queryClient.setQueryData(keys.tailoring.draft(id), result);
+		});
+		return true;
+	};
+
 	const send = async () => {
+		if ((await sendRoles()) && !dirty()) return;
 		const sent = { ...unwrap(texts) };
 		const gone = removed();
 		const slots = slotsToSave(slotIds(), sent, saved, gone);
@@ -192,6 +291,54 @@ export function createDraftEditor(
 		return before.slotId;
 	};
 
+	const replaceRole = (
+		positionId: string,
+		slots: string[],
+		bullets: DraftPositionEdit["bullets"],
+	) => {
+		const list = blocks();
+		const lastAt = list.findIndex((b) => b.slotId === slots.at(-1));
+		const template = list.find((b) => b.slotId === slots[0]);
+		if (!template || lastAt < 0 || bullets.length === 0) return;
+		const dropped = new Set(slots.slice(bullets.length));
+		const fresh = bullets
+			.slice(slots.length)
+			.map(() => `${ADDED_PREFIX}${crypto.randomUUID()}`);
+		const final = [...slots.slice(0, bullets.length), ...fresh];
+		const lead = template.runs[0];
+		setBlocks([
+			...list.slice(0, lastAt + 1).filter((b) => !dropped.has(b.slotId)),
+			...fresh.map((slotId) => ({
+				...template,
+				slotId,
+				runs: lead ? [{ ...lead, text: " " }] : [],
+			})),
+			...list.slice(lastAt + 1),
+		]);
+		const body = (i: number) => oneLine(bullets[i]?.text ?? "");
+		setOriginal(
+			produce((o) => {
+				for (const s of dropped) delete o[s];
+				final.forEach((s, i) => {
+					o[s] = body(i);
+				});
+			}),
+		);
+		setTexts(
+			produce((t) => {
+				for (const s of dropped) delete t[s];
+				final.forEach((s, i) => {
+					t[s] = body(i);
+				});
+			}),
+		);
+		setRoleEdits((now) => ({
+			...now,
+			[positionId]: { slots: final, ids: bullets.map((b) => b.achievementIds) },
+		}));
+		loop.schedule();
+	};
+
 	const dirty = () =>
 		removed().length > 0 || slotIds().some((s) => text(s) !== (saved[s] ?? ""));
 	const pageCountFinding = () =>
@@ -225,6 +372,7 @@ export function createDraftEditor(
 		blocks,
 		addBullet,
 		removeBullet,
+		replaceRole,
 		label,
 		text,
 		original: (slotId: string) => original[slotId] ?? "",

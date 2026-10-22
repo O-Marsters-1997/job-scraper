@@ -81,17 +81,17 @@ const MOCK_PROFILE =
 
 const MOCK_ACHIEVEMENTS = [
 	{
-		id: "ach-1",
+		id: "achievement-1",
 		positionId: "position-1",
 		text: "Cut p99 latency of the billing API from 900ms to 240ms.",
 	},
 	{
-		id: "ach-2",
+		id: "achievement-2",
 		positionId: "position-1",
 		text: "Led the migration of twelve services to Kubernetes, reducing deploy time and the pager load for a team of eight across two time zones.",
 	},
 	{
-		id: "ach-3",
+		id: "achievement-3",
 		positionId: "position-2",
 		text: "Built the internal ledger service in Go and Postgres.",
 	},
@@ -142,6 +142,15 @@ function mockContent(): Pick<Draft, "content" | "base"> {
 		positions: p ? [{ positionId: p.id, bullets: bullets.map(bullet) }] : [],
 	});
 	const [first = "", second = "", third = ""] = texts;
+	const generated = (positionId: string, slotIds: string[]) => ({
+		positionId,
+		bullets: slotIds.map((slotId) => ({
+			text: MOCK_BULLET_TEXT[slotId] ?? "",
+			achievementIds: MOCK_ACHIEVEMENTS.filter(
+				(a) => a.text === MOCK_BULLET_TEXT[slotId],
+			).map((a) => a.id),
+		})),
+	});
 	return {
 		base: content(
 			[first, second, third],
@@ -151,14 +160,20 @@ function mockContent(): Pick<Draft, "content" | "base"> {
 			],
 			"Backend engineer with six years of experience.",
 		),
-		content: content(
-			[third, `${first} using Kubernetes`, "Led the on-call rota"],
-			[
-				{ label: "Languages", items: ["Go", "SQL"] },
-				{ label: "Tools", items: ["Postgres", "Kubernetes"] },
+		content: {
+			...content(
+				[],
+				[
+					{ label: "Languages", items: ["Go", "SQL"] },
+					{ label: "Tools", items: ["Postgres", "Kubernetes"] },
+				],
+				"Backend engineer with six years of experience in platform work.",
+			),
+			positions: [
+				generated("position-1", ["s1", "s2"]),
+				generated("position-2", ["s3"]),
 			],
-			"Backend engineer with six years of experience in platform work.",
-		),
+		},
 	};
 }
 
@@ -179,6 +194,8 @@ export function createDraft(input: DraftInput): DraftRef {
 			content: null,
 			base: null,
 			skillsEditable: false,
+			baseDocId: input.docId,
+			baseTabId: input.tabId,
 		},
 		polls: 0,
 	});
@@ -276,7 +293,7 @@ export function saveDraftSlots(
 			severity: "block",
 			message: "the Draft is 2 pages; the base CV is 1",
 		});
-	const replaced = replaceProvenance(mockProvenance(), positions);
+	const replaced = replaceProvenance(entry.draft.provenance, positions);
 	const provenance = { ...replaced, positions: byRole(replaced.positions) };
 	const { content } = entry.draft;
 	const edited =
@@ -321,10 +338,11 @@ function replaceProvenance(
 			return {
 				...p,
 				bullets: replaced.bullets.map((b, i) => ({
-					slotId: p.bullets[i]?.slotId ?? `new-${p.positionId}-${i}`,
-					achievements: MOCK_ACHIEVEMENTS.filter((a) =>
-						b.achievementIds.includes(a.id),
-					),
+					slotId: p.bullets[i]?.slotId ?? `s-${p.positionId}-${i}`,
+					achievements: getExperience()
+						.flatMap((position) => position.achievements)
+						.filter((a) => b.achievementIds.includes(a.id))
+						.map(({ id, positionId, text }) => ({ id, positionId, text })),
 				})),
 			};
 		}),
@@ -387,6 +405,8 @@ function seedDraft(id: string, outcome: Draft["outcome"]) {
 			],
 			provenance: mockProvenance(),
 			skillsEditable: true,
+			baseDocId: "mock-doc",
+			baseTabId: "mock-tab",
 			...mockContent(),
 		},
 	});

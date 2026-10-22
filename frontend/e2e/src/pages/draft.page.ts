@@ -12,6 +12,7 @@ export class DraftPage {
 	readonly suggestionDiff: Locator;
 	readonly resolvedCount: Locator;
 	readonly dots: Locator;
+	readonly drawer: Locator;
 
 	constructor(readonly page: Page) {
 		this.saveStatus = page.getByTestId("save-status");
@@ -22,6 +23,26 @@ export class DraftPage {
 		this.suggestionDiff = page.getByTestId("suggestion-diff");
 		this.resolvedCount = page.getByTestId("resolved-count");
 		this.dots = page.getByTestId("card-dot");
+		this.drawer = page.getByRole("complementary", {
+			name: "Choose Achievements",
+		});
+	}
+
+	async openRole(index = 0) {
+		await this.page
+			.getByRole("button", { name: "Choose Achievements for this role" })
+			.nth(index)
+			.click();
+		await this.drawer.waitFor({ state: "visible" });
+	}
+
+	row(text: string) {
+		return this.drawer.getByRole("option").filter({ hasText: text });
+	}
+
+	async usedLines() {
+		const text = await this.drawer.getByTestId("line-budget").textContent();
+		return Number(/(\d+) \/ \d+ lines/.exec(text ?? "")?.[1]);
 	}
 
 	async goto(id = "draft-ready") {
