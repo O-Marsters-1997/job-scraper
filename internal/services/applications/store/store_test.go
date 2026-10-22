@@ -3,6 +3,7 @@ package store_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/jackc/pgx/v5"
@@ -330,6 +331,30 @@ func TestApplyTaskSync(t *testing.T) {
 		}
 		if open, done := taskCounts(t, e); open != 1 || done != 0 {
 			t.Errorf("open = %d, done = %d, want 1 and 0", open, done)
+		}
+	})
+
+	t.Run("marking applied sets the chase date from the Applied reply window", func(t *testing.T) {
+		t.Parallel()
+		e := setup(t)
+		if _, err := e.st.UpdateApplicationStatus(t.Context(), e.applied, e.userID, "Applied", "#6366f1", new(5)); err != nil {
+			t.Fatalf("UpdateApplicationStatus err = %v", err)
+		}
+		app, err := e.st.CreateApplication(t.Context(), e.userID, dto.CreateApplicationInput{JobID: e.jobID})
+		if err != nil {
+			t.Fatalf("CreateApplication err = %v", err)
+		}
+		now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+		pgtest.InTx(t, e.pool, true, func(tx pgx.Tx) error {
+			return e.st.MarkApplied(t.Context(), tx, e.userID, e.jobID, now)
+		})
+		apps, err := e.st.ListApplications(t.Context(), e.userID, dto.ApplicationsQuery{})
+		if err != nil {
+			t.Fatalf("ListApplications err = %v", err)
+		}
+		want := time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)
+		if len(apps) != 1 || apps[0].ID != app.ID || apps[0].ChaseBy == nil || !apps[0].ChaseBy.Equal(want) {
+			t.Errorf("ListApplications after MarkApplied = %+v, want one row with ChaseBy %v", apps, want)
 		}
 	})
 }

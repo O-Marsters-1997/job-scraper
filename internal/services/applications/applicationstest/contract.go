@@ -35,6 +35,20 @@ func createApp(t *testing.T, f Fixture, in dto.CreateApplicationInput) dto.Appli
 	return got
 }
 
+func createWindowStatus(t *testing.T, f Fixture, days int) dto.ApplicationStatus {
+	t.Helper()
+	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, "Window", "#6366f1", &days)
+	if err != nil {
+		t.Fatalf("CreateApplicationStatus(window=%d) err = %v", days, err)
+	}
+	return got
+}
+
+func daysFromToday(days int) time.Time {
+	y, m, d := time.Now().UTC().Date()
+	return time.Date(y, m, d+days, 0, 0, 0, 0, time.UTC)
+}
+
 func createStatus(t *testing.T, f Fixture, name string) dto.ApplicationStatus {
 	t.Helper()
 	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, name, "#6366f1", nil)
@@ -213,6 +227,28 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 		if got.ChaseBy != nil {
 			t.Errorf("UpdateApplication(status change) ChaseBy = %v, want nil", got.ChaseBy)
+		}
+	})
+
+	t.Run("create with a reply window sets the chase date", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		got := createApp(t, f, dto.CreateApplicationInput{StatusID: createWindowStatus(t, f, 7).ID})
+		if want := daysFromToday(7); got.ChaseBy == nil || !got.ChaseBy.Equal(want) {
+			t.Errorf("CreateApplication(7-day status) ChaseBy = %v, want %v", got.ChaseBy, want)
+		}
+	})
+
+	t.Run("update to a status with a reply window sets the chase date", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: createWindowStatus(t, f, 3).ID})
+		if err != nil {
+			t.Fatalf("UpdateApplication(status change) err = %v", err)
+		}
+		if want := daysFromToday(3); got.ChaseBy == nil || !got.ChaseBy.Equal(want) {
+			t.Errorf("UpdateApplication(3-day status) ChaseBy = %v, want %v", got.ChaseBy, want)
 		}
 	})
 

@@ -55,6 +55,15 @@ export function getApplications(
 		.map(buildWithDetails);
 }
 
+function chaseFor(statusId: string): string | null {
+	const days = statuses.find((s) => s.ID === statusId)?.ReplyWindowDays;
+	if (days == null) return null;
+	const d = new Date();
+	d.setUTCHours(0, 0, 0, 0);
+	d.setUTCDate(d.getUTCDate() + days);
+	return d.toISOString();
+}
+
 export function createApplication(data: CreateApplicationPayload): Application {
 	const status =
 		statuses.find((s) => s.ID === data.status_id) ??
@@ -69,7 +78,7 @@ export function createApplication(data: CreateApplicationPayload): Application {
 		SalaryInfo: data.salary_info ?? "",
 		CreatedAt: new Date().toISOString(),
 		UpdatedAt: new Date().toISOString(),
-		ChaseBy: null,
+		ChaseBy: chaseFor(status.ID),
 	};
 	applications = [...applications, app];
 	return app;
@@ -89,7 +98,7 @@ export function updateApplication(
 		ChaseBy:
 			data.status_id === undefined || data.status_id === prev.StatusID
 				? prev.ChaseBy
-				: null,
+				: chaseFor(data.status_id),
 		AppliedAt: data.applied_at !== undefined ? data.applied_at : prev.AppliedAt,
 		SalaryInfo: data.salary_info ?? prev.SalaryInfo,
 		UpdatedAt: new Date().toISOString(),

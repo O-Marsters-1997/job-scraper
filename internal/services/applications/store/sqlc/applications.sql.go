@@ -28,12 +28,16 @@ func (q *Queries) ClearApplicationChase(ctx context.Context, arg ClearApplicatio
 }
 
 const createApplication = `-- name: CreateApplication :one
-INSERT INTO applications (user_id, job_id, status_id, applied_at, salary_info)
-SELECT $1::uuid, $2::uuid,
-       COALESCE($3::uuid,
-                (SELECT d.id FROM application_statuses d
-                 WHERE d.user_id = $1::uuid AND d.system_key = 'draft')),
-       $4::date, $5::text
+INSERT INTO applications (user_id, job_id, status_id, applied_at, salary_info, chase_by)
+SELECT p.user_id, p.job_id, p.status_id, p.applied_at, p.salary_info,
+       (SELECT CURRENT_DATE + s.reply_window_days FROM application_statuses s WHERE s.id = p.status_id)
+FROM (
+    SELECT $1::uuid AS user_id, $2::uuid AS job_id,
+           COALESCE($3::uuid,
+                    (SELECT d.id FROM application_statuses d
+                     WHERE d.user_id = $1::uuid AND d.system_key = 'draft')) AS status_id,
+           $4::date AS applied_at, $5::text AS salary_info
+) p
 WHERE $3::uuid IS NULL
    OR EXISTS (SELECT 1 FROM application_statuses s
               WHERE s.id = $3::uuid AND s.user_id = $1::uuid)
@@ -259,7 +263,7 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 
 const markApplicationApplied = `-- name: MarkApplicationApplied :one
 WITH applied AS (
-    SELECT s.id FROM application_statuses s
+    SELECT s.id, s.reply_window_days FROM application_statuses s
     WHERE s.user_id = $2::uuid AND s.system_key = 'applied'
 ), target AS (
     SELECT a.id, a.status_id AS from_status_id FROM applications a
@@ -268,7 +272,7 @@ WITH applied AS (
 UPDATE applications a
 SET status_id = applied.id,
     applied_at = COALESCE(a.applied_at, $1::timestamptz::date),
-    chase_by = NULL,
+    chase_by = $1::timestamptz::date + applied.reply_window_days,
     updated_at = $1::timestamptz
 FROM applied, target
 WHERE a.id = target.id AND a.status_id IS DISTINCT FROM applied.id
@@ -327,7 +331,9 @@ func (q *Queries) SetApplicationChase(ctx context.Context, arg SetApplicationCha
 const updateApplication = `-- name: UpdateApplication :one
 UPDATE applications a
 SET status_id = $3, applied_at = $4, salary_info = $5, updated_at = NOW(),
-    chase_by = CASE WHEN a.status_id IS DISTINCT FROM $3 THEN NULL ELSE a.chase_by END
+    chase_by = CASE WHEN a.status_id IS DISTINCT FROM $3
+                    THEN (SELECT CURRENT_DATE + s.reply_window_days FROM application_statuses s WHERE s.id = $3::uuid)
+                    ELSE a.chase_by END
 WHERE a.id = $1 AND a.user_id = $2
   AND ($3::uuid IS NULL
        OR EXISTS (SELECT 1 FROM application_statuses s WHERE s.id = $3::uuid AND s.user_id = $2))
