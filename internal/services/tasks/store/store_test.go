@@ -33,6 +33,17 @@ func insertType(t *testing.T, pool *pgxpool.Pool, userID, name string) string {
 	return id
 }
 
+func insertSystemType(t *testing.T, pool *pgxpool.Pool, userID, name string) string {
+	t.Helper()
+	var id string
+	err := pool.QueryRow(t.Context(),
+		`INSERT INTO task_types (user_id, name, colour, system_key) VALUES ($1, $2, '#6366f1', 'apply') RETURNING id`, userID, name).Scan(&id)
+	if err != nil {
+		t.Fatalf("insert system task type: %v", err)
+	}
+	return id
+}
+
 func TestStoreContract(t *testing.T) {
 	t.Parallel()
 	taskstest.RunStoreContract(t, func(t *testing.T) taskstest.Fixture {
@@ -40,12 +51,13 @@ func TestStoreContract(t *testing.T) {
 		st, pool, userID := newStore(t)
 		other := pgtest.InsertUser(t, pool)
 		return taskstest.Fixture{
-			Store:       st,
-			UserID:      userID,
-			OtherUserID: other,
-			TypeID:      insertType(t, pool, userID, "Apply"),
-			OtherTypeID: insertType(t, pool, other, "Apply"),
-			JobID:       pgtest.InsertJob(t, pool, "Contract Job", "Contract Job"),
+			Store:        st,
+			UserID:       userID,
+			OtherUserID:  other,
+			TypeID:       insertType(t, pool, userID, "Apply"),
+			OtherTypeID:  insertType(t, pool, other, "Apply"),
+			SystemTypeID: insertSystemType(t, pool, userID, "Submit"),
+			JobID:        pgtest.InsertJob(t, pool, "Contract Job", "Contract Job"),
 		}
 	})
 }

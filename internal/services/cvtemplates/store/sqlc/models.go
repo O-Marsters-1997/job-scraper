@@ -656,6 +656,7 @@ type TaskType struct {
 	Name      string
 	Colour    string
 	CreatedAt pgtype.Timestamptz
+	SystemKey pgtype.Text
 }
 
 type TrackedCompany struct {

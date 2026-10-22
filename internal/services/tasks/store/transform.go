@@ -13,6 +13,7 @@ func toTaskTypeDTO(t sqlc.ListTaskTypesRow) dto.TaskType {
 		ID:        t.ID.String(),
 		Name:      t.Name,
 		Colour:    t.Colour,
+		SystemKey: dto.TaskTypeSystemKey(t.SystemKey.String),
 		TaskCount: int(t.TaskCount),
 		CreatedAt: t.CreatedAt.Time,
 	}
@@ -31,6 +32,7 @@ func toTaskDTO(r sqlc.PageTasksRow) dto.Task {
 		TypeID:         r.TypeID.String(),
 		TypeName:       r.TypeName,
 		TypeColour:     r.TypeColour,
+		TypeSystemKey:  dto.TaskTypeSystemKey(r.TypeSystemKey.String),
 		JobID:          uuidPtr(r.JobID),
 		JobTitle:       r.JobTitle.String,
 		JobCompanySlug: r.JobCompanySlug.String,

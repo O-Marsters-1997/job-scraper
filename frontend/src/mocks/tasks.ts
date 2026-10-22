@@ -15,16 +15,36 @@ import { failIfRequested } from "./helpers";
 import { getJobs } from "./jobs";
 
 const TYPES = [
-	{ ID: "task-type-apply", Name: "Apply", Colour: "#6366f1" },
-	{ ID: "task-type-follow-up", Name: "Follow up", Colour: "#c2410c" },
-	{ ID: "task-type-reach-out", Name: "Reach out", Colour: "#15803d" },
+	{
+		ID: "task-type-apply",
+		Name: "Apply",
+		Colour: "#6366f1",
+		SystemKey: "apply",
+	},
+	{
+		ID: "task-type-follow-up",
+		Name: "Follow up",
+		Colour: "#c2410c",
+		SystemKey: "",
+	},
+	{
+		ID: "task-type-reach-out",
+		Name: "Reach out",
+		Colour: "#15803d",
+		SystemKey: "",
+	},
 ] as const;
 
 const seedCreatedAt = new Date(Date.now() - 86_400_000).toISOString();
 
 let types: Omit<TaskType, "TaskCount">[] = [
 	...TYPES,
-	{ ID: "task-type-prep", Name: "Prep", Colour: "#64748b" },
+	{
+		ID: "task-type-prep",
+		Name: "Prep",
+		Colour: "#64748b",
+		SystemKey: "" as const,
+	},
 ].map((t) => ({ ...t, CreatedAt: seedCreatedAt }));
 
 function seedTasks(): Task[] {
@@ -37,6 +57,7 @@ function seedTasks(): Task[] {
 			TypeID: type.ID,
 			TypeName: type.Name,
 			TypeColour: type.Colour,
+			TypeSystemKey: type.SystemKey,
 			JobID: job?.ID ?? null,
 			JobTitle: job?.Title ?? "",
 			JobCompanySlug: job?.CompanySlug ?? "",
@@ -83,6 +104,7 @@ export function createTaskType(name: string, colour: string): TaskType {
 		ID: faker.string.uuid(),
 		Name: name,
 		Colour: colour,
+		SystemKey: "" as const,
 		CreatedAt: new Date().toISOString(),
 	};
 	types = [...types, type];
@@ -106,6 +128,11 @@ export function updateTaskType(
 }
 
 export function deleteTaskType(id: string): void {
+	if (types.find((t) => t.ID === id)?.SystemKey) {
+		throw new ApiError(400, `/task-types/${id}`, {
+			error: "this task type is used by the app and can't be deleted",
+		});
+	}
 	types = types.filter((t) => t.ID !== id);
 	tasks = allTasks().filter((t) => t.TypeID !== id);
 }
@@ -126,6 +153,7 @@ export function createTask(input: CreateTaskInput): Task {
 		TypeID: type.ID,
 		TypeName: type.Name,
 		TypeColour: type.Colour,
+		TypeSystemKey: type.SystemKey,
 		JobID: job?.ID ?? null,
 		JobTitle: job?.Title ?? "",
 		JobCompanySlug: job?.CompanySlug ?? "",
@@ -180,12 +208,22 @@ export function updateTask(
 		TypeID: type.ID,
 		TypeName: type.Name,
 		TypeColour: type.Colour,
+		TypeSystemKey: type.SystemKey,
 		Link: input.link,
 		Notes: input.notes,
 		UpdatedAt: new Date().toISOString(),
 	};
 	tasks = allTasks().map((t) => (t.ID === id ? updated : t));
 	return updated;
+}
+
+export function completeOpenApplyTasks(jobId: string): void {
+	const now = new Date().toISOString();
+	tasks = allTasks().map((t) =>
+		t.JobID === jobId && t.TypeSystemKey === "apply" && !t.CompletedAt
+			? { ...t, CompletedAt: now, UpdatedAt: now }
+			: t,
+	);
 }
 
 export function setTaskDone(id: string, done: boolean): Task {

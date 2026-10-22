@@ -194,6 +194,27 @@ func TestApplicationTracked(t *testing.T) {
 		}
 	})
 
+	t.Run("renaming the Apply type keeps tracking and applying working", func(t *testing.T) {
+		t.Parallel()
+		env := newSyncEnv(t)
+		env.exec(t, `UPDATE task_types SET name = 'Submit' WHERE user_id = $1 AND system_key = 'apply'`, env.userID)
+
+		pgtest.InTx(t, env.pool, true, func(tx pgx.Tx) error {
+			return tasks.NewFacade(env.pool).ApplicationTracked(t.Context(), tx, env.userID, env.jobID)
+		})
+		if got := openApplyTasks(t, env); got != 1 {
+			t.Fatalf("open tasks after tracking = %d, want 1", got)
+		}
+
+		pgtest.InTx(t, env.pool, true, func(tx pgx.Tx) error {
+			return tasks.NewFacade(env.pool).ApplicationApplied(t.Context(), tx, env.userID, env.jobID)
+		})
+		page, err := env.tasks.ListTasks(t.Context(), env.userID, dto.TaskPageOptions{JobID: env.jobID, Done: true, Limit: 25})
+		if err != nil || page.Total != 1 {
+			t.Errorf("ListTasks(done) = %+v, %v, want 1 completed task", page, err)
+		}
+	})
+
 	t.Run("an existing open Apply task is not duplicated", func(t *testing.T) {
 		t.Parallel()
 		env := newSyncEnv(t)

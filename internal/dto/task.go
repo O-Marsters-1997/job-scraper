@@ -9,10 +9,15 @@ const (
 	TaskSortJobPosted TaskSort = "job_posted"
 )
 
+type TaskTypeSystemKey string
+
+const TaskTypeApply TaskTypeSystemKey = "apply"
+
 type TaskType struct {
 	ID        string
 	Name      string
 	Colour    string
+	SystemKey TaskTypeSystemKey
 	TaskCount int
 	CreatedAt time.Time
 }
@@ -28,6 +33,7 @@ type Task struct {
 	TypeID         string
 	TypeName       string
 	TypeColour     string
+	TypeSystemKey  TaskTypeSystemKey
 	JobID          *string
 	JobTitle       string
 	JobCompanySlug string

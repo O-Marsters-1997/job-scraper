@@ -10,6 +10,109 @@ async function openFirstRowApplicationDialog(page: Page) {
 	return page.getByRole("dialog");
 }
 
+async function openFirstApplication(page: Page) {
+	await page.goto("/applications");
+	await page.locator('a[href^="/applications/"]').first().click();
+	await page.getByRole("heading", { level: 1 }).waitFor();
+}
+
+test.describe("Application page", () => {
+	test("tabs show only their own content", async ({ page }) => {
+		await openFirstApplication(page);
+
+		await expect(page.getByRole("tab", { name: "Checklist" })).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await expect(page.getByLabel("Note", { exact: true })).toBeHidden();
+
+		await page.getByRole("tab", { name: "Notes" }).click();
+		await expect(page.getByLabel("Note", { exact: true })).toBeVisible();
+
+		await page.getByRole("tab", { name: "Description" }).click();
+		await expect(page.getByLabel("Note", { exact: true })).toBeHidden();
+		await expect(
+			page.getByRole("heading", { name: "Description" }),
+		).toBeVisible();
+	});
+
+	test("confirming the application moves it to Applied and ticks Apply", async ({
+		page,
+	}) => {
+		await openFirstApplication(page);
+		const status = page.getByRole("button", { name: "Status" });
+		await status.click();
+		await page.getByRole("option", { name: "Draft" }).click();
+		await expect(status).toContainText("Draft");
+
+		const apply = page.getByRole("listitem").filter({ hasText: /^Apply on/ });
+		await expect(apply.getByRole("img", { name: "To do" })).toBeVisible();
+		const popup = page.waitForEvent("popup");
+		await apply.getByRole("link", { name: /Open application/ }).click();
+		await (await popup).close();
+		await expect(apply.getByText("Did you send it?")).toBeVisible();
+		await apply.getByRole("button", { name: "Yes, I applied" }).click();
+
+		await expect(status).toContainText("Applied");
+		await expect(apply.getByRole("img", { name: "Done" })).toBeVisible();
+	});
+
+	test("adding a step lists it and offers no Apply type", async ({ page }) => {
+		await openFirstApplication(page);
+		await page.getByRole("button", { name: "Add a step" }).click();
+		const dialog = page.getByRole("dialog");
+		await expect(
+			dialog.getByRole("option", { name: "Apply", exact: true }),
+		).toHaveCount(0);
+		await dialog.getByLabel("Notes").fill("Email the recruiter");
+		await dialog.getByRole("button", { name: "Save" }).click();
+		await expect(dialog).toBeHidden();
+
+		const step = page
+			.getByRole("listitem")
+			.filter({ hasText: "Email the recruiter" });
+		await expect(step).toBeVisible();
+		await step.getByRole("button", { name: "Done" }).click();
+		await expect(step).toBeHidden();
+	});
+
+	test("the status dropdown saves and the list reflects it", async ({
+		page,
+	}) => {
+		await openFirstApplication(page);
+		const path = new URL(page.url()).pathname;
+
+		const status = page.getByRole("button", { name: "Status" });
+		await status.click();
+		await page.getByRole("option", { name: "Rejected" }).click();
+		await expect(status).toContainText("Rejected");
+
+		await page
+			.getByRole("navigation", { name: "Breadcrumb" })
+			.getByRole("link", { name: "Applications" })
+			.click();
+		await expect(
+			page
+				.locator("div.items-center")
+				.filter({ has: page.locator(`a[href="${path}"]`) }),
+		).toContainText("Rejected");
+	});
+
+	test("the breadcrumb shows the job title and the listing link opens the job URL", async ({
+		page,
+	}) => {
+		await openFirstApplication(page);
+		const title = await page.getByRole("heading", { level: 1 }).innerText();
+
+		await expect(
+			page.getByRole("navigation", { name: "Breadcrumb" }),
+		).toContainText(title);
+		const listing = page.getByRole("link", { name: /Original listing/ });
+		await expect(listing).toHaveAttribute("target", "_blank");
+		await expect(listing).toHaveAttribute("href", /^https?:\/\//);
+	});
+});
+
 test.describe("Applications", () => {
 	test("editing a status from /jobs keeps applied date and salary", async ({
 		page,

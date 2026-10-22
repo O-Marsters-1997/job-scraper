@@ -16,13 +16,12 @@ import { useCreateTask, useTaskTypes, useUpdateTask } from "@/hooks/useTasks";
 import type { Job } from "@/types/job";
 import type { Task } from "@/types/task";
 
-const DEFAULT_TYPE_NAME = "Apply";
-
 interface CreateTaskDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	job?: Pick<Job, "ID" | "Title"> | undefined;
 	task?: Task | undefined;
+	hideSystemTypes?: boolean;
 }
 
 export function CreateTaskDialog(props: CreateTaskDialogProps) {
@@ -40,6 +39,7 @@ export function CreateTaskDialog(props: CreateTaskDialogProps) {
 					<CreateTaskForm
 						job={props.job}
 						task={props.task}
+						hideSystemTypes={props.hideSystemTypes ?? false}
 						onClose={() => props.onOpenChange(false)}
 					/>
 				</Show>
@@ -59,6 +59,7 @@ function errorMessage(err: unknown): string {
 function CreateTaskForm(props: {
 	job: Pick<Job, "ID" | "Title"> | undefined;
 	task: Task | undefined;
+	hideSystemTypes: boolean;
 	onClose: () => void;
 }) {
 	const types = useTaskTypes();
@@ -69,10 +70,15 @@ function CreateTaskForm(props: {
 	const [link, setLink] = createSignal(initial?.Link ?? "");
 	const [notes, setNotes] = createSignal(initial?.Notes ?? "");
 
+	const options = () =>
+		props.hideSystemTypes
+			? types.data?.filter((t) => !t.SystemKey)
+			: types.data;
 	const selectedTypeId = () =>
 		typeId() ||
-		types.data?.find((t) => t.Name === DEFAULT_TYPE_NAME)?.ID ||
-		types.data?.[0]?.ID ||
+		(!props.hideSystemTypes &&
+			types.data?.find((t) => t.SystemKey === "apply")?.ID) ||
+		options()?.[0]?.ID ||
 		"";
 
 	const form = useFormSubmit(async () => {
@@ -100,7 +106,7 @@ function CreateTaskForm(props: {
 					value={selectedTypeId()}
 					onChange={(e) => setTypeId(e.currentTarget.value)}
 				>
-					<For each={types.data}>
+					<For each={options()}>
 						{(t) => <option value={t.ID}>{t.Name}</option>}
 					</For>
 				</select>

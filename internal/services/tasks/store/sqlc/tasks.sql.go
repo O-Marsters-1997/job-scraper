@@ -15,7 +15,7 @@ const completeApplyTasks = `-- name: CompleteApplyTasks :exec
 UPDATE tasks t
 SET completed_at = $1::timestamptz, updated_at = $1::timestamptz
 FROM task_types tt
-WHERE tt.id = t.type_id AND tt.name = 'Apply'
+WHERE tt.id = t.type_id AND tt.system_key = 'apply'
   AND t.user_id = $2::uuid AND t.job_id = $3::uuid
   AND t.completed_at IS NULL
 `
@@ -63,7 +63,7 @@ const createApplyTask = `-- name: CreateApplyTask :exec
 INSERT INTO tasks (user_id, type_id, job_id)
 SELECT $1::uuid, tt.id, $2::uuid
 FROM task_types tt
-WHERE tt.user_id = $1::uuid AND tt.name = 'Apply'
+WHERE tt.user_id = $1::uuid AND tt.system_key = 'apply'
   AND NOT EXISTS (
       SELECT 1 FROM tasks t
       WHERE t.type_id = tt.id AND t.job_id = $2::uuid AND t.completed_at IS NULL
@@ -92,6 +92,7 @@ SELECT
     t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
+    tt.system_key AS type_system_key,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
     j.company_id   AS job_company_id,
@@ -122,6 +123,7 @@ type CreateTaskRow struct {
 	UpdatedAt      pgtype.Timestamptz
 	TypeName       string
 	TypeColour     string
+	TypeSystemKey  pgtype.Text
 	JobTitle       pgtype.Text
 	JobCompanySlug pgtype.Text
 	JobCompanyID   pgtype.UUID
@@ -149,6 +151,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 		&i.UpdatedAt,
 		&i.TypeName,
 		&i.TypeColour,
+		&i.TypeSystemKey,
 		&i.JobTitle,
 		&i.JobCompanySlug,
 		&i.JobCompanyID,
@@ -161,7 +164,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 const createTaskType = `-- name: CreateTaskType :one
 INSERT INTO task_types (user_id, name, colour)
 VALUES ($1, $2, $3)
-RETURNING id, name, colour, created_at, 0::int AS task_count
+RETURNING id, name, colour, system_key, created_at, 0::int AS task_count
 `
 
 type CreateTaskTypeParams struct {
@@ -174,6 +177,7 @@ type CreateTaskTypeRow struct {
 	ID        pgtype.UUID
 	Name      string
 	Colour    string
+	SystemKey pgtype.Text
 	CreatedAt pgtype.Timestamptz
 	TaskCount int32
 }
@@ -185,6 +189,7 @@ func (q *Queries) CreateTaskType(ctx context.Context, arg CreateTaskTypeParams) 
 		&i.ID,
 		&i.Name,
 		&i.Colour,
+		&i.SystemKey,
 		&i.CreatedAt,
 		&i.TaskCount,
 	)
@@ -192,7 +197,7 @@ func (q *Queries) CreateTaskType(ctx context.Context, arg CreateTaskTypeParams) 
 }
 
 const deleteTaskType = `-- name: DeleteTaskType :execrows
-DELETE FROM task_types WHERE id = $1 AND user_id = $2
+DELETE FROM task_types WHERE id = $1 AND user_id = $2 AND system_key IS NULL
 `
 
 type DeleteTaskTypeParams struct {
@@ -208,8 +213,24 @@ func (q *Queries) DeleteTaskType(ctx context.Context, arg DeleteTaskTypeParams) 
 	return result.RowsAffected(), nil
 }
 
+const getTaskTypeSystemKey = `-- name: GetTaskTypeSystemKey :one
+SELECT system_key FROM task_types WHERE id = $1 AND user_id = $2
+`
+
+type GetTaskTypeSystemKeyParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) GetTaskTypeSystemKey(ctx context.Context, arg GetTaskTypeSystemKeyParams) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getTaskTypeSystemKey, arg.ID, arg.UserID)
+	var system_key pgtype.Text
+	err := row.Scan(&system_key)
+	return system_key, err
+}
+
 const listTaskTypes = `-- name: ListTaskTypes :many
-SELECT tt.id, tt.name, tt.colour, tt.created_at,
+SELECT tt.id, tt.name, tt.colour, tt.system_key, tt.created_at,
     (SELECT count(*) FROM tasks t WHERE t.type_id = tt.id)::int AS task_count
 FROM task_types tt
 WHERE tt.user_id = $1
@@ -220,6 +241,7 @@ type ListTaskTypesRow struct {
 	ID        pgtype.UUID
 	Name      string
 	Colour    string
+	SystemKey pgtype.Text
 	CreatedAt pgtype.Timestamptz
 	TaskCount int32
 }
@@ -237,6 +259,7 @@ func (q *Queries) ListTaskTypes(ctx context.Context, userID pgtype.UUID) ([]List
 			&i.ID,
 			&i.Name,
 			&i.Colour,
+			&i.SystemKey,
 			&i.CreatedAt,
 			&i.TaskCount,
 		); err != nil {
@@ -251,7 +274,7 @@ func (q *Queries) ListTaskTypes(ctx context.Context, userID pgtype.UUID) ([]List
 }
 
 const lockTask = `-- name: LockTask :one
-SELECT t.job_id, t.completed_at, (tt.name = 'Apply')::bool AS is_apply
+SELECT t.job_id, t.completed_at, (tt.system_key IS NOT DISTINCT FROM 'apply')::bool AS is_apply
 FROM tasks t
 JOIN task_types tt ON tt.id = t.type_id
 WHERE t.id = $1::uuid AND t.user_id = $2::uuid
@@ -281,6 +304,7 @@ SELECT
     t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
+    tt.system_key AS type_system_key,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
     j.company_id   AS job_company_id,
@@ -322,6 +346,7 @@ type PageTasksRow struct {
 	UpdatedAt      pgtype.Timestamptz
 	TypeName       string
 	TypeColour     string
+	TypeSystemKey  pgtype.Text
 	JobTitle       pgtype.Text
 	JobCompanySlug pgtype.Text
 	JobCompanyID   pgtype.UUID
@@ -357,6 +382,7 @@ func (q *Queries) PageTasks(ctx context.Context, arg PageTasksParams) ([]PageTas
 			&i.UpdatedAt,
 			&i.TypeName,
 			&i.TypeColour,
+			&i.TypeSystemKey,
 			&i.JobTitle,
 			&i.JobCompanySlug,
 			&i.JobCompanyID,
@@ -374,12 +400,12 @@ func (q *Queries) PageTasks(ctx context.Context, arg PageTasksParams) ([]PageTas
 }
 
 const seedDefaultTaskTypes = `-- name: SeedDefaultTaskTypes :exec
-INSERT INTO task_types (user_id, name, colour)
+INSERT INTO task_types (user_id, name, colour, system_key)
 VALUES
-    ($1, 'Apply',     '#6366f1'),
-    ($1, 'Follow up', '#c2410c'),
-    ($1, 'Reach out', '#15803d'),
-    ($1, 'Prep',      '#64748b')
+    ($1, 'Apply',     '#6366f1', 'apply'),
+    ($1, 'Follow up', '#c2410c', NULL),
+    ($1, 'Reach out', '#15803d', NULL),
+    ($1, 'Prep',      '#64748b', NULL)
 `
 
 func (q *Queries) SeedDefaultTaskTypes(ctx context.Context, userID pgtype.UUID) error {
@@ -399,6 +425,7 @@ SELECT
     t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
+    tt.system_key AS type_system_key,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
     j.company_id   AS job_company_id,
@@ -428,6 +455,7 @@ type SetTaskDoneRow struct {
 	UpdatedAt      pgtype.Timestamptz
 	TypeName       string
 	TypeColour     string
+	TypeSystemKey  pgtype.Text
 	JobTitle       pgtype.Text
 	JobCompanySlug pgtype.Text
 	JobCompanyID   pgtype.UUID
@@ -454,6 +482,7 @@ func (q *Queries) SetTaskDone(ctx context.Context, arg SetTaskDoneParams) (SetTa
 		&i.UpdatedAt,
 		&i.TypeName,
 		&i.TypeColour,
+		&i.TypeSystemKey,
 		&i.JobTitle,
 		&i.JobCompanySlug,
 		&i.JobCompanyID,
@@ -479,6 +508,7 @@ SELECT
     t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
+    tt.system_key AS type_system_key,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
     j.company_id   AS job_company_id,
@@ -510,6 +540,7 @@ type UpdateTaskRow struct {
 	UpdatedAt      pgtype.Timestamptz
 	TypeName       string
 	TypeColour     string
+	TypeSystemKey  pgtype.Text
 	JobTitle       pgtype.Text
 	JobCompanySlug pgtype.Text
 	JobCompanyID   pgtype.UUID
@@ -538,6 +569,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateT
 		&i.UpdatedAt,
 		&i.TypeName,
 		&i.TypeColour,
+		&i.TypeSystemKey,
 		&i.JobTitle,
 		&i.JobCompanySlug,
 		&i.JobCompanyID,
@@ -551,7 +583,7 @@ const updateTaskType = `-- name: UpdateTaskType :one
 UPDATE task_types tt
 SET name = $1, colour = $2
 WHERE tt.id = $3 AND tt.user_id = $4
-RETURNING tt.id, tt.name, tt.colour, tt.created_at,
+RETURNING tt.id, tt.name, tt.colour, tt.system_key, tt.created_at,
     (SELECT count(*) FROM tasks t WHERE t.type_id = tt.id)::int AS task_count
 `
 
@@ -566,6 +598,7 @@ type UpdateTaskTypeRow struct {
 	ID        pgtype.UUID
 	Name      string
 	Colour    string
+	SystemKey pgtype.Text
 	CreatedAt pgtype.Timestamptz
 	TaskCount int32
 }
@@ -582,6 +615,7 @@ func (q *Queries) UpdateTaskType(ctx context.Context, arg UpdateTaskTypeParams) 
 		&i.ID,
 		&i.Name,
 		&i.Colour,
+		&i.SystemKey,
 		&i.CreatedAt,
 		&i.TaskCount,
 	)

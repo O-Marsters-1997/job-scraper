@@ -1,10 +1,14 @@
 -- name: CreateApplication :one
-INSERT INTO applications (user_id, job_id, status_id, applied_at, salary_info)
-SELECT sqlc.arg('user_id')::uuid, sqlc.arg('job_id')::uuid,
-       COALESCE(sqlc.narg('status_id')::uuid,
-                (SELECT d.id FROM application_statuses d
-                 WHERE d.user_id = sqlc.arg('user_id')::uuid AND d.system_key = 'draft')),
-       sqlc.narg('applied_at')::date, sqlc.narg('salary_info')::text
+INSERT INTO applications (user_id, job_id, status_id, applied_at, salary_info, chase_by)
+SELECT p.user_id, p.job_id, p.status_id, p.applied_at, p.salary_info,
+       (SELECT CURRENT_DATE + s.reply_window_days FROM application_statuses s WHERE s.id = p.status_id)
+FROM (
+    SELECT sqlc.arg('user_id')::uuid AS user_id, sqlc.arg('job_id')::uuid AS job_id,
+           COALESCE(sqlc.narg('status_id')::uuid,
+                    (SELECT d.id FROM application_statuses d
+                     WHERE d.user_id = sqlc.arg('user_id')::uuid AND d.system_key = 'draft')) AS status_id,
+           sqlc.narg('applied_at')::date AS applied_at, sqlc.narg('salary_info')::text AS salary_info
+) p
 WHERE sqlc.narg('status_id')::uuid IS NULL
    OR EXISTS (SELECT 1 FROM application_statuses s
               WHERE s.id = sqlc.narg('status_id')::uuid AND s.user_id = sqlc.arg('user_id')::uuid)
@@ -34,7 +38,9 @@ ORDER BY
 -- name: UpdateApplication :one
 UPDATE applications a
 SET status_id = $3, applied_at = $4, salary_info = $5, updated_at = NOW(),
-    chase_by = CASE WHEN a.status_id IS DISTINCT FROM $3 THEN NULL ELSE a.chase_by END
+    chase_by = CASE WHEN a.status_id IS DISTINCT FROM $3
+                    THEN (SELECT CURRENT_DATE + s.reply_window_days FROM application_statuses s WHERE s.id = $3::uuid)
+                    ELSE a.chase_by END
 WHERE a.id = $1 AND a.user_id = $2
   AND ($3::uuid IS NULL
        OR EXISTS (SELECT 1 FROM application_statuses s WHERE s.id = $3::uuid AND s.user_id = $2))
@@ -72,7 +78,7 @@ WHERE id = $1 AND user_id = $2;
 
 -- name: MarkApplicationApplied :one
 WITH applied AS (
-    SELECT s.id FROM application_statuses s
+    SELECT s.id, s.reply_window_days FROM application_statuses s
     WHERE s.user_id = sqlc.arg(user_id)::uuid AND s.system_key = 'applied'
 ), target AS (
     SELECT a.id, a.status_id AS from_status_id FROM applications a
@@ -81,7 +87,7 @@ WITH applied AS (
 UPDATE applications a
 SET status_id = applied.id,
     applied_at = COALESCE(a.applied_at, sqlc.arg(now)::timestamptz::date),
-    chase_by = NULL,
+    chase_by = sqlc.arg(now)::timestamptz::date + applied.reply_window_days,
     updated_at = sqlc.arg(now)::timestamptz
 FROM applied, target
 WHERE a.id = target.id AND a.status_id IS DISTINCT FROM applied.id
