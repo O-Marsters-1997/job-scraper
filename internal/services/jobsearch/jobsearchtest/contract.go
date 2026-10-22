@@ -89,6 +89,32 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("harvest seen ids are kept per source until retired", func(t *testing.T) {
+		t.Parallel()
+		st, _ := newStore(t)
+		ctx := t.Context()
+		if err := st.RecordHarvestSeenIDs(ctx, "wttj", "backfill", []string{"a", "b", "c"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.RecordHarvestSeenIDs(ctx, "wttj", "exported", []string{"b"}); err != nil {
+			t.Fatalf("RecordHarvestSeenIDs(repeat) = %v, want nil", err)
+		}
+		if err := st.RecordHarvestSeenIDs(ctx, "other", "backfill", []string{"x"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.RetireHarvestSeenIDs(ctx, "wttj", []string{"a"}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := st.HarvestSeenIDs(ctx, "wttj")
+		if err != nil {
+			t.Fatal(err)
+		}
+		slices.Sort(got)
+		if diff := cmp.Diff([]string{"b", "c"}, got); diff != "" {
+			t.Errorf("HarvestSeenIDs (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("marking a board's UK jobs seen stamps it", func(t *testing.T) {
 		t.Parallel()
 		st, _ := newStore(t)

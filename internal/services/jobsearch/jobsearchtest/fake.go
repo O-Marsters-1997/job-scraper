@@ -54,6 +54,7 @@ type FakeStore struct {
 	lastScraped map[string]time.Time
 	fetches     map[string]dto.CachedResponse
 	misses      map[string]time.Time
+	harvestSeen map[string]map[string]string
 	profiles    map[string]dto.CompanyProfile
 
 	sourceTargets map[string]dto.SourceTarget
@@ -82,6 +83,7 @@ func NewFakeStore() *FakeStore {
 		lastScraped:    make(map[string]time.Time),
 		fetches:        make(map[string]dto.CachedResponse),
 		misses:         make(map[string]time.Time),
+		harvestSeen:    make(map[string]map[string]string),
 		profiles:       make(map[string]dto.CompanyProfile),
 		sourceTargets:  make(map[string]dto.SourceTarget),
 		targetByKey:    make(map[string]string),
@@ -1371,4 +1373,31 @@ func (f *FakeStore) DiscoverMissedSince(_ context.Context, source, token string,
 	defer f.mu.Unlock()
 	at, ok := f.misses[source+"/"+token]
 	return ok && !at.Before(since), nil
+}
+
+func (f *FakeStore) HarvestSeenIDs(_ context.Context, source string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Collect(maps.Keys(f.harvestSeen[source])), nil
+}
+
+func (f *FakeStore) RecordHarvestSeenIDs(_ context.Context, source, outcome string, ids []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.harvestSeen[source] == nil {
+		f.harvestSeen[source] = make(map[string]string)
+	}
+	for _, id := range ids {
+		f.harvestSeen[source][id] = outcome
+	}
+	return nil
+}
+
+func (f *FakeStore) RetireHarvestSeenIDs(_ context.Context, source string, ids []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, id := range ids {
+		delete(f.harvestSeen[source], id)
+	}
+	return nil
 }

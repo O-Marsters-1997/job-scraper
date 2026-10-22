@@ -17,7 +17,6 @@ const (
 	baseURL = "https://app.welcometothejungle.com"
 	maxAge  = 90 * 24 * time.Hour
 
-	ukPollIn    = 7 * 24 * time.Hour
 	otherPollIn = 90 * 24 * time.Hour
 )
 
@@ -103,12 +102,21 @@ func (s *Source) poll(ctx context.Context) (sources.BoardResult, apiCompany, err
 		}
 		jobs = append(jobs, job)
 	}
-	return sources.BoardResult{Jobs: jobs, NextPollIn: ukPollIn, Profile: profile}, company, nil
+	return sources.BoardResult{Jobs: jobs, Profile: profile}, company, nil
 }
 
 func CompanyName(ctx context.Context, companyToken string) (string, error) {
 	c, err := NewClient(0).company(ctx, companyToken)
 	return c.Name, err
+}
+
+func (c *Client) Jobs(ctx context.Context, ids []string) ([]dto.Job, error) {
+	details, err := c.jobs(ctx, ids, detailFields)
+	jobs := make([]dto.Job, len(details))
+	for i, d := range details {
+		jobs[i] = d.toJob()
+	}
+	return jobs, err
 }
 
 func (j apiJob) toJob() dto.Job {
