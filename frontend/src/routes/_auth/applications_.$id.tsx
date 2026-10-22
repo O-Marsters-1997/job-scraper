@@ -1,5 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { createSignal, For, Show } from "solid-js";
+import {
+	createSignal,
+	For,
+	type JSX,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
 import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -22,21 +29,27 @@ import {
 	useApplications,
 	useUpdateApplication,
 } from "@/hooks/useApplications";
+import { useCoverLetters } from "@/hooks/useCoverLetters";
 import { jobCommentsQueryOptions } from "@/hooks/useJobComments";
 import { jobNoteQueryOptions } from "@/hooks/useJobNotes";
 import { jobQueryOptions, useJob } from "@/hooks/useJobs";
-import { jobDraftsQueryOptions } from "@/hooks/useTailoring";
-import { jobOpenTasksQueryOptions } from "@/hooks/useTasks";
+import { jobDraftsQueryOptions, useJobDrafts } from "@/hooks/useTailoring";
+import {
+	jobOpenTasksQueryOptions,
+	useJobOpenTasks,
+	useSetTaskDone,
+} from "@/hooks/useTasks";
+import { checklistDone } from "@/lib/applicationChecklist";
 import { dayKey, formatDate } from "@/lib/datetime";
 import { queryClient } from "@/lib/queryClient";
 import { loadedData } from "@/lib/queryData";
-import { titleCase } from "@/lib/utils";
+import { cn, titleCase } from "@/lib/utils";
 import type { ApplicationWithDetails } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
 import type { Job } from "@/types/job";
+import { ChaseRow } from "./-jobs-detail/ChaseRow";
 import { CommentableDescription } from "./-jobs-detail/CommentableDescription";
 import { JobNotesCard } from "./-jobs-detail/JobNotesCard";
-import { JobTasksCard } from "./-jobs-detail/JobTasksCard";
 import { workStyle } from "./-jobs-detail/workStyle";
 
 export const Route = createFileRoute("/_auth/applications_/$id")({
@@ -102,6 +115,177 @@ function StatusSelect(props: { app: ApplicationWithDetails }) {
 			</SelectTrigger>
 			<SelectContent />
 		</Select>
+	);
+}
+
+function Step(props: { done: boolean; title: string; children?: JSX.Element }) {
+	return (
+		<li class="flex gap-3 rounded-md border border-border p-3">
+			<span
+				role="img"
+				aria-label={props.done ? "Done" : "To do"}
+				class={cn(
+					"mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
+					props.done
+						? "border-primary bg-primary text-primary-foreground"
+						: "border-border",
+				)}
+			>
+				<Show when={props.done}>
+					<Icon name="check" size={12} />
+				</Show>
+			</span>
+			<div class="flex min-w-0 flex-1 flex-col gap-2">
+				<p class="text-sm font-medium text-foreground">{props.title}</p>
+				{props.children}
+			</div>
+		</li>
+	);
+}
+
+function ApplyStep(props: {
+	app: ApplicationWithDetails;
+	company: string;
+	done: boolean;
+}) {
+	const statuses = useApplicationStatuses();
+	const update = useUpdateApplication();
+	const [asking, setAsking] = createSignal(false);
+	const [opened, setOpened] = createSignal(false);
+	const onFocus = () => opened() && setAsking(true);
+	onMount(() => window.addEventListener("focus", onFocus));
+	onCleanup(() => window.removeEventListener("focus", onFocus));
+
+	const markApplied = () => {
+		const applied = loadedData(statuses)?.find(
+			(s) => s.SystemKey === "applied",
+		);
+		if (!applied) return;
+		update.mutate(
+			{
+				id: props.app.ID,
+				data: { status_id: applied.ID, applied_at: dayKey(new Date()) },
+			},
+			{ onSuccess: () => setAsking(false) },
+		);
+	};
+
+	return (
+		<Step done={props.done} title={`Apply on ${props.company}'s site`}>
+			<Show when={!props.done}>
+				<Button
+					as="a"
+					href={props.app.JobURL}
+					target="_blank"
+					rel="noopener noreferrer"
+					variant="outline"
+					size="sm"
+					class="w-fit"
+					onClick={() => {
+						setOpened(true);
+						setAsking(true);
+					}}
+				>
+					Open application
+					<span aria-hidden="true">↗</span>
+					<span class="sr-only">(opens in new tab)</span>
+				</Button>
+				<Show when={asking()}>
+					<div class="flex flex-wrap items-center gap-2 text-sm">
+						<span class="text-muted">Did you send it?</span>
+						<Button size="sm" loading={update.isPending} onClick={markApplied}>
+							Yes, I applied
+						</Button>
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => setAsking(false)}
+						>
+							Not yet
+						</Button>
+					</div>
+				</Show>
+			</Show>
+		</Step>
+	);
+}
+
+function ChecklistTab(props: {
+	app: ApplicationWithDetails;
+	onAddStep: () => void;
+}) {
+	const statuses = useApplicationStatuses();
+	const drafts = useJobDrafts(() => props.app.JobID);
+	const letters = useCoverLetters(() => props.app.JobID);
+	const tasks = useJobOpenTasks(() => props.app.JobID);
+	const setDone = useSetTaskDone();
+
+	const openTasks = () => loadedData(tasks)?.items ?? [];
+	const done = () =>
+		checklistDone({
+			statusSystemKey:
+				loadedData(statuses)?.find((s) => s.ID === props.app.StatusID)
+					?.SystemKey ?? "",
+			hasKeptDraft:
+				loadedData(drafts)?.some((d) => d.outcome === "kept") ?? false,
+			hasDoneLetter: loadedData(letters)?.some((l) => l.doneAt) ?? false,
+			applyTaskOpen: openTasks().some((t) => t.TypeSystemKey === "apply"),
+			chaseBy: props.app.ChaseBy,
+		});
+
+	return (
+		<Show when={loadedData(statuses) && loadedData(tasks)}>
+			<ol class="flex flex-col gap-3">
+				<Step done={done().cv} title="CV">
+					<JobDrafts jobId={props.app.JobID} />
+				</Step>
+				<Step done={done().coverLetter} title="Cover letter (optional)">
+					<details>
+						<summary class="cursor-pointer text-xs text-muted">
+							Write a cover letter
+						</summary>
+						<div class="mt-2">
+							<CoverLetterCard jobId={props.app.JobID} />
+						</div>
+					</details>
+				</Step>
+				<ApplyStep
+					app={props.app}
+					company={titleCase(props.app.JobCompanySlug)}
+					done={done().apply}
+				/>
+				<Step done={done().followUp} title="Follow up">
+					<ChaseRow
+						applicationId={props.app.ID}
+						statusId={props.app.StatusID}
+						chaseBy={props.app.ChaseBy}
+					/>
+				</Step>
+				<For each={openTasks().filter((t) => !t.TypeSystemKey)}>
+					{(task) => (
+						<Step done={false} title={task.TypeName}>
+							<Show when={task.Notes}>
+								<p class="text-xs text-muted">{task.Notes}</p>
+							</Show>
+							<Button
+								variant="outline"
+								size="sm"
+								class="w-fit"
+								loading={setDone.isPending}
+								onClick={() => setDone.mutate({ id: task.ID, done: true })}
+							>
+								Done
+							</Button>
+						</Step>
+					)}
+				</For>
+				<li>
+					<Button variant="outline" size="sm" onClick={props.onAddStep}>
+						Add a step
+					</Button>
+				</li>
+			</ol>
+		</Show>
 	);
 }
 
@@ -198,16 +382,7 @@ function ApplicationDetailPage() {
 								<TabsTrigger value="notes">Notes</TabsTrigger>
 							</TabsList>
 							<TabsContent value="checklist">
-								<div class="flex flex-col gap-4">
-									<div class="flex flex-col gap-3">
-										<JobDrafts jobId={app().JobID} />
-										<CoverLetterCard jobId={app().JobID} />
-									</div>
-									<JobTasksCard
-										jobId={app().JobID}
-										onAdd={() => setTaskOpen(true)}
-									/>
-								</div>
+								<ChecklistTab app={app()} onAddStep={() => setTaskOpen(true)} />
 							</TabsContent>
 							<TabsContent value="description">
 								<Card>
@@ -243,6 +418,7 @@ function ApplicationDetailPage() {
 						open={taskOpen()}
 						onOpenChange={setTaskOpen}
 						job={{ ID: app().JobID, Title: app().JobTitle }}
+						hideSystemTypes
 					/>
 				</div>
 			)}

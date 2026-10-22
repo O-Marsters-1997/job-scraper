@@ -217,6 +217,15 @@ export function updateTask(
 	return updated;
 }
 
+export function completeOpenApplyTasks(jobId: string): void {
+	const now = new Date().toISOString();
+	tasks = allTasks().map((t) =>
+		t.JobID === jobId && t.TypeSystemKey === "apply" && !t.CompletedAt
+			? { ...t, CompletedAt: now, UpdatedAt: now }
+			: t,
+	);
+}
+
 export function setTaskDone(id: string, done: boolean): Task {
 	failIfRequested("setTaskDone");
 	const prev = allTasks().find((t) => t.ID === id);

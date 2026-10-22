@@ -36,6 +36,46 @@ test.describe("Application page", () => {
 		).toBeVisible();
 	});
 
+	test("confirming the application moves it to Applied and ticks Apply", async ({
+		page,
+	}) => {
+		await openFirstApplication(page);
+		const status = page.getByRole("button", { name: "Status" });
+		await status.click();
+		await page.getByRole("option", { name: "Draft" }).click();
+		await expect(status).toContainText("Draft");
+
+		const apply = page.getByRole("listitem").filter({ hasText: /^Apply on/ });
+		await expect(apply.getByRole("img", { name: "To do" })).toBeVisible();
+		const popup = page.waitForEvent("popup");
+		await apply.getByRole("link", { name: /Open application/ }).click();
+		await (await popup).close();
+		await expect(apply.getByText("Did you send it?")).toBeVisible();
+		await apply.getByRole("button", { name: "Yes, I applied" }).click();
+
+		await expect(status).toContainText("Applied");
+		await expect(apply.getByRole("img", { name: "Done" })).toBeVisible();
+	});
+
+	test("adding a step lists it and offers no Apply type", async ({ page }) => {
+		await openFirstApplication(page);
+		await page.getByRole("button", { name: "Add a step" }).click();
+		const dialog = page.getByRole("dialog");
+		await expect(
+			dialog.getByRole("option", { name: "Apply", exact: true }),
+		).toHaveCount(0);
+		await dialog.getByLabel("Notes").fill("Email the recruiter");
+		await dialog.getByRole("button", { name: "Save" }).click();
+		await expect(dialog).toBeHidden();
+
+		const step = page
+			.getByRole("listitem")
+			.filter({ hasText: "Email the recruiter" });
+		await expect(step).toBeVisible();
+		await step.getByRole("button", { name: "Done" }).click();
+		await expect(step).toBeHidden();
+	});
+
 	test("the status dropdown saves and the list reflects it", async ({
 		page,
 	}) => {
