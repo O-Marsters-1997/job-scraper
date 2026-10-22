@@ -96,7 +96,7 @@ func (h *Harvester) Harvest(ctx context.Context) (discover.Harvest, error) {
 	if err := h.handleNew(ctx, fresh, &out); err != nil {
 		return discover.Harvest{}, err
 	}
-	if len(ids) > 0 {
+	if len(ids)*2 >= len(known) {
 		gone := slices.DeleteFunc(known, func(id string) bool { return inSitemap[id] })
 		if err := h.seen.RetireHarvestSeenIDs(ctx, source, gone); err != nil {
 			return discover.Harvest{}, err

@@ -265,6 +265,17 @@ func TestHarvester_Harvest(t *testing.T) {
 		}
 	})
 
+	t.Run("a truncated sitemap retires nothing", func(t *testing.T) {
+		t.Parallel()
+		st := seenStore(t, "a", "b", "c", "d", "e", "f", "g")
+		if _, err := harvester(t, sitemapOf(0), listingsByID(t), st, &recordingExporter{}).Harvest(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if got := len(seenIDs(t, st)); got != 7 {
+			t.Errorf("seen IDs after an empty sitemap = %d, want 7 kept", got)
+		}
+	})
+
 	t.Run("a failed export leaves that ID unrecorded for the next run", func(t *testing.T) {
 		t.Parallel()
 		st := seenStore(t, "departed")
