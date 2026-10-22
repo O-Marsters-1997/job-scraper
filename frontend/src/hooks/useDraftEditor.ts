@@ -1,8 +1,10 @@
 import { useQueryClient } from "@tanstack/solid-query";
 import {
 	type Accessor,
+	createEffect,
 	createMemo,
 	createSignal,
+	on,
 	onCleanup,
 	onMount,
 } from "solid-js";
@@ -41,21 +43,23 @@ function readResolved(id: string): Record<string, boolean> {
 
 export function createDraftEditor(
 	draft: Accessor<Draft>,
-	layout: DraftLayout | null,
+	layout: Accessor<DraftLayout | null>,
 ) {
 	const queryClient = useQueryClient();
 	const id = draft().id;
-	const [blocks, setBlocks] = createSignal<LayoutBlock[]>(layout?.blocks ?? []);
+	const [blocks, setBlocks] = createSignal<LayoutBlock[]>(
+		layout()?.blocks ?? [],
+	);
 	const isSlotBlock = (b: LayoutBlock) => b.slotId && !b.section;
 	const slotIds = () =>
 		blocks()
 			.filter(isSlotBlock)
 			.map((b) => b.slotId);
-	const original: Record<string, string> = Object.fromEntries(
-		(layout?.blocks ?? [])
-			.filter(isSlotBlock)
-			.map((b) => [b.slotId, blockText(b)]),
-	);
+	const slotTexts = (list: LayoutBlock[]): Record<string, string> =>
+		Object.fromEntries(
+			list.filter(isSlotBlock).map((b) => [b.slotId, blockText(b)]),
+		);
+	const original = slotTexts(layout()?.blocks ?? []);
 
 	const [texts, setTexts] = createStore<Record<string, string>>({
 		...original,
@@ -63,6 +67,36 @@ export function createDraftEditor(
 	const [saved, setSaved] = createStore<Record<string, string>>({
 		...original,
 	});
+
+	createEffect(
+		on(
+			layout,
+			(next) => {
+				if (!next) return;
+				for (const [slotId, t] of Object.entries(slotTexts(next.blocks))) {
+					if (slotId in texts) continue;
+					original[slotId] = t;
+					setTexts(slotId, t);
+					setSaved(slotId, t);
+				}
+				const merged = [...next.blocks];
+				const local = blocks();
+				local.forEach((b, i) => {
+					if (
+						!isAddedSlot(b.slotId) ||
+						merged.some((m) => m.slotId === b.slotId)
+					)
+						return;
+					const anchor = merged.findIndex(
+						(m) => m.slotId === local[i - 1]?.slotId,
+					);
+					merged.splice(anchor + 1, 0, b);
+				});
+				setBlocks(merged);
+			},
+			{ defer: true },
+		),
+	);
 	const [removed, setRemoved] = createSignal<string[]>([]);
 	const [status, setStatus] = createSignal<SaveStatus>("saved");
 	const [googleSaved, setGoogleSaved] = createSignal(false);
