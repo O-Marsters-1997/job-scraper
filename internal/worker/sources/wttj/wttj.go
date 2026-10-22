@@ -17,7 +17,6 @@ const (
 	baseURL = "https://app.welcometothejungle.com"
 	maxAge  = 90 * 24 * time.Hour
 
-	ukPollIn    = 7 * 24 * time.Hour
 	otherPollIn = 90 * 24 * time.Hour
 )
 
@@ -103,7 +102,7 @@ func (s *Source) poll(ctx context.Context) (sources.BoardResult, apiCompany, err
 		}
 		jobs = append(jobs, job)
 	}
-	return sources.BoardResult{Jobs: jobs, NextPollIn: ukPollIn, Profile: profile}, company, nil
+	return sources.BoardResult{Jobs: jobs, Profile: profile}, company, nil
 }
 
 func CompanyName(ctx context.Context, companyToken string) (string, error) {
