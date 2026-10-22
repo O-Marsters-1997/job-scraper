@@ -101,13 +101,18 @@ func rewrite(el object, start int, f func([]object) []object) (object, int, erro
 	return object{"startIndex": mustMarshal(start), "endIndex": mustMarshal(at), "paragraph": mustMarshal(p)}, at, nil
 }
 
+func swap(s, from, to string) string {
+	if from == "" {
+		return s
+	}
+	return strings.ReplaceAll(s, from, to)
+}
+
 func restyle(runs []object, named, last bool, from, to Role) []object {
 	switch {
 	case named:
 		return mapContent(runs, func(s string) string {
-			s = strings.ReplaceAll(s, from.Title, to.Title)
-			s = strings.ReplaceAll(s, from.Employer, to.Employer)
-			return restyleDates(s, to)
+			return restyleDates(swap(swap(s, from.Title, to.Title), from.Employer, to.Employer), to)
 		})
 	case !last:
 		return mapContent(runs[:1], func(string) string { return to.Title + "\n" })

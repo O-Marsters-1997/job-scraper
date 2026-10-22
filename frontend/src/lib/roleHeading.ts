@@ -31,6 +31,9 @@ function datesLike(sample: string, to: RoleText) {
 	return `${dateLike(start, to.startDate, present)}${sep}${dateLike(endHasYear ? end : start, to.endDate, present)}`;
 }
 
+const swap = (text: string, from: string, to: string) =>
+	from ? text.replaceAll(from, to) : text;
+
 export function cloneRoleHeading(
 	template: LayoutBlock,
 	from: Pick<RoleText, "title" | "employer">,
@@ -54,9 +57,11 @@ export function cloneRoleHeading(
 	return {
 		...template,
 		runs: template.runs.map((r) => {
-			const text = r.text
-				.replaceAll(from.title, to.title)
-				.replaceAll(from.employer, to.employer);
+			const text = swap(
+				swap(r.text, from.title, to.title),
+				from.employer,
+				to.employer,
+			);
 			const dates = datesLike(text, to);
 			return { ...r, text: dates ? text.replace(DATE_RANGE, dates) : text };
 		}),
