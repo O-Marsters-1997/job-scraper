@@ -16,8 +16,6 @@ import { useCreateTask, useTaskTypes, useUpdateTask } from "@/hooks/useTasks";
 import type { Job } from "@/types/job";
 import type { Task } from "@/types/task";
 
-const DEFAULT_TYPE_NAME = "Apply";
-
 interface CreateTaskDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -71,7 +69,7 @@ function CreateTaskForm(props: {
 
 	const selectedTypeId = () =>
 		typeId() ||
-		types.data?.find((t) => t.Name === DEFAULT_TYPE_NAME)?.ID ||
+		types.data?.find((t) => t.SystemKey === "apply")?.ID ||
 		types.data?.[0]?.ID ||
 		"";
 

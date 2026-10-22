@@ -48,6 +48,12 @@ export function TaskTypeRow(props: {
 						<Button
 							type="button"
 							onClick={() => props.onDelete()}
+							disabled={props.type.SystemKey !== ""}
+							title={
+								props.type.SystemKey
+									? "Used by the app, so it can't be deleted"
+									: undefined
+							}
 							variant="ghost"
 							size="sm"
 							class="h-auto px-2 py-1 text-xs text-destructive-strong hover:bg-destructive-subtle hover:text-destructive-strong"

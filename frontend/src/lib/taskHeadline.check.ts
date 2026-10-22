@@ -7,6 +7,7 @@ const base: Task = {
 	TypeID: "ty1",
 	TypeName: "Apply",
 	TypeColour: "#6366f1",
+	TypeSystemKey: "apply",
 	JobID: null,
 	JobTitle: "",
 	JobCompanySlug: "",

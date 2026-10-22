@@ -16,7 +16,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/tasks/store/sqlc"
 )
 
-var ErrTaskTypeExists = errors.New("task type name already exists")
+var (
+	ErrTaskTypeExists = errors.New("task type name already exists")
+
+	ErrSystemTaskType = errors.New("system task type")
+)
 
 type ApplicationSync interface {
 	MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error
@@ -100,6 +104,13 @@ func (s *Store) DeleteTaskType(ctx context.Context, userID, id string) error {
 	tid, err := data.UUID(id)
 	if err != nil {
 		return data.ErrNotFound
+	}
+	key, err := s.queries.GetTaskTypeSystemKey(ctx, sqlc.GetTaskTypeSystemKeyParams{ID: tid, UserID: uid})
+	if err != nil {
+		return data.QueryErr("DeleteTaskType", err)
+	}
+	if key.Valid {
+		return ErrSystemTaskType
 	}
 	n, err := s.queries.DeleteTaskType(ctx, sqlc.DeleteTaskTypeParams{ID: tid, UserID: uid})
 	if err != nil {

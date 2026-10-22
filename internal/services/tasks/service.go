@@ -68,6 +68,14 @@ func (s *Service) UpdateType(ctx context.Context, userID string, in dto.TaskType
 	return mapTypeExists(s.store.UpdateTaskType(ctx, userID, in))
 }
 
+func (s *Service) DeleteType(ctx context.Context, userID, id string) error {
+	err := s.store.DeleteTaskType(ctx, userID, id)
+	if errors.Is(err, store.ErrSystemTaskType) {
+		return apperr.Invalid("this task type is used by the app and can't be deleted")
+	}
+	return err
+}
+
 func mapTypeExists(t dto.TaskType, err error) (dto.TaskType, error) {
 	if errors.Is(err, store.ErrTaskTypeExists) {
 		return t, apperr.Conflict("a task type with that name already exists")

@@ -11,7 +11,7 @@ func (m *Module) Routes(r chi.Router) {
 		r.Get("/", handlers.GetAll(m.store.ListTaskTypes))
 		r.Post("/", handlers.Create(m.service.CreateType))
 		r.Patch("/{id}", handlers.Update(m.service.UpdateType))
-		r.Delete("/{id}", handlers.Delete(m.store.DeleteTaskType))
+		r.Delete("/{id}", handlers.Delete(m.service.DeleteType))
 	})
 	r.Route("/tasks", func(r chi.Router) {
 		r.Get("/", handlers.Query(m.service.List))
