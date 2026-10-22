@@ -186,12 +186,14 @@ function ApplyStep(props: {
 						setAsking(true);
 					}}
 				>
-					Open application ↗
+					Open application
+					<span aria-hidden="true">↗</span>
+					<span class="sr-only">(opens in new tab)</span>
 				</Button>
 				<Show when={asking()}>
 					<div class="flex flex-wrap items-center gap-2 text-sm">
 						<span class="text-muted">Did you send it?</span>
-						<Button size="sm" disabled={update.isPending} onClick={markApplied}>
+						<Button size="sm" loading={update.isPending} onClick={markApplied}>
 							Yes, I applied
 						</Button>
 						<Button
@@ -232,56 +234,58 @@ function ChecklistTab(props: {
 		});
 
 	return (
-		<ol class="flex flex-col gap-3">
-			<Step done={done().cv} title="CV">
-				<JobDrafts jobId={props.app.JobID} />
-			</Step>
-			<Step done={done().coverLetter} title="Cover letter (optional)">
-				<details>
-					<summary class="cursor-pointer text-xs text-muted">
-						Write a cover letter
-					</summary>
-					<div class="mt-2">
-						<CoverLetterCard jobId={props.app.JobID} />
-					</div>
-				</details>
-			</Step>
-			<ApplyStep
-				app={props.app}
-				company={titleCase(props.app.JobCompanySlug)}
-				done={done().apply}
-			/>
-			<Step done={done().followUp} title="Follow up">
-				<ChaseRow
-					applicationId={props.app.ID}
-					statusId={props.app.StatusID}
-					chaseBy={props.app.ChaseBy}
+		<Show when={loadedData(statuses) && loadedData(tasks)}>
+			<ol class="flex flex-col gap-3">
+				<Step done={done().cv} title="CV">
+					<JobDrafts jobId={props.app.JobID} />
+				</Step>
+				<Step done={done().coverLetter} title="Cover letter (optional)">
+					<details>
+						<summary class="cursor-pointer text-xs text-muted">
+							Write a cover letter
+						</summary>
+						<div class="mt-2">
+							<CoverLetterCard jobId={props.app.JobID} />
+						</div>
+					</details>
+				</Step>
+				<ApplyStep
+					app={props.app}
+					company={titleCase(props.app.JobCompanySlug)}
+					done={done().apply}
 				/>
-			</Step>
-			<For each={openTasks().filter((t) => !t.TypeSystemKey)}>
-				{(task) => (
-					<Step done={false} title={task.TypeName}>
-						<Show when={task.Notes}>
-							<p class="text-xs text-muted">{task.Notes}</p>
-						</Show>
-						<Button
-							variant="outline"
-							size="sm"
-							class="w-fit"
-							disabled={setDone.isPending}
-							onClick={() => setDone.mutate({ id: task.ID, done: true })}
-						>
-							Done
-						</Button>
-					</Step>
-				)}
-			</For>
-			<li>
-				<Button variant="outline" size="sm" onClick={props.onAddStep}>
-					Add a step
-				</Button>
-			</li>
-		</ol>
+				<Step done={done().followUp} title="Follow up">
+					<ChaseRow
+						applicationId={props.app.ID}
+						statusId={props.app.StatusID}
+						chaseBy={props.app.ChaseBy}
+					/>
+				</Step>
+				<For each={openTasks().filter((t) => !t.TypeSystemKey)}>
+					{(task) => (
+						<Step done={false} title={task.TypeName}>
+							<Show when={task.Notes}>
+								<p class="text-xs text-muted">{task.Notes}</p>
+							</Show>
+							<Button
+								variant="outline"
+								size="sm"
+								class="w-fit"
+								loading={setDone.isPending}
+								onClick={() => setDone.mutate({ id: task.ID, done: true })}
+							>
+								Done
+							</Button>
+						</Step>
+					)}
+				</For>
+				<li>
+					<Button variant="outline" size="sm" onClick={props.onAddStep}>
+						Add a step
+					</Button>
+				</li>
+			</ol>
+		</Show>
 	);
 }
 
