@@ -8,14 +8,19 @@ test.describe("Keyboard operability", () => {
 		await draftPage.goto();
 
 		await draftPage.line("Profile").focus();
+		const role = page.getByRole("button", {
+			name: "Choose Achievements for this role",
+		});
 		const order = [
-			"Senior Backend Engineer bullet 1",
-			"Senior Backend Engineer bullet 2",
-			"Software Engineer bullet 1",
+			role.nth(0),
+			draftPage.line("Senior Backend Engineer bullet 1"),
+			draftPage.line("Senior Backend Engineer bullet 2"),
+			role.nth(1),
+			draftPage.line("Software Engineer bullet 1"),
 		];
-		for (const label of order) {
+		for (const stop of order) {
 			await page.keyboard.press("Tab");
-			await expect(draftPage.line(label)).toBeFocused();
+			await expect(stop).toBeFocused();
 		}
 
 		await page.keyboard.press("Enter");

@@ -58,6 +58,8 @@ export type PageEditor = {
 	onEnter?: ((slotId: string) => void) | undefined;
 	onBackspaceEmpty?: ((slotId: string) => boolean) | undefined;
 	onEditSkills?: (() => void) | undefined;
+	roleFor?: ((block: LayoutBlock) => string | undefined) | undefined;
+	onEditRole?: ((positionId: string) => void) | undefined;
 };
 
 const ALIGN: Record<string, JSX.CSSProperties["text-align"]> = {
@@ -317,6 +319,11 @@ function Block(props: {
 		props.block.slotId && !props.block.section ? props.editor : undefined;
 	const onEditSkills = () =>
 		props.block.section === "skills" ? props.editor?.onEditSkills : undefined;
+	const onEditRole = () => {
+		const positionId = props.editor?.roleFor?.(props.block);
+		const open = props.editor?.onEditRole;
+		return positionId && open ? () => open(positionId) : undefined;
+	};
 	return (
 		<div
 			data-slot-id={props.block.slotId || undefined}
@@ -331,6 +338,17 @@ function Block(props: {
 						type="button"
 						aria-label="Edit skills"
 						title="Edit skills"
+						class="absolute inset-0 z-10 cursor-pointer rounded-sm hover:bg-accent-subtle/60 focus-visible:outline-2 focus-visible:outline-primary"
+						onClick={() => open()()}
+					/>
+				)}
+			</Show>
+			<Show when={onEditRole()}>
+				{(open) => (
+					<button
+						type="button"
+						aria-label="Choose Achievements for this role"
+						title="Choose Achievements for this role"
 						class="absolute inset-0 z-10 cursor-pointer rounded-sm hover:bg-accent-subtle/60 focus-visible:outline-2 focus-visible:outline-primary"
 						onClick={() => open()()}
 					/>

@@ -95,6 +95,8 @@ export const draftSchema = z.object({
 	content: draftContentSchema.nullable(),
 	base: draftContentSchema.nullable(),
 	skillsEditable: z.boolean(),
+	baseDocId: z.string(),
+	baseTabId: z.string(),
 });
 
 const list = <T extends z.ZodType>(item: T) =>

@@ -33,6 +33,12 @@ let experience: Position[] = [
 				context:
 					"Cost pressure forced the move; we kept Postgres on RDS to limit risk.",
 			},
+			{
+				id: "achievement-4",
+				positionId: "position-1",
+				text: "Mentored three engineers through their first on-call rotation",
+				context: "",
+			},
 		],
 	},
 	{

@@ -76,8 +76,8 @@ type Draft struct {
 	// SkillsEditable is false for a Draft made before Skill Lines.
 	SkillsEditable bool `json:"skillsEditable"`
 
-	BaseDocID      string      `json:"-"`
-	BaseTabID      string      `json:"-"`
+	BaseDocID      string      `json:"baseDocId"`
+	BaseTabID      string      `json:"baseTabId"`
 	AchievementIDs []string    `json:"-"`
 	SkillSwaps     []SkillSwap `json:"-"`
 }
