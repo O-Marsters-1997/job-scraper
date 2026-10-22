@@ -37,7 +37,8 @@ export function RolesDrawer(
 								{p.title}, {p.employer}
 							</span>
 							<span class="block text-xs text-faint">
-								{p.achievements.length} Achievements
+								{p.achievements.length} Achievement
+								{p.achievements.length === 1 ? "" : "s"}
 							</span>
 						</>
 					),

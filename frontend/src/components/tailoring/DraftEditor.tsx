@@ -13,6 +13,7 @@ import {
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { isSparse, maxCharsForFewerLines } from "@/lib/docLayout";
+import { loadedData } from "@/lib/queryData";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
 import type { Draft, DraftLayout } from "@/types/tailoring";
@@ -196,7 +197,7 @@ export function DraftEditor(props: {
 	const [selectedRole, setSelectedRole] = createSignal<string>();
 	const experience = useExperience();
 	const rolePositions = () =>
-		[...(experience.data ?? [])].sort((a, b) =>
+		[...(loadedData(experience) ?? [])].sort((a, b) =>
 			(b.startDate ?? "9999").localeCompare(a.startDate ?? "9999"),
 		);
 	const closeRoles = () => {
@@ -386,7 +387,6 @@ export function DraftEditor(props: {
 							variant="ghost"
 							size="sm"
 							aria-label="Roles"
-							aria-pressed={rolesOpen()}
 							onClick={openRoles}
 						>
 							<Icon name="briefcase" size={14} />

@@ -117,6 +117,7 @@ export function createRolePicks(opts: {
 	};
 
 	const picksFor = (positionId: string) => picks()[positionId] ?? [];
+	const order = () => onPage().map((r) => r.id);
 
 	return {
 		headings,
@@ -137,17 +138,14 @@ export function createRolePicks(opts: {
 			rest.splice(Math.min(place - 1, rest.length), 0, id);
 			setPicksFor(positionId, rest);
 		},
-		order: () => onPage().map((r) => r.id),
+		order,
 		removeRole(positionId: string) {
-			const order = onPage().map((r) => r.id);
-			if (order.length > 1 && order.includes(positionId))
-				arrange(order.filter((id) => id !== positionId));
+			if (order().length > 1 && order().includes(positionId))
+				arrange(order().filter((id) => id !== positionId));
 		},
 		moveRole(positionId: string, place: number) {
-			const rest = onPage()
-				.map((r) => r.id)
-				.filter((id) => id !== positionId);
-			if (rest.length === onPage().length) return;
+			const rest = order().filter((id) => id !== positionId);
+			if (rest.length === order().length) return;
 			rest.splice(Math.min(place - 1, rest.length), 0, positionId);
 			arrange(rest);
 		},

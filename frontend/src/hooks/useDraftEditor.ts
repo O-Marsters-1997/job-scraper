@@ -227,8 +227,9 @@ export function createDraftEditor(
 	};
 
 	const send = async () => {
+		const reordered = pendingRoles() !== undefined;
 		await sendOrder();
-		if ((await sendRoles()) && !dirty()) return;
+		if (((await sendRoles()) || reordered) && !dirty()) return;
 		const sent = { ...unwrap(texts) };
 		const gone = removed();
 		const slots = slotsToSave(slotIds(), sent, saved, gone);
