@@ -13,10 +13,12 @@ import {
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { isSparse, maxCharsForFewerLines } from "@/lib/docLayout";
+import { loadedData } from "@/lib/queryData";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
 import type { Draft, DraftLayout } from "@/types/tailoring";
 import { createDraftEditor } from "../../hooks/useDraftEditor";
+import { useExperience } from "../../hooks/useExperience";
 import { useJob } from "../../hooks/useJobs";
 import { createKeepFlow } from "../../hooks/useKeepFlow";
 import { createRolePicks } from "../../hooks/useRolePicks";
@@ -35,6 +37,7 @@ import { PageMeter, SaveIndicator } from "./DraftMeters";
 import { KeepControls, KeepNotices } from "./KeepFlow";
 import { MarginCards } from "./MarginCards";
 import { PrintPreview } from "./PrintPreview";
+import { RolesDrawer } from "./RolesDrawer";
 import { SkillsPanel } from "./SkillsPanel";
 import { WandMenu } from "./WandMenu";
 
@@ -190,7 +193,23 @@ export function DraftEditor(props: {
 	});
 	const pageLines = (pt: number) =>
 		Math.round(pt / (metrics().bodyLinePt || DEFAULT_BODY_LINE_PT));
+	const [rolesOpen, setRolesOpen] = createSignal(false);
+	const [selectedRole, setSelectedRole] = createSignal<string>();
+	const experience = useExperience();
+	const rolePositions = () =>
+		[...(loadedData(experience) ?? [])].sort((a, b) =>
+			(b.startDate ?? "9999").localeCompare(a.startDate ?? "9999"),
+		);
+	const closeRoles = () => {
+		setSelectedRole(undefined);
+		setRolesOpen(false);
+	};
+	const openRoles = () => {
+		closeRole();
+		setRolesOpen(true);
+	};
 	const openRole = (positionId: string) => {
+		closeRoles();
 		setSelectedPick(undefined);
 		setBankWanted(true);
 		setRolePanel(positionId);
@@ -363,6 +382,17 @@ export function DraftEditor(props: {
 							Changes
 						</Button>
 					</Show>
+					<Show when={editable() && props.layout}>
+						<Button
+							variant="ghost"
+							size="sm"
+							aria-label="Roles"
+							onClick={openRoles}
+						>
+							<Icon name="briefcase" size={14} />
+							<span class="hidden 2xl:inline">Roles</span>
+						</Button>
+					</Show>
 					<Button
 						variant="ghost"
 						size="sm"
@@ -399,7 +429,7 @@ export function DraftEditor(props: {
 				ref={(el) => watchSize(el, () => setMainWidth(el.clientWidth))}
 				class={cn(
 					"scroll-slim flex-1 overflow-auto bg-border/45",
-					rolePanel() && "pr-[30rem]",
+					(rolePanel() || rolesOpen()) && "pr-[30rem]",
 				)}
 				onMouseDown={(e) => {
 					if (e.target === e.currentTarget) activate(undefined);
@@ -484,7 +514,7 @@ export function DraftEditor(props: {
 									</Show>
 									<Show when={narrow()}>{marginCards(true)}</Show>
 								</div>
-								<Show when={!narrow() && !rolePanel()}>
+								<Show when={!narrow() && !rolePanel() && !rolesOpen()}>
 									{marginCards(false)}
 								</Show>
 							</div>
@@ -495,6 +525,19 @@ export function DraftEditor(props: {
 			<div class="sr-only" aria-live="polite">
 				{suggestions.announcement()}
 			</div>
+			<Show when={rolesOpen()}>
+				<RolesDrawer
+					positions={rolePositions()}
+					picked={rolePicks.order()}
+					usedLines={pageLines(metrics().contentPt)}
+					budgetLines={pageLines(metrics().availablePt)}
+					selected={selectedRole()}
+					onSelect={setSelectedRole}
+					onToggle={rolePicks.removeRole}
+					onMove={rolePicks.moveRole}
+					onClose={closeRoles}
+				/>
+			</Show>
 			<Show when={rolePanel()}>
 				{(positionId) => {
 					const role = () => rolePicks.role(positionId());

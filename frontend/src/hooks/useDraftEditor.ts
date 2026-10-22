@@ -213,8 +213,23 @@ export function createDraftEditor(
 		return true;
 	};
 
+	const [pendingRoles, setPendingRoles] = createSignal<string[]>();
+
+	const sendOrder = async () => {
+		const order = pendingRoles();
+		if (!order) return;
+		const result = await saveDraftSlots(id, [], undefined, undefined, order);
+		batch(() => {
+			setPendingRoles((now) => (now === order ? undefined : now));
+			setGoogleSaved(true);
+			queryClient.setQueryData(keys.tailoring.draft(id), result);
+		});
+	};
+
 	const send = async () => {
-		if ((await sendRoles()) && !dirty()) return;
+		const reordered = pendingRoles() !== undefined;
+		await sendOrder();
+		if (((await sendRoles()) || reordered) && !dirty()) return;
 		const sent = { ...unwrap(texts) };
 		const gone = removed();
 		const slots = slotsToSave(slotIds(), sent, saved, gone);
@@ -339,8 +354,24 @@ export function createDraftEditor(
 		loop.schedule();
 	};
 
+	const rearrange = (next: LayoutBlock[], order: string[]) => {
+		const kept = new Set(next.map((b) => b.slotId));
+		const gone = slotIds().filter((s) => !kept.has(s));
+		setBlocks(next);
+		for (const store of [setTexts, setSaved])
+			store(
+				produce((t) => {
+					for (const s of gone) delete t[s];
+				}),
+			);
+		setPendingRoles(order);
+		loop.schedule();
+	};
+
 	const dirty = () =>
-		removed().length > 0 || slotIds().some((s) => text(s) !== (saved[s] ?? ""));
+		pendingRoles() !== undefined ||
+		removed().length > 0 ||
+		slotIds().some((s) => text(s) !== (saved[s] ?? ""));
 	const pageCountFinding = () =>
 		draft().findings.find((f) => f.check === "page_count");
 	const googlePages = (): number | undefined => {
@@ -373,6 +404,7 @@ export function createDraftEditor(
 		addBullet,
 		removeBullet,
 		replaceRole,
+		rearrange,
 		label,
 		text,
 		original: (slotId: string) => original[slotId] ?? "",
