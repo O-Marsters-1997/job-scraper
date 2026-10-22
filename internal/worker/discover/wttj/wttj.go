@@ -36,6 +36,7 @@ const (
 	outcomeBackfill   = "backfill"
 	outcomeIneligible = "ineligible"
 	outcomeExported   = "exported"
+	outcomeATSCheck   = "ats_check"
 )
 
 type SeenStore interface {
@@ -112,8 +113,6 @@ func (h *Harvester) handleNew(ctx context.Context, fresh []string, out *discover
 	if err != nil && (!errors.Is(err, sources.ErrDeferred) || len(listings) == 0 || ctx.Err() != nil) {
 		return err
 	}
-	type boardKey struct{ source, token string }
-	seenBoards := map[boardKey]bool{}
 	seenCompanies := map[string]bool{}
 	var native []string
 	var ineligible []string
@@ -130,12 +129,8 @@ func (h *Harvester) handleNew(ctx context.Context, fresh []string, out *discover
 	}
 	for _, l := range listings {
 		if board, ok := atsBoard(l.ApplyURL); ok {
-			key := boardKey{board.Source, board.Token}
-			if !seenBoards[key] {
-				seenBoards[key] = true
-				board.ListingURL, board.ApplyURL = listingBase+l.ID, l.ApplyURL
-				out.Boards = append(out.Boards, board)
-			}
+			board.ListingURL, board.ApplyURL = listingBase+l.ID, l.ApplyURL
+			out.Checks = append(out.Checks, discover.Check{ID: l.ID, Board: board})
 			continue
 		}
 		companySlug := slug.Make(l.CompanyToken)
@@ -156,6 +151,10 @@ func (h *Harvester) handleNew(ctx context.Context, fresh []string, out *discover
 		return err
 	}
 	return h.export(ctx, native)
+}
+
+func (h *Harvester) RecordChecks(ctx context.Context, ids []string) error {
+	return h.seen.RecordHarvestSeenIDs(ctx, source, outcomeATSCheck, ids)
 }
 
 func (h *Harvester) export(ctx context.Context, ids []string) error {
