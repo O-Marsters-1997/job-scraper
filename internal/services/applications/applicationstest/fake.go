@@ -127,7 +127,7 @@ func (f *FakeStore) chaseFor(statusID string, from time.Time) *time.Time {
 	if !ok || s.ReplyWindowDays == nil {
 		return nil
 	}
-	y, m, d := from.Date()
+	y, m, d := from.UTC().Date()
 	chaseBy := time.Date(y, m, d+*s.ReplyWindowDays, 0, 0, 0, 0, time.UTC)
 	return &chaseBy
 }
