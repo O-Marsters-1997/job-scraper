@@ -84,10 +84,10 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 		if ds, err = s.rebuildDoc(ctx, claim, draft.DraftDocID, layout, edits); err == nil {
 			headings = ds.Headings
 		}
-	case edits.Roles != nil:
-		headings = docPlan.structure.Headings
-		err = s.applyEdits(ctx, userID, draft.DraftDocID, docPlan, docEdits)
 	default:
+		if edits.Roles != nil {
+			headings = docPlan.structure.Headings
+		}
 		err = s.applyEdits(ctx, userID, draft.DraftDocID, docPlan, docEdits)
 	}
 	if err != nil {

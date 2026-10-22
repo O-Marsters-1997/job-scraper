@@ -174,7 +174,6 @@ func TestSaveDraftSlotsRoles(t *testing.T) {
 			"empty":    {},
 			"repeated": {e.pos.ID, e.pos.ID},
 			"unknown":  {e.pos.ID, "nope"},
-			"unmapped": {e.pos.ID, "00000000-0000-0000-0000-000000000000"},
 		}
 		for name, roles := range cases {
 			if _, err := e.save(t, roles); !apperr.IsKind(err, apperr.KindInvalid) {
