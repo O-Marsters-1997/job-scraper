@@ -339,7 +339,7 @@ func (s *Store) FailKeep(ctx context.Context, claim dto.DraftClaim, failure dto.
 
 // SetDraftEdits replaces the Draft's edit set and findings after the User's
 // edits; ErrDraftNotFound when userID does not own it.
-func (s *Store) SetDraftEdits(ctx context.Context, userID, id string, editSet json.RawMessage, findings []dto.DraftFinding) error {
+func (s *Store) SetDraftEdits(ctx context.Context, userID, id string, editSet json.RawMessage, findings []dto.DraftFinding, achievementIDs []string) error {
 	uid, err := parseID(userID, ErrDraftNotFound)
 	if err != nil {
 		return err
@@ -352,7 +352,11 @@ func (s *Store) SetDraftEdits(ctx context.Context, userID, id string, editSet js
 	if err != nil {
 		return fmt.Errorf("store.SetDraftEdits: encode findings: %w", err)
 	}
-	n, err := s.queries.SetDraftEdits(ctx, sqlc.SetDraftEditsParams{ID: did, UserID: uid, EditSet: editSet, Findings: raw})
+	achievements, err := data.UUIDs(achievementIDs)
+	if err != nil {
+		return apperr.Invalid("unknown achievement")
+	}
+	n, err := s.queries.SetDraftEdits(ctx, sqlc.SetDraftEditsParams{ID: did, UserID: uid, EditSet: editSet, Findings: raw, AchievementIds: achievements})
 	if err != nil {
 		return fmt.Errorf("store.SetDraftEdits: %w", err)
 	}

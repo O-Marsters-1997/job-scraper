@@ -195,13 +195,14 @@ type SlotEdit struct {
 	Remove bool   `json:"remove,omitempty"`
 }
 
-// DraftSlotsInput carries the bullets and, when Skills is set, the full
-// grouped Skills the User changed on a Draft.
+// DraftSlotsInput carries a Draft's changed bullets. Each Positions entry replaces that role's
+// whole bullet list and applies before Slots; Skills, when set, is the full grouped Skills.
 type DraftSlotsInput struct {
-	ID     string       `json:"-" path:"id"`
-	Slots  []SlotEdit   `json:"slots"`
-	Skills []SkillGroup `json:"skills"`
-	Roles  []string     `json:"roles"`
+	ID        string          `json:"-" path:"id"`
+	Positions []DraftPosition `json:"positions"`
+	Slots     []SlotEdit      `json:"slots"`
+	Skills    []SkillGroup    `json:"skills"`
+	Roles     []string        `json:"roles"`
 }
 
 // DraftLayout is a Draft Doc's single-column page geometry and styled

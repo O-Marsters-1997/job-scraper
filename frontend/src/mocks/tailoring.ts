@@ -4,6 +4,7 @@ import type {
 	DraftContent,
 	DraftInput,
 	DraftLayout,
+	DraftPositionEdit,
 	DraftProvenance,
 	DraftRef,
 	ExperienceMatch,
@@ -258,6 +259,7 @@ export function saveDraftSlots(
 	id: string,
 	slots: SlotEdit[],
 	skills?: SkillGroup[],
+	positions: DraftPositionEdit[] = [],
 	roles?: string[],
 ): Draft {
 	const entry = mockEntry(id);
@@ -274,10 +276,11 @@ export function saveDraftSlots(
 			severity: "block",
 			message: "the Draft is 2 pages; the base CV is 1",
 		});
-	const base = mockProvenance();
-	const provenance = { ...base, positions: byRole(base.positions) };
+	const replaced = replaceProvenance(mockProvenance(), positions);
+	const provenance = { ...replaced, positions: byRole(replaced.positions) };
 	const { content } = entry.draft;
-	const edited = content && applySlots(content, base, slots);
+	const edited =
+		content && applySlots(replaceContent(content, positions), replaced, slots);
 	entry.draft = {
 		...entry.draft,
 		findings,
@@ -292,6 +295,40 @@ export function saveDraftSlots(
 		},
 	};
 	return entry.draft;
+}
+
+function replaceContent(
+	content: DraftContent,
+	positions: DraftPositionEdit[],
+): DraftContent {
+	return {
+		...content,
+		positions: content.positions.map(
+			(p) => positions.find((r) => r.positionId === p.positionId) ?? p,
+		),
+	};
+}
+
+function replaceProvenance(
+	provenance: DraftProvenance,
+	positions: DraftPositionEdit[],
+): DraftProvenance {
+	return {
+		...provenance,
+		positions: provenance.positions.map((p) => {
+			const replaced = positions.find((r) => r.positionId === p.positionId);
+			if (!replaced) return p;
+			return {
+				...p,
+				bullets: replaced.bullets.map((b, i) => ({
+					slotId: p.bullets[i]?.slotId ?? `new-${p.positionId}-${i}`,
+					achievements: MOCK_ACHIEVEMENTS.filter((a) =>
+						b.achievementIds.includes(a.id),
+					),
+				})),
+			};
+		}),
+	};
 }
 
 function applySlots(

@@ -7,6 +7,7 @@ import {
 	type Draft,
 	type DraftInput,
 	type DraftLayout,
+	type DraftPositionEdit,
 	type DraftRef,
 	draftLayoutSchema,
 	draftRefSchema,
@@ -151,15 +152,16 @@ export async function saveDraftSlots(
 	id: string,
 	slots: SlotEdit[],
 	skills?: SkillGroup[],
+	positions?: DraftPositionEdit[],
 	roles?: string[],
 ): Promise<Draft> {
 	return mocked(
-		(db) => db.saveDraftSlots(id, slots, skills, roles),
+		(db) => db.saveDraftSlots(id, slots, skills, positions, roles),
 		() =>
 			apiFetch(
 				`/tailoring/drafts/${id}/slots`,
 				draftSchema,
-				jsonInit("PUT", { slots, skills, roles }),
+				jsonInit("PUT", { positions, slots, skills, roles }),
 			),
 	);
 }

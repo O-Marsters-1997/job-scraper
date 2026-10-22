@@ -420,7 +420,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		e, id := newQueuedDraft(t)
 		e.run(t, tick{docs: cvtailortest.Docs{TabJSON: baseTab(t, head("Skills"), prose("Go, SQL"))}, editor: cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.25))})
 		legacy := json.RawMessage(`{"positions":[],"skills":["SQL","Go"]}`)
-		if err := e.store.SetDraftEdits(t.Context(), userID, id, legacy, nil); err != nil {
+		if err := e.store.SetDraftEdits(t.Context(), userID, id, legacy, nil, nil); err != nil {
 			t.Fatalf("SetDraftEdits() error = %v", err)
 		}
 

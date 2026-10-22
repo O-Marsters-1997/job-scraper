@@ -40,7 +40,22 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 		return dto.Draft{}, fmt.Errorf("decode edit set: %w", err)
 	}
 
-	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: draft.AchievementIDs, SkillSwaps: draft.SkillSwaps}
+	bank, err := s.store.ListPositions(ctx, userID)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	cited, err := citedByReplacements(bank, edits, in.Positions)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	chosen := slices.Clone(draft.AchievementIDs)
+	for _, id := range cited {
+		if !slices.Contains(chosen, id) {
+			chosen = append(chosen, id)
+		}
+	}
+
+	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: chosen, SkillSwaps: draft.SkillSwaps}
 	basePlan, err := s.plan(ctx, claim, claim.DocID)
 	if err != nil {
 		return dto.Draft{}, err
@@ -54,6 +69,10 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 		return dto.Draft{}, err
 	}
 	before := edits.Profile
+	edits, err = basePlan.replaceBullets(edits, in.Positions)
+	if err != nil {
+		return dto.Draft{}, err
+	}
 	edits, err = basePlan.overlay(edits, in.Slots)
 	if err != nil {
 		return dto.Draft{}, err
@@ -108,10 +127,97 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	}
 	checked.Parse = parseInput(ctx, draftPDF, headings)
 	findings := toDraftFindings(checks.Run(checked))
-	if err := s.store.SetDraftEdits(ctx, userID, draft.ID, editSet, findings); err != nil {
+	if err := s.store.SetDraftEdits(ctx, userID, draft.ID, editSet, findings, citedAchievements(bank, edits, draft.AchievementIDs)); err != nil {
 		return dto.Draft{}, err
 	}
 	return s.GetDraft(ctx, userID, dto.DraftQuery{ID: draft.ID})
+}
+
+func citedByReplacements(bank []dto.Position, edits cvedit.EditSet, reps []dto.DraftPosition) ([]string, error) {
+	owner := map[string]string{}
+	for _, p := range bank {
+		for _, a := range p.Achievements {
+			owner[a.ID] = p.ID
+		}
+	}
+	var cited []string
+	for _, r := range reps {
+		if !slices.ContainsFunc(edits.Positions, func(pe cvedit.PositionEdit) bool { return pe.PositionID == r.PositionID }) {
+			return nil, apperr.Invalid("unknown position")
+		}
+		if len(r.Bullets) == 0 {
+			return nil, apperr.Invalid("a position keeps at least one bullet")
+		}
+		for _, b := range r.Bullets {
+			for _, id := range b.AchievementIDs {
+				if owner[id] != r.PositionID {
+					return nil, apperr.Invalid("unknown achievement")
+				}
+				cited = append(cited, id)
+			}
+		}
+	}
+	return cited, nil
+}
+
+func (pl plan) replaceBullets(edits cvedit.EditSet, reps []dto.DraftPosition) (cvedit.EditSet, error) {
+	slotIDs := pl.slotIDs()
+	byID := pl.byID()
+	for _, r := range reps {
+		ids := slotIDs[r.PositionID]
+		at := slices.IndexFunc(edits.Positions, func(pe cvedit.PositionEdit) bool { return pe.PositionID == r.PositionID })
+		if at < 0 || len(ids) == 0 {
+			return edits, apperr.Invalid("unknown position")
+		}
+		pe := cvedit.PositionEdit{PositionID: r.PositionID}
+		after := ""
+		for i, b := range r.Bullets {
+			text := strings.TrimSpace(b.Text)
+			if text == "" || strings.ContainsAny(text, "\r\n") {
+				return edits, apperr.Invalid("a bullet must be one non-empty line")
+			}
+			if i < len(ids) {
+				keep := len(b.AchievementIDs) == 0 && text == byID[r.PositionID].SlotTexts[i]
+				pe.Bullets = append(pe.Bullets, cvedit.Bullet{Keep: keep, Text: text, AchievementIDs: slices.Clone(b.AchievementIDs), SlotID: ids[i]})
+				after = ids[i]
+				continue
+			}
+			added := cvedit.AddedBullet{SlotID: fmt.Sprintf("%s%s-%d", addedSlotPrefix, r.PositionID, i), After: after, Text: text, AchievementIDs: slices.Clone(b.AchievementIDs)}
+			pe.Added = append(pe.Added, added)
+			after = added.SlotID
+		}
+		edits.Positions = slices.Clone(edits.Positions)
+		edits.Positions[at] = pe
+	}
+	return edits, nil
+}
+
+func citedAchievements(bank []dto.Position, edits cvedit.EditSet, previous []string) []string {
+	out := []string{}
+	for _, pe := range edits.Positions {
+		before := len(out)
+		for _, l := range pe.Lines() {
+			for _, id := range l.AchievementIDs {
+				if !slices.Contains(out, id) {
+					out = append(out, id)
+				}
+			}
+		}
+		if len(out) > before {
+			continue
+		}
+		for _, p := range bank {
+			if p.ID != pe.PositionID {
+				continue
+			}
+			for _, a := range p.Achievements {
+				if slices.Contains(previous, a.ID) && !slices.Contains(out, a.ID) {
+					out = append(out, a.ID)
+				}
+			}
+		}
+	}
+	return out
 }
 
 func (pl plan) overlay(edits cvedit.EditSet, slots []dto.SlotEdit) (cvedit.EditSet, error) {
