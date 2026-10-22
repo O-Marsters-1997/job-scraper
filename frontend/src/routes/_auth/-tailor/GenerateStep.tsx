@@ -2,21 +2,27 @@ import { Link } from "@tanstack/solid-router";
 import { createSignal, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { isSettled } from "@/lib/tailoring";
+import { isSettled, selectedAchievementIds } from "@/lib/tailoring";
 import { GoogleWriteConsent } from "../../../components/GoogleWriteConsent";
 import { useGoogleStatus } from "../../../hooks/useGoogle";
 import {
 	type CVRef,
 	useCreateDraft,
 	useDraft,
+	useSuggestions,
 } from "../../../hooks/useTailoring";
 
 export function GenerateStep(props: {
 	jobId: () => string;
 	cv: () => CVRef | undefined;
-	achievementIds: () => string[];
 	onBack: () => void;
 }) {
+	const suggestions = useSuggestions(
+		() => props.jobId(),
+		() => props.cv(),
+	);
+	const achievementIds = () =>
+		selectedAchievementIds(suggestions.data ?? [], {}, []);
 	const google = useGoogleStatus();
 	const create = useCreateDraft();
 	const [draftId, setDraftId] = createSignal<string>();
@@ -29,7 +35,7 @@ export function GenerateStep(props: {
 			{
 				jobId: props.jobId(),
 				...ref,
-				achievementIds: props.achievementIds(),
+				achievementIds: achievementIds(),
 			},
 			{ onSuccess: (r) => setDraftId(r.id) },
 		);
@@ -50,9 +56,15 @@ export function GenerateStep(props: {
 							<p class="mb-4 text-sm text-muted">
 								FastTrack copies your CV into a new Google Doc and rewrites the
 								bullets of the roles you mapped, using only the{" "}
-								{props.achievementIds().length} Achievements you chose. Treat
-								the result as a first draft.
+								{achievementIds().length} best-matching Achievements. Treat the
+								result as a first draft.
 							</p>
+							<Show when={suggestions.error}>
+								<p class="mb-3 text-sm text-danger">
+									Could not rank your Achievements for this job. Check your AI
+									key in Settings and try again.
+								</p>
+							</Show>
 							<Show when={create.error}>
 								<p class="mb-3 text-sm text-danger">
 									Could not start the draft. Check your selection and try again.
@@ -65,8 +77,7 @@ export function GenerateStep(props: {
 								<Button
 									loading={create.isPending}
 									disabled={
-										!google.data?.canWrite ||
-										props.achievementIds().length === 0
+										!google.data?.canWrite || achievementIds().length === 0
 									}
 									onClick={generate}
 								>

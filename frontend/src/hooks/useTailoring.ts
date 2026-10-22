@@ -4,13 +4,11 @@ import { keys } from "../api/keys";
 import {
 	createDraft,
 	discardDraft,
-	explainAchievement,
 	fetchDraft,
 	fetchDraftLayout,
 	fetchExperienceMatch,
 	fetchHeadings,
 	fetchJobDrafts,
-	fetchSkillSuggestions,
 	fetchSuggestions,
 	keepDraft,
 	saveDraftSlots,
@@ -59,23 +57,6 @@ export function useSuggestions(
 	});
 }
 
-export function useSkillSuggestions(
-	jobId: Accessor<string>,
-	cv: Accessor<CVRef | undefined>,
-) {
-	return createQuery(() => {
-		const ref = cv();
-		const { docId = "", tabId = "" } = ref ?? {};
-		return {
-			queryKey: keys.tailoring.skillSuggestions(jobId(), docId, tabId),
-			queryFn: () => fetchSkillSuggestions(jobId(), docId, tabId),
-			enabled: ref !== undefined,
-			retry: false,
-			staleTime: 5 * 60 * 1000,
-		};
-	});
-}
-
 export const experienceMatchQueryOptions = (jobId: string) =>
 	queryOptions({
 		queryKey: keys.tailoring.experienceMatch(jobId),
@@ -86,13 +67,6 @@ export const experienceMatchQueryOptions = (jobId: string) =>
 
 export function useExperienceMatch(jobId: Accessor<string>) {
 	return createQuery(() => experienceMatchQueryOptions(jobId()));
-}
-
-export function useExplainAchievement(jobId: Accessor<string>) {
-	return useInvalidatingMutation(
-		(achievementId: string) => explainAchievement(jobId(), achievementId),
-		[],
-	);
 }
 
 export function useCreateDraft() {
