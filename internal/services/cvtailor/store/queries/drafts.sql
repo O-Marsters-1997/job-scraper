@@ -76,7 +76,8 @@ UPDATE tailored_cvs SET
 WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status = 'keeping';
 
 -- name: SetDraftEdits :execrows
-UPDATE tailored_cvs SET edit_set = sqlc.arg(edit_set)::jsonb, findings = sqlc.arg(findings)::jsonb
+UPDATE tailored_cvs SET edit_set = sqlc.arg(edit_set)::jsonb, findings = sqlc.arg(findings)::jsonb,
+    achievement_ids = sqlc.arg(achievement_ids)::uuid[]
 WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
 
 -- name: GetJobDescription :one

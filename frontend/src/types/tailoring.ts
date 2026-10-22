@@ -191,6 +191,10 @@ export type SlotEdit = {
 	after?: string;
 	remove?: true;
 };
+export type DraftPositionEdit = {
+	positionId: string;
+	bullets: { text: string; achievementIds: string[] }[];
+};
 export type DraftFinding = z.infer<typeof draftFindingSchema>;
 export type DraftProvenance = z.infer<typeof draftProvenanceSchema>;
 export type DraftContent = z.infer<typeof draftContentSchema>;

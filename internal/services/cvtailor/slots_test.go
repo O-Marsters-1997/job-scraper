@@ -129,6 +129,94 @@ func TestSaveDraftSlots(t *testing.T) {
 		}
 	})
 
+	t.Run("replacing a role's bullets swaps, extends and re-cites them", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		swapped, original := e.pos.Achievements[1], e.pos.Achievements[0]
+		replacement := dto.DraftPosition{PositionID: e.pos.ID, Bullets: []dto.DraftBullet{
+			{Text: swapped.Text, AchievementIDs: []string{swapped.ID}},
+			{Text: original.Text, AchievementIDs: []string{original.ID}},
+			{Text: "Wrote docs", AchievementIDs: []string{}},
+			{Text: "Mentored four engineers again", AchievementIDs: []string{swapped.ID}},
+		}}
+
+		got, err := e.editing(t, e.drive).SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{replacement}})
+		if err != nil {
+			t.Fatalf("SaveDraftSlots() error = %v", err)
+		}
+
+		if diff := cmp.Diff([]string{"\nMentored four engineers again", original.Text, swapped.Text}, insertedText(t, e.drive)); diff != "" {
+			t.Errorf("inserted text mismatch (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(replacement.Bullets, got.Content.Positions[0].Bullets); diff != "" {
+			t.Errorf("SaveDraftSlots().Content bullets mismatch (-want +got):\n%s", diff)
+		}
+		var cited [][]string
+		for _, b := range got.Provenance.Positions[0].Bullets {
+			var ids []string
+			for _, a := range b.Achievements {
+				ids = append(ids, a.ID)
+			}
+			cited = append(cited, ids)
+		}
+		if diff := cmp.Diff([][]string{{swapped.ID}, {original.ID}, nil, {swapped.ID}}, cited); diff != "" {
+			t.Errorf("SaveDraftSlots().Provenance citations mismatch (-want +got):\n%s", diff)
+		}
+		stored, err := e.store.GetDraft(t.Context(), userID, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff([]string{swapped.ID, original.ID}, stored.AchievementIDs); diff != "" {
+			t.Errorf("Draft achievement ids mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a replace drops a cited achievement from the draft and may remove bullets", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		swapped := e.pos.Achievements[1]
+		svc := e.editing(t, e.drive)
+		two := dto.DraftPosition{PositionID: e.pos.ID, Bullets: []dto.DraftBullet{
+			{Text: e.pos.Achievements[0].Text, AchievementIDs: []string{e.pos.Achievements[0].ID}},
+			{Text: swapped.Text, AchievementIDs: []string{swapped.ID}},
+		}}
+		one := dto.DraftPosition{PositionID: e.pos.ID, Bullets: two.Bullets[1:]}
+		for _, rep := range []dto.DraftPosition{two, one} {
+			if _, err := svc.SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{rep}}); err != nil {
+				t.Fatalf("SaveDraftSlots() error = %v", err)
+			}
+		}
+
+		stored, err := e.store.GetDraft(t.Context(), userID, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff([]string{swapped.ID}, stored.AchievementIDs); diff != "" {
+			t.Errorf("Draft achievement ids mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("rejects an empty, unknown or foreign replacement", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		bullet := dto.DraftBullet{Text: "Cut p99 latency", AchievementIDs: []string{e.pos.Achievements[0].ID}}
+		for name, rep := range map[string]dto.DraftPosition{
+			"no bullets":          {PositionID: e.pos.ID},
+			"unknown position":    {PositionID: "nope", Bullets: []dto.DraftBullet{bullet}},
+			"unknown achievement": {PositionID: e.pos.ID, Bullets: []dto.DraftBullet{{Text: "x", AchievementIDs: []string{"nope"}}}},
+			"blank text":          {PositionID: e.pos.ID, Bullets: []dto.DraftBullet{{Text: " "}}},
+		} {
+			_, err := e.editing(t, e.drive).SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{rep}})
+
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("SaveDraftSlots(%s) error = %v, want an invalid error", name, err)
+			}
+		}
+	})
+
 	t.Run("rejects removing a base bullet and anchoring on an unknown slot", func(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
@@ -318,7 +406,7 @@ func TestSaveDraftSlotsSkills(t *testing.T) {
 	t.Run("rejects skills on a Draft stored with flat skills", func(t *testing.T) {
 		e, id, svc := ready(t)
 		legacy := json.RawMessage(`{"positions":[],"skills":["Go","SQL"]}`)
-		if err := e.store.SetDraftEdits(t.Context(), userID, id, legacy, nil); err != nil {
+		if err := e.store.SetDraftEdits(t.Context(), userID, id, legacy, nil, e.draft(t, id).AchievementIDs); err != nil {
 			t.Fatalf("SetDraftEdits() error = %v", err)
 		}
 
