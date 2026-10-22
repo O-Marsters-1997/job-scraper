@@ -29,19 +29,24 @@ import type { Job } from "../../types/job";
 import { DeleteApplicationDialog } from "./-applications/DeleteApplicationDialog";
 import { SetAnotherChase } from "./-applications/SetAnotherChase";
 
-export const Route = createFileRoute("/_auth/applications")({
-	validateSearch: (search: Record<string, unknown>) => ({
+function parseApplicationsSearch(search: Record<string, unknown>) {
+	return {
 		status: typeof search.status === "string" ? search.status : undefined,
 		chase: search.chase === true || search.chase === "true" ? true : undefined,
-	}),
-	loaderDeps: ({ search }) => search,
-	loader: ({ deps }) =>
-		Promise.all([
+	};
+}
+
+export const Route = createFileRoute("/_auth/applications")({
+	validateSearch: parseApplicationsSearch,
+	loader: ({ location }) => {
+		const { status, chase } = parseApplicationsSearch(location.search);
+		return Promise.all([
 			queryClient.prefetchQuery(
-				applicationsQueryOptions(deps.status, deps.chase === true),
+				applicationsQueryOptions(status, chase === true),
 			),
 			queryClient.prefetchQuery(applicationStatusesQueryOptions),
-		]),
+		]);
+	},
 	component: ApplicationsPage,
 });
 

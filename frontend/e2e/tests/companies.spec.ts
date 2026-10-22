@@ -27,6 +27,20 @@ test.describe("Companies", () => {
 			.toBe(true);
 	});
 
+	test("keeps focus and every character while each keystroke's search runs", async ({
+		page,
+		companiesPage,
+	}) => {
+		await companiesPage.searchInput.click();
+		await companiesPage.searchInput.pressSequentially("ab cd", {
+			delay: 400,
+		});
+
+		await expect(page).toHaveURL(/q=ab(\+|%20)cd/);
+		await expect(companiesPage.searchInput).toBeFocused();
+		await expect(companiesPage.searchInput).toHaveValue("ab cd");
+	});
+
 	test("moves the active row with j/k and opens it in a new tab with Enter", async ({
 		page,
 		companiesPage,
