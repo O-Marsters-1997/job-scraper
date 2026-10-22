@@ -76,6 +76,37 @@ test.describe("Application page", () => {
 		await expect(cvRegion).toBeHidden();
 	});
 
+	test("a fresh application's CV row links Tailor CV in a new tab", async ({
+		page,
+	}) => {
+		await openFirstApplication(page);
+		await page.getByRole("button", { name: /^(To do|Done) CV/ }).click();
+		const link = page
+			.getByRole("region", { name: /^(To do|Done) CV/ })
+			.getByRole("link", { name: /Tailor CV/ });
+		await expect(link).toHaveAttribute("target", "_blank");
+		await expect(link).toHaveAttribute("href", /^\/jobs\/[^/]+\/tailor$/);
+		await expect(page.getByRole("button", { name: "Tailor CV" })).toHaveCount(
+			0,
+		);
+	});
+
+	test("an application with a kept draft shows Complete linking to it", async ({
+		page,
+	}) => {
+		await page.goto("/applications");
+		await page.locator('a[href^="/applications/"]').last().click();
+		await page.getByRole("heading", { level: 1 }).waitFor();
+		const cv = page.getByRole("button", { name: /^(To do|Done) CV/ });
+		await expect(cv).toContainText("Complete");
+		await cv.click();
+		await expect(
+			page
+				.getByRole("region", { name: /^(To do|Done) CV/ })
+				.getByRole("link", { name: /Tailored CV/ }),
+		).toHaveAttribute("href", "/tailoring/drafts/draft-kept");
+	});
+
 	test("the Did you send it prompt survives collapsing Apply", async ({
 		page,
 	}) => {

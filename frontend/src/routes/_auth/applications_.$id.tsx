@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
+import { createFileRoute, Link } from "@tanstack/solid-router";
 import {
 	createSignal,
 	For,
@@ -11,7 +11,6 @@ import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CoverLetterCard } from "@/components/tailoring/CoverLetterCard";
-import { JobDrafts } from "@/components/tailoring/JobDrafts";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import {
 	Accordion,
@@ -19,6 +18,7 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -45,7 +45,7 @@ import {
 	useJobOpenTasks,
 	useSetTaskDone,
 } from "@/hooks/useTasks";
-import { checklistDone } from "@/lib/applicationChecklist";
+import { checklistDone, linkedDraft } from "@/lib/applicationChecklist";
 import { formatChaseDate } from "@/lib/chase";
 import { dayKey, formatDate } from "@/lib/datetime";
 import { queryClient } from "@/lib/queryClient";
@@ -54,6 +54,7 @@ import { cn, titleCase } from "@/lib/utils";
 import type { ApplicationWithDetails } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
 import type { Job } from "@/types/job";
+import type { Draft } from "@/types/tailoring";
 import { ChaseRow } from "./-jobs-detail/ChaseRow";
 import { CommentableDescription } from "./-jobs-detail/CommentableDescription";
 import { JobNotesCard } from "./-jobs-detail/JobNotesCard";
@@ -254,6 +255,76 @@ function ApplyRow(props: {
 	);
 }
 
+function TailorButton(props: {
+	jobId: string;
+	label: string;
+	variant?: "outline";
+}) {
+	return (
+		<Button
+			as={Link}
+			to={`/jobs/${props.jobId}/tailor`}
+			target="_blank"
+			variant={props.variant}
+			size="sm"
+			class="w-fit"
+		>
+			{props.label}
+			<span aria-hidden="true">↗</span>
+			<span class="sr-only">(opens in new tab)</span>
+		</Button>
+	);
+}
+
+function CvRowBody(props: {
+	jobId: string;
+	draft: Draft | undefined;
+	done: boolean;
+}) {
+	return (
+		<Show
+			when={props.draft}
+			fallback={
+				<>
+					<p class="text-xs text-muted">
+						{props.done
+							? "Marked done because the application moved on. No tailored CV linked."
+							: "No tailored CV for this role yet."}
+					</p>
+					<TailorButton jobId={props.jobId} label="Tailor CV" />
+				</>
+			}
+		>
+			{(draft) => (
+				<>
+					<Link
+						to="/tailoring/drafts/$id"
+						params={{ id: draft().id }}
+						class="flex items-center justify-between gap-3 rounded-md py-1.5 pr-3 text-sm transition-colors hover:bg-surface-muted"
+					>
+						<span>Tailored CV, {formatDate(draft().createdAt)}</span>
+						<Badge
+							variant={draft().outcome === "kept" ? "default" : "secondary"}
+							class={cn(
+								draft().outcome === "kept" && "bg-primary/10 text-primary",
+							)}
+						>
+							{draft().outcome === "kept" ? "Complete" : "Draft"}
+						</Badge>
+					</Link>
+					<Show when={draft().outcome !== "kept"}>
+						<TailorButton
+							jobId={props.jobId}
+							label="Tailor again"
+							variant="outline"
+						/>
+					</Show>
+				</>
+			)}
+		</Show>
+	);
+}
+
 function ChecklistTab(props: {
 	app: ApplicationWithDetails;
 	onAddStep: () => void;
@@ -267,14 +338,14 @@ function ChecklistTab(props: {
 	const [open, setOpen] = createSignal<string[]>([]);
 
 	const openTasks = () => loadedData(tasks)?.items ?? [];
-	const hasKeptDraft = () =>
-		loadedData(drafts)?.some((d) => d.outcome === "kept") ?? false;
+	const draft = () => linkedDraft(loadedData(drafts) ?? []);
 	const done = () =>
 		checklistDone({
 			statusSystemKey:
 				loadedData(statuses)?.find((s) => s.ID === props.app.StatusID)
 					?.SystemKey ?? "",
-			hasKeptDraft: hasKeptDraft(),
+			hasKeptDraft:
+				loadedData(drafts)?.some((d) => d.outcome === "kept") ?? false,
 			hasDoneLetter: loadedData(letters)?.some((l) => l.doneAt) ?? false,
 			applyTaskOpen: openTasks().some((t) => t.TypeSystemKey === "apply"),
 			chaseBy: props.app.ChaseBy,
@@ -294,14 +365,20 @@ function ChecklistTab(props: {
 						done={done().cv}
 						title="CV"
 						summary={
-							hasKeptDraft()
+							draft()?.outcome === "kept"
 								? "Complete"
-								: done().cv
-									? "No CV linked"
-									: "Not started"
+								: draft()
+									? "Draft"
+									: done().cv
+										? "No CV linked"
+										: "Not started"
 						}
 					>
-						<JobDrafts jobId={props.app.JobID} />
+						<CvRowBody
+							jobId={props.app.JobID}
+							draft={draft()}
+							done={done().cv}
+						/>
 					</ChecklistRow>
 					<ChecklistRow
 						value="letter"
@@ -384,7 +461,6 @@ function ChecklistTab(props: {
 function ApplicationDetailPage() {
 	const params = Route.useParams();
 	const query = useApplications();
-	const navigate = useNavigate();
 	const [tab, setTab] = createSignal("checklist");
 	const [taskOpen, setTaskOpen] = createSignal(false);
 	const job = useJob(
@@ -421,17 +497,6 @@ function ApplicationDetailPage() {
 						</div>
 						<div class="flex shrink-0 items-center gap-3">
 							<StatusSelect app={app()} />
-							<Button
-								size="sm"
-								onClick={() =>
-									navigate({
-										to: "/jobs/$id/tailor",
-										params: { id: app().JobID },
-									})
-								}
-							>
-								Tailor CV
-							</Button>
 						</div>
 					</div>
 
