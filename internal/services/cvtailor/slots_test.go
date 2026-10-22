@@ -209,11 +209,13 @@ func TestSaveDraftSlots(t *testing.T) {
 			"unknown achievement": {PositionID: e.pos.ID, Bullets: []dto.DraftBullet{{Text: "x", AchievementIDs: []string{"nope"}}}},
 			"blank text":          {PositionID: e.pos.ID, Bullets: []dto.DraftBullet{{Text: " "}}},
 		} {
-			_, err := e.editing(t, e.drive).SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{rep}})
+			t.Run(name, func(t *testing.T) {
+				_, err := e.editing(t, e.drive).SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{rep}})
 
-			if !apperr.IsKind(err, apperr.KindInvalid) {
-				t.Errorf("SaveDraftSlots(%s) error = %v, want an invalid error", name, err)
-			}
+				if !apperr.IsKind(err, apperr.KindInvalid) {
+					t.Errorf("SaveDraftSlots() error = %v, want an invalid error", err)
+				}
+			})
 		}
 	})
 
