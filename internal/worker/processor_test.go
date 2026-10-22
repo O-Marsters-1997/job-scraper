@@ -792,6 +792,23 @@ func TestProcessBoardDiscover(t *testing.T) {
 		}
 	})
 
+	t.Run("a pivot carries the discovering source, listing URL and apply URL", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		viaAshby := func(context.Context, string, string) (scraper.Discovery, error) {
+			job := dto.Job{Title: "Go Engineer", Location: "London", URL: "https://wellfound.com/jobs/1", ApplyURL: "https://jobs.ashbyhq.com/acme/123"}
+			return scraper.Discovery{Name: "Acme Corp", Jobs: []dto.Job{job}}, nil
+		}
+		task := queue.Task{Version: 1, Source: "wttj", Kind: queue.BoardDiscoverTask, BoardToken: "acme", Via: "wellfound"}
+		if err := f.discoverProcessor(viaAshby, configsStub{match}).Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		tasks := f.published.Tasks()
+		if len(tasks) != 1 || tasks[0].Via != "wellfound" || tasks[0].ListingURL != "https://wellfound.com/jobs/1" || tasks[0].ApplyURL != "https://jobs.ashbyhq.com/acme/123" {
+			t.Fatalf("published = %+v, want one task carrying wellfound, its listing URL and the apply URL", tasks)
+		}
+	})
+
 	t.Run("an already verified ATS board is not republished", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
 		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme Corp"})

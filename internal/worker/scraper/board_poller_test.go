@@ -188,6 +188,35 @@ func TestPollPrefetchedCompletesTheFullListWithHint(t *testing.T) {
 	}
 }
 
+func TestPollPrefetchedStampsTheJobMatchingTheListing(t *testing.T) {
+	t.Parallel()
+	listing := scraper.Listing{Via: "wttj", URL: "https://wttj.example/jobs/1", ApplyURL: "https://boards.greenhouse.io/acme/jobs/123"}
+	tests := []struct {
+		name string
+		job  dto.Job
+		want bool
+	}{
+		{"same apply url", dto.Job{URL: listing.ApplyURL}, true},
+		{"same posting id", dto.Job{URL: "https://job-boards.greenhouse.io/acme/jobs/123?gh_src=x", ProviderPostingID: "123"}, true},
+		{"other posting", dto.Job{URL: "https://boards.greenhouse.io/acme/jobs/999", ProviderPostingID: "999"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			store := &boardStoreStub{board: dto.BoardPoll{ID: "board"}}
+			ingester := &boardIngesterStub{}
+			poller := scraper.NewBoardPoller(store, boardFetcherStub{}, ingester)
+			if err := poller.PollPrefetched(t.Context(), "board", []dto.Job{tt.job}, 0, listing); err != nil {
+				t.Fatal(err)
+			}
+			got := ingester.jobs[0]
+			if stamped := got.DiscoveredVia == "wttj" && got.DiscoveryURL == listing.URL; stamped != tt.want {
+				t.Errorf("job = %+v, stamped = %v, want %v", got, stamped, tt.want)
+			}
+		})
+	}
+}
+
 func TestBoardPollLogsUnderparsedOnlyWhenShort(t *testing.T) {
 	jobs := func(n int) []dto.Job {
 		out := make([]dto.Job, n)

@@ -30,6 +30,7 @@ type Job struct {
 	CompanyFavourite   bool
 	CompanyKind        CompanyKind
 	DiscoveredVia      string
+	DiscoveryURL       string
 	Breakdown          []ScoreRow
 	Listings           []JobListing
 }

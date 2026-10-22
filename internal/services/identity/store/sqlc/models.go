@@ -388,6 +388,7 @@ type Job struct {
 	RepostedAt         pgtype.Timestamptz
 	SalaryMin          pgtype.Float8
 	SalaryMax          pgtype.Float8
+	DiscoveredVia      pgtype.Text
 }
 
 type JobCandidate struct {

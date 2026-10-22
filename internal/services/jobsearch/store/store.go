@@ -437,8 +437,8 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			Title: job.Title, Location: job.Location, Url: job.URL, CompanySlug: job.CompanySlug,
 			Source: job.Source, PostedAt: postedAt, Description: job.Description,
 			SalaryRaw: job.SalaryRaw, SalaryMin: salaryMin, SalaryMax: salaryMax,
-			WorkArrangement: job.WorkArrangement,
-			CompanyID:       companyID, BoardID: boardID, PostingID: postingID, Fingerprint: fingerprint,
+			WorkArrangement: job.WorkArrangement, DiscoveredVia: job.DiscoveredVia,
+			CompanyID: companyID, BoardID: boardID, PostingID: postingID, Fingerprint: fingerprint,
 			MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
 			MatchLocation: pgtype.Text{String: matchLocation, Valid: true},
 		})
@@ -486,6 +486,9 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	if rows != 1 {
 		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another canonical job", ErrCanonicalConflict)
 	}
+	if err := saveDiscoveryAlias(ctx, queries, jobID, job); err != nil {
+		return dto.Job{}, "", err
+	}
 	if status == "new" || status == "changed" || status == "upgraded" {
 		if err := s.scoring.JobsChanged(ctx, tx, []string{id}, status == "new"); err != nil {
 			return dto.Job{}, "", fmt.Errorf("scoring.JobsChanged: %w", err)
@@ -496,6 +499,22 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	}
 	job.ID = id
 	return job, status, nil
+}
+
+func saveDiscoveryAlias(ctx context.Context, queries *sqlc.Queries, jobID pgtype.UUID, job dto.Job) error {
+	if job.DiscoveredVia == "" || job.DiscoveryURL == "" {
+		return nil
+	}
+	listingURL, err := normalizeJobURL(job.DiscoveryURL)
+	if err == nil {
+		_, err = queries.SaveCanonicalJobAlias(ctx, sqlc.SaveCanonicalJobAliasParams{
+			Column1: jobID, NormalizedUrl: listingURL, Source: job.DiscoveredVia,
+		})
+	}
+	if err != nil {
+		return fmt.Errorf("save discovery listing URL: %w", err)
+	}
+	return nil
 }
 
 func findMatch(ctx context.Context, queries *sqlc.Queries, job dto.Job, companyID pgtype.UUID, matchTitle, matchLocation string, trusted bool) (sqlc.FindMatchCandidatesRow, bool, error) {

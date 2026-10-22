@@ -31,6 +31,8 @@ const (
 	interval  = 30 * time.Minute
 	jobPath   = "/jobs/"
 
+	listingBase = "https://app.welcometothejungle.com" + jobPath
+
 	outcomeBackfill   = "backfill"
 	outcomeIneligible = "ineligible"
 	outcomeExported   = "exported"
@@ -110,7 +112,8 @@ func (h *Harvester) handleNew(ctx context.Context, fresh []string, out *discover
 	if err != nil && (!errors.Is(err, sources.ErrDeferred) || len(listings) == 0 || ctx.Err() != nil) {
 		return err
 	}
-	seenBoards := map[discover.Board]bool{}
+	type boardKey struct{ source, token string }
+	seenBoards := map[boardKey]bool{}
 	seenCompanies := map[string]bool{}
 	var native []string
 	var ineligible []string
@@ -127,8 +130,10 @@ func (h *Harvester) handleNew(ctx context.Context, fresh []string, out *discover
 	}
 	for _, l := range listings {
 		if board, ok := atsBoard(l.ApplyURL); ok {
-			if !seenBoards[board] {
-				seenBoards[board] = true
+			key := boardKey{board.Source, board.Token}
+			if !seenBoards[key] {
+				seenBoards[key] = true
+				board.ListingURL, board.ApplyURL = listingBase+l.ID, l.ApplyURL
 				out.Boards = append(out.Boards, board)
 			}
 			continue

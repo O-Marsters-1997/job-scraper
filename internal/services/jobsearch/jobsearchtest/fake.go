@@ -155,6 +155,13 @@ func (f *FakeStore) addListing(jobID string, job dto.Job) {
 	f.listings[jobID] = append(f.listings[jobID], dto.JobListing{Source: job.Source, URL: job.URL, FirstSeenAt: time.Now()})
 }
 
+func (f *FakeStore) addDiscoveryListing(jobID string, job dto.Job) {
+	if job.DiscoveredVia == "" || job.DiscoveryURL == "" {
+		return
+	}
+	f.addListing(jobID, dto.Job{Source: job.DiscoveredVia, URL: normalizeJobURL(job.DiscoveryURL)})
+}
+
 func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -178,6 +185,7 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 		f.jobOrder = append(f.jobOrder, id)
 		f.indexJob(job)
 		f.addListing(id, job)
+		f.addDiscoveryListing(id, job)
 		return job, "new", nil
 	}
 
@@ -191,6 +199,8 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 		status = "changed"
 	}
 	f.addListing(id, job)
+	f.addDiscoveryListing(id, job)
+	job.DiscoveredVia = prev.DiscoveredVia
 	job.PostedAt, job.RepostedAt = applyPostedAt(prev, job.PostedAt)
 	job.PostedAfter, job.FirstDiscoveredAt = prev.PostedAfter, prev.FirstDiscoveredAt
 	job.ID, job.ContentFingerprint, job.URL = id, fingerprint, prev.URL

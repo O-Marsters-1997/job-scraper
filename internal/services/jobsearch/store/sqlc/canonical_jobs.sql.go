@@ -236,7 +236,7 @@ func (q *Queries) FindMatchCandidates(ctx context.Context, arg FindMatchCandidat
 const insertCanonicalJob = `-- name: InsertCanonicalJob :one
 INSERT INTO jobs (title, location, url, company_slug, source, posted_at, posted_after, description,
     salary_raw, salary_min, salary_max, work_arrangement, company_id, primary_board_id, provider_posting_id,
-    content_fingerprint, content_changed_at, match_title, match_location)
+    content_fingerprint, content_changed_at, match_title, match_location, discovered_via)
 VALUES ($1, $2, $3, $4,
     $5, $6::timestamptz,
     (SELECT last_completed_at FROM board_poll_state WHERE board_id = $7::uuid),
@@ -244,7 +244,8 @@ VALUES ($1, $2, $3, $4,
     $10::float8, $11::float8,
     $12, COALESCE($13::uuid, (SELECT id FROM companies WHERE slug = $4)),
     $7::uuid, $14,
-    $15, NOW(), $16, $17)
+    $15, NOW(), $16, $17,
+    NULLIF($18::text, ''))
 RETURNING id
 `
 
@@ -266,6 +267,7 @@ type InsertCanonicalJobParams struct {
 	Fingerprint     pgtype.Text
 	MatchTitle      pgtype.Text
 	MatchLocation   pgtype.Text
+	DiscoveredVia   string
 }
 
 func (q *Queries) InsertCanonicalJob(ctx context.Context, arg InsertCanonicalJobParams) (pgtype.UUID, error) {
@@ -287,6 +289,7 @@ func (q *Queries) InsertCanonicalJob(ctx context.Context, arg InsertCanonicalJob
 		arg.Fingerprint,
 		arg.MatchTitle,
 		arg.MatchLocation,
+		arg.DiscoveredVia,
 	)
 	var id pgtype.UUID
 	err := row.Scan(&id)
