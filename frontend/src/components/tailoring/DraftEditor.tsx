@@ -8,17 +8,23 @@ import {
 	onMount,
 	Show,
 	Switch,
+	untrack,
 } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { isSparse, maxCharsForFewerLines } from "@/lib/docLayout";
+import { loadedData } from "@/lib/queryData";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
 import type { Draft, DraftLayout } from "@/types/tailoring";
 import { createDraftEditor } from "../../hooks/useDraftEditor";
+import { useExperience } from "../../hooks/useExperience";
 import { useJob } from "../../hooks/useJobs";
 import { createKeepFlow } from "../../hooks/useKeepFlow";
+import { createRolePicks } from "../../hooks/useRolePicks";
 import { createSuggestions } from "../../hooks/useSuggestions";
+import { useSuggestions as useAchievementBank } from "../../hooks/useTailoring";
+import { AchievementsDrawer } from "./AchievementsDrawer";
 import { ChangesDiff } from "./ChangesDiff";
 import {
 	DEFAULT_BODY_LINE_PT,
@@ -31,6 +37,7 @@ import { PageMeter, SaveIndicator } from "./DraftMeters";
 import { KeepControls, KeepNotices } from "./KeepFlow";
 import { MarginCards } from "./MarginCards";
 import { PrintPreview } from "./PrintPreview";
+import { RolesDrawer } from "./RolesDrawer";
 import { SkillsPanel } from "./SkillsPanel";
 import { WandMenu } from "./WandMenu";
 
@@ -169,6 +176,60 @@ export function DraftEditor(props: {
 		if (await ed.flush()) setPreview(true);
 	};
 
+	const [rolePanel, setRolePanel] = createSignal<string>();
+	const [selectedPick, setSelectedPick] = createSignal<string>();
+	const [bankWanted, setBankWanted] = createSignal(false);
+	const bank = useAchievementBank(
+		() => props.draft.jobId,
+		() =>
+			bankWanted()
+				? { docId: props.draft.baseDocId, tabId: props.draft.baseTabId }
+				: undefined,
+	);
+	const rolePicks = createRolePicks({
+		draft: () => props.draft,
+		editor: ed,
+		bank: () => bank.data ?? [],
+		positions: () => rolePositions(),
+	});
+	const pageLines = (pt: number) =>
+		Math.round(pt / (metrics().bodyLinePt || DEFAULT_BODY_LINE_PT));
+	const [rolesOpen, setRolesOpen] = createSignal(false);
+	const [selectedRole, setSelectedRole] = createSignal<string>();
+	const experience = useExperience();
+	const rolePositions = () =>
+		[...(loadedData(experience) ?? [])].sort((a, b) =>
+			(b.startDate ?? "9999").localeCompare(a.startDate ?? "9999"),
+		);
+	const closeRoles = () => {
+		setSelectedRole(undefined);
+		setRolesOpen(false);
+	};
+	const openRoles = () => {
+		closeRole();
+		setBankWanted(true);
+		setRolesOpen(true);
+	};
+	const openRole = (positionId: string) => {
+		closeRoles();
+		setSelectedPick(undefined);
+		setBankWanted(true);
+		setRolePanel(positionId);
+	};
+	const closeRole = () => {
+		setSelectedPick(undefined);
+		setRolePanel(undefined);
+		activate(undefined);
+	};
+	createEffect(() => {
+		const positionId = rolePanel();
+		if (!positionId) return;
+		const id = selectedPick();
+		const at = id ? rolePicks.picksFor(positionId).indexOf(id) : -1;
+		const slot = at >= 0 ? rolePicks.roleSlots(positionId)[at] : undefined;
+		untrack(() => activate(slot));
+	});
+
 	const pageEditor: PageEditor = {
 		get editable() {
 			return editable();
@@ -208,6 +269,10 @@ export function DraftEditor(props: {
 			return editable() && props.draft.skillsEditable
 				? () => void setSkillsOpen(true)
 				: undefined;
+		},
+		roleFor: (block) => rolePicks.headings().get(block),
+		get onEditRole() {
+			return editable() ? openRole : undefined;
 		},
 	};
 
@@ -319,6 +384,17 @@ export function DraftEditor(props: {
 							Changes
 						</Button>
 					</Show>
+					<Show when={editable() && props.layout}>
+						<Button
+							variant="ghost"
+							size="sm"
+							aria-label="Roles"
+							onClick={openRoles}
+						>
+							<Icon name="briefcase" size={14} />
+							<span class="hidden 2xl:inline">Roles</span>
+						</Button>
+					</Show>
 					<Button
 						variant="ghost"
 						size="sm"
@@ -353,7 +429,10 @@ export function DraftEditor(props: {
 
 			<main
 				ref={(el) => watchSize(el, () => setMainWidth(el.clientWidth))}
-				class="scroll-slim flex-1 overflow-auto bg-border/45"
+				class={cn(
+					"scroll-slim flex-1 overflow-auto bg-border/45",
+					(rolePanel() || rolesOpen()) && "pr-[30rem]",
+				)}
 				onMouseDown={(e) => {
 					if (e.target === e.currentTarget) activate(undefined);
 				}}
@@ -437,7 +516,9 @@ export function DraftEditor(props: {
 									</Show>
 									<Show when={narrow()}>{marginCards(true)}</Show>
 								</div>
-								<Show when={!narrow()}>{marginCards(false)}</Show>
+								<Show when={!narrow() && !rolePanel() && !rolesOpen()}>
+									{marginCards(false)}
+								</Show>
 							</div>
 						)}
 					</Match>
@@ -446,6 +527,42 @@ export function DraftEditor(props: {
 			<div class="sr-only" aria-live="polite">
 				{suggestions.announcement()}
 			</div>
+			<Show when={rolesOpen()}>
+				<RolesDrawer
+					positions={rolePositions()}
+					picked={rolePicks.order()}
+					usedLines={pageLines(metrics().contentPt)}
+					budgetLines={pageLines(metrics().availablePt)}
+					selected={selectedRole()}
+					onSelect={setSelectedRole}
+					onToggle={rolePicks.toggleRole}
+					onChooseAchievements={openRole}
+					onMove={rolePicks.moveRole}
+					onClose={closeRoles}
+				/>
+			</Show>
+			<Show when={rolePanel()}>
+				{(positionId) => {
+					const role = () => rolePicks.role(positionId());
+					return (
+						<AchievementsDrawer
+							title={`${role()?.title ?? ""}, ${role()?.employer ?? ""}`}
+							bank={rolePicks.bankFor(positionId())}
+							emptyText="No Achievements found for this role."
+							loading={bank.isPending}
+							picked={rolePicks.picksFor(positionId())}
+							usedLines={pageLines(metrics().contentPt)}
+							budgetLines={pageLines(metrics().availablePt)}
+							selected={selectedPick()}
+							onSelect={setSelectedPick}
+							onToggle={(id) => rolePicks.toggle(positionId(), id)}
+							onMove={(id, place) => rolePicks.move(positionId(), id, place)}
+							onClear={() => rolePicks.clear(positionId())}
+							onClose={closeRole}
+						/>
+					);
+				}}
+			</Show>
 			<Show when={props.draft.skillsEditable}>
 				<SkillsPanel
 					draft={props.draft}

@@ -33,6 +33,12 @@ let experience: Position[] = [
 				context:
 					"Cost pressure forced the move; we kept Postgres on RDS to limit risk.",
 			},
+			{
+				id: "achievement-4",
+				positionId: "position-1",
+				text: "Mentored three engineers through their first on-call rotation",
+				context: "",
+			},
 		],
 	},
 	{
@@ -46,6 +52,21 @@ let experience: Position[] = [
 				id: "achievement-3",
 				positionId: "position-2",
 				text: "Built the billing export pipeline used by finance every month",
+				context: "",
+			},
+		],
+	},
+	{
+		id: "position-3",
+		employer: "Initech",
+		title: "Developer",
+		startDate: "2015-09-01",
+		endDate: "2018-05-31",
+		achievements: [
+			{
+				id: "achievement-5",
+				positionId: "position-3",
+				text: "Replaced a nightly batch job with a streaming pipeline",
 				context: "",
 			},
 		],

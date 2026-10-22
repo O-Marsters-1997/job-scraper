@@ -117,13 +117,16 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 		finding := dto.DraftFinding{Check: "page_count", Severity: "block", Message: "over a page"}
 		edited := json.RawMessage(`{"positions":[{"positionId":"p","bullets":[]}]}`)
-		if err := f.Store.SetDraftEdits(ctx, f.Other, d.ID, edited, nil); !apperr.IsKind(err, apperr.KindNotFound) {
+		if err := f.Store.SetDraftEdits(ctx, f.Other, d.ID, edited, nil, nil); !apperr.IsKind(err, apperr.KindNotFound) {
 			t.Errorf("SetDraftEdits(other user) err = %v, want not found", err)
 		}
-		if err := f.Store.SetDraftEdits(ctx, f.UserID, d.ID, edited, []dto.DraftFinding{finding}); err != nil {
+		if err := f.Store.SetDraftEdits(ctx, f.UserID, d.ID, edited, []dto.DraftFinding{finding}, []string{}); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
+		if len(got.AchievementIDs) != 0 {
+			t.Errorf("GetDraft().AchievementIDs = %v, want the saved (empty) set", got.AchievementIDs)
+		}
 		if diff := cmp.Diff([]dto.DraftFinding{finding}, got.Findings); diff != "" {
 			t.Errorf("GetDraft().Findings mismatch (-want +got):\n%s", diff)
 		}

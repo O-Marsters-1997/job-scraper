@@ -4,15 +4,14 @@ import type {
 	DraftContent,
 	DraftInput,
 	DraftLayout,
+	DraftPositionEdit,
 	DraftProvenance,
 	DraftRef,
 	ExperienceMatch,
-	Explanation,
 	HeadingMapping,
 	LayoutBlock,
 	LayoutRun,
 	SkillGroup,
-	SkillSuggestions,
 	SlotEdit,
 	SuggestDone,
 	Suggestion,
@@ -59,49 +58,6 @@ export function getExperienceMatch(): ExperienceMatch {
 	return { score: 0.34 };
 }
 
-export function getSkillSuggestions(): SkillSuggestions {
-	return {
-		lines: [
-			{
-				label: "Languages",
-				base: [
-					{ text: "Go", score: 0.6, state: "fit" },
-					{ text: "PHP", score: -0.4, state: "low" },
-					{ text: "TypeScript", score: 0.3, state: "fit" },
-				],
-				candidates: [
-					{
-						bankSkillId: "bank-skill-1",
-						name: "Rust",
-						score: 0.7,
-						state: "fit",
-						preselected: true,
-						replaces: "PHP",
-					},
-					{
-						bankSkillId: "bank-skill-2",
-						name: "Elixir",
-						score: 0.05,
-						state: "fit",
-						preselected: false,
-						replaces: "",
-					},
-				],
-			},
-		],
-		unplaced: [
-			{
-				bankSkillId: "bank-skill-3",
-				name: "Kubernetes",
-				score: 0.5,
-				state: "fit",
-				preselected: false,
-				replaces: "",
-			},
-		],
-	};
-}
-
 export function getSuggestions(): Suggestion[] {
 	const scores = [0.81, 0.64, 0.42, 0.17];
 	return getExperience().flatMap((p) => {
@@ -126,17 +82,17 @@ const MOCK_PROFILE =
 
 const MOCK_ACHIEVEMENTS = [
 	{
-		id: "ach-1",
+		id: "achievement-1",
 		positionId: "position-1",
 		text: "Cut p99 latency of the billing API from 900ms to 240ms.",
 	},
 	{
-		id: "ach-2",
+		id: "achievement-2",
 		positionId: "position-1",
 		text: "Led the migration of twelve services to Kubernetes, reducing deploy time and the pager load for a team of eight across two time zones.",
 	},
 	{
-		id: "ach-3",
+		id: "achievement-3",
 		positionId: "position-2",
 		text: "Built the internal ledger service in Go and Postgres.",
 	},
@@ -187,6 +143,15 @@ function mockContent(): Pick<Draft, "content" | "base"> {
 		positions: p ? [{ positionId: p.id, bullets: bullets.map(bullet) }] : [],
 	});
 	const [first = "", second = "", third = ""] = texts;
+	const generated = (positionId: string, slotIds: string[]) => ({
+		positionId,
+		bullets: slotIds.map((slotId) => ({
+			text: MOCK_BULLET_TEXT[slotId] ?? "",
+			achievementIds: MOCK_ACHIEVEMENTS.filter(
+				(a) => a.text === MOCK_BULLET_TEXT[slotId],
+			).map((a) => a.id),
+		})),
+	});
 	return {
 		base: content(
 			[first, second, third],
@@ -196,14 +161,20 @@ function mockContent(): Pick<Draft, "content" | "base"> {
 			],
 			"Backend engineer with six years of experience.",
 		),
-		content: content(
-			[third, `${first} using Kubernetes`, "Led the on-call rota"],
-			[
-				{ label: "Languages", items: ["Go", "SQL"] },
-				{ label: "Tools", items: ["Postgres", "Kubernetes"] },
+		content: {
+			...content(
+				[],
+				[
+					{ label: "Languages", items: ["Go", "SQL"] },
+					{ label: "Tools", items: ["Postgres", "Kubernetes"] },
+				],
+				"Backend engineer with six years of experience in platform work.",
+			),
+			positions: [
+				generated("position-1", ["s1", "s2"]),
+				generated("position-2", ["s3"]),
 			],
-			"Backend engineer with six years of experience in platform work.",
-		),
+		},
 	};
 }
 
@@ -224,6 +195,8 @@ export function createDraft(input: DraftInput): DraftRef {
 			content: null,
 			base: null,
 			skillsEditable: false,
+			baseDocId: input.docId,
+			baseTabId: input.tabId,
 		},
 		polls: 0,
 	});
@@ -304,9 +277,17 @@ export function saveDraftSlots(
 	id: string,
 	slots: SlotEdit[],
 	skills?: SkillGroup[],
+	positions: DraftPositionEdit[] = [],
+	roles?: string[],
 ): Draft {
 	const entry = mockEntry(id);
 	if (!entry.draft.provenance) throw new Error(`mock draft ${id} is not ready`);
+	for (const { positionId } of positions) addMockRole(entry, positionId);
+	if (!entry.draft.provenance) throw new Error(`mock draft ${id} is not ready`);
+	const order =
+		roles ?? entry.draft.provenance.positions.map((p) => p.positionId);
+	const byRole = <T extends { positionId: string }>(positions: T[]) =>
+		order.flatMap((r) => positions.filter((p) => p.positionId === r));
 	const chars = slots.reduce((n, s) => n + s.text.length, 0);
 	const findings = entry.draft.findings.filter((f) => f.check !== "page_count");
 	if (chars > MOCK_TWO_PAGES_CHARS)
@@ -315,14 +296,18 @@ export function saveDraftSlots(
 			severity: "block",
 			message: "the Draft is 2 pages; the base CV is 1",
 		});
-	const provenance = mockProvenance();
+	const replaced = replaceProvenance(entry.draft.provenance, positions);
+	const provenance = { ...replaced, positions: byRole(replaced.positions) };
 	const { content } = entry.draft;
+	const edited =
+		content && applySlots(replaceContent(content, positions), replaced, slots);
 	entry.draft = {
 		...entry.draft,
 		findings,
 		provenance,
-		content: content && {
-			...applySlots(content, provenance, slots),
+		content: edited && {
+			...edited,
+			positions: byRole(edited.positions),
 			...(skills && {
 				skills: skills.flatMap((g) => g.items),
 				skillGroups: skills,
@@ -330,6 +315,71 @@ export function saveDraftSlots(
 		},
 	};
 	return entry.draft;
+}
+
+function addMockRole(entry: ReturnType<typeof mockEntry>, positionId: string) {
+	const { provenance, content } = entry.draft;
+	const position = getExperience().find((p) => p.id === positionId);
+	if (
+		!provenance ||
+		!position ||
+		provenance.positions.some((p) => p.positionId === positionId)
+	)
+		return;
+	entry.draft = {
+		...entry.draft,
+		provenance: {
+			...provenance,
+			positions: [
+				...provenance.positions,
+				{
+					positionId,
+					employer: position.employer,
+					title: position.title,
+					bullets: [],
+				},
+			],
+		},
+		content: content && {
+			...content,
+			positions: [...content.positions, { positionId, bullets: [] }],
+		},
+	};
+}
+
+function replaceContent(
+	content: DraftContent,
+	positions: DraftPositionEdit[],
+): DraftContent {
+	return {
+		...content,
+		positions: content.positions.map(
+			(p) => positions.find((r) => r.positionId === p.positionId) ?? p,
+		),
+	};
+}
+
+function replaceProvenance(
+	provenance: DraftProvenance,
+	positions: DraftPositionEdit[],
+): DraftProvenance {
+	return {
+		...provenance,
+		positions: provenance.positions.map((p) => {
+			const replaced = positions.find((r) => r.positionId === p.positionId);
+			if (!replaced) return p;
+			return {
+				...p,
+				bullets: replaced.bullets.map((b, i) => ({
+					slotId: p.bullets[i]?.slotId ?? `s-${p.positionId}-${i}`,
+					achievements: getExperience()
+						.flatMap((position) => position.achievements)
+						.filter((a) => b.achievementIds.includes(a.id))
+						.map(({ id, positionId, text }) => ({ id, positionId, text })),
+				})),
+			};
+		}),
+	};
 }
 
 function applySlots(
@@ -388,6 +438,8 @@ function seedDraft(id: string, outcome: Draft["outcome"], jobId?: string) {
 			],
 			provenance: mockProvenance(),
 			skillsEditable: true,
+			baseDocId: "mock-doc",
+			baseTabId: "mock-tab",
 			...mockContent(),
 		},
 	});
@@ -553,13 +605,4 @@ export async function streamSuggestion(
 	}
 	signal.throwIfAborted();
 	return { text, findings: [] };
-}
-
-export async function explainAchievement(
-	_achievementId: string,
-): Promise<Explanation> {
-	await new Promise((resolve) => setTimeout(resolve, MOCK_WORD_MS * 10));
-	return {
-		text: "The job asks for on-call ownership; this bullet doesn't show it.",
-	};
 }

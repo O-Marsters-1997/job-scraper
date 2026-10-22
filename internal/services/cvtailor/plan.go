@@ -97,7 +97,7 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 		}
 		slices.SortFunc(pp.Achievements, func(a, b cvedit.Achievement) int { return chosenAt[a.ID] - chosenAt[b.ID] })
 		slots := slotsOf[p.ID]
-		if len(slots) == 0 {
+		if len(slots) == 0 && !slices.Contains(claim.Roles, p.ID) {
 			return plan{}, apperr.Unprocessable("a chosen position is no longer mapped to a heading of the CV tab")
 		}
 		for _, s := range slots {
@@ -312,7 +312,11 @@ func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Dra
 			cp.Bullets = append(cp.Bullets, slot)
 		}
 		for _, a := range pe.Added {
-			cp.Bullets = append(cp.Bullets, checks.Slot{ID: a.SlotID, Text: a.Text})
+			slot := checks.Slot{ID: a.SlotID, Text: a.Text}
+			for _, id := range a.AchievementIDs {
+				slot.Cited = append(slot.Cited, p.texts[id])
+			}
+			cp.Bullets = append(cp.Bullets, slot)
 		}
 		d.Positions = append(d.Positions, cp)
 	}

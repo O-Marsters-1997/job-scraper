@@ -1,12 +1,10 @@
 import { For, Show } from "solid-js";
 
-export type Step = "cv" | "headings" | "achievements" | "skills" | "generate";
+export type Step = "cv" | "headings" | "generate";
 
 const STEP_LABELS: { step: Step; label: string }[] = [
 	{ step: "cv", label: "Base CV" },
 	{ step: "headings", label: "Headings" },
-	{ step: "achievements", label: "Achievements" },
-	{ step: "skills", label: "Skills" },
 	{ step: "generate", label: "Generate" },
 ];
 

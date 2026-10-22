@@ -120,14 +120,14 @@ func (f *FakeStore) SetDraftOutcome(_ context.Context, userID, id, outcome strin
 	return d.Draft, nil
 }
 
-func (f *FakeStore) SetDraftEdits(_ context.Context, userID, id string, editSet json.RawMessage, findings []dto.DraftFinding) error {
+func (f *FakeStore) SetDraftEdits(_ context.Context, userID, id string, editSet json.RawMessage, findings []dto.DraftFinding, achievementIDs []string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	d, ok := f.drafts[id]
 	if !ok || d.userID != userID {
 		return errDraftNotFound
 	}
-	d.EditSet, d.Findings = editSet, slices.Clone(findings)
+	d.EditSet, d.Findings, d.AchievementIDs = editSet, slices.Clone(findings), slices.Clone(achievementIDs)
 	return nil
 }
 

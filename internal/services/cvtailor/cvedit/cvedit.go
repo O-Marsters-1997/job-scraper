@@ -101,9 +101,10 @@ type PositionEdit struct {
 }
 
 type AddedBullet struct {
-	SlotID string `json:"slotId"`
-	After  string `json:"after"`
-	Text   string `json:"text"`
+	SlotID         string   `json:"slotId"`
+	After          string   `json:"after"`
+	Text           string   `json:"text"`
+	AchievementIDs []string `json:"achievement_ids,omitempty"`
 }
 
 type Line struct {
@@ -119,11 +120,12 @@ func (pe PositionEdit) Lines() []Line {
 	follow = func(id string) {
 		for _, a := range pe.Added {
 			if a.After == id {
-				out = append(out, Line{SlotID: a.SlotID, Text: a.Text, Added: true})
+				out = append(out, Line{SlotID: a.SlotID, Text: a.Text, AchievementIDs: a.AchievementIDs, Added: true})
 				follow(a.SlotID)
 			}
 		}
 	}
+	follow("")
 	for _, b := range pe.Bullets {
 		out = append(out, Line{SlotID: b.SlotID, Text: b.Text, AchievementIDs: b.AchievementIDs})
 		follow(b.SlotID)
@@ -170,6 +172,7 @@ func FlatSkills(groups []SkillGroup) []string {
 // skills array, decoded as one unlabelled group.
 type EditSet struct {
 	Positions    []PositionEdit `json:"positions"`
+	Roles        []string       `json:"roles,omitempty"`
 	Profile      *string        `json:"profile,omitempty"`
 	Skills       []SkillGroup   `json:"skills,omitempty"`
 	LegacySkills bool           `json:"-"`

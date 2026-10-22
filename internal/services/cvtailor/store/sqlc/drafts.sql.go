@@ -437,21 +437,24 @@ func (q *Queries) SetDraftDoc(ctx context.Context, arg SetDraftDocParams) error 
 }
 
 const setDraftEdits = `-- name: SetDraftEdits :execrows
-UPDATE tailored_cvs SET edit_set = $1::jsonb, findings = $2::jsonb
-WHERE id = $3::uuid AND user_id = $4::uuid
+UPDATE tailored_cvs SET edit_set = $1::jsonb, findings = $2::jsonb,
+    achievement_ids = $3::uuid[]
+WHERE id = $4::uuid AND user_id = $5::uuid
 `
 
 type SetDraftEditsParams struct {
-	EditSet  []byte
-	Findings []byte
-	ID       pgtype.UUID
-	UserID   pgtype.UUID
+	EditSet        []byte
+	Findings       []byte
+	AchievementIds []pgtype.UUID
+	ID             pgtype.UUID
+	UserID         pgtype.UUID
 }
 
 func (q *Queries) SetDraftEdits(ctx context.Context, arg SetDraftEditsParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setDraftEdits,
 		arg.EditSet,
 		arg.Findings,
+		arg.AchievementIds,
 		arg.ID,
 		arg.UserID,
 	)
