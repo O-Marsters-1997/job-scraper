@@ -76,9 +76,9 @@ deploy:
     docker compose up -d --build --remove-orphans
     docker compose ps
 
-[doc('from the laptop: forward the app (localhost:8000) and RabbitMQ management (localhost:15673) from the server')]
-tunnel host:
-    ssh -N -L 8000:127.0.0.1:8000 -L 15673:127.0.0.1:15672 {{host}}
+[doc('from the laptop: forward the app (target=app, localhost:8000) or RabbitMQ management (target=rabbit, localhost:15673) from the server')]
+tunnel target host:
+    ssh -N -L {{ if target == "app" { "8000:127.0.0.1:8000" } else if target == "rabbit" { "15673:127.0.0.1:15672" } else { error("target must be app or rabbit") } }} {{host}}
 
 [doc('tail api and worker logs')]
 logs:
