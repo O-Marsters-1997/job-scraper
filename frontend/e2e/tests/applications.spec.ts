@@ -57,9 +57,9 @@ test.describe("Application page", () => {
 		await expect(apply.getByRole("img", { name: "Done" })).toBeVisible();
 	});
 
-	test("adding a step lists it and offers no Apply type", async ({ page }) => {
+	test("adding a task lists it and offers no Apply type", async ({ page }) => {
 		await openFirstApplication(page);
-		await page.getByRole("button", { name: "Add a step" }).click();
+		await page.getByRole("button", { name: "Add task" }).click();
 		const dialog = page.getByRole("dialog");
 		await expect(
 			dialog.getByRole("option", { name: "Apply", exact: true }),

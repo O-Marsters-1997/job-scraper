@@ -120,7 +120,7 @@ function StatusSelect(props: { app: ApplicationWithDetails }) {
 
 function Step(props: { done: boolean; title: string; children?: JSX.Element }) {
 	return (
-		<li class="flex gap-3 rounded-md border border-border p-3">
+		<li class="flex gap-3 rounded-md border border-border bg-surface p-3">
 			<span
 				role="img"
 				aria-label={props.done ? "Done" : "To do"}
@@ -240,6 +240,9 @@ function ChecklistTab(props: {
 					<JobDrafts jobId={props.app.JobID} />
 				</Step>
 				<Step done={done().coverLetter} title="Cover letter (optional)">
+					<p class="text-xs text-muted">
+						Check whether the listing asks for a cover letter.
+					</p>
 					<details>
 						<summary class="cursor-pointer text-xs text-muted">
 							Write a cover letter
@@ -281,7 +284,7 @@ function ChecklistTab(props: {
 				</For>
 				<li>
 					<Button variant="outline" size="sm" onClick={props.onAddStep}>
-						Add a step
+						Add task
 					</Button>
 				</li>
 			</ol>
