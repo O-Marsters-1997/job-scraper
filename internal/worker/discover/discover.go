@@ -213,7 +213,7 @@ func (r *Runner) publishChecks(ctx context.Context, log *slog.Logger, h Harveste
 		boardID, err := r.catalog.GetVerifiedBoardID(ctx, b.Source, b.Token)
 		switch {
 		case err == nil:
-			task = queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardCheckTask, BoardID: boardID, Via: via, ListingURL: b.ListingURL, ApplyURL: b.ApplyURL, Urgent: true}
+			task = queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardCheckTask, BoardID: boardID, Via: via, ListingURL: b.ListingURL, ApplyURL: b.ApplyURL, Urgent: true, Manual: true}
 		case !errors.Is(err, data.ErrNotFound):
 			log.WarnContext(ctx, "could not check board verified, publishing", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
 		case r.discoverMissed(ctx, log, b):

@@ -316,7 +316,7 @@ func TestRunner_PublishesChecks(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		want := queue.Task{Version: 1, Source: "ashby", Kind: queue.BoardCheckTask, BoardID: board.ID, Via: "wttj", ListingURL: check.Board.ListingURL, ApplyURL: check.Board.ApplyURL, Urgent: true}
+		want := queue.Task{Version: 1, Source: "ashby", Kind: queue.BoardCheckTask, BoardID: board.ID, Via: "wttj", ListingURL: check.Board.ListingURL, ApplyURL: check.Board.ApplyURL, Urgent: true, Manual: true}
 		if len(pub.tasks) != 1 {
 			t.Fatalf("published = %+v, want one task", pub.tasks)
 		}
