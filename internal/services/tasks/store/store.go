@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/tasks/store/sqlc"
@@ -20,7 +19,7 @@ import (
 var (
 	ErrTaskTypeExists = errors.New("task type name already exists")
 
-	ErrSystemTaskType = apperr.Invalid("this task type is used by the app and can't be deleted")
+	ErrSystemTaskType = errors.New("system task type")
 )
 
 type ApplicationSync interface {
