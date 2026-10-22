@@ -180,10 +180,10 @@ func TestFetchPage(t *testing.T) {
 
 func TestPollBoard(t *testing.T) {
 	t.Parallel()
-	t.Run("a UK company is next due in 7 days and a non-UK one in 90", func(t *testing.T) {
+	t.Run("a UK company gets no poll hint and a non-UK one is next due in 90 days", func(t *testing.T) {
 		t.Parallel()
 		for company, want := range map[string]time.Duration{
-			"company_faculty.json": 7 * 24 * time.Hour,
+			"company_faculty.json": 0,
 			"company_us_only.json": 90 * 24 * time.Hour,
 		} {
 			_, client := newAPI(t, company)
