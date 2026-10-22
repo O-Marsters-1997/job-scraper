@@ -32,7 +32,7 @@ export function Stepper(props: { current: Step; skippedHeadings: boolean }) {
 							}}
 						/>
 						<span
-							class="mt-1.5 block truncate"
+							class="mt-1.5 block break-words"
 							classList={{
 								"font-semibold text-foreground": i() === currentIndex(),
 								"text-foreground": i() < currentIndex(),
