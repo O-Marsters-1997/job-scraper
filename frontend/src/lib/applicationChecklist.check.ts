@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { type ChecklistInput, checklistDone } from "./applicationChecklist";
+import type { Draft } from "@/types/tailoring";
+import {
+	type ChecklistInput,
+	checklistDone,
+	linkedDraft,
+} from "./applicationChecklist";
 
 const base: ChecklistInput = {
 	statusSystemKey: "draft",
@@ -42,3 +47,22 @@ assert.equal(
 	}).followUp,
 	false,
 );
+
+const draft = (id: string, over: Partial<Draft> = {}): Draft =>
+	({ id, status: "ready", outcome: null, ...over }) as Draft;
+
+assert.equal(linkedDraft([]), undefined);
+assert.equal(
+	linkedDraft([draft("open"), draft("kept", { outcome: "kept" })])?.id,
+	"kept",
+);
+assert.equal(
+	linkedDraft([
+		draft("gone", { outcome: "discarded" }),
+		draft("bad", { status: "failed" }),
+	]),
+	undefined,
+);
+assert.equal(linkedDraft([draft("p", { status: "pending" })])?.id, "p");
+assert.equal(linkedDraft([draft("r", { status: "running" })])?.id, "r");
+assert.equal(linkedDraft([draft("new"), draft("old")])?.id, "new");
