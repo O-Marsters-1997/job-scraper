@@ -13,6 +13,12 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CoverLetterCard } from "@/components/tailoring/CoverLetterCard";
 import { JobDrafts } from "@/components/tailoring/JobDrafts";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -40,6 +46,7 @@ import {
 	useSetTaskDone,
 } from "@/hooks/useTasks";
 import { checklistDone } from "@/lib/applicationChecklist";
+import { formatChaseDate } from "@/lib/chase";
 import { dayKey, formatDate } from "@/lib/datetime";
 import { queryClient } from "@/lib/queryClient";
 import { loadedData } from "@/lib/queryData";
@@ -118,41 +125,59 @@ function StatusSelect(props: { app: ApplicationWithDetails }) {
 	);
 }
 
-function Step(props: { done: boolean; title: string; children?: JSX.Element }) {
+function ChecklistRow(props: {
+	value: string;
+	done: boolean;
+	title: string;
+	summary: string;
+	children: JSX.Element;
+}) {
 	return (
-		<li class="flex gap-3 rounded-md border border-border bg-surface p-3">
-			<span
-				role="img"
-				aria-label={props.done ? "Done" : "To do"}
-				class={cn(
-					"mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
-					props.done
-						? "border-primary bg-primary text-primary-foreground"
-						: "border-border",
-				)}
-			>
-				<Show when={props.done}>
-					<Icon name="check" size={12} />
-				</Show>
-			</span>
-			<div class="flex min-w-0 flex-1 flex-col gap-2">
-				<p class="text-sm font-medium text-foreground">{props.title}</p>
+		<AccordionItem value={props.value}>
+			<AccordionTrigger class="items-center gap-3 p-3 hover:no-underline">
+				<span
+					role="img"
+					aria-label={props.done ? "Done" : "To do"}
+					class={cn(
+						"flex size-5 shrink-0 items-center justify-center rounded-full border",
+						props.done
+							? "border-primary bg-primary text-primary-foreground"
+							: "border-border",
+					)}
+				>
+					<Show when={props.done}>
+						<Icon name="check" size={12} />
+					</Show>
+				</span>
+				<span class={cn("min-w-0 flex-1 truncate", props.done && "text-muted")}>
+					{props.title}
+				</span>
+				<span class="shrink-0 text-xs font-normal text-faint">
+					{props.summary}
+				</span>
+			</AccordionTrigger>
+			<AccordionContent class="flex flex-col gap-2 pr-0 pl-7">
 				{props.children}
-			</div>
-		</li>
+			</AccordionContent>
+		</AccordionItem>
 	);
 }
 
-function ApplyStep(props: {
+function ApplyRow(props: {
 	app: ApplicationWithDetails;
 	company: string;
 	done: boolean;
+	onAsk: () => void;
 }) {
 	const statuses = useApplicationStatuses();
 	const update = useUpdateApplication();
 	const [asking, setAsking] = createSignal(false);
 	const [opened, setOpened] = createSignal(false);
-	const onFocus = () => opened() && setAsking(true);
+	const onFocus = () => {
+		if (!opened()) return;
+		setAsking(true);
+		props.onAsk();
+	};
 	onMount(() => window.addEventListener("focus", onFocus));
 	onCleanup(() => window.removeEventListener("focus", onFocus));
 
@@ -171,8 +196,27 @@ function ApplyStep(props: {
 	};
 
 	return (
-		<Step done={props.done} title={`Apply on ${props.company}'s site`}>
-			<Show when={!props.done}>
+		<ChecklistRow
+			value="apply"
+			done={props.done}
+			title={`Apply on ${props.company}'s site`}
+			summary={
+				props.done
+					? props.app.AppliedAt
+						? `Applied ${formatDate(props.app.AppliedAt)}`
+						: "Applied"
+					: "Opens in a new tab"
+			}
+		>
+			<Show
+				when={!props.done}
+				fallback={
+					<p class="text-xs text-muted">
+						Marked applied
+						{props.app.AppliedAt && ` on ${formatDate(props.app.AppliedAt)}`}.
+					</p>
+				}
+			>
 				<Button
 					as="a"
 					href={props.app.JobURL}
@@ -206,7 +250,7 @@ function ApplyStep(props: {
 					</div>
 				</Show>
 			</Show>
-		</Step>
+		</ChecklistRow>
 	);
 }
 
@@ -220,14 +264,17 @@ function ChecklistTab(props: {
 	const tasks = useJobOpenTasks(() => props.app.JobID);
 	const setDone = useSetTaskDone();
 
+	const [open, setOpen] = createSignal<string[]>([]);
+
 	const openTasks = () => loadedData(tasks)?.items ?? [];
+	const hasKeptDraft = () =>
+		loadedData(drafts)?.some((d) => d.outcome === "kept") ?? false;
 	const done = () =>
 		checklistDone({
 			statusSystemKey:
 				loadedData(statuses)?.find((s) => s.ID === props.app.StatusID)
 					?.SystemKey ?? "",
-			hasKeptDraft:
-				loadedData(drafts)?.some((d) => d.outcome === "kept") ?? false,
+			hasKeptDraft: hasKeptDraft(),
 			hasDoneLetter: loadedData(letters)?.some((l) => l.doneAt) ?? false,
 			applyTaskOpen: openTasks().some((t) => t.TypeSystemKey === "apply"),
 			chaseBy: props.app.ChaseBy,
@@ -235,59 +282,101 @@ function ChecklistTab(props: {
 
 	return (
 		<Show when={loadedData(statuses) && loadedData(tasks)}>
-			<ol class="flex flex-col gap-3">
-				<Step done={done().cv} title="CV">
-					<JobDrafts jobId={props.app.JobID} />
-				</Step>
-				<Step done={done().coverLetter} title="Cover letter (optional)">
-					<p class="text-xs text-muted">
-						Check whether the listing asks for a cover letter.
-					</p>
-					<details>
-						<summary class="cursor-pointer text-xs text-muted">
-							Write a cover letter
-						</summary>
-						<div class="mt-2">
-							<CoverLetterCard jobId={props.app.JobID} />
-						</div>
-					</details>
-				</Step>
-				<ApplyStep
-					app={props.app}
-					company={titleCase(props.app.JobCompanySlug)}
-					done={done().apply}
-				/>
-				<Step done={done().followUp} title="Follow up">
-					<ChaseRow
-						applicationId={props.app.ID}
-						statusId={props.app.StatusID}
-						chaseBy={props.app.ChaseBy}
+			<div class="flex flex-col gap-3">
+				<Accordion
+					collapsible
+					value={open()}
+					onChange={setOpen}
+					class="rounded-xl border border-border bg-surface"
+				>
+					<ChecklistRow
+						value="cv"
+						done={done().cv}
+						title="CV"
+						summary={
+							hasKeptDraft()
+								? "Complete"
+								: done().cv
+									? "No CV linked"
+									: "Not started"
+						}
+					>
+						<JobDrafts jobId={props.app.JobID} />
+					</ChecklistRow>
+					<ChecklistRow
+						value="letter"
+						done={done().coverLetter}
+						title="Cover letter"
+						summary={done().coverLetter ? "Done" : "Optional"}
+					>
+						<p class="text-xs text-muted">
+							Check whether the listing asks for a cover letter.
+						</p>
+						<details>
+							<summary class="cursor-pointer text-xs text-muted">
+								Write a cover letter
+							</summary>
+							<div class="mt-2">
+								<CoverLetterCard jobId={props.app.JobID} />
+							</div>
+						</details>
+					</ChecklistRow>
+					<ApplyRow
+						app={props.app}
+						company={titleCase(props.app.JobCompanySlug)}
+						done={done().apply}
+						onAsk={() => setOpen(["apply"])}
 					/>
-				</Step>
-				<For each={openTasks().filter((t) => !t.TypeSystemKey)}>
-					{(task) => (
-						<Step done={false} title={task.TypeName}>
-							<Show when={task.Notes}>
-								<p class="text-xs text-muted">{task.Notes}</p>
-							</Show>
-							<Button
-								variant="outline"
-								size="sm"
-								class="w-fit"
-								loading={setDone.isPending}
-								onClick={() => setDone.mutate({ id: task.ID, done: true })}
+					<ChecklistRow
+						value="chase"
+						done={done().followUp}
+						title="Follow up"
+						summary={
+							props.app.ChaseBy
+								? `Chase by ${formatChaseDate(props.app.ChaseBy)}`
+								: "No chase set"
+						}
+					>
+						<ChaseRow
+							applicationId={props.app.ID}
+							statusId={props.app.StatusID}
+							chaseBy={props.app.ChaseBy}
+						/>
+					</ChecklistRow>
+					<For each={openTasks().filter((t) => !t.TypeSystemKey)}>
+						{(task) => (
+							<ChecklistRow
+								value={`task-${task.ID}`}
+								done={false}
+								title={task.TypeName}
+								summary="Task"
 							>
-								Done
-							</Button>
-						</Step>
-					)}
-				</For>
-				<li>
-					<Button variant="outline" size="sm" onClick={props.onAddStep}>
-						Add task
-					</Button>
-				</li>
-			</ol>
+								<Show when={task.Notes}>
+									<p class="text-xs text-muted">{task.Notes}</p>
+								</Show>
+								<Button
+									variant="outline"
+									size="sm"
+									class="w-fit"
+									loading={setDone.isPending}
+									onClick={() => setDone.mutate({ id: task.ID, done: true })}
+								>
+									Done
+								</Button>
+							</ChecklistRow>
+						)}
+					</For>
+				</Accordion>
+				<Button
+					variant="outline"
+					size="sm"
+					class="w-fit"
+					onClick={props.onAddStep}
+				>
+					<Icon name="plus" size={14} />
+					Add task
+				</Button>
+			</div>
 		</Show>
 	);
 }
