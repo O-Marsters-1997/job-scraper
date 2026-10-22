@@ -61,8 +61,8 @@ export function GenerateStep(props: {
 							</p>
 							<Show when={suggestions.error}>
 								<p class="mb-3 text-sm text-danger">
-									Could not rank your Achievements for this job. Check your AI
-									key in Settings and try again.
+									Could not rank your Achievements for this job. Make sure you
+									have an AI key in Settings, then try again.
 								</p>
 							</Show>
 							<Show when={create.error}>
