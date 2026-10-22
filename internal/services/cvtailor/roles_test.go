@@ -167,6 +167,62 @@ func TestSaveDraftSlotsRoles(t *testing.T) {
 		}
 	})
 
+	t.Run("adding a bank role clones a heading and writes its bullet after the last role", func(t *testing.T) {
+		t.Parallel()
+		e := newRolesEnv(t)
+		initech, err := e.store.CreatePosition(t.Context(), userID, dto.PositionInput{Employer: "Initech", Title: "Consultant"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, err := e.store.CreateAchievement(t.Context(), userID, dto.AchievementInput{PositionID: initech.ID, Text: "Cut report time by half"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		roles := []string{e.pos.ID, e.widgets.ID, initech.ID}
+		svc := cvtailor.NewService(e.store, cvtailortest.Docs{TabJSON: e.tab}, nil, e.drive)
+		add := dto.DraftSlotsInput{ID: e.id, Roles: roles, Positions: []dto.DraftPosition{{
+			PositionID: initech.ID, Bullets: []dto.DraftBullet{{Text: "Cut report time by half", AchievementIDs: []string{a.ID}}, {Text: "Ran the audit", AchievementIDs: []string{a.ID}}},
+		}}}
+
+		got, err := svc.SaveDraftSlots(t.Context(), userID, add)
+		if err != nil {
+			t.Fatalf("SaveDraftSlots() error = %v", err)
+		}
+
+		wantBody := strings.Join([]string{heading, "Built and maintained the public APIs for the platform", "Ran on-call", "Wrote docs",
+			widgetsHeading, "Built reports", "Reference available", "Consultant, Initech", "Built and maintained the public APIs for the platform"}, "\n")
+		if body := rebuiltBody(t, e); body != wantBody {
+			t.Errorf("rebuilt body = %q, want %q", body, wantBody)
+		}
+		if inserted := insertedText(t, e.drive); !slices.Contains(inserted, "Cut report time by half") {
+			t.Errorf("inserted %q, want the new role's first bullet", inserted)
+		}
+		if diff := cmp.Diff(roles, positionIDs(got)); diff != "" {
+			t.Errorf("SaveDraftSlots().Content positions (-want +got):\n%s", diff)
+		}
+
+		again, err := svc.SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: e.id, Roles: roles})
+		if err != nil {
+			t.Fatalf("SaveDraftSlots() with the role already added error = %v", err)
+		}
+		if diff := cmp.Diff(roles, positionIDs(again)); diff != "" {
+			t.Errorf("SaveDraftSlots() positions after reload (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a role added without a bullet is invalid", func(t *testing.T) {
+		t.Parallel()
+		e := newRolesEnv(t)
+		initech, err := e.store.CreatePosition(t.Context(), userID, dto.PositionInput{Employer: "Initech", Title: "Consultant"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := e.save(t, []string{e.pos.ID, e.widgets.ID, initech.ID}); !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("SaveDraftSlots() error = %v, want an invalid error", err)
+		}
+	})
+
 	t.Run("an empty, repeated or unknown role is invalid", func(t *testing.T) {
 		t.Parallel()
 		e := newRolesEnv(t)

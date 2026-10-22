@@ -97,7 +97,7 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 		}
 		slices.SortFunc(pp.Achievements, func(a, b cvedit.Achievement) int { return chosenAt[a.ID] - chosenAt[b.ID] })
 		slots := slotsOf[p.ID]
-		if len(slots) == 0 {
+		if len(slots) == 0 && !slices.Contains(claim.Roles, p.ID) {
 			return plan{}, apperr.Unprocessable("a chosen position is no longer mapped to a heading of the CV tab")
 		}
 		for _, s := range slots {

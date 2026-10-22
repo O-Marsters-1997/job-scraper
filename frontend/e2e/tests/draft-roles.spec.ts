@@ -38,6 +38,34 @@ test.describe("Roles drawer", () => {
 		});
 	});
 
+	test("clicking a bank role adds its heading and best-fit bullet after the newer roles", async ({
+		page,
+		draftPage,
+	}) => {
+		const rows = draftPage.rolesDrawer.getByRole("option");
+		await rows.nth(2).click();
+		await expect(rows.nth(2).getByRole("button")).toHaveText("3");
+		await expect(page.getByText("Developer, Initech").first()).toBeVisible();
+		await expect(
+			page.getByRole("textbox", { name: /Developer bullet 1/ }),
+		).toHaveCount(1);
+		await expect(draftPage.saveStatus).toHaveText("Saved", {
+			timeout: SAVED_TIMEOUT_MS,
+		});
+	});
+
+	test("Choose its Achievements opens the selected role's drawer", async ({
+		draftPage,
+	}) => {
+		const rows = draftPage.rolesDrawer.getByRole("option");
+		await rows.nth(1).click();
+		await draftPage.rolesDrawer
+			.getByRole("button", { name: "Choose its Achievements" })
+			.click();
+		await expect(draftPage.drawer).toBeVisible();
+		await expect(draftPage.drawer).toContainText("Software Engineer, Globex");
+	});
+
 	test("the circle removes a role, but never the last one", async ({
 		page,
 		draftPage,

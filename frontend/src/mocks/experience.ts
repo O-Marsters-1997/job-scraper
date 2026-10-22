@@ -56,6 +56,21 @@ let experience: Position[] = [
 			},
 		],
 	},
+	{
+		id: "position-3",
+		employer: "Initech",
+		title: "Developer",
+		startDate: "2015-09-01",
+		endDate: "2018-05-31",
+		achievements: [
+			{
+				id: "achievement-5",
+				positionId: "position-3",
+				text: "Replaced a nightly batch job with a streaming pipeline",
+				context: "",
+			},
+		],
+	},
 ];
 
 export function getExperience(): Position[] {

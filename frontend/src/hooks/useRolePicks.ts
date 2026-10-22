@@ -1,13 +1,20 @@
 import { type Accessor, createMemo, createSignal, untrack } from "solid-js";
+import { ADDED_PREFIX } from "@/lib/draftSlots";
+import { cloneRoleHeading } from "@/lib/roleHeading";
+import type { Position } from "@/types/experience";
 import type { Draft, LayoutBlock, Suggestion } from "@/types/tailoring";
 import type { DraftEditorState } from "./useDraftEditor";
+
+type AddedRole = { positionId: string; head: LayoutBlock };
 
 export function createRolePicks(opts: {
 	draft: Accessor<Draft>;
 	editor: DraftEditorState;
 	bank: Accessor<Suggestion[]>;
+	positions: Accessor<Position[]>;
 }) {
 	const roles = () => opts.draft().provenance?.positions ?? [];
+	const [added, setAdded] = createSignal<AddedRole[]>([]);
 
 	const [picks, setPicks] = createSignal<Record<string, string[]>>(
 		untrack(() =>
@@ -42,6 +49,8 @@ export function createRolePicks(opts: {
 				.find((b) => !b.bullet && !b.slotId);
 			if (at >= 0 && head) found.set(head, p.positionId);
 		}
+		for (const a of added())
+			if (list.includes(a.head)) found.set(a.head, a.positionId);
 		return found;
 	});
 
@@ -119,13 +128,70 @@ export function createRolePicks(opts: {
 	const picksFor = (positionId: string) => picks()[positionId] ?? [];
 	const order = () => onPage().map((r) => r.id);
 
+	const addRole = (position: Position) => {
+		const list = opts.editor.blocks();
+		const groups = onPage();
+		const template = groups[0];
+		const from = roles().find((p) => p.positionId === template?.id);
+		const templateHead = [...headings()].find(
+			([, id]) => id === template?.id,
+		)?.[0];
+		const templateBullet = list.find(
+			(b) => b.slotId === roleSlots(template?.id ?? "")[0],
+		);
+		const best = bankFor(position.id)[0];
+		const first = best
+			? { id: best.achievementId, text: best.text }
+			: position.achievements[0];
+		if (!template || !from || !templateHead || !templateBullet || !first)
+			return;
+		const startOf = (id: string) =>
+			opts.positions().find((p) => p.id === id)?.startDate ?? "";
+		const newer = groups
+			.filter((g) => startOf(g.id) > (position.startDate ?? ""))
+			.at(-1);
+		const at = newer ? newer.end : template.start;
+		const head = cloneRoleHeading(templateHead, from, position);
+		const slotId = `${ADDED_PREFIX}${crypto.randomUUID()}`;
+		const lead = templateBullet.runs[0];
+		const ids = groups.map((g) => g.id);
+		ids.splice(newer ? ids.indexOf(newer.id) + 1 : 0, 0, position.id);
+		setAdded([...added(), { positionId: position.id, head }]);
+		setPicks({ ...picks(), [position.id]: [first.id] });
+		opts.editor.rearrange(
+			[
+				...list.slice(0, at),
+				head,
+				{
+					...templateBullet,
+					slotId,
+					runs: lead ? [{ ...lead, text: " " }] : [],
+				},
+				...list.slice(at),
+			],
+			ids,
+		);
+		opts.editor.replaceRole(
+			position.id,
+			[slotId],
+			[{ text: first.text, achievementIds: [first.id] }],
+		);
+	};
+
 	return {
 		headings,
 		roleSlots,
 		bankFor,
 		picksFor,
-		role: (positionId: string) =>
-			roles().find((p) => p.positionId === positionId),
+		role: (positionId: string) => {
+			const saved = roles().find((p) => p.positionId === positionId);
+			if (saved) return saved;
+			const position = opts.positions().find((p) => p.id === positionId);
+			return position && added().some((a) => a.positionId === positionId)
+				? { title: position.title, employer: position.employer }
+				: undefined;
+		},
+		addRole,
 		toggle(positionId: string, id: string) {
 			const now = picksFor(positionId);
 			setPicksFor(
@@ -139,9 +205,14 @@ export function createRolePicks(opts: {
 			setPicksFor(positionId, rest);
 		},
 		order,
-		removeRole(positionId: string) {
-			if (order().length > 1 && order().includes(positionId))
-				arrange(order().filter((id) => id !== positionId));
+		toggleRole(positionId: string) {
+			const ids = order();
+			if (!ids.includes(positionId)) {
+				const position = opts.positions().find((p) => p.id === positionId);
+				if (position) addRole(position);
+			} else if (ids.length > 1) {
+				arrange(ids.filter((id) => id !== positionId));
+			}
 		},
 		moveRole(positionId: string, place: number) {
 			const rest = order().filter((id) => id !== positionId);

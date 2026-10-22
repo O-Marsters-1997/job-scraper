@@ -41,7 +41,7 @@ func (s *Service) roleLayout(ctx context.Context, claim dto.DraftClaim, ds docpa
 	return rl, nil
 }
 
-func (rl roleLayout) validate(roles []string) error {
+func (rl roleLayout) validate(roles []string, bank []dto.Position) error {
 	if len(roles) == 0 {
 		return apperr.Invalid("a CV needs at least one role")
 	}
@@ -51,7 +51,7 @@ func (rl roleLayout) validate(roles []string) error {
 			return apperr.Invalid("roles must not repeat")
 		}
 		seen[id] = true
-		if !slices.Contains(rl.order, id) {
+		if !slices.Contains(rl.order, id) && !slices.ContainsFunc(bank, func(p dto.Position) bool { return p.ID == id }) {
 			return apperr.Invalid("unknown role")
 		}
 	}
@@ -78,12 +78,12 @@ func (s *Service) withinRoles(ctx context.Context, claim dto.DraftClaim, roles [
 	return claim, nil
 }
 
-func (s *Service) applyRoles(ctx context.Context, claim dto.DraftClaim, ds docparse.DocStructure, edits cvedit.EditSet, roles []string) (cvedit.EditSet, roleLayout, bool, error) {
+func (s *Service) applyRoles(ctx context.Context, claim dto.DraftClaim, ds docparse.DocStructure, edits cvedit.EditSet, roles []string, bank []dto.Position) (cvedit.EditSet, roleLayout, bool, error) {
 	rl, err := s.roleLayout(ctx, claim, ds)
 	if err != nil {
 		return edits, rl, false, err
 	}
-	if err := rl.validate(roles); err != nil {
+	if err := rl.validate(roles, bank); err != nil {
 		return edits, rl, false, err
 	}
 	current := edits.Roles
@@ -97,6 +97,11 @@ func (s *Service) applyRoles(ctx context.Context, claim dto.DraftClaim, ds docpa
 	edits.Positions = slices.DeleteFunc(slices.Clone(edits.Positions), func(pe cvedit.PositionEdit) bool {
 		return !slices.Contains(roles, pe.PositionID)
 	})
+	for _, id := range roles {
+		if !slices.Contains(rl.order, id) && !slices.ContainsFunc(edits.Positions, func(pe cvedit.PositionEdit) bool { return pe.PositionID == id }) {
+			edits.Positions = append(edits.Positions, cvedit.PositionEdit{PositionID: id})
+		}
+	}
 	slices.SortStableFunc(edits.Positions, func(a, b cvedit.PositionEdit) int {
 		return slices.Index(roles, a.PositionID) - slices.Index(roles, b.PositionID)
 	})
@@ -108,9 +113,38 @@ func (s *Service) rebuildDoc(ctx context.Context, claim dto.DraftClaim, draftDoc
 	if err != nil {
 		return docparse.DocStructure{}, fmt.Errorf("load CV tab: %w", err)
 	}
-	arranged, err := tabcopy.Arrange(base, rl.roleOf, edits.Roles)
+	bank, err := s.store.ListPositions(ctx, claim.UserID)
+	if err != nil {
+		return docparse.DocStructure{}, err
+	}
+	roles := make(map[string]tabcopy.Role, len(bank))
+	for _, p := range bank {
+		roles[p.ID] = tabcopy.Role{Title: p.Title, Employer: p.Employer, Start: p.StartDate, End: p.EndDate}
+	}
+	for _, id := range edits.Roles {
+		if slices.Contains(rl.order, id) {
+			continue
+		}
+		at := slices.IndexFunc(edits.Positions, func(pe cvedit.PositionEdit) bool { return pe.PositionID == id })
+		if at < 0 || len(edits.Positions[at].Lines()) == 0 {
+			return docparse.DocStructure{}, apperr.Invalid("a role added to the CV needs a bullet")
+		}
+	}
+	arranged, headings, err := tabcopy.Arrange(base, rl.roleOf, edits.Roles, roles)
 	if err != nil {
 		return docparse.DocStructure{}, unrebuildable(err)
+	}
+	var added []dto.HeadingMapping
+	for id, text := range headings {
+		if _, taken := rl.roleOf[text]; taken {
+			return docparse.DocStructure{}, apperr.Unprocessable("the CV already has a heading like " + text)
+		}
+		added = append(added, dto.HeadingMapping{HeadingText: text, PositionID: &id})
+	}
+	if len(added) > 0 {
+		if err := s.store.SaveHeadingMappings(ctx, claim.UserID, claim.DocID, claim.TabID, added); err != nil {
+			return docparse.DocStructure{}, err
+		}
 	}
 	current, err := s.docs.GetDocument(ctx, claim.UserID, draftDocID, claim.TabID)
 	if err != nil {

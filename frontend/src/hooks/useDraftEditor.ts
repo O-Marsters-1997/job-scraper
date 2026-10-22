@@ -173,9 +173,8 @@ export function createDraftEditor(
 		);
 	};
 
-	const sendRoles = async () => {
-		const edits = roleEdits();
-		const sent = Object.entries(edits).flatMap(([positionId, edit]) => {
+	const sentRoles = (edits: Record<string, RoleEdit>) =>
+		Object.entries(edits).flatMap(([positionId, edit]) => {
 			const kept = edit.slots.flatMap((slot, i) => {
 				const body = text(slot).trim();
 				return body ? [{ slot, body, ids: edit.ids[i] ?? [] }] : [];
@@ -194,22 +193,33 @@ export function createDraftEditor(
 					]
 				: [];
 		});
+
+	type SentRole = ReturnType<typeof sentRoles>[number];
+
+	const positionEdits = (sent: SentRole[]): DraftPositionEdit[] =>
+		sent.map((s) => ({ positionId: s.positionId, bullets: s.bullets }));
+
+	const settleRoles = (
+		edits: Record<string, RoleEdit>,
+		sent: SentRole[],
+		result: Draft,
+	) => {
+		setRoleEdits((now) =>
+			Object.fromEntries(
+				Object.entries(now).filter(([k, v]) => edits[k] !== v),
+			),
+		);
+		rekey(result, sent);
+		setGoogleSaved(true);
+		queryClient.setQueryData(keys.tailoring.draft(id), result);
+	};
+
+	const sendRoles = async () => {
+		const edits = roleEdits();
+		const sent = sentRoles(edits);
 		if (sent.length === 0) return false;
-		const positions: DraftPositionEdit[] = sent.map((s) => ({
-			positionId: s.positionId,
-			bullets: s.bullets,
-		}));
-		const result = await saveDraftSlots(id, [], undefined, positions);
-		batch(() => {
-			setRoleEdits((now) =>
-				Object.fromEntries(
-					Object.entries(now).filter(([k, v]) => edits[k] !== v),
-				),
-			);
-			rekey(result, sent);
-			setGoogleSaved(true);
-			queryClient.setQueryData(keys.tailoring.draft(id), result);
-		});
+		const result = await saveDraftSlots(id, [], undefined, positionEdits(sent));
+		batch(() => settleRoles(edits, sent, result));
 		return true;
 	};
 
@@ -218,11 +228,25 @@ export function createDraftEditor(
 	const sendOrder = async () => {
 		const order = pendingRoles();
 		if (!order) return;
-		const result = await saveDraftSlots(id, [], undefined, undefined, order);
+		const known = new Set(
+			draft().provenance?.positions.map((p) => p.positionId),
+		);
+		const edits = Object.fromEntries(
+			Object.entries(roleEdits()).filter(
+				([k]) => order.includes(k) && !known.has(k),
+			),
+		);
+		const sent = sentRoles(edits);
+		const result = await saveDraftSlots(
+			id,
+			[],
+			undefined,
+			sent.length > 0 ? positionEdits(sent) : undefined,
+			order,
+		);
 		batch(() => {
 			setPendingRoles((now) => (now === order ? undefined : now));
-			setGoogleSaved(true);
-			queryClient.setQueryData(keys.tailoring.draft(id), result);
+			settleRoles(edits, sent, result);
 		});
 	};
 
@@ -364,6 +388,13 @@ export function createDraftEditor(
 					for (const s of gone) delete t[s];
 				}),
 			);
+		setRoleEdits((now) =>
+			Object.fromEntries(
+				Object.entries(now).filter(([positionId]) =>
+					order.includes(positionId),
+				),
+			),
+		);
 		setPendingRoles(order);
 		loop.schedule();
 	};

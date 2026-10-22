@@ -50,7 +50,7 @@ func (s *Service) DraftLayout(ctx context.Context, userID string, q dto.DraftQue
 		slog.ErrorContext(ctx, "parse draft doc failed", slog.String("draft_id", draft.ID), slog.Any(logger.KeyErr, err))
 		return dto.DraftLayout{}, apperr.Unprocessable("could not read the draft document")
 	}
-	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: draft.AchievementIDs}
+	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: draft.AchievementIDs, Roles: edits.Roles}
 	if claim, err = s.withinRoles(ctx, claim, edits.Roles); err != nil {
 		return dto.DraftLayout{}, err
 	}

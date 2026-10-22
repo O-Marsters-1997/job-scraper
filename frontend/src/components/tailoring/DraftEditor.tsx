@@ -190,6 +190,7 @@ export function DraftEditor(props: {
 		draft: () => props.draft,
 		editor: ed,
 		bank: () => bank.data ?? [],
+		positions: () => rolePositions(),
 	});
 	const pageLines = (pt: number) =>
 		Math.round(pt / (metrics().bodyLinePt || DEFAULT_BODY_LINE_PT));
@@ -206,6 +207,7 @@ export function DraftEditor(props: {
 	};
 	const openRoles = () => {
 		closeRole();
+		setBankWanted(true);
 		setRolesOpen(true);
 	};
 	const openRole = (positionId: string) => {
@@ -533,7 +535,8 @@ export function DraftEditor(props: {
 					budgetLines={pageLines(metrics().availablePt)}
 					selected={selectedRole()}
 					onSelect={setSelectedRole}
-					onToggle={rolePicks.removeRole}
+					onToggle={rolePicks.toggleRole}
+					onChooseAchievements={openRole}
 					onMove={rolePicks.moveRole}
 					onClose={closeRoles}
 				/>

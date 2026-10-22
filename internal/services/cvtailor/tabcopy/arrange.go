@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 )
 
@@ -19,26 +20,27 @@ type block struct {
 
 type bodyParagraph struct {
 	heading bool
+	bullet  bool
 	text    string
 }
 
 // Arrange returns src with its role blocks (a heading through the paragraph before the next
 // one) in the order of order, a list of position ids; roleOf maps heading text to position id.
 // Blocks of positions left out are dropped, and unmapped blocks keep their place.
-func Arrange(src json.RawMessage, roleOf map[string]string, order []string) (json.RawMessage, error) {
+func Arrange(src json.RawMessage, roleOf map[string]string, order []string, roles map[string]Role) (json.RawMessage, map[string]string, error) {
 	var tab, doc, body object
 	var content []object
 	if err := json.Unmarshal(src, &tab); err != nil {
-		return nil, fmt.Errorf("decoding tab: %w", err)
+		return nil, nil, fmt.Errorf("decoding tab: %w", err)
 	}
 	if err := json.Unmarshal(tab["documentTab"], &doc); err != nil {
-		return nil, fmt.Errorf("decoding tab: %w", err)
+		return nil, nil, fmt.Errorf("decoding tab: %w", err)
 	}
 	if err := json.Unmarshal(doc["body"], &body); err != nil {
-		return nil, fmt.Errorf("decoding tab: %w", err)
+		return nil, nil, fmt.Errorf("decoding tab: %w", err)
 	}
 	if err := json.Unmarshal(body["content"], &content); err != nil {
-		return nil, fmt.Errorf("decoding tab: %w", err)
+		return nil, nil, fmt.Errorf("decoding tab: %w", err)
 	}
 
 	lead := 0
@@ -48,25 +50,45 @@ func Arrange(src json.RawMessage, roleOf map[string]string, order []string) (jso
 	paras := make([]bodyParagraph, 0, len(content)-lead)
 	for _, el := range content[lead:] {
 		if el["paragraph"] == nil {
-			return nil, fmt.Errorf("%w: non-paragraph content", ErrUnsupported)
+			return nil, nil, fmt.Errorf("%w: non-paragraph content", ErrUnsupported)
 		}
 		p, err := paragraphText(el["paragraph"])
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		paras = append(paras, p)
 	}
 
 	blocks := blocksOf(paras, roleOf)
 	byPosition := map[string]block{}
-	for _, bl := range blocks {
+	tpl := -1
+	for i, bl := range blocks {
 		if bl.position == "" {
 			continue
 		}
 		if _, dup := byPosition[bl.position]; dup {
-			return nil, fmt.Errorf("%w: %q", ErrAmbiguousRole, bl.position)
+			return nil, nil, fmt.Errorf("%w: %q", ErrAmbiguousRole, bl.position)
 		}
 		byPosition[bl.position] = bl
+		if tpl < 0 {
+			tpl = i
+		}
+	}
+	fresh := 0
+	for _, id := range order {
+		if _, ok := byPosition[id]; !ok {
+			fresh++
+		}
+	}
+	if fresh > 0 {
+		if tpl < 0 {
+			return nil, nil, fmt.Errorf("%w: no role to copy", ErrUnsupported)
+		}
+		last := len(blocks) - 1
+		for blocks[last].position == "" {
+			last--
+		}
+		blocks = slices.Insert(blocks, last+1, slices.Repeat([]block{{position: "+"}}, fresh)...)
 	}
 
 	out := append([]object{}, content[:lead]...)
@@ -75,6 +97,7 @@ func Arrange(src json.RawMessage, roleOf map[string]string, order []string) (jso
 	if lead < len(content) {
 		next = intOf(content[lead]["startIndex"])
 	}
+	headings := map[string]string{}
 	for _, slot := range blocks {
 		bl := slot
 		if slot.position != "" {
@@ -83,7 +106,18 @@ func Arrange(src json.RawMessage, roleOf map[string]string, order []string) (jso
 			}
 			var ok bool
 			if bl, ok = byPosition[queue[0]]; !ok {
-				return nil, fmt.Errorf("tabcopy: no block for position %q", queue[0])
+				mapped := mappedAt(paras, blocks[tpl], roleOf)
+				to, known := roles[queue[0]]
+				if !known {
+					return nil, nil, fmt.Errorf("tabcopy: no block or role for position %q", queue[0])
+				}
+				copied, heading, end, err := cloneRole(content[lead:], paras, blocks[tpl], mapped, roles[roleOf[paras[mapped].text]], to, next)
+				if err != nil {
+					return nil, nil, err
+				}
+				out, next, headings[queue[0]] = append(out, copied...), end, heading
+				queue = queue[1:]
+				continue
 			}
 			queue = queue[1:]
 		}
@@ -97,7 +131,17 @@ func Arrange(src json.RawMessage, roleOf map[string]string, order []string) (jso
 	body["content"] = mustMarshal(out)
 	doc["body"] = mustMarshal(body)
 	tab["documentTab"] = mustMarshal(doc)
-	return json.Marshal(tab)
+	arranged, err := json.Marshal(tab)
+	return arranged, headings, err
+}
+
+func mappedAt(paras []bodyParagraph, bl block, roleOf map[string]string) int {
+	for i := bl.from; i < bl.to; i++ {
+		if _, ok := roleOf[paras[i].text]; ok && paras[i].heading {
+			return i
+		}
+	}
+	return bl.from
 }
 
 func paragraphText(raw json.RawMessage) (bodyParagraph, error) {
@@ -108,6 +152,7 @@ func paragraphText(raw json.RawMessage) (bodyParagraph, error) {
 		ParagraphStyle struct {
 			NamedStyleType string `json:"namedStyleType"`
 		} `json:"paragraphStyle"`
+		Bullet *struct{} `json:"bullet"`
 	}
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return bodyParagraph{}, fmt.Errorf("decoding paragraph: %w", err)
@@ -120,6 +165,7 @@ func paragraphText(raw json.RawMessage) (bodyParagraph, error) {
 	}
 	return bodyParagraph{
 		heading: strings.HasPrefix(p.ParagraphStyle.NamedStyleType, "HEADING_"),
+		bullet:  p.Bullet != nil,
 		text:    strings.TrimSpace(text.String()),
 	}, nil
 }
