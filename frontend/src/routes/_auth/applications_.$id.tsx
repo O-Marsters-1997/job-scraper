@@ -287,7 +287,7 @@ function ChecklistTab(props: {
 					collapsible
 					value={open()}
 					onChange={setOpen}
-					class="rounded-lg border border-border bg-surface"
+					class="rounded-xl border border-border bg-surface"
 				>
 					<ChecklistRow
 						value="cv"

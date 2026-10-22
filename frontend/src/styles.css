@@ -747,7 +747,6 @@ html[data-size="lg"] {
 }
 
 @layer components {
-	/* accordion — zaidan/style-luma.css */
 	.z-accordion {
 		@apply overflow-hidden rounded-2xl border;
 	}
