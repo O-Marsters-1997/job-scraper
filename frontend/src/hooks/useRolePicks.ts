@@ -57,6 +57,38 @@ export function createRolePicks(opts: {
 		return slots;
 	};
 
+	const onPage = createMemo(() => {
+		const list = opts.editor.blocks();
+		const found = [...headings()]
+			.map(([head, id]) => ({ id, start: list.indexOf(head) }))
+			.sort((a, b) => a.start - b.start);
+		return found.map((r, i) => {
+			const lastSlot = list.findIndex(
+				(b) => b.slotId === roleSlots(r.id).at(-1),
+			);
+			return { ...r, end: found[i + 1]?.start ?? lastSlot + 1 };
+		});
+	});
+
+	const arrange = (order: string[]) => {
+		const list = opts.editor.blocks();
+		const groups = onPage();
+		const first = groups[0];
+		const last = groups.at(-1);
+		if (!first || !last) return;
+		opts.editor.rearrange(
+			[
+				...list.slice(0, first.start),
+				...order.flatMap((id) => {
+					const g = groups.find((r) => r.id === id);
+					return g ? list.slice(g.start, g.end) : [];
+				}),
+				...list.slice(last.end),
+			],
+			order,
+		);
+	};
+
 	const bankFor = (positionId: string) =>
 		opts
 			.bank()
@@ -104,6 +136,20 @@ export function createRolePicks(opts: {
 			const rest = picksFor(positionId).filter((x) => x !== id);
 			rest.splice(Math.min(place - 1, rest.length), 0, id);
 			setPicksFor(positionId, rest);
+		},
+		order: () => onPage().map((r) => r.id),
+		removeRole(positionId: string) {
+			const order = onPage().map((r) => r.id);
+			if (order.length > 1 && order.includes(positionId))
+				arrange(order.filter((id) => id !== positionId));
+		},
+		moveRole(positionId: string, place: number) {
+			const rest = onPage()
+				.map((r) => r.id)
+				.filter((id) => id !== positionId);
+			if (rest.length === onPage().length) return;
+			rest.splice(Math.min(place - 1, rest.length), 0, positionId);
+			arrange(rest);
 		},
 		clear: (positionId: string) => setPicks({ ...picks(), [positionId]: [] }),
 	};

@@ -13,8 +13,10 @@ export class DraftPage {
 	readonly resolvedCount: Locator;
 	readonly dots: Locator;
 	readonly drawer: Locator;
+	readonly rolesDrawer: Locator;
 
 	constructor(readonly page: Page) {
+		this.rolesDrawer = page.getByRole("complementary", { name: "Roles" });
 		this.saveStatus = page.getByTestId("save-status");
 		this.meter = page.getByTestId("page-meter");
 		this.cards = page.getByTestId("margin-card");
