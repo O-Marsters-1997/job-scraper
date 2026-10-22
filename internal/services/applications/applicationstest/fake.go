@@ -70,6 +70,7 @@ func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.C
 		StatusID:   statusID,
 		AppliedAt:  parseDate(in.AppliedAt),
 		SalaryInfo: in.SalaryInfo,
+		ChaseBy:    f.chaseFor(statusID, time.Now()),
 	}
 	f.apps[app.ID] = app
 	return app, nil
@@ -121,6 +122,16 @@ func (f *FakeStore) ownsStatus(userID, statusID string) bool {
 	return ok && s.UserID == userID
 }
 
+func (f *FakeStore) chaseFor(statusID string, from time.Time) *time.Time {
+	s, ok := f.statuses[statusID]
+	if !ok || s.ReplyWindowDays == nil {
+		return nil
+	}
+	y, m, d := from.UTC().Date()
+	chaseBy := time.Date(y, m, d+*s.ReplyWindowDays, 0, 0, 0, 0, time.UTC)
+	return &chaseBy
+}
+
 func parseDate(s *string) *time.Time {
 	if s == nil {
 		return nil
@@ -150,7 +161,7 @@ func (f *FakeStore) UpdateApplication(_ context.Context, userID, id string, in d
 		return dto.Application{}, data.ErrNotFound
 	}
 	if app.StatusID != in.StatusID {
-		app.ChaseBy = nil
+		app.ChaseBy = f.chaseFor(in.StatusID, time.Now())
 	}
 	app.StatusID = in.StatusID
 	app.AppliedAt = parseDate(in.AppliedAt)
@@ -172,7 +183,7 @@ func (f *FakeStore) MarkApplied(_ context.Context, _ pgx.Tx, userID, jobID strin
 		if a.UserID != userID || a.JobID != jobID || a.StatusID == appliedID {
 			continue
 		}
-		a.StatusID, a.ChaseBy = appliedID, nil
+		a.StatusID, a.ChaseBy = appliedID, f.chaseFor(appliedID, now)
 		if a.AppliedAt == nil {
 			a.AppliedAt = &now
 		}
