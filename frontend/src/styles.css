@@ -745,3 +745,21 @@ html[data-size="lg"] {
 		@apply text-sm;
 	}
 }
+
+@layer components {
+	.z-accordion {
+		@apply overflow-hidden rounded-2xl border;
+	}
+	.z-accordion-item {
+		@apply data-expanded:bg-surface-muted not-last:border-b;
+	}
+	.z-accordion-trigger {
+		@apply [&_[data-slot=accordion-trigger-icon]]:text-faint gap-6 p-4 text-left text-sm font-medium hover:underline [&_[data-slot=accordion-trigger-icon]]:ml-auto [&_[data-slot=accordion-trigger-icon]]:size-4;
+	}
+	.z-accordion-content {
+		@apply data-expanded:animate-accordion-down data-closed:animate-accordion-up px-4 text-sm;
+	}
+	.z-accordion-content-inner {
+		@apply pt-0 pb-4;
+	}
+}

@@ -2,7 +2,8 @@ import { devices } from "@playwright/test";
 import { seed } from "../../src/mocks/seed";
 import { expect, test } from "../src/fixtures";
 
-const withKeptDraft = seed.jobs.at(-1)!;
+const keptJobID = seed.applications.at(-1)!.JobID;
+const withKeptDraft = seed.jobs.find((j) => j.ID === keptJobID)!;
 
 test.describe("CV sheet on a phone", () => {
 	test.use({

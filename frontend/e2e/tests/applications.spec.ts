@@ -45,16 +45,90 @@ test.describe("Application page", () => {
 		await page.getByRole("option", { name: "Draft" }).click();
 		await expect(status).toContainText("Draft");
 
-		const apply = page.getByRole("listitem").filter({ hasText: /^Apply on/ });
-		await expect(apply.getByRole("img", { name: "To do" })).toBeVisible();
+		const trigger = page.getByRole("button", { name: /Apply on/ });
+		const region = page.getByRole("region", { name: /Apply on/ });
+		await expect(trigger.getByRole("img", { name: "To do" })).toBeVisible();
+		await trigger.click();
 		const popup = page.waitForEvent("popup");
-		await apply.getByRole("link", { name: /Open application/ }).click();
+		await region.getByRole("link", { name: /Open application/ }).click();
 		await (await popup).close();
-		await expect(apply.getByText("Did you send it?")).toBeVisible();
-		await apply.getByRole("button", { name: "Yes, I applied" }).click();
+		await expect(region.getByText("Did you send it?")).toBeVisible();
+		await region.getByRole("button", { name: "Yes, I applied" }).click();
 
 		await expect(status).toContainText("Applied");
-		await expect(apply.getByRole("img", { name: "Done" })).toBeVisible();
+		await expect(trigger.getByRole("img", { name: "Done" })).toBeVisible();
+	});
+
+	test("checklist rows start collapsed and open one at a time", async ({
+		page,
+	}) => {
+		await openFirstApplication(page);
+		const cv = page.getByRole("button", { name: /^(To do|Done) CV/ });
+		const apply = page.getByRole("button", { name: /Apply on/ });
+		const cvRegion = page.getByRole("region", { name: /^(To do|Done) CV/ });
+		await expect(cv).toHaveAttribute("aria-expanded", "false");
+		await expect(apply).toHaveAttribute("aria-expanded", "false");
+
+		await cv.click();
+		await expect(cvRegion).toBeVisible();
+		await apply.click();
+		await expect(page.getByRole("region", { name: /Apply on/ })).toBeVisible();
+		await expect(cvRegion).toBeHidden();
+	});
+
+	test("a fresh application's CV row links Tailor CV in a new tab", async ({
+		page,
+	}) => {
+		await openFirstApplication(page);
+		await page.getByRole("button", { name: /^(To do|Done) CV/ }).click();
+		const link = page
+			.getByRole("region", { name: /^(To do|Done) CV/ })
+			.getByRole("link", { name: /Tailor CV/ });
+		await expect(link).toHaveAttribute("target", "_blank");
+		await expect(link).toHaveAttribute("href", /^\/jobs\/[^/]+\/tailor$/);
+		await expect(page.getByRole("button", { name: "Tailor CV" })).toHaveCount(
+			0,
+		);
+	});
+
+	test("an application with a kept draft shows Complete linking to it", async ({
+		page,
+	}) => {
+		await page.goto("/applications");
+		await page.locator('a[href^="/applications/"]').last().click();
+		await page.getByRole("heading", { level: 1 }).waitFor();
+		const cv = page.getByRole("button", { name: /^(To do|Done) CV/ });
+		await expect(cv).toContainText("Complete");
+		await cv.click();
+		await expect(
+			page
+				.getByRole("region", { name: /^(To do|Done) CV/ })
+				.getByRole("link", { name: /Tailored CV/ }),
+		).toHaveAttribute("href", "/tailoring/drafts/draft-kept");
+	});
+
+	test("the Did you send it prompt survives collapsing Apply", async ({
+		page,
+	}) => {
+		await openFirstApplication(page);
+		const status = page.getByRole("button", { name: "Status" });
+		await status.click();
+		await page.getByRole("option", { name: "Draft" }).click();
+		await expect(status).toContainText("Draft");
+
+		const trigger = page.getByRole("button", { name: /Apply on/ });
+		await trigger.click();
+		const popup = page.waitForEvent("popup");
+		await page
+			.getByRole("region", { name: /Apply on/ })
+			.getByRole("link", { name: /Open application/ })
+			.click();
+		await (await popup).close();
+		await trigger.click();
+		await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+		await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+		await expect(page.getByText("Did you send it?")).toBeVisible();
 	});
 
 	test("adding a task lists it and offers no Apply type", async ({ page }) => {
@@ -68,12 +142,13 @@ test.describe("Application page", () => {
 		await dialog.getByRole("button", { name: "Save" }).click();
 		await expect(dialog).toBeHidden();
 
-		const step = page
-			.getByRole("listitem")
-			.filter({ hasText: "Email the recruiter" });
-		await expect(step).toBeVisible();
-		await step.getByRole("button", { name: "Done" }).click();
-		await expect(step).toBeHidden();
+		const row = page.getByRole("button", { name: /Task$/ });
+		await expect(row).toBeVisible();
+		await row.click();
+		const region = page.getByRole("region", { name: /Task$/ });
+		await expect(region).toContainText("Email the recruiter");
+		await region.getByRole("button", { name: "Done" }).click();
+		await expect(row).toBeHidden();
 	});
 
 	test("the status dropdown saves and the list reflects it", async ({

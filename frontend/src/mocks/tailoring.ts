@@ -21,6 +21,7 @@ import type {
 import { KeptDraftExistsError } from "../lib/tailoring";
 import { getExperience } from "./experience";
 import { getJobs } from "./jobs";
+import { seed } from "./seed";
 
 const savedHeadings = new Map<string, HeadingMapping[]>();
 
@@ -355,12 +356,12 @@ function applySlots(
 	};
 }
 
-function seedDraft(id: string, outcome: Draft["outcome"]) {
+function seedDraft(id: string, outcome: Draft["outcome"], jobId?: string) {
 	mockDrafts.set(id, {
 		polls: 0,
 		draft: {
 			id,
-			jobId: getJobs().at(-1)?.ID ?? "",
+			jobId: jobId ?? getJobs().at(-1)?.ID ?? "",
 			status: "ready",
 			outcome,
 			keptAs: outcome === "kept" ? "doc" : "",
@@ -411,7 +412,7 @@ function seedUnsettled(id: string, status: Draft["status"], lastError = "") {
 seedDraft("draft-ready", null);
 seedUnsettled("draft-pending", "pending");
 seedUnsettled("draft-failed", "failed", "the model timed out");
-seedDraft("draft-kept", "kept");
+seedDraft("draft-kept", "kept", seed.applications.at(-1)?.JobID);
 
 const mockRun = (text: string, over: Partial<LayoutRun> = {}): LayoutRun => ({
 	text,

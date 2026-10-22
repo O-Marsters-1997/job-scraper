@@ -1,4 +1,5 @@
 import type { ApplicationStatus } from "@/types/applicationStatus";
+import type { Draft } from "@/types/tailoring";
 
 export type ChecklistStepKey = "cv" | "coverLetter" | "apply" | "followUp";
 
@@ -20,4 +21,13 @@ export function checklistDone(
 		apply: pastDraft && !input.applyTaskOpen,
 		followUp: false,
 	};
+}
+
+// Kept draft first, else the newest draft with no outcome whose status isn't "failed".
+// Drafts arrive newest first (ListJobDrafts).
+export function linkedDraft(drafts: Draft[]): Draft | undefined {
+	return (
+		drafts.find((d) => d.outcome === "kept") ??
+		drafts.find((d) => !d.outcome && d.status !== "failed")
+	);
 }

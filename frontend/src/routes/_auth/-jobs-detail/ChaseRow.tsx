@@ -107,7 +107,7 @@ export function ChaseRow(props: {
 						<Button
 							variant="outline"
 							size="sm"
-							class="w-full"
+							class="w-fit"
 							onClick={openPicker}
 						>
 							Set chase
