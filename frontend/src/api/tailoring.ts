@@ -13,18 +13,14 @@ import {
 	draftRefSchema,
 	draftSchema,
 	type ExperienceMatch,
-	type Explanation,
 	experienceMatchSchema,
-	explanationSchema,
 	type HeadingMapping,
 	headingMappingSchema,
 	type SkillGroup,
-	type SkillSuggestions,
 	type SlotEdit,
 	type SuggestDone,
 	type Suggestion,
 	type SuggestRequest,
-	skillSuggestionsSchema,
 	suggestDoneSchema,
 	suggestionSchema,
 } from "../types/tailoring";
@@ -90,21 +86,6 @@ export async function fetchSuggestions(
 	);
 }
 
-export async function fetchSkillSuggestions(
-	jobId: string,
-	docId: string,
-	tabId: string,
-): Promise<SkillSuggestions> {
-	return mocked(
-		(db) => db.getSkillSuggestions(),
-		() =>
-			apiFetch(
-				`/tailoring/jobs/${jobId}/skill-suggestions?${new URLSearchParams({ docId, tabId })}`,
-				skillSuggestionsSchema,
-			).catch(rethrowStatus({ 422: () => new MissingAiKeyError() })),
-	);
-}
-
 export async function fetchExperienceMatch(
 	jobId: string,
 ): Promise<ExperienceMatch> {
@@ -114,21 +95,6 @@ export async function fetchExperienceMatch(
 			apiFetch(
 				`/tailoring/jobs/${jobId}/experience-match`,
 				experienceMatchSchema,
-			).catch(rethrowStatus({ 422: () => new MissingAiKeyError() })),
-	);
-}
-
-export async function explainAchievement(
-	jobId: string,
-	achievementId: string,
-): Promise<Explanation> {
-	return mocked(
-		(db) => db.explainAchievement(achievementId),
-		() =>
-			apiFetch(
-				`/tailoring/jobs/${jobId}/achievements/${encodeURIComponent(achievementId)}/explain`,
-				explanationSchema,
-				jsonInit("POST", {}),
 			).catch(rethrowStatus({ 422: () => new MissingAiKeyError() })),
 	);
 }
@@ -187,14 +153,15 @@ export async function saveDraftSlots(
 	slots: SlotEdit[],
 	skills?: SkillGroup[],
 	positions?: DraftPositionEdit[],
+	roles?: string[],
 ): Promise<Draft> {
 	return mocked(
-		(db) => db.saveDraftSlots(id, slots, skills, positions),
+		(db) => db.saveDraftSlots(id, slots, skills, positions, roles),
 		() =>
 			apiFetch(
 				`/tailoring/drafts/${id}/slots`,
 				draftSchema,
-				jsonInit("PUT", { positions, slots, skills }),
+				jsonInit("PUT", { positions, slots, skills, roles }),
 			),
 	);
 }

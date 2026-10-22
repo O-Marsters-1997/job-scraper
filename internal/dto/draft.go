@@ -202,6 +202,7 @@ type DraftSlotsInput struct {
 	Positions []DraftPosition `json:"positions"`
 	Slots     []SlotEdit      `json:"slots"`
 	Skills    []SkillGroup    `json:"skills"`
+	Roles     []string        `json:"roles"`
 }
 
 // DraftLayout is a Draft Doc's single-column page geometry and styled

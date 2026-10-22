@@ -1,25 +1,14 @@
 import assert from "node:assert/strict";
-import type {
-	CVHeading,
-	DraftFinding,
-	SkillSuggestions,
-	Suggestion,
-} from "../types/tailoring";
+import type { CVHeading, DraftFinding, Suggestion } from "../types/tailoring";
 import {
 	allConfirmed,
-	canExplain,
 	isSettled,
 	keptDraft,
 	lineWithIds,
 	moveItem,
-	moveSuggestion,
 	orderSuggestions,
-	placeUnplaced,
-	preselectedPicks,
-	retarget,
 	reviewFindings,
 	selectedAchievementIds,
-	setLinePicks,
 	toMappings,
 } from "./tailoring";
 
@@ -82,21 +71,11 @@ assert.ok(
 	).join() === "c,a,b",
 	"chosen order comes first and unordered suggestions keep their rank",
 );
-const ranked = [
-	suggestion("a", true),
-	{ ...suggestion("x", true), positionId: "p2" },
-	suggestion("b", true),
-	suggestion("c", true),
-];
 assert.ok(
-	moveSuggestion(ranked, "c", 0).join() === "c,x,a,b",
-	"a move reorders only its own position's slots",
-);
-assert.ok(
-	orderSuggestions(ranked, moveSuggestion(ranked, "b", 0))
+	orderSuggestions([suggestion("a", true), suggestion("b", true)], ["b"])
 		.map((s) => s.achievementId)
-		.join() === "b,x,a,c",
-	"the moved order round-trips through orderSuggestions",
+		.join() === "b,a",
+	"a chosen order puts its ids first",
 );
 assert.ok(
 	isSettled("ready") && isSettled("failed"),
@@ -131,92 +110,6 @@ assert.ok(
 assert.ok(
 	keptDraft([{ outcome: "discarded" }]) === undefined,
 	"a discarded draft is not kept",
-);
-
-assert.ok(!canExplain(suggestion("a", true)), "a bullet that fits has no Why?");
-assert.ok(
-	canExplain(suggestion("a", true, "low")),
-	"a low bullet can be explained",
-);
-assert.ok(
-	canExplain(suggestion("a", true, "unclear")),
-	"an unclear bullet can be explained",
-);
-
-const skills: SkillSuggestions = {
-	lines: [
-		{
-			label: "Languages",
-			base: [
-				{ text: "Go", score: 0.6, state: "fit" },
-				{ text: "PHP", score: -0.4, state: "low" },
-				{ text: "Perl", score: -0.1, state: "unclear" },
-			],
-			candidates: [
-				{
-					bankSkillId: "r",
-					name: "Rust",
-					score: 0.7,
-					state: "fit",
-					preselected: true,
-					replaces: "PHP",
-				},
-				{
-					bankSkillId: "e",
-					name: "Elixir",
-					score: 0.1,
-					state: "fit",
-					preselected: false,
-					replaces: "",
-				},
-			],
-		},
-	],
-	unplaced: [
-		{
-			bankSkillId: "k",
-			name: "Kubernetes",
-			score: 0.5,
-			state: "fit",
-			preselected: false,
-			replaces: "",
-		},
-	],
-};
-
-const initial = preselectedPicks(skills);
-assert.deepEqual(
-	initial,
-	[{ bankSkillId: "r", line: 0, replaces: "PHP" }],
-	"preselected candidates start as picks with their server-chosen victim",
-);
-assert.deepEqual(
-	setLinePicks(skills, initial, 0, ["r", "e"]).find(
-		(p) => p.bankSkillId === "e",
-	)?.replaces,
-	"Perl",
-	"a newly picked candidate replaces the lowest-lean item not already replaced",
-);
-assert.deepEqual(
-	setLinePicks(skills, initial, 0, []),
-	[],
-	"clearing the line drops its picks",
-);
-assert.deepEqual(
-	placeUnplaced(skills, initial, "k", 0).find((p) => p.bankSkillId === "k")
-		?.replaces,
-	"Perl",
-	"an unplaced candidate takes the next free victim in the chosen line",
-);
-assert.deepEqual(
-	placeUnplaced(skills, placeUnplaced(skills, initial, "k", 0), "k", undefined),
-	initial,
-	"unsetting the line removes the unplaced pick",
-);
-assert.equal(
-	retarget(initial, "r", "Go")[0]?.replaces,
-	"Go",
-	"the replaced item can be changed",
 );
 
 assert.deepEqual(

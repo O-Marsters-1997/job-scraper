@@ -8,12 +8,10 @@ import type {
 	DraftProvenance,
 	DraftRef,
 	ExperienceMatch,
-	Explanation,
 	HeadingMapping,
 	LayoutBlock,
 	LayoutRun,
 	SkillGroup,
-	SkillSuggestions,
 	SlotEdit,
 	SuggestDone,
 	Suggestion,
@@ -57,49 +55,6 @@ export function saveHeadings(
 
 export function getExperienceMatch(): ExperienceMatch {
 	return { score: 0.34 };
-}
-
-export function getSkillSuggestions(): SkillSuggestions {
-	return {
-		lines: [
-			{
-				label: "Languages",
-				base: [
-					{ text: "Go", score: 0.6, state: "fit" },
-					{ text: "PHP", score: -0.4, state: "low" },
-					{ text: "TypeScript", score: 0.3, state: "fit" },
-				],
-				candidates: [
-					{
-						bankSkillId: "bank-skill-1",
-						name: "Rust",
-						score: 0.7,
-						state: "fit",
-						preselected: true,
-						replaces: "PHP",
-					},
-					{
-						bankSkillId: "bank-skill-2",
-						name: "Elixir",
-						score: 0.05,
-						state: "fit",
-						preselected: false,
-						replaces: "",
-					},
-				],
-			},
-		],
-		unplaced: [
-			{
-				bankSkillId: "bank-skill-3",
-				name: "Kubernetes",
-				score: 0.5,
-				state: "fit",
-				preselected: false,
-				replaces: "",
-			},
-		],
-	};
 }
 
 export function getSuggestions(): Suggestion[] {
@@ -305,9 +260,14 @@ export function saveDraftSlots(
 	slots: SlotEdit[],
 	skills?: SkillGroup[],
 	positions: DraftPositionEdit[] = [],
+	roles?: string[],
 ): Draft {
 	const entry = mockEntry(id);
 	if (!entry.draft.provenance) throw new Error(`mock draft ${id} is not ready`);
+	const order =
+		roles ?? entry.draft.provenance.positions.map((p) => p.positionId);
+	const byRole = <T extends { positionId: string }>(positions: T[]) =>
+		order.flatMap((r) => positions.filter((p) => p.positionId === r));
 	const chars = slots.reduce((n, s) => n + s.text.length, 0);
 	const findings = entry.draft.findings.filter((f) => f.check !== "page_count");
 	if (chars > MOCK_TWO_PAGES_CHARS)
@@ -316,14 +276,18 @@ export function saveDraftSlots(
 			severity: "block",
 			message: "the Draft is 2 pages; the base CV is 1",
 		});
-	const provenance = replaceProvenance(mockProvenance(), positions);
+	const replaced = replaceProvenance(mockProvenance(), positions);
+	const provenance = { ...replaced, positions: byRole(replaced.positions) };
 	const { content } = entry.draft;
+	const edited =
+		content && applySlots(replaceContent(content, positions), replaced, slots);
 	entry.draft = {
 		...entry.draft,
 		findings,
 		provenance,
-		content: content && {
-			...applySlots(replaceContent(content, positions), provenance, slots),
+		content: edited && {
+			...edited,
+			positions: byRole(edited.positions),
 			...(skills && {
 				skills: skills.flatMap((g) => g.items),
 				skillGroups: skills,
@@ -588,13 +552,4 @@ export async function streamSuggestion(
 	}
 	signal.throwIfAborted();
 	return { text, findings: [] };
-}
-
-export async function explainAchievement(
-	_achievementId: string,
-): Promise<Explanation> {
-	await new Promise((resolve) => setTimeout(resolve, MOCK_WORD_MS * 10));
-	return {
-		text: "The job asks for on-call ownership; this bullet doesn't show it.",
-	};
 }

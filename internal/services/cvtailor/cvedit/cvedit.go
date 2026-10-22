@@ -171,6 +171,7 @@ func FlatSkills(groups []SkillGroup) []string {
 // skills array, decoded as one unlabelled group.
 type EditSet struct {
 	Positions    []PositionEdit `json:"positions"`
+	Roles        []string       `json:"roles,omitempty"`
 	Profile      *string        `json:"profile,omitempty"`
 	Skills       []SkillGroup   `json:"skills,omitempty"`
 	LegacySkills bool           `json:"-"`

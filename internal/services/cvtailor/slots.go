@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
@@ -59,7 +60,11 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	docPlan, err := s.plan(ctx, withoutSwaps(claim), draft.DraftDocID)
+	docClaim, err := s.withinRoles(ctx, withoutSwaps(claim), edits.Roles)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	docPlan, err := s.plan(ctx, docClaim, draft.DraftDocID)
 	if err != nil {
 		return dto.Draft{}, err
 	}
@@ -76,6 +81,14 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	if err != nil {
 		return dto.Draft{}, err
 	}
+	var layout roleLayout
+	rebuilt := false
+	if in.Roles != nil {
+		edits, layout, rebuilt, err = s.applyRoles(ctx, claim, basePlan.structure, edits, in.Roles)
+		if err != nil {
+			return dto.Draft{}, err
+		}
+	}
 	docEdits := cvedit.EditSet{Positions: edits.Positions}
 	if edits.Profile != before {
 		docEdits.Profile = edits.Profile
@@ -83,7 +96,20 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	if len(in.Skills) > 0 && !skillsEqual(edits.Skills, cvedit.SkillGroups(docPlan.structure.Skills)) {
 		docEdits.Skills = edits.Skills
 	}
-	if err := s.applyEdits(ctx, userID, draft.DraftDocID, docPlan, docEdits); err != nil {
+	headings := basePlan.structure.Headings
+	switch {
+	case rebuilt:
+		var ds docparse.DocStructure
+		if ds, err = s.rebuildDoc(ctx, claim, draft.DraftDocID, layout, edits); err == nil {
+			headings = ds.Headings
+		}
+	default:
+		if edits.Roles != nil {
+			headings = docPlan.structure.Headings
+		}
+		err = s.applyEdits(ctx, userID, draft.DraftDocID, docPlan, docEdits)
+	}
+	if err != nil {
 		return dto.Draft{}, err
 	}
 
@@ -99,7 +125,7 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	if len(in.Skills) > 0 {
 		checked.BaseSkills = cvedit.CheckLines(edits.Skills)
 	}
-	checked.Parse = parseInput(ctx, draftPDF, basePlan.structure.Headings)
+	checked.Parse = parseInput(ctx, draftPDF, headings)
 	findings := toDraftFindings(checks.Run(checked))
 	if err := s.store.SetDraftEdits(ctx, userID, draft.ID, editSet, findings, citedAchievements(bank, edits, draft.AchievementIDs)); err != nil {
 		return dto.Draft{}, err
