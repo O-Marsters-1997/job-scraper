@@ -307,23 +307,28 @@ func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, err
 }
 
 func (s *Service) applyEdits(ctx context.Context, userID, docID string, pl plan, edits cvedit.EditSet) error {
-	requests, err := docedit.Requests(pl.structure, pl.slotIDs(), edits)
-	if err != nil {
-		return fmt.Errorf("build doc edits: %w", err)
-	}
-	if len(requests) == 0 {
-		return nil
-	}
-	raw := make([]json.RawMessage, len(requests))
-	for i, r := range requests {
-		b, err := json.Marshal(r)
-		if err != nil {
-			return fmt.Errorf("marshal doc edit: %w", err)
-		}
-		raw[i] = b
+	raw, err := s.editRequests(pl, edits)
+	if err != nil || len(raw) == 0 {
+		return err
 	}
 	if err := s.drive.BatchUpdate(ctx, userID, docID, raw); err != nil {
 		return fmt.Errorf("apply doc edits: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) editRequests(pl plan, edits cvedit.EditSet) ([]json.RawMessage, error) {
+	requests, err := docedit.Requests(pl.structure, pl.slotIDs(), edits)
+	if err != nil {
+		return nil, fmt.Errorf("build doc edits: %w", err)
+	}
+	raw := make([]json.RawMessage, len(requests))
+	for i, r := range requests {
+		b, err := json.Marshal(r)
+		if err != nil {
+			return nil, fmt.Errorf("marshal doc edit: %w", err)
+		}
+		raw[i] = b
+	}
+	return raw, nil
 }

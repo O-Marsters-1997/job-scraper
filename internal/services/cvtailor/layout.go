@@ -51,6 +51,9 @@ func (s *Service) DraftLayout(ctx context.Context, userID string, q dto.DraftQue
 		return dto.DraftLayout{}, apperr.Unprocessable("could not read the draft document")
 	}
 	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: draft.AchievementIDs}
+	if claim, err = s.withinRoles(ctx, claim, edits.Roles); err != nil {
+		return dto.DraftLayout{}, err
+	}
 	pl, err := s.planOf(ctx, claim, ds)
 	if err != nil {
 		return dto.DraftLayout{}, err
