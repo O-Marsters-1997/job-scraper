@@ -85,7 +85,6 @@ export async function fetchSuggestions(
 	);
 }
 
-
 export async function fetchExperienceMatch(
 	jobId: string,
 ): Promise<ExperienceMatch> {
@@ -98,7 +97,6 @@ export async function fetchExperienceMatch(
 			).catch(rethrowStatus({ 422: () => new MissingAiKeyError() })),
 	);
 }
-
 
 export async function createDraft(input: DraftInput): Promise<DraftRef> {
 	return mocked(
