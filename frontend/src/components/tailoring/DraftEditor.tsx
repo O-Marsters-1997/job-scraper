@@ -76,8 +76,10 @@ export function DraftEditor(props: {
 	layout: DraftLayout | null;
 	layoutError?: string | undefined;
 }) {
-	// eslint-disable-next-line solid/reactivity -- pedantic: the layout is read once on purpose
-	const ed = createDraftEditor(() => props.draft, props.layout);
+	const ed = createDraftEditor(
+		() => props.draft,
+		() => props.layout,
+	);
 	const flow = createKeepFlow(() => props.draft, ed.flush);
 	const job = useJob(() => props.draft.jobId);
 
