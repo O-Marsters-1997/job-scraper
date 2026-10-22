@@ -239,7 +239,7 @@ function ChecklistTab(props: {
 				<Step done={done().cv} title="CV">
 					<JobDrafts jobId={props.app.JobID} />
 				</Step>
-				<Step done={done().coverLetter} title="Cover letter">
+				<Step done={done().coverLetter} title="Cover letter (optional)">
 					<p class="text-xs text-muted">
 						Check whether the listing asks for a cover letter.
 					</p>
