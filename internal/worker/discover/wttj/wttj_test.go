@@ -100,7 +100,7 @@ func TestHarvester_Harvest(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := discover.Harvest{
-			Boards: []discover.Board{{Source: "ashby", Token: "acme"}},
+			Boards: []discover.Board{{Source: "ashby", Token: "acme", ListingURL: "https://app.welcometothejungle.com/jobs/ats1", ApplyURL: "https://jobs.ashbyhq.com/acme/1"}},
 			Companies: []discover.Company{
 				{Slug: "steno-labs", Name: "Steno Labs", Board: discover.Board{Source: "wttj", Token: "Steno-Labs"}},
 			},
@@ -119,7 +119,7 @@ func TestHarvester_Harvest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Harvest error = %v, want the fetched listings kept", err)
 		}
-		if diff := cmp.Diff([]discover.Board{{Source: "ashby", Token: "acme"}}, got.Boards); diff != "" {
+		if diff := cmp.Diff([]discover.Board{{Source: "ashby", Token: "acme", ListingURL: "https://app.welcometothejungle.com/jobs/job0", ApplyURL: "https://jobs.ashbyhq.com/acme/0"}}, got.Boards); diff != "" {
 			t.Errorf("Harvest boards (-want +got):\n%s", diff)
 		}
 	})

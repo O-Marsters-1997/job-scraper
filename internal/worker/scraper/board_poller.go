@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
@@ -39,7 +40,25 @@ func NewBoardPoller(store BoardPollStore, fetcher BoardFetcher, ingester BoardIn
 	return &BoardPoller{store: store, fetcher: fetcher, ingester: ingester}
 }
 
-func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool) error {
+type Listing struct {
+	Via, URL, ApplyURL string
+}
+
+func (l Listing) Stamp(jobs []dto.Job) {
+	if l.Via == "" || l.URL == "" || l.ApplyURL == "" {
+		return
+	}
+	_, _, postingID, _ := detect.ResolvePosting(l.ApplyURL)
+	for idx := range jobs {
+		job := &jobs[idx]
+		if job.URL == l.ApplyURL || job.ApplyURL == l.ApplyURL || (postingID != "" && job.ProviderPostingID == postingID) {
+			job.DiscoveredVia, job.DiscoveryURL = l.Via, l.URL
+			return
+		}
+	}
+}
+
+func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool, from ...Listing) error {
 	claim, err := p.store.ClaimBoard(ctx, id, manual)
 	if errors.Is(err, jobsearch.ErrBoardClaimUnavailable) && !manual {
 		return p.store.ClearBoardCheckPublished(ctx, id)
@@ -48,11 +67,11 @@ func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool) err
 		return err
 	}
 	res, err := p.fetcher.FetchBoard(ctx, claim)
-	return p.complete(ctx, claim, res, err)
+	return p.complete(ctx, claim, res, err, from...)
 }
 
 // PollPrefetched completes a Board's poll from jobs the caller already fetched.
-func (p *BoardPoller) PollPrefetched(ctx context.Context, id string, jobs []dto.Job, nextPollIn time.Duration) error {
+func (p *BoardPoller) PollPrefetched(ctx context.Context, id string, jobs []dto.Job, nextPollIn time.Duration, from ...Listing) error {
 	claim, err := p.store.ClaimBoard(ctx, id, false)
 	if errors.Is(err, jobsearch.ErrBoardClaimUnavailable) {
 		return nil
@@ -60,19 +79,22 @@ func (p *BoardPoller) PollPrefetched(ctx context.Context, id string, jobs []dto.
 	if err != nil {
 		return err
 	}
-	return p.complete(ctx, claim, sources.BoardResult{Jobs: jobs, NextPollIn: nextPollIn}, nil)
+	return p.complete(ctx, claim, sources.BoardResult{Jobs: jobs, NextPollIn: nextPollIn}, nil, from...)
 }
 
 // underparsedRatio is the share of the reported count a poll must parse to count as full.
 const underparsedRatio = 0.98
 
-func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, res sources.BoardResult, err error) error {
+func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, res sources.BoardResult, err error, from ...Listing) error {
 	jobs := res.Jobs
 	if err == nil {
 		for idx := range jobs {
 			jobs[idx].BoardID = claim.ID
 			jobs[idx].CompanyID = claim.CompanyID
 			jobs[idx].CompanySlug = claim.CompanySlug
+		}
+		for _, l := range from {
+			l.Stamp(jobs)
 		}
 		err = p.ingester.BulkExport(ctx, jobs)
 	}

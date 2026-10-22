@@ -189,6 +189,38 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("discovery provenance is set on creation only and its listing URL is aliased", func(t *testing.T) {
+		t.Parallel()
+		st, _ := newStore(t)
+		ctx := t.Context()
+		created, status, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/new", DiscoveredVia: "wttj", DiscoveryURL: "https://wttj.example/jobs/new"})
+		if err != nil || status != "new" {
+			t.Fatalf("SaveCanonical(discovered) = %+v, %q, %v, want new", created, status, err)
+		}
+		existing, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Designer", URL: "https://example.com/jobs/old"})
+		if err != nil {
+			t.Fatalf("SaveCanonical(existing) = %v", err)
+		}
+		again, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Designer", URL: "https://example.com/jobs/old", DiscoveredVia: "wellfound", DiscoveryURL: "https://wellfound.example/jobs/old"})
+		if err != nil || again.ID != existing.ID {
+			t.Fatalf("SaveCanonical(rediscovered) = %+v, %v, want job %s", again, err, existing.ID)
+		}
+		for _, tt := range []struct{ id, wantVia, wantAlias string }{
+			{created.ID, "wttj", "https://wttj.example/jobs/new"},
+			{existing.ID, "", "https://wellfound.example/jobs/old"},
+		} {
+			got, err := st.GetJob(ctx, tt.id, missingID)
+			if err != nil || got.DiscoveredVia != tt.wantVia {
+				t.Errorf("GetJob(%s) = %+v, %v, want DiscoveredVia %q", tt.id, got, err, tt.wantVia)
+				continue
+			}
+			listings, err := st.ListJobListings(ctx, tt.id)
+			if err != nil || !slices.ContainsFunc(listings, func(l dto.JobListing) bool { return l.URL == tt.wantAlias }) {
+				t.Errorf("ListJobListings(%s) = %+v, %v, want alias %s", tt.id, listings, err, tt.wantAlias)
+			}
+		}
+	})
+
 	runPostedContract(t, newStore)
 
 	t.Run("listings are every url of a job in first-seen order", func(t *testing.T) {

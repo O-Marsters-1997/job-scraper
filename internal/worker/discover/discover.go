@@ -23,6 +23,8 @@ import (
 // Board is an ATS board a harvester found, identified by source and token.
 type Board struct {
 	Source, Token string
+	ListingURL    string
+	ApplyURL      string
 }
 
 // Company is a company a harvester found, with the candidate Board it would be polled through.
@@ -165,7 +167,7 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 				continue
 			}
 		}
-		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.Token, Via: h.Name(), RequireUK: true}
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.Token, Via: h.Name(), ListingURL: b.ListingURL, ApplyURL: b.ApplyURL, RequireUK: true}
 		if err := r.publisher.Publish(ctx, task); err != nil {
 			log.ErrorContext(ctx, "publish failed", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
 			continue

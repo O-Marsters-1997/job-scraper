@@ -26,6 +26,8 @@ const (
 	userAgent = "Mozilla/5.0 (compatible; job-scraper/1.0)"
 	interval  = 24 * time.Hour
 	jobPath   = "/jobs/"
+
+	listingBase = "https://app.welcometothejungle.com" + jobPath
 )
 
 type Harvester struct {
@@ -55,12 +57,15 @@ func (h *Harvester) Harvest(ctx context.Context) (discover.Harvest, error) {
 		return discover.Harvest{}, err
 	}
 	out := discover.Harvest{Skipped: skipped}
-	seenBoards := map[discover.Board]bool{}
+	type boardKey struct{ source, token string }
+	seenBoards := map[boardKey]bool{}
 	seenCompanies := map[string]bool{}
 	for _, l := range listings {
 		if board, ok := atsBoard(l.ApplyURL); ok {
-			if !seenBoards[board] {
-				seenBoards[board] = true
+			key := boardKey{board.Source, board.Token}
+			if !seenBoards[key] {
+				seenBoards[key] = true
+				board.ListingURL, board.ApplyURL = listingBase+l.ID, l.ApplyURL
 				out.Boards = append(out.Boards, board)
 			}
 			continue
