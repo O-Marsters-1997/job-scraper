@@ -9,6 +9,7 @@ import type { ApplicationStatus } from "@/types/applicationStatus";
 import { failIfRequested } from "./helpers";
 import { getJobs } from "./jobs";
 import { seed } from "./seed";
+import { completeOpenApplyTasks } from "./tasks";
 
 let statuses: ApplicationStatus[] = seed.statuses;
 let applications: Application[] = seed.applications;
@@ -103,6 +104,12 @@ export function updateApplication(
 		SalaryInfo: data.salary_info ?? prev.SalaryInfo,
 		UpdatedAt: new Date().toISOString(),
 	};
+	if (
+		updated.StatusID !== prev.StatusID &&
+		statuses.find((s) => s.ID === updated.StatusID)?.SystemKey === "applied"
+	) {
+		completeOpenApplyTasks(updated.JobID);
+	}
 	applications = [
 		...applications.slice(0, idx),
 		updated,
