@@ -210,6 +210,7 @@ func TestSaveDraftSlots(t *testing.T) {
 			"blank text":          {PositionID: e.pos.ID, Bullets: []dto.DraftBullet{{Text: " "}}},
 		} {
 			t.Run(name, func(t *testing.T) {
+				t.Parallel()
 				_, err := e.editing(t, e.drive).SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{rep}})
 
 				if !apperr.IsKind(err, apperr.KindInvalid) {
