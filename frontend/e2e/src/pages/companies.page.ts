@@ -1,7 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
 export class CompaniesPage {
-	private readonly searchInput: Locator;
+	readonly searchInput: Locator;
 	private readonly heading: Locator;
 	readonly rows: Locator;
 

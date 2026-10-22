@@ -40,23 +40,24 @@ const SORT_CHOICES: Choice[] = [
 
 const ALL_TYPES: Choice = { value: "", label: "All types" };
 
+function parseTaskSearch(search: Record<string, unknown>): TaskListState {
+	const page = Number(search.page);
+	return {
+		page: Number.isInteger(page) && page > 1 ? page : undefined,
+		type:
+			typeof search.type === "string" && search.type ? search.type : undefined,
+		sort: taskSortSchema.safeParse(search.sort).data,
+		done: search.done === true || search.done === "true" ? true : undefined,
+	};
+}
+
 export const Route = createFileRoute("/_auth/tasks")({
-	validateSearch: (search: Record<string, unknown>): TaskListState => {
-		const page = Number(search.page);
-		return {
-			page: Number.isInteger(page) && page > 1 ? page : undefined,
-			type:
-				typeof search.type === "string" && search.type
-					? search.type
-					: undefined,
-			sort: taskSortSchema.safeParse(search.sort).data,
-			done: search.done === true || search.done === "true" ? true : undefined,
-		};
-	},
-	loaderDeps: ({ search }) => ({ state: search }),
-	loader: ({ deps }) =>
+	validateSearch: parseTaskSearch,
+	loader: ({ location }) =>
 		Promise.all([
-			queryClient.prefetchQuery(taskPageQuery(deps.state)),
+			queryClient.prefetchQuery(
+				taskPageQuery(parseTaskSearch(location.search)),
+			),
 			queryClient.prefetchQuery(taskTypesQueryOptions),
 		]),
 	component: TasksPage,

@@ -58,8 +58,10 @@ import type { Company } from "../../types/company";
 export const Route = createFileRoute("/_auth/companies")({
 	validateSearch: (raw: Record<string, unknown>): Partial<CompanyListState> =>
 		parseCompanySearch(raw),
-	loaderDeps: ({ search }) => ({ state: parseCompanySearch(search) }),
-	loader: ({ deps }) => queryClient.prefetchQuery(companyPageQuery(deps.state)),
+	loader: ({ location }) =>
+		queryClient.prefetchQuery(
+			companyPageQuery(parseCompanySearch(location.search)),
+		),
 	component: CompaniesPage,
 });
 

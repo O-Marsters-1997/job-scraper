@@ -1,4 +1,8 @@
-import { createQuery, queryOptions } from "@tanstack/solid-query";
+import {
+	createQuery,
+	keepPreviousData,
+	queryOptions,
+} from "@tanstack/solid-query";
 import {
 	clearChase,
 	createApplication,
@@ -27,9 +31,10 @@ export function useApplications(
 	statusId?: () => string | undefined,
 	chase?: () => boolean,
 ) {
-	return createQuery(() =>
-		applicationsQueryOptions(statusId?.(), chase?.() ?? false),
-	);
+	return createQuery(() => ({
+		...applicationsQueryOptions(statusId?.(), chase?.() ?? false),
+		placeholderData: keepPreviousData,
+	}));
 }
 
 export function useCreateApplication() {

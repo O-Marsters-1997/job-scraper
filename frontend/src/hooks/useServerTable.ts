@@ -4,7 +4,7 @@ import {
 	type QueryKey,
 } from "@tanstack/solid-query";
 import type { RowSelectionState } from "@tanstack/solid-table";
-import { createEffect, createSignal, on } from "solid-js";
+import { createEffect, createSignal, on, untrack } from "solid-js";
 import { clampPage, filterSignature, nextSelection } from "@/lib/serverTable";
 
 interface ServerTableOptions<
@@ -29,8 +29,11 @@ export function useServerTable<
 		placeholderData: keepPreviousData,
 	}));
 
+	const loaded = () => (query.isPending ? undefined : query.data);
+	const [data, setData] = createSignal<P | undefined>(untrack(loaded));
+	createEffect(() => setData(() => loaded()));
+
 	const page = () => opts.state().page ?? 1;
-	const data = () => (query.isPending ? undefined : query.data);
 	const items = (): Item[] => data()?.items ?? [];
 	const total = () => data()?.total ?? 0;
 
@@ -58,7 +61,21 @@ export function useServerTable<
 	});
 
 	return {
-		query,
+		query: {
+			get isPending() {
+				return query.isPending;
+			},
+			get isError() {
+				return query.isError;
+			},
+			get error() {
+				return query.error;
+			},
+			refetch: () => query.refetch(),
+			get data() {
+				return data();
+			},
+		},
 		page,
 		pageSize: opts.pageSize,
 		items,
