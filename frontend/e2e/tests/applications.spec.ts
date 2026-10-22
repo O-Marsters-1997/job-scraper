@@ -10,6 +10,69 @@ async function openFirstRowApplicationDialog(page: Page) {
 	return page.getByRole("dialog");
 }
 
+async function openFirstApplication(page: Page) {
+	await page.goto("/applications");
+	await page.locator('a[href^="/applications/"]').first().click();
+	await page.getByRole("heading", { level: 1 }).waitFor();
+}
+
+test.describe("Application page", () => {
+	test("tabs show only their own content", async ({ page }) => {
+		await openFirstApplication(page);
+
+		await expect(page.getByRole("tab", { name: "Checklist" })).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await expect(page.getByLabel("Note", { exact: true })).toBeHidden();
+
+		await page.getByRole("tab", { name: "Notes" }).click();
+		await expect(page.getByLabel("Note", { exact: true })).toBeVisible();
+
+		await page.getByRole("tab", { name: "Description" }).click();
+		await expect(page.getByLabel("Note", { exact: true })).toBeHidden();
+		await expect(
+			page.getByRole("heading", { name: "Description" }),
+		).toBeVisible();
+	});
+
+	test("the status dropdown saves and the list reflects it", async ({
+		page,
+	}) => {
+		await openFirstApplication(page);
+		const path = new URL(page.url()).pathname;
+
+		const status = page.getByRole("button", { name: "Status" });
+		await status.click();
+		await page.getByRole("option", { name: "Rejected" }).click();
+		await expect(status).toContainText("Rejected");
+
+		await page
+			.getByRole("navigation", { name: "Breadcrumb" })
+			.getByRole("link", { name: "Applications" })
+			.click();
+		await expect(
+			page
+				.locator("div.items-center")
+				.filter({ has: page.locator(`a[href="${path}"]`) }),
+		).toContainText("Rejected");
+	});
+
+	test("the breadcrumb shows the job title and the listing link opens the job URL", async ({
+		page,
+	}) => {
+		await openFirstApplication(page);
+		const title = await page.getByRole("heading", { level: 1 }).innerText();
+
+		await expect(
+			page.getByRole("navigation", { name: "Breadcrumb" }),
+		).toContainText(title);
+		const listing = page.getByRole("link", { name: /Original listing/ });
+		await expect(listing).toHaveAttribute("target", "_blank");
+		await expect(listing).toHaveAttribute("href", /^https?:\/\//);
+	});
+});
+
 test.describe("Applications", () => {
 	test("editing a status from /jobs keeps applied date and salary", async ({
 		page,

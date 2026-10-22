@@ -3,6 +3,7 @@ import { Link, useLocation } from "@tanstack/solid-router";
 import { Match, Switch } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { loadedData } from "@/lib/queryData";
+import { applicationsQueryOptions } from "../hooks/useApplications";
 import { jobQueryOptions } from "../hooks/useJobs";
 import { findSettingsSection } from "../lib/settingsSections";
 import SettingsPanel from "./SettingsPanel";
@@ -36,6 +37,16 @@ export default function Topbar(props: TopbarProps) {
 		const m = location().pathname.match(/^\/jobs\/([^/]+)$/);
 		return m ? m[1] : null;
 	};
+
+	const applicationId = () =>
+		location().pathname.match(/^\/applications\/([^/]+)$/)?.[1];
+	const applicationsQuery = createQuery(() => ({
+		...applicationsQueryOptions(),
+		enabled: applicationId() != null,
+	}));
+	const applicationTitle = () =>
+		loadedData(applicationsQuery)?.find((a) => a.ID === applicationId())
+			?.JobTitle;
 
 	const jobQuery = createQuery(() => ({
 		...jobQueryOptions(jobDetailId() ?? ""),
@@ -79,6 +90,19 @@ export default function Topbar(props: TopbarProps) {
 						<span class="text-border-strong">/</span>
 						<span class="font-semibold text-foreground">
 							{jobDetailTitle() ?? "Job"}
+						</span>
+					</Match>
+					<Match when={applicationId()}>
+						<Link
+							to="/applications"
+							search={{ status: undefined, chase: undefined }}
+							class="text-faint transition-colors hover:text-foreground"
+						>
+							Applications
+						</Link>
+						<span class="text-border-strong">/</span>
+						<span class="font-semibold text-foreground">
+							{applicationTitle() ?? "Application"}
 						</span>
 					</Match>
 					<Match when={settingsSection()}>
