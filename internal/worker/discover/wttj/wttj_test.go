@@ -175,7 +175,7 @@ func ukEngineeringJobs(n int) string {
 		data[fmt.Sprintf("j%d", i)] = map[string]any{
 			"actualOriginalUrl":   fmt.Sprintf("https://jobs.ashbyhq.com/acme/%d", i),
 			"locationPreferences": []map[string]string{{"location": "LONDON"}},
-			"function":            map[string]string{"value": "Software Engineering"},
+			"subFunction":         map[string]string{"value": "Backend Engineer"},
 			"company":             map[string]string{"name": "Acme", "urlSafeName": "Acme"},
 		}
 	}
