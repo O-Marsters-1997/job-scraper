@@ -18,7 +18,11 @@ const item = (id: string, s: AchievementStats | null): Achievement => ({
 });
 
 assert.equal(statLine(null), "");
-assert.equal(statLine(stats(0, 2, 0, 0)), "");
+assert.equal(statLine(stats(0, 0, 0, 0)), "");
+assert.equal(
+	statLine(stats(0, 2, 0, 0)),
+	"in 0 CVs · left out 2× while higher",
+);
 assert.equal(
 	statLine(stats(3, 2, 2, 1)),
 	"in 3 CVs · left out 2× while higher · 1/2 replied",

@@ -5,7 +5,7 @@ export type AchievementSort = "bank" | "usage" | "rate";
 const RATE_MIN_APPLIED = 5;
 
 export function statLine(stats: AchievementStats | null): string {
-	if (!stats || stats.inCvs === 0) return "";
+	if (!stats || (stats.inCvs === 0 && stats.leftOut === 0)) return "";
 	const parts = [`in ${stats.inCvs} CV${stats.inCvs === 1 ? "" : "s"}`];
 	if (stats.leftOut > 0) parts.push(`left out ${stats.leftOut}× while higher`);
 	if (stats.applied > 0) {
