@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const cvHeadingSchema = z.object({
+const cvHeadingSchema = z.object({
 	text: z.string(),
 	positionId: z.string().nullable(),
 	confirmed: z.boolean(),
