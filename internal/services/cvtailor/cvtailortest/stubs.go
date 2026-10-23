@@ -28,6 +28,7 @@ var (
 
 type RecordingEditor struct {
 	deltas        []string
+	replies       []string
 	suggestErr    error
 	pace          time.Duration
 	SuggestInputs []cvedit.SuggestInput
@@ -63,6 +64,10 @@ func Suggesting(deltas ...string) *RecordingEditor {
 	return &RecordingEditor{deltas: deltas}
 }
 
+func SuggestingReplies(replies ...string) *RecordingEditor {
+	return &RecordingEditor{replies: replies}
+}
+
 func SuggestingEvery(pace time.Duration, deltas ...string) *RecordingEditor {
 	return &RecordingEditor{deltas: deltas, pace: pace}
 }
@@ -75,6 +80,11 @@ func SuggestFailing(err error, deltas ...string) *RecordingEditor {
 
 func (e *RecordingEditor) Suggest(_ context.Context, _ string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error) {
 	e.SuggestInputs = append(e.SuggestInputs, in)
+	if len(e.replies) > 0 {
+		text := e.replies[min(len(e.SuggestInputs), len(e.replies))-1]
+		onDelta(text)
+		return cvedit.SuggestResult{Text: text, Cost: 0.001}, e.suggestErr
+	}
 	for _, d := range e.deltas {
 		time.Sleep(e.pace)
 		onDelta(d)

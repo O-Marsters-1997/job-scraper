@@ -28,6 +28,7 @@ type SuggestInput struct {
 	Text         string
 	MaxChars     int
 	Achievements []string
+	Feedback     string
 }
 
 type SuggestResult struct {
@@ -67,6 +68,9 @@ func renderSuggest(in SuggestInput) (string, error) {
 		b.WriteString("Start the line with a stronger, more specific verb. Change nothing else.\n")
 	case "tailor":
 		fmt.Fprintf(&b, "Swap only the nouns and terms in the line that differ from the wording of this quote from the job description, keeping the same sentence shape, verb and voice. Never add a claim the Achievements lack, and never add words.\n\nQuote:\n%s\n", in.Quote)
+		if in.Feedback != "" {
+			fmt.Fprintf(&b, "\nYour previous reply was rejected: %s. Fix that.\n", in.Feedback)
+		}
 	case "ask":
 		fmt.Fprintf(&b, "Rewrite the line as the person asks, within the rules: %s\n", in.Prompt)
 	default:

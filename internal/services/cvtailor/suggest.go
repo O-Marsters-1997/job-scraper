@@ -25,6 +25,7 @@ import (
 const (
 	maxSuggestChars = 2000
 	suggestBuffer   = 16
+	tailorRetries   = 1
 )
 
 var suggestActions = []string{"fit", "tighten", "verb", "ask", dto.SuggestActionTailor}
@@ -95,25 +96,41 @@ func (m *Module) streamSuggestion(ctx context.Context, events chan<- SuggestEven
 		case <-ctx.Done():
 		}
 	}
-	res, err := m.editor.Suggest(ctx, key, cvedit.SuggestInput{
-		Action: in.Action, Prompt: in.Prompt, Quote: in.Quote, Text: in.Text, MaxChars: in.MaxChars, Achievements: target.achievements,
-	}, func(delta string) { send(SuggestEvent{Delta: delta}) })
-	slog.InfoContext(ctx, "draft suggestion", slog.String("draft_id", in.ID), slog.String("action", in.Action),
-		slog.String("model", cvedit.SuggestModel), slog.String("prompt_version", cvedit.SuggestPromptVersion),
-		slog.Float64("cost", res.Cost), slog.Any(logger.KeyErr, err))
-	if err != nil {
-		send(SuggestEvent{Err: suggestError(err)})
-		return
+	tailor := in.Action == dto.SuggestActionTailor
+	onDelta := func(delta string) { send(SuggestEvent{Delta: delta}) }
+	if tailor {
+		onDelta = func(string) {}
 	}
-	if in.Action == dto.SuggestActionTailor {
+	req := cvedit.SuggestInput{
+		Action: in.Action, Prompt: in.Prompt, Quote: in.Quote, Text: in.Text, MaxChars: in.MaxChars, Achievements: target.achievements,
+	}
+	var res cvedit.SuggestResult
+	for attempt := 0; ; attempt++ {
+		var err error
+		res, err = m.editor.Suggest(ctx, key, req, onDelta)
+		slog.InfoContext(ctx, "draft suggestion", slog.String("draft_id", in.ID), slog.String("action", in.Action),
+			slog.String("model", cvedit.SuggestModel), slog.String("prompt_version", cvedit.SuggestPromptVersion),
+			slog.Int("attempt", attempt), slog.Float64("cost", res.Cost), slog.Any(logger.KeyErr, err))
+		if err != nil {
+			send(SuggestEvent{Err: suggestError(err)})
+			return
+		}
+		if !tailor {
+			break
+		}
 		limit := utf8.RuneCountInString(in.Text)
 		if in.MaxChars > 0 {
 			limit = min(limit, in.MaxChars)
 		}
-		if why := cvedit.TailorViolation(in.Text, res.Text, limit, dto.TailorMaxChangedShare); why != "" {
+		why := cvedit.TailorViolation(in.Text, res.Text, limit, dto.TailorMaxChangedShare)
+		if why == "" {
+			break
+		}
+		if attempt == tailorRetries {
 			send(SuggestEvent{Err: apperr.Unprocessable(why + "; try again")})
 			return
 		}
+		req.Feedback = why
 	}
 	send(SuggestEvent{Done: &dto.SuggestDone{Text: res.Text, Findings: target.findings(res.Text)}})
 }
