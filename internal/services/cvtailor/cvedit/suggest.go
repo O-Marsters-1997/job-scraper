@@ -5,7 +5,9 @@ import (
 	_ "embed"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/openrouter"
 )
 
@@ -38,6 +40,29 @@ type SuggestResult struct {
 
 // Suggest streams a rewrite of in.Text to onDelta and returns it whole.
 func (c *Client) Suggest(ctx context.Context, apiKey string, in SuggestInput, onDelta func(string)) (SuggestResult, error) {
+	if in.Action != dto.SuggestActionTailor {
+		return c.suggestOnce(ctx, apiKey, in, onDelta)
+	}
+	limit := utf8.RuneCountInString(in.Text)
+	if in.MaxChars > 0 {
+		limit = min(limit, in.MaxChars)
+	}
+	var cost float64
+	for attempt := 0; ; attempt++ {
+		res, err := c.suggestOnce(ctx, apiKey, in, func(string) {})
+		cost += res.Cost
+		res.Cost = cost
+		if err != nil {
+			return res, err
+		}
+		in.Feedback = TailorViolation(in.Text, res.Text, limit, dto.TailorMaxChangedShare)
+		if in.Feedback == "" || attempt == 1 {
+			return res, nil
+		}
+	}
+}
+
+func (c *Client) suggestOnce(ctx context.Context, apiKey string, in SuggestInput, onDelta func(string)) (SuggestResult, error) {
 	task, err := renderSuggest(in)
 	if err != nil {
 		return SuggestResult{}, err

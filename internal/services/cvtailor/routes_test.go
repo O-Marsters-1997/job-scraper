@@ -269,8 +269,8 @@ func TestSuggestRoute(t *testing.T) {
 				t.Parallel()
 				_, body := tailor(tc.reply, "microservices in Go", tc.maxChars)
 
-				if !strings.HasPrefix(body, `{"error":`) {
-					t.Errorf("tailor body = %q, want a JSON error and no stream", body)
+				if !strings.Contains(body, "event: error") || strings.Contains(body, "event: done") {
+					t.Errorf("tailor body = %q, want an error event and no done", body)
 				}
 			})
 		}

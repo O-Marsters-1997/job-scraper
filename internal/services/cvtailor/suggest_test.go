@@ -132,43 +132,6 @@ func TestSuggest(t *testing.T) {
 		}
 	})
 
-	t.Run("tailor retries once with the reason and returns the passing reply", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.readyDrafts(t, 1)[0]
-		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
-		editor := cvtailortest.SuggestingReplies("Cut p99 latency by a wide margin now", "Cut p99 latency")
-		m := e.suggestModule(editor, apiKey)
-
-		got, err := collect(t, m, dto.SuggestInput{ID: id, SlotID: slot, Action: dto.SuggestActionTailor, Text: "Cut p99 latency", Quote: "latency"})
-
-		if err != nil {
-			t.Fatalf("Suggest() error = %v", err)
-		}
-		if len(got) != 1 || got[0].Done == nil || got[0].Done.Text != "Cut p99 latency" {
-			t.Fatalf("Suggest() events = %+v, want only the second reply as done", got)
-		}
-		if len(editor.SuggestInputs) != 2 || editor.SuggestInputs[0].Feedback != "" || editor.SuggestInputs[1].Feedback == "" {
-			t.Errorf("Suggest() inputs = %+v, want the retry alone to carry feedback", editor.SuggestInputs)
-		}
-	})
-
-	t.Run("tailor surfaces the error when the retry breaks the rule too", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.readyDrafts(t, 1)[0]
-		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
-		editor := cvtailortest.SuggestingReplies("Cut p99 latency by a wide margin now")
-		m := e.suggestModule(editor, apiKey)
-
-		_, err := collect(t, m, dto.SuggestInput{ID: id, SlotID: slot, Action: dto.SuggestActionTailor, Text: "Cut p99 latency", Quote: "latency"})
-
-		if !apperr.IsKind(err, apperr.KindUnprocessable) {
-			t.Errorf("Suggest() error = %v, want unprocessable", err)
-		}
-		if len(editor.SuggestInputs) != 2 {
-			t.Errorf("Suggest() made %d attempts, want 2", len(editor.SuggestInputs))
-		}
-	})
-
 	t.Run("a failure after the first word ends the stream with an error event", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]

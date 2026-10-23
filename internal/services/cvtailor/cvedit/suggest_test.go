@@ -59,6 +59,73 @@ func TestSuggest(t *testing.T) {
 	}
 }
 
+func TestSuggestTailor(t *testing.T) {
+	const original = "Built Kubernetes tooling"
+	reply := func(text string) string {
+		body, _ := json.Marshal(text)
+		return "data: {\"choices\":[{\"delta\":{\"content\":" + string(body) + "}}]}\n\ndata: [DONE]\n\n"
+	}
+	run := func(t *testing.T, replies ...string) (cvedit.SuggestResult, []string, []string) {
+		t.Helper()
+		var prompts []string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var req struct {
+				Messages []struct{ Content string }
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Errorf("decode request: %v", err)
+			}
+			prompts = append(prompts, req.Messages[1].Content)
+			_, _ = w.Write([]byte(reply(replies[min(len(prompts), len(replies))-1])))
+		}))
+		t.Cleanup(server.Close)
+		client := cvedit.NewClientAt(server.URL, server.Client())
+		var deltas []string
+
+		res, err := client.Suggest(t.Context(), "k", cvedit.SuggestInput{Action: "tailor", Quote: "k8s", Text: original}, func(s string) { deltas = append(deltas, s) })
+
+		if err != nil {
+			t.Fatalf("Suggest() err = %v", err)
+		}
+		return res, prompts, deltas
+	}
+
+	t.Run("a reply within the rule is not retried", func(t *testing.T) {
+		res, prompts, _ := run(t, "Built k8s tooling")
+
+		if res.Text != "Built k8s tooling" || len(prompts) != 1 {
+			t.Errorf("Suggest() = %q after %d calls, want the first reply after 1", res.Text, len(prompts))
+		}
+	})
+
+	t.Run("a reply with more words is retried with the reason", func(t *testing.T) {
+		res, prompts, _ := run(t, "Built Kubernetes tooling at scale", "Built k8s tooling")
+
+		if res.Text != "Built k8s tooling" || len(prompts) != 2 {
+			t.Fatalf("Suggest() = %q after %d calls, want the second reply after 2", res.Text, len(prompts))
+		}
+		if strings.Contains(prompts[0], "previous reply was rejected") || !strings.Contains(prompts[1], "more words than the original") {
+			t.Errorf("prompts = %q, want the reason only on the retry", prompts)
+		}
+	})
+
+	t.Run("a second bad reply is returned after one retry", func(t *testing.T) {
+		res, prompts, _ := run(t, "Built Kubernetes tooling at scale", "Built Kubernetes tooling at huge scale")
+
+		if res.Text != "Built Kubernetes tooling at huge scale" || len(prompts) != 2 {
+			t.Errorf("Suggest() = %q after %d calls, want the second reply after 2", res.Text, len(prompts))
+		}
+	})
+
+	t.Run("streams no deltas", func(t *testing.T) {
+		_, _, deltas := run(t, "Built Kubernetes tooling at scale", "Built k8s tooling")
+
+		if len(deltas) != 0 {
+			t.Errorf("deltas = %q, want none", deltas)
+		}
+	})
+}
+
 func TestSuggestRejectsUnknownAction(t *testing.T) {
 	client := cvedit.NewClientAt("http://unused", http.DefaultClient)
 
