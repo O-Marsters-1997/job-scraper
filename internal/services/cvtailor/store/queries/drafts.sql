@@ -83,6 +83,6 @@ WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
 -- name: GetJobDescription :one
 SELECT description FROM jobs WHERE id = $1;
 
--- name: InsertBulletLabels :copyfrom
-INSERT INTO preference_labels (user_id, job_id, draft_id, kind, achievement_id, p_yes, p_no, p_not_stated, confidence, preselected, kept)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+-- name: InsertAchievementOutcomes :copyfrom
+INSERT INTO achievement_outcomes (draft_id, achievement_id, user_id, job_id, p_yes, p_no, on_source_cv, in_final_cv, outscored_kept_but_left_out, reworded)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);

@@ -251,18 +251,17 @@ func (q *Queries) GetJobDescription(ctx context.Context, id pgtype.UUID) (string
 	return description, err
 }
 
-type InsertBulletLabelsParams struct {
-	UserID        pgtype.UUID
-	JobID         pgtype.UUID
-	DraftID       pgtype.UUID
-	Kind          string
-	AchievementID pgtype.UUID
-	PYes          pgtype.Float8
-	PNo           pgtype.Float8
-	PNotStated    pgtype.Float8
-	Confidence    pgtype.Float8
-	Preselected   bool
-	Kept          bool
+type InsertAchievementOutcomesParams struct {
+	DraftID                 pgtype.UUID
+	AchievementID           pgtype.UUID
+	UserID                  pgtype.UUID
+	JobID                   pgtype.UUID
+	PYes                    pgtype.Float8
+	PNo                     pgtype.Float8
+	OnSourceCv              bool
+	InFinalCv               bool
+	OutscoredKeptButLeftOut bool
+	Reworded                bool
 }
 
 const insertDraft = `-- name: InsertDraft :one

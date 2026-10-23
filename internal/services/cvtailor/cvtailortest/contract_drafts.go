@@ -21,7 +21,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 	create := func(t *testing.T, f Fixture) dto.Draft {
 		t.Helper()
-		d, err := f.Store.CreateDraft(ctx, f.UserID, input(f), nil)
+		d, err := f.Store.CreateDraft(ctx, f.UserID, input(f))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -74,7 +74,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		f := newStore(t)
 		in := input(f)
 		in.SkillSwaps = []dto.SkillSwap{{BankSkillID: "b1", Line: 1, Replaces: "SQL"}}
-		if _, err := f.Store.CreateDraft(ctx, f.UserID, in, nil); err != nil {
+		if _, err := f.Store.CreateDraft(ctx, f.UserID, in); err != nil {
 			t.Fatal(err)
 		}
 		if diff := cmp.Diff(in.SkillSwaps, claim(t, f).SkillSwaps); diff != "" {
@@ -259,7 +259,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if _, err := f.Store.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
 			t.Errorf("ClaimDraft() while leased err = %v, want ErrNotFound", err)
 		}
-		if err := f.Store.CompleteKeep(ctx, c); err != nil {
+		if err := f.Store.CompleteKeep(ctx, c, nil); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)

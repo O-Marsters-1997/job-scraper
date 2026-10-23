@@ -111,6 +111,67 @@ func TestKeepDraft(t *testing.T) {
 		}
 	})
 
+	t.Run("the keep records what happened to every bank Achievement", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		onCV := addAchievements(t, e.pos.ID, e.store, "Ran on-call")[0]
+		e.asker.answers = map[string]dto.Answer{
+			questionPrefix + e.pos.Achievements[0].Text: {PYes: 0.4, PNo: 0.1},
+			questionPrefix + e.pos.Achievements[1].Text: {PYes: 0.7, PNo: 0.1},
+		}
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+
+		e.run(t, tick{})
+
+		yes0, no, yes1 := 0.4, 0.1, 0.7
+		want := []dto.AchievementOutcome{
+			{AchievementID: e.pos.Achievements[0].ID, PYes: &yes0, PNo: &no, InFinalCV: true, Reworded: true},
+			{AchievementID: e.pos.Achievements[1].ID, PYes: &yes1, PNo: &no, OutscoredKeptButLeftOut: true},
+			{AchievementID: onCV.ID, OnSourceCV: true},
+		}
+		if diff := cmp.Diff(want, e.store.AchievementOutcomes(id)); diff != "" {
+			t.Errorf("outcomes (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("the keep still records outcomes when Jev cannot answer", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		e.asker.err = errors.New("jev down")
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+
+		e.run(t, tick{})
+
+		want := []dto.AchievementOutcome{
+			{AchievementID: e.pos.Achievements[0].ID, InFinalCV: true, Reworded: true},
+			{AchievementID: e.pos.Achievements[1].ID},
+		}
+		if diff := cmp.Diff(want, e.store.AchievementOutcomes(id)); diff != "" {
+			t.Errorf("outcomes (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("discarding a Draft records no outcomes", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+
+		if _, err := e.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		e.run(t, tick{})
+
+		if got := e.store.AchievementOutcomes(id); len(got) != 0 {
+			t.Errorf("outcomes = %+v, want none", got)
+		}
+	})
+
 	t.Run("a second Draft of a Job conflicts until the first is discarded", func(t *testing.T) {
 		e := newDraftEnv(t)
 		ctx := t.Context()

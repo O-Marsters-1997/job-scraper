@@ -9,13 +9,13 @@ import (
 	"context"
 )
 
-// iteratorForInsertBulletLabels implements pgx.CopyFromSource.
-type iteratorForInsertBulletLabels struct {
-	rows                 []InsertBulletLabelsParams
+// iteratorForInsertAchievementOutcomes implements pgx.CopyFromSource.
+type iteratorForInsertAchievementOutcomes struct {
+	rows                 []InsertAchievementOutcomesParams
 	skippedFirstNextCall bool
 }
 
-func (r *iteratorForInsertBulletLabels) Next() bool {
+func (r *iteratorForInsertAchievementOutcomes) Next() bool {
 	if len(r.rows) == 0 {
 		return false
 	}
@@ -27,26 +27,25 @@ func (r *iteratorForInsertBulletLabels) Next() bool {
 	return len(r.rows) > 0
 }
 
-func (r iteratorForInsertBulletLabels) Values() ([]interface{}, error) {
+func (r iteratorForInsertAchievementOutcomes) Values() ([]interface{}, error) {
 	return []interface{}{
+		r.rows[0].DraftID,
+		r.rows[0].AchievementID,
 		r.rows[0].UserID,
 		r.rows[0].JobID,
-		r.rows[0].DraftID,
-		r.rows[0].Kind,
-		r.rows[0].AchievementID,
 		r.rows[0].PYes,
 		r.rows[0].PNo,
-		r.rows[0].PNotStated,
-		r.rows[0].Confidence,
-		r.rows[0].Preselected,
-		r.rows[0].Kept,
+		r.rows[0].OnSourceCv,
+		r.rows[0].InFinalCv,
+		r.rows[0].OutscoredKeptButLeftOut,
+		r.rows[0].Reworded,
 	}, nil
 }
 
-func (r iteratorForInsertBulletLabels) Err() error {
+func (r iteratorForInsertAchievementOutcomes) Err() error {
 	return nil
 }
 
-func (q *Queries) InsertBulletLabels(ctx context.Context, arg []InsertBulletLabelsParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"preference_labels"}, []string{"user_id", "job_id", "draft_id", "kind", "achievement_id", "p_yes", "p_no", "p_not_stated", "confidence", "preselected", "kept"}, &iteratorForInsertBulletLabels{rows: arg})
+func (q *Queries) InsertAchievementOutcomes(ctx context.Context, arg []InsertAchievementOutcomesParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"achievement_outcomes"}, []string{"draft_id", "achievement_id", "user_id", "job_id", "p_yes", "p_no", "on_source_cv", "in_final_cv", "outscored_kept_but_left_out", "reworded"}, &iteratorForInsertAchievementOutcomes{rows: arg})
 }

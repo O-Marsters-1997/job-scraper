@@ -1,7 +1,6 @@
 package cvtailor_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -203,51 +202,6 @@ func TestCreateDraft(t *testing.T) {
 		want := dto.Draft{ID: id, JobID: jobID, Status: "pending", Findings: []dto.DraftFinding{}}
 		if diff := cmp.Diff(want, e.draft(t, id), cmpopts.IgnoreFields(dto.Draft{}, "CreatedAt", "BaseDocID", "BaseTabID", "AchievementIDs")); diff != "" {
 			t.Errorf("GetDraft(%s) mismatch (-want +got):\n%s", id, diff)
-		}
-	})
-
-	t.Run("records a label for every offered achievement", func(t *testing.T) {
-		e := newDraftEnv(t)
-		pos := e.pos
-		extra := addAchievements(t, pos.ID, e.store, "Third", "Hand", "Unseen")
-		e.asker.answers = map[string]dto.Answer{
-			questionPrefix + pos.Achievements[0].Text: {PYes: 0.7, PNo: 0.1, PNotStated: 0.2, Confidence: 0.6},
-			questionPrefix + pos.Achievements[1].Text: {PYes: 0.3, PNo: 0.1, PNotStated: 0.6, Confidence: 0.2},
-			questionPrefix + "Third":                  {PYes: 0.2, PNo: 0.1, PNotStated: 0.7, Confidence: 0.1},
-			questionPrefix + "Hand":                   {PYes: 0, PNo: 0.6, PNotStated: 0.4, Confidence: 0.5},
-		}
-		in := e.input
-		in.AchievementIDs = []string{pos.Achievements[0].ID, extra[1].ID}
-
-		if _, err := e.svc.CreateDraft(t.Context(), userID, in); err != nil {
-			t.Fatalf("CreateDraft() error = %v", err)
-		}
-
-		answer := func(text string) *dto.Answer { a := e.asker.answers[questionPrefix+text]; return &a }
-		want := []dto.BulletLabel{
-			{AchievementID: pos.Achievements[0].ID, Answer: answer(pos.Achievements[0].Text), Preselected: true, Kept: true},
-			{AchievementID: pos.Achievements[1].ID, Answer: answer(pos.Achievements[1].Text), Preselected: true},
-			{AchievementID: extra[0].ID, Answer: answer("Third"), Preselected: true},
-			{AchievementID: extra[2].ID},
-			{AchievementID: extra[1].ID, Answer: answer("Hand"), Kept: true},
-		}
-		if diff := cmp.Diff(want, e.store.BulletLabels()); diff != "" {
-			t.Errorf("recorded labels mismatch (-want +got):\n%s", diff)
-		}
-	})
-
-	t.Run("still queues the Draft when Jev cannot answer", func(t *testing.T) {
-		e := newDraftEnv(t)
-		e.asker.err = errors.New("jev down")
-
-		if _, err := e.svc.CreateDraft(t.Context(), userID, e.input); err != nil {
-			t.Fatalf("CreateDraft() error = %v", err)
-		}
-
-		for _, l := range e.store.BulletLabels() {
-			if l.Answer != nil {
-				t.Errorf("label %+v has an answer, want none", l)
-			}
 		}
 	})
 

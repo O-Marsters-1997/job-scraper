@@ -33,12 +33,12 @@ type Store interface {
 	ImportPositions(ctx context.Context, userID string, in []dto.ImportPosition) ([]dto.Position, error)
 	ListHeadingMappings(ctx context.Context, userID, docID, tabID string) ([]dto.HeadingMapping, error)
 	SaveHeadingMappings(ctx context.Context, userID, docID, tabID string, mappings []dto.HeadingMapping) error
-	CreateDraft(ctx context.Context, userID string, in dto.DraftInput, labels []dto.BulletLabel) (dto.Draft, error)
+	CreateDraft(ctx context.Context, userID string, in dto.DraftInput) (dto.Draft, error)
 	GetDraft(ctx context.Context, userID, id string) (dto.Draft, error)
 	ListJobDrafts(ctx context.Context, userID, jobID string) ([]dto.Draft, error)
 	SetDraftOutcome(ctx context.Context, userID, id, outcome string) (dto.Draft, error)
 	QueueKeep(ctx context.Context, userID, id string) (dto.Draft, error)
-	CompleteKeep(ctx context.Context, claim dto.DraftClaim) error
+	CompleteKeep(ctx context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error
 	FailKeep(ctx context.Context, claim dto.DraftClaim, failure dto.DraftFailure) error
 	SetDraftEdits(ctx context.Context, userID, id string, editSet json.RawMessage, findings []dto.DraftFinding, achievementIDs []string) error
 	ClaimDraft(ctx context.Context) (dto.DraftClaim, error)
