@@ -183,7 +183,6 @@ export type DraftInput = {
 	jobId: string;
 	docId: string;
 	tabId: string;
-	achievementIds: string[];
 	mode: DraftMode;
 };
 export const bulletLeanSchema = z.object({

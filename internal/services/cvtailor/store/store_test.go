@@ -61,7 +61,7 @@ func TestClaimDraftReclaimsAfterLeaseExpiry(t *testing.T) {
 	st, pool, uid := newStore(t)
 	ctx := t.Context()
 	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
-	d, err := st.CreateDraft(ctx, uid, dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}})
+	d, err := st.CreateDraft(ctx, uid, dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestCreateDraftUnknownJobIsNotFound(t *testing.T) {
 	t.Parallel()
 	st, _, uid := newStore(t)
 
-	_, err := st.CreateDraft(t.Context(), uid, dto.DraftInput{JobID: missingID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}})
+	_, err := st.CreateDraft(t.Context(), uid, dto.DraftInput{JobID: missingID, DocID: "doc", TabID: "t.0"})
 
 	if !errors.Is(err, store.ErrJobNotFound) {
 		t.Errorf("CreateDraft() err = %v, want ErrJobNotFound", err)
@@ -119,7 +119,7 @@ func TestCompleteKeepRecordsAchievementOutcomes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	in := dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{kept.ID}}
+	in := dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0"}
 	yes, no := 0.7, 0.1
 	outcomes := []dto.AchievementOutcome{
 		{AchievementID: kept.ID, PYes: &yes, PNo: &no, OnSourceCV: true, InFinalCV: true, Reworded: true},

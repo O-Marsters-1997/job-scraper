@@ -17,7 +17,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	ctx := t.Context()
 
 	input := func(f Fixture) dto.DraftInput {
-		return dto.DraftInput{JobID: f.JobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}}
+		return dto.DraftInput{JobID: f.JobID, DocID: "doc", TabID: "t.0"}
 	}
 	create := func(t *testing.T, f Fixture) dto.Draft {
 		t.Helper()
@@ -57,7 +57,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
-		if c.ID != d.ID || c.UserID != f.UserID || c.DocID != "doc" || c.TabID != "t.0" || len(c.AchievementIDs) != 1 || c.Attempts != 1 {
+		if c.ID != d.ID || c.UserID != f.UserID || c.DocID != "doc" || c.TabID != "t.0" || c.Attempts != 1 {
 			t.Errorf("ClaimDraft() = %+v, want the created Draft on attempt 1", c)
 		}
 		if _, err := f.Store.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
@@ -66,19 +66,6 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
 		if got.Status != "running" {
 			t.Errorf("GetDraft().Status = %q, want running", got.Status)
-		}
-	})
-
-	t.Run("a claim carries the Draft's skill swaps", func(t *testing.T) {
-		t.Parallel()
-		f := newStore(t)
-		in := input(f)
-		in.SkillSwaps = []dto.SkillSwap{{BankSkillID: "b1", Line: 1, Replaces: "SQL"}}
-		if _, err := f.Store.CreateDraft(ctx, f.UserID, in); err != nil {
-			t.Fatal(err)
-		}
-		if diff := cmp.Diff(in.SkillSwaps, claim(t, f).SkillSwaps); diff != "" {
-			t.Errorf("ClaimDraft().SkillSwaps mismatch (-want +got):\n%s", diff)
 		}
 	})
 

@@ -25,7 +25,7 @@ function Status(props: { draft: Draft }) {
 						{props.draft.lastError ? `: ${props.draft.lastError}` : "."}
 					</p>
 					<Link
-						to="/jobs/$id/tailor"
+						to="/jobs/$id"
 						params={{ id: props.draft.jobId }}
 						class="inline-flex h-9 items-center rounded-md border border-border bg-surface px-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-muted"
 					>

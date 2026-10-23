@@ -12,26 +12,11 @@ const (
 	DraftModeGenerate DraftMode = "generate"
 )
 
-// DraftInput asks for a Tailored CV Draft of one Job from one base CV Tab,
-// citing the Achievements the User confirmed.
 type DraftInput struct {
-	JobID          string      `json:"jobId"`
-	DocID          string      `json:"docId"`
-	TabID          string      `json:"tabId"`
-	AchievementIDs []string    `json:"achievementIds"`
-	SkillSwaps     []SkillSwap `json:"skillSwaps"`
-	Mode           DraftMode   `json:"mode"`
-}
-
-// SkillSwap puts a Bank Skill into the Skill Line at index Line (0-based, in
-// base CV order), in place of the base item Replaces.
-type SkillSwap struct {
-	BankSkillID string `json:"bankSkillId"`
-	Line        int    `json:"line"`
-	Replaces    string `json:"replaces"`
-	// Name is set from the Bank Skill when a Draft is created, so later plans
-	// need no lookup. A request value is ignored.
-	Name string `json:"name"`
+	JobID string    `json:"jobId"`
+	DocID string    `json:"docId"`
+	TabID string    `json:"tabId"`
+	Mode  DraftMode `json:"mode"`
 }
 
 type AchievementOutcome struct {
@@ -85,10 +70,9 @@ type Draft struct {
 	// SkillsEditable is false for a Draft made before Skill Lines.
 	SkillsEditable bool `json:"skillsEditable"`
 
-	BaseDocID      string      `json:"baseDocId"`
-	BaseTabID      string      `json:"baseTabId"`
-	AchievementIDs []string    `json:"-"`
-	SkillSwaps     []SkillSwap `json:"-"`
+	BaseDocID      string   `json:"baseDocId"`
+	BaseTabID      string   `json:"baseTabId"`
+	AchievementIDs []string `json:"-"`
 }
 
 // DraftContent is the editable part of a Draft: the Profile, Skills (flat,
@@ -158,7 +142,6 @@ type DraftClaim struct {
 	TabID          string
 	AchievementIDs []string
 	Roles          []string
-	SkillSwaps     []SkillSwap
 	Mode           DraftMode
 	Attempts       int
 	DraftDocID     string

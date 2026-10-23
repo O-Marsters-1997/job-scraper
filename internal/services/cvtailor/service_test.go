@@ -140,7 +140,7 @@ func newDraftEnv(t *testing.T) draftEnv {
 		svc:   cvtailor.NewService(store, cvtailortest.Docs{TabJSON: baseTab(t)}, asker, drive),
 		asker: asker,
 		pos:   pos,
-		input: dto.DraftInput{JobID: jobID, DocID: docID, TabID: tabID, AchievementIDs: []string{pos.Achievements[0].ID}},
+		input: dto.DraftInput{JobID: jobID, DocID: docID, TabID: tabID},
 	}
 }
 
@@ -153,48 +153,9 @@ func (e draftEnv) bankSkill(t *testing.T, name string) dto.BankSkill {
 	return sk
 }
 
-func TestCreateDraftSkillSwaps(t *testing.T) {
-	e := newDraftEnv(t)
-	e.svc = cvtailor.NewService(e.store, cvtailortest.Docs{TabJSON: baseTab(t, head("Skills"), prose("Languages: Go, SQL"))}, e.asker, e.drive)
-	rust := e.bankSkill(t, "Rust")
-	foreign, err := e.store.CreateBankSkill(t.Context(), otherUserID, dto.BankSkillInput{Name: "Zig"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cases := []struct {
-		name string
-		swap dto.SkillSwap
-	}{
-		{"another user's Bank Skill is invalid", dto.SkillSwap{BankSkillID: foreign.ID, Line: 0, Replaces: "SQL"}},
-		{"unknown line is invalid", dto.SkillSwap{BankSkillID: rust.ID, Line: 3, Replaces: "SQL"}},
-		{"item not in the line is invalid", dto.SkillSwap{BankSkillID: rust.ID, Line: 0, Replaces: "Perl"}},
-		{"Bank Skill already in the CV is invalid", dto.SkillSwap{BankSkillID: e.bankSkill(t, "go").ID, Line: 0, Replaces: "SQL"}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			in := e.input
-			in.SkillSwaps = []dto.SkillSwap{tc.swap}
-
-			_, err := e.svc.CreateDraft(t.Context(), userID, in)
-
-			if !apperr.IsKind(err, apperr.KindInvalid) {
-				t.Errorf("CreateDraft(%+v) error = %v, want an invalid error", tc.swap, err)
-			}
-		})
-	}
-
-	t.Run("a valid swap is queued", func(t *testing.T) {
-		in := e.input
-		in.SkillSwaps = []dto.SkillSwap{{BankSkillID: rust.ID, Line: 0, Replaces: "sql"}}
-
-		if _, err := e.svc.CreateDraft(t.Context(), userID, in); err != nil {
-			t.Fatalf("CreateDraft() error = %v", err)
-		}
-	})
-}
-
 func TestCreateDraft(t *testing.T) {
-	t.Run("queues a pending Draft for confirmed achievements", func(t *testing.T) {
+	t.Run("queues a pending Draft", func(t *testing.T) {
+		t.Parallel()
 		e := newDraftEnv(t)
 
 		id := e.queue(t)
@@ -205,10 +166,9 @@ func TestCreateDraft(t *testing.T) {
 		}
 	})
 
-	t.Run("as_is needs no achievements and an unknown mode is invalid", func(t *testing.T) {
+	t.Run("an unknown mode is invalid and as_is is kept", func(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
-		e.input.AchievementIDs = nil
 
 		e.input.Mode = "rewrite"
 		if _, err := e.svc.CreateDraft(t.Context(), userID, e.input); !apperr.IsKind(err, apperr.KindInvalid) {
@@ -226,38 +186,17 @@ func TestCreateDraft(t *testing.T) {
 		}
 	})
 
-	e := newDraftEnv(t)
-	other, err := e.store.CreatePosition(t.Context(), userID, dto.PositionInput{Employer: "Unmapped", Title: "Dev"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	unmapped, err := e.store.CreateAchievement(t.Context(), userID, dto.AchievementInput{PositionID: other.ID, Text: "Shipped"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cases := []struct {
-		name   string
-		user   string
-		mutate func(*dto.DraftInput)
-	}{
-		{"repeated achievement is invalid", userID, func(in *dto.DraftInput) { in.AchievementIDs = []string{in.AchievementIDs[0], in.AchievementIDs[0]} }},
-		{"another user's achievement is invalid", otherUserID, func(*dto.DraftInput) {}},
-		{"achievement of an unmapped position is invalid", userID, func(in *dto.DraftInput) { in.AchievementIDs = []string{unmapped.ID} }},
-		{"missing tab is invalid", userID, func(in *dto.DraftInput) { in.TabID = "" }},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			in := e.input
-			in.AchievementIDs = append([]string(nil), in.AchievementIDs...)
-			tc.mutate(&in)
+	t.Run("missing tab is invalid", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		e.input.TabID = ""
 
-			_, err := e.svc.CreateDraft(t.Context(), tc.user, in)
+		_, err := e.svc.CreateDraft(t.Context(), userID, e.input)
 
-			if !apperr.IsKind(err, apperr.KindInvalid) {
-				t.Errorf("CreateDraft(%+v) error = %v, want an invalid error", in, err)
-			}
-		})
-	}
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("CreateDraft(%+v) error = %v, want an invalid error", e.input, err)
+		}
+	})
 }
 
 func TestGetDraft(t *testing.T) {
