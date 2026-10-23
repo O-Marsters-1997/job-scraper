@@ -1321,6 +1321,18 @@ func (f *FakeStore) DeleteExpiredCandidates(context.Context) error {
 	return nil
 }
 
+func (f *FakeStore) ScrapeRunPageDone(context.Context, string) error { return nil }
+
+func (f *FakeStore) ScrapeRunDeferred(context.Context, string) error { return nil }
+
+func (f *FakeStore) ScrapeRunAttemptFailed(context.Context, string, int, int, string) error {
+	return nil
+}
+
+func (f *FakeStore) FinishScrapeRun(context.Context, string, dto.StopReason) error { return nil }
+
+func (f *FakeStore) DeleteExpiredScrapeRuns(context.Context) error { return nil }
+
 var _ Store = (*FakeStore)(nil)
 
 func (f *FakeStore) LookupFetch(_ context.Context, url string) (dto.CachedResponse, bool, error) {

@@ -307,6 +307,7 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 			var task Task
 			err := json.Unmarshal(delivery.Body, &task)
 			task.Redelivered = delivery.Redelivered
+			task.Attempt = int(deliveryCount(delivery.Headers["x-delivery-count"])) + 1
 			if err == nil {
 				err = task.Validate()
 			}

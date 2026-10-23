@@ -38,9 +38,9 @@ func (p *Processor) FailRun(ctx context.Context, task queue.Task) error {
 	}
 	_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "Work failed after retries. Try running it again.")
 	if errors.Is(err, data.ErrNotFound) {
-		return nil
+		err = nil
 	}
-	return err
+	return errors.Join(err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
 }
 
 type Publisher interface {
@@ -395,9 +395,12 @@ func (p *Processor) processPage(ctx context.Context, task queue.Task) error {
 	}
 	next, err := p.orchestrator.ScrapePage(ctx, target, task.Cursor)
 	if errors.Is(err, sources.ErrSourceKeyRejected) {
-		return p.disableSource(ctx, task.Source, err)
+		return errors.Join(p.disableSource(ctx, task.Source, err), p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
 	}
 	if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
+		if err := p.js.ScrapeRunDeferred(ctx, task.RunID); err != nil {
+			return err
+		}
 		msg := waitingPrefix + until.Format(time.RFC3339)
 		if _, transitionErr := p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", msg); transitionErr != nil {
 			return transitionErr
@@ -405,15 +408,29 @@ func (p *Processor) processPage(ctx context.Context, task queue.Task) error {
 		return &queue.DeferError{Until: until, Err: err}
 	}
 	if err != nil {
+		if recordErr := p.js.ScrapeRunAttemptFailed(ctx, task.RunID, task.Page, task.Attempt, err.Error()); recordErr != nil {
+			p.log.WarnContext(ctx, "record scrape run attempt failed", slog.Any(logger.KeyErr, recordErr))
+		}
+		return err
+	}
+	if err := p.js.ScrapeRunPageDone(ctx, task.RunID); err != nil {
 		return err
 	}
 	task.Page++
-	if next != "" && (p.maxPages == 0 || task.Page < p.maxPages) {
+	capped := next != "" && p.maxPages != 0 && task.Page >= p.maxPages
+	if next != "" && !capped {
 		task.ID, task.Cursor = uuid.NewString(), next
 		if err := p.broker.Publish(ctx, task); err != nil {
 			return err
 		}
 		_, err = p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", "")
+		return err
+	}
+	stop := dto.StopLastPage
+	if capped {
+		stop = dto.StopPageCap
+	}
+	if err := p.js.FinishScrapeRun(ctx, task.RunID, stop); err != nil {
 		return err
 	}
 	_, err = p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "succeeded", "")
@@ -453,11 +470,11 @@ func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 			return nil
 		}
 		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "The board's page could not be read.")
-		return err
+		return errors.Join(err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
 	}
 	if task.TargetID != "" {
 		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "succeeded", "")
-		return err
+		return errors.Join(err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopLastPage))
 	}
 	return nil
 }
