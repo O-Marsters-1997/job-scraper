@@ -172,7 +172,7 @@ func (p *Processor) verifyBoard(ctx context.Context, task queue.Task) error {
 	if !task.Poll {
 		return nil
 	}
-	if err := p.boards.PollBoard(ctx, board.ID, true, taskListing(task)); err != nil {
+	if _, err := p.boards.PollBoard(ctx, board.ID, true, taskListing(task)); err != nil {
 		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
 			return &queue.DeferError{Until: until, Err: err}
 		}
@@ -270,7 +270,8 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 			return err
 		}
 	}
-	return p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0, taskListing(task))
+	_, err = p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0, taskListing(task))
+	return err
 }
 
 func taskListing(task queue.Task) scraper.Listing {
@@ -458,7 +459,7 @@ func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 			return err
 		}
 	}
-	if err := p.boards.PollBoard(ctx, task.BoardID, task.Manual, taskListing(task)); err != nil {
+	if _, err := p.boards.PollBoard(ctx, task.BoardID, task.Manual, taskListing(task)); err != nil {
 		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
 			return &queue.DeferError{Until: until, Err: err}
 		}

@@ -30,7 +30,8 @@ func (p *APIExporter) WithInitialBackoff(d time.Duration) *APIExporter {
 	return p
 }
 
-func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) error {
+func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) (dto.IngestTally, error) {
+	var tally dto.IngestTally
 	for len(jobs) > 0 {
 		count := min(len(jobs), 100)
 		var body []byte
@@ -40,20 +41,20 @@ func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) error {
 				Jobs []dto.Job `json:"jobs"`
 			}{Jobs: jobs[:count]})
 			if err != nil {
-				return fmt.Errorf("api_exporter: marshal batch: %w", err)
+				return tally, fmt.Errorf("api_exporter: marshal batch: %w", err)
 			}
 			if len(body) <= 2<<20 {
 				break
 			}
 			if count == 1 {
-				return fmt.Errorf("api_exporter: job exceeds 2 MiB")
+				return tally, fmt.Errorf("api_exporter: job exceeds 2 MiB")
 			}
 			count = max(1, count/2)
 		}
 		batch := jobs[:count]
 		response, err := p.post(ctx, "/ingest/batch", body)
 		if err != nil {
-			return err
+			return tally, err
 		}
 		var result struct {
 			Results []struct {
@@ -62,20 +63,24 @@ func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) error {
 			} `json:"results"`
 		}
 		if err := json.Unmarshal(response, &result); err != nil || len(result.Results) != len(batch) {
-			return fmt.Errorf("api_exporter: invalid batch response")
+			return tally, fmt.Errorf("api_exporter: invalid batch response")
 		}
 		for idx, item := range result.Results {
 			switch item.Status {
-			case "new", "changed", "unchanged", "merged", "upgraded":
+			case "new":
+				tally.New++
+			case "merged":
+				tally.Merged++
+			case "changed", "unchanged", "upgraded":
 			case "rejected":
-				return fmt.Errorf("api_exporter: job %s rejected: %s", batch[idx].URL, item.Reason)
+				return tally, fmt.Errorf("api_exporter: job %s rejected: %s", batch[idx].URL, item.Reason)
 			default:
-				return fmt.Errorf("api_exporter: unknown outcome %q", item.Status)
+				return tally, fmt.Errorf("api_exporter: unknown outcome %q", item.Status)
 			}
 		}
 		jobs = jobs[count:]
 	}
-	return nil
+	return tally, nil
 }
 
 func (p *APIExporter) Export(ctx context.Context, job dto.Job) error {

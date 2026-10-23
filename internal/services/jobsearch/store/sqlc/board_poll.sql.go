@@ -56,14 +56,16 @@ func (q *Queries) ClearBoardCheckPublished(ctx context.Context, boardID pgtype.U
 	return err
 }
 
-const closeMissingBoardJobs = `-- name: CloseMissingBoardJobs :exec
+const closeMissingBoardJobs = `-- name: CloseMissingBoardJobs :one
 WITH closed AS (
     UPDATE jobs SET closed_at = NOW()
     WHERE primary_board_id = $1 AND closed_at IS NULL
       AND id IN (SELECT job_id FROM board_job_observations WHERE board_id = $1 AND last_snapshot_version < $2)
     RETURNING id
+), cleared AS (
+    DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed)
 )
-DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed)
+SELECT count(*) FROM closed
 `
 
 type CloseMissingBoardJobsParams struct {
@@ -73,9 +75,11 @@ type CloseMissingBoardJobsParams struct {
 
 // Writes scoring's option_answers table directly; documented exception
 // (ADR 0011, issue #264) pending #267.
-func (q *Queries) CloseMissingBoardJobs(ctx context.Context, arg CloseMissingBoardJobsParams) error {
-	_, err := q.db.Exec(ctx, closeMissingBoardJobs, arg.PrimaryBoardID, arg.LastSnapshotVersion)
-	return err
+func (q *Queries) CloseMissingBoardJobs(ctx context.Context, arg CloseMissingBoardJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, closeMissingBoardJobs, arg.PrimaryBoardID, arg.LastSnapshotVersion)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const completePollState = `-- name: CompletePollState :execrows

@@ -17,7 +17,7 @@ import (
 
 type BoardPollStore interface {
 	ClaimBoard(context.Context, string, bool) (dto.BoardPoll, error)
-	CompleteBoard(context.Context, dto.BoardSnapshot) error
+	CompleteBoard(context.Context, dto.BoardSnapshot) (removed int, err error)
 	FailBoard(context.Context, dto.BoardPoll) error
 	ClearBoardCheckPublished(context.Context, string) error
 }
@@ -27,7 +27,7 @@ type BoardFetcher interface {
 }
 
 type BoardIngester interface {
-	BulkExport(context.Context, []dto.Job) error
+	BulkExport(context.Context, []dto.Job) (dto.IngestTally, error)
 }
 
 type BoardPoller struct {
@@ -58,26 +58,26 @@ func (l Listing) Stamp(jobs []dto.Job) {
 	}
 }
 
-func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool, from ...Listing) error {
+func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool, from ...Listing) (dto.BoardTally, error) {
 	claim, err := p.store.ClaimBoard(ctx, id, manual)
 	if errors.Is(err, jobsearch.ErrBoardClaimUnavailable) && !manual {
-		return p.store.ClearBoardCheckPublished(ctx, id)
+		return dto.BoardTally{}, p.store.ClearBoardCheckPublished(ctx, id)
 	}
 	if err != nil {
-		return err
+		return dto.BoardTally{}, err
 	}
 	res, err := p.fetcher.FetchBoard(ctx, claim)
 	return p.complete(ctx, claim, res, err, from...)
 }
 
 // PollPrefetched completes a Board's poll from jobs the caller already fetched.
-func (p *BoardPoller) PollPrefetched(ctx context.Context, id string, jobs []dto.Job, nextPollIn time.Duration, from ...Listing) error {
+func (p *BoardPoller) PollPrefetched(ctx context.Context, id string, jobs []dto.Job, nextPollIn time.Duration, from ...Listing) (dto.BoardTally, error) {
 	claim, err := p.store.ClaimBoard(ctx, id, false)
 	if errors.Is(err, jobsearch.ErrBoardClaimUnavailable) {
-		return nil
+		return dto.BoardTally{}, nil
 	}
 	if err != nil {
-		return err
+		return dto.BoardTally{}, err
 	}
 	return p.complete(ctx, claim, sources.BoardResult{Jobs: jobs, NextPollIn: nextPollIn}, nil, from...)
 }
@@ -85,8 +85,9 @@ func (p *BoardPoller) PollPrefetched(ctx context.Context, id string, jobs []dto.
 // underparsedRatio is the share of the reported count a poll must parse to count as full.
 const underparsedRatio = 0.98
 
-func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, res sources.BoardResult, err error, from ...Listing) error {
+func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, res sources.BoardResult, err error, from ...Listing) (dto.BoardTally, error) {
 	jobs := res.Jobs
+	tally := dto.BoardTally{Claimed: true, Listed: len(jobs)}
 	if err == nil {
 		for idx := range jobs {
 			jobs[idx].BoardID = claim.ID
@@ -96,14 +97,18 @@ func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, res sou
 		for _, l := range from {
 			l.Stamp(jobs)
 		}
-		err = p.ingester.BulkExport(ctx, jobs)
+		var ingested dto.IngestTally
+		ingested, err = p.ingester.BulkExport(ctx, jobs)
+		tally.New, tally.Elsewhere = ingested.New, ingested.Merged
 	}
 	if err != nil {
-		return errors.Join(err, p.store.FailBoard(ctx, claim))
+		return tally, errors.Join(err, p.store.FailBoard(ctx, claim))
 	}
-	if err := p.store.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Jobs: jobs, Complete: true, NextPollIn: res.NextPollIn, Reported: res.Reported}); err != nil {
-		return err
+	removed, err := p.store.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Jobs: jobs, Complete: true, NextPollIn: res.NextPollIn, Reported: res.Reported})
+	if err != nil {
+		return tally, err
 	}
+	tally.Removed = removed
 	if res.Reported > 0 && float64(len(jobs)) < underparsedRatio*float64(res.Reported) {
 		slog.WarnContext(ctx, "board parsed fewer jobs than reported",
 			slog.String(logger.KeyEvent, telemetry.EventBoardUnderparsed),
@@ -112,7 +117,7 @@ func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, res sou
 			slog.Int("reported", res.Reported),
 			slog.Int("parsed", len(jobs)))
 	}
-	return nil
+	return tally, nil
 }
 
 type ProfileSaver interface {

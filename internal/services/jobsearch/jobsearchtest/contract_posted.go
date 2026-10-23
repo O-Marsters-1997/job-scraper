@@ -220,7 +220,7 @@ func runPostedContract(t *testing.T, newStore func(t *testing.T) (Store, string)
 			t.Fatalf("ClaimBoard(...) = %v", err)
 		}
 		before := time.Now().Add(-time.Minute)
-		if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: poll, Complete: true, Jobs: []dto.Job{first}, Reported: 1}); err != nil {
+		if _, err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: poll, Complete: true, Jobs: []dto.Job{first}, Reported: 1}); err != nil {
 			t.Fatalf("CompleteBoard(...) = %v", err)
 		}
 		second := save("2")
