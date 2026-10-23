@@ -3,7 +3,6 @@ import {
 	Portal as SheetPortal,
 	Title as SheetTitle,
 } from "@kobalte/core/dialog";
-import { useNavigate } from "@tanstack/solid-router";
 import { For, Show } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
@@ -13,6 +12,7 @@ import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { useGoogleStatus } from "@/hooks/useGoogle";
 import { useCreateDraft, useJobDrafts } from "@/hooks/useTailoring";
 import { formatDate } from "@/lib/datetime";
+import { openDraftInNewTab } from "@/lib/draftTab";
 import { loadedData } from "@/lib/queryData";
 import { sharePdf } from "@/lib/sharePdf";
 import type { Job } from "@/types/job";
@@ -39,18 +39,18 @@ export function CvSheet(props: CvSheetProps) {
 		void share.submit();
 	};
 
-	const navigate = useNavigate();
 	const createDraft = useCreateDraft();
 	let baseCv = { DocID: "", TabID: "" };
 	const tailor = useFormSubmit(async () => {
 		const { DocID: docId, TabID: tabId } = baseCv;
-		const draft = await createDraft.mutateAsync({
-			jobId: props.job.ID,
-			docId,
-			tabId,
-			mode: "generate",
-		});
-		await navigate({ to: "/tailoring/drafts/$id", params: { id: draft.id } });
+		await openDraftInNewTab(() =>
+			createDraft.mutateAsync({
+				jobId: props.job.ID,
+				docId,
+				tabId,
+				mode: "generate",
+			}),
+		);
 	});
 
 	const baseCvs = () => loadedData(cvs)?.filter((c) => c.Visible) ?? [];

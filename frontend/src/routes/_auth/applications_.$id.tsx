@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
+import { createFileRoute, Link } from "@tanstack/solid-router";
 import {
 	createSignal,
 	For,
@@ -56,6 +56,7 @@ import {
 import { checklistDone, linkedDraft } from "@/lib/applicationChecklist";
 import { formatChaseDate } from "@/lib/chase";
 import { dayKey, formatDate } from "@/lib/datetime";
+import { draftPath, openDraftInNewTab } from "@/lib/draftTab";
 import { queryClient } from "@/lib/queryClient";
 import { loadedData } from "@/lib/queryData";
 import { cn, titleCase } from "@/lib/utils";
@@ -297,7 +298,6 @@ function CvRowBody(props: {
 	failed: Draft | undefined;
 	done: boolean;
 }) {
-	const navigate = useNavigate();
 	const cvs = useCVTemplates();
 	const create = useCreateDraft();
 	const discard = useDiscardDraft();
@@ -305,24 +305,30 @@ function CvRowBody(props: {
 	const options = () => loadedData(cvs)?.filter((c) => c.Visible) ?? [];
 	const chosen = () => picked() ?? options()[0];
 
-	const openAsIs = useFormSubmit(async () => {
-		const cv = chosen();
-		if (!cv) return;
-		const stale = props.draft?.outcome
-			? undefined
-			: (props.draft ?? props.failed);
-		if (stale) await discard.mutateAsync(stale.id);
-		const ref = await create.mutateAsync({
-			jobId: props.jobId,
-			docId: cv.DocID,
-			tabId: cv.TabID,
-			mode: "as_is",
+	const start = (mode: "as_is" | "generate") =>
+		useFormSubmit(async () => {
+			const cv = chosen();
+			if (!cv) return;
+			await openDraftInNewTab(async () => {
+				const stale = props.draft?.outcome
+					? undefined
+					: (props.draft ?? props.failed);
+				if (stale) await discard.mutateAsync(stale.id);
+				return create.mutateAsync({
+					jobId: props.jobId,
+					docId: cv.DocID,
+					tabId: cv.TabID,
+					mode,
+				});
+			});
 		});
-		await navigate({ to: "/tailoring/drafts/$id", params: { id: ref.id } });
-	});
-	const startOver = () => {
+	const openAsIs = start("as_is");
+	const generate = start("generate");
+	const pending = () => openAsIs.pending() || generate.pending();
+	const error = () => openAsIs.error() ?? generate.error();
+	const startOver = (run: typeof openAsIs) => () => {
 		if (window.confirm("Discard this draft and start a new one?"))
-			void openAsIs.submit();
+			void run.submit();
 	};
 
 	return (
@@ -335,16 +341,25 @@ function CvRowBody(props: {
 							? "Marked done because the application moved on. No tailored CV linked."
 							: "No tailored CV for this role yet."}
 					</p>
-					<FormFeedback error={openAsIs.error()} />
+					<FormFeedback error={error()} />
 					<div class="flex flex-wrap items-center gap-2">
 						<CvPicker cvs={options()} value={chosen()} onChange={setPicked} />
 						<Button
 							size="sm"
-							disabled={!chosen()}
+							disabled={!chosen() || pending()}
 							loading={openAsIs.pending()}
 							onClick={() => void openAsIs.submit()}
 						>
 							Open as-is
+						</Button>
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={!chosen() || pending()}
+							loading={generate.pending()}
+							onClick={() => void generate.submit()}
+						>
+							Generate
 						</Button>
 					</div>
 				</>
@@ -355,6 +370,7 @@ function CvRowBody(props: {
 					<Link
 						to="/tailoring/drafts/$id"
 						params={{ id: draft().id }}
+						target="_blank"
 						class="flex items-center justify-between gap-3 rounded-md py-1.5 pr-3 text-sm transition-colors hover:bg-surface-muted"
 					>
 						<span>
@@ -377,17 +393,12 @@ function CvRowBody(props: {
 						</Badge>
 					</Link>
 					<Show when={draft().outcome !== "kept"}>
-						<FormFeedback error={openAsIs.error()} />
+						<FormFeedback error={error()} />
 						<div class="flex flex-wrap items-center gap-2">
 							<CvPicker cvs={options()} value={chosen()} onChange={setPicked} />
 							<Button
 								size="sm"
-								onClick={() =>
-									void navigate({
-										to: "/tailoring/drafts/$id",
-										params: { id: draft().id },
-									})
-								}
+								onClick={() => window.open(draftPath(draft().id), "_blank")}
 							>
 								Open draft
 							</Button>
@@ -399,9 +410,22 @@ function CvRowBody(props: {
 									(draft().status !== "ready" && draft().status !== "failed")
 								}
 								loading={openAsIs.pending()}
-								onClick={startOver}
+								onClick={startOver(openAsIs)}
 							>
 								Start over
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={
+									!chosen() ||
+									pending() ||
+									(draft().status !== "ready" && draft().status !== "failed")
+								}
+								loading={generate.pending()}
+								onClick={startOver(generate)}
+							>
+								Start over and generate
 							</Button>
 						</div>
 					</Show>
