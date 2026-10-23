@@ -6,6 +6,7 @@ export const applicationStatusSchema = z.object({
 	Name: z.string(),
 	Colour: z.string(),
 	ReplyWindowDays: z.number().int().nullable(),
+	CountsAsReply: z.boolean(),
 	SystemKey: z.enum(["draft", "applied", ""]),
 	CreatedAt: z.string(),
 });

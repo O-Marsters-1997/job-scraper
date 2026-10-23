@@ -317,7 +317,7 @@ func (s *Store) SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID strin
 	return nil
 }
 
-func (s *Store) CreateApplicationStatus(ctx context.Context, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error) {
+func (s *Store) CreateApplicationStatus(ctx context.Context, userID, name, colour string, replyWindowDays *int, countsAsReply bool) (dto.ApplicationStatus, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.ApplicationStatus{}, err
@@ -327,6 +327,7 @@ func (s *Store) CreateApplicationStatus(ctx context.Context, userID, name, colou
 		Name:            name,
 		Colour:          colour,
 		ReplyWindowDays: toInt4(replyWindowDays),
+		CountsAsReply:   countsAsReply,
 	})
 	if err != nil {
 		return dto.ApplicationStatus{}, fmt.Errorf("store.CreateApplicationStatus: %w", err)
@@ -350,7 +351,7 @@ func (s *Store) ListApplicationStatusesByUser(ctx context.Context, userID string
 	return out, nil
 }
 
-func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error) {
+func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string, replyWindowDays *int, countsAsReply bool) (dto.ApplicationStatus, error) {
 	sid, err := data.UUID(id)
 	if err != nil {
 		return dto.ApplicationStatus{}, err
@@ -365,6 +366,7 @@ func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, c
 		Name:            name,
 		Colour:          colour,
 		ReplyWindowDays: toInt4(replyWindowDays),
+		CountsAsReply:   countsAsReply,
 	})
 	if err != nil {
 		return dto.ApplicationStatus{}, fmt.Errorf("store.UpdateApplicationStatus: %w", err)

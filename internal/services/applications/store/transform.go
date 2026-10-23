@@ -67,6 +67,7 @@ func toApplicationStatusDTO(s sqlc.ApplicationStatus) dto.ApplicationStatus {
 		Name:            s.Name,
 		Colour:          s.Colour,
 		ReplyWindowDays: fromInt4(s.ReplyWindowDays),
+		CountsAsReply:   s.CountsAsReply,
 		SystemKey:       s.SystemKey.String,
 		CreatedAt:       s.CreatedAt.Time,
 	}

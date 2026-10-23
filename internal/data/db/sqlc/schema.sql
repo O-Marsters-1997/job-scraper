@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS application_statuses (
     colour     TEXT        NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     reply_window_days INT  CHECK (reply_window_days BETWEEN 1 AND 60),
+    counts_as_reply BOOLEAN NOT NULL DEFAULT FALSE,
     system_key TEXT        CHECK (system_key IN ('draft', 'applied'))
 );
 
