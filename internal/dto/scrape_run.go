@@ -18,3 +18,12 @@ const (
 	StopPageCap  StopReason = "page_cap"
 	StopFailed   StopReason = "failed"
 )
+
+type BoardTally struct {
+	Claimed                         bool
+	Listed, New, Elsewhere, Removed int
+}
+
+type IngestTally struct {
+	New, Merged int
+}

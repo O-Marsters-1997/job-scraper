@@ -781,7 +781,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if err != nil {
 			t.Fatalf("ClaimBoard(...) = %v", err)
 		}
-		if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: poll, Complete: true, Jobs: []dto.Job{job}, Reported: 5}); err != nil {
+		if _, err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: poll, Complete: true, Jobs: []dto.Job{job}, Reported: 5}); err != nil {
 			t.Fatalf("CompleteBoard(...) = %v", err)
 		}
 		boards, err := st.ListCompanyBoards(ctx, c.ID)
@@ -867,7 +867,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if err != nil {
 			t.Fatalf("ClaimBoard(polled-co) = %v", err)
 		}
-		if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: poll, Complete: true}); err != nil {
+		if _, err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: poll, Complete: true}); err != nil {
 			t.Fatalf("CompleteBoard(polled-co) = %v", err)
 		}
 		got, err := st.ListVerifiedBoardsBySlug(ctx, []string{"polled-co", "candidate-co", "paused-co", "unknown-co"})

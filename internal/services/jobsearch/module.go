@@ -87,7 +87,7 @@ type Store interface {
 	ClearBoardCheckPublished(ctx context.Context, id string) error
 	ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error)
 	ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error)
-	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error
+	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) (removed int, err error)
 	FailBoard(ctx context.Context, poll dto.BoardPoll) error
 	ListUntrackedDiscoveredBoards(ctx context.Context, uk bool, ukSince time.Time) ([]dto.CompanyBoard, error)
 	ListVerifiedBoardsBySlug(ctx context.Context, slugs []string) ([]dto.CardBoard, error)
