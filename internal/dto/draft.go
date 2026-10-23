@@ -294,11 +294,20 @@ type SuggestInput struct {
 	MaxChars int    `json:"maxChars"`
 }
 
+type CloserMatch struct {
+	AchievementID string  `json:"achievementId"`
+	Text          string  `json:"text"`
+	Lean          float64 `json:"lean"`
+}
+
 type BulletLean struct {
 	SlotID        string          `json:"slotId"`
 	AchievementID *string         `json:"achievementId"`
 	Lean          *float64        `json:"lean"`
 	State         SuggestionState `json:"state"`
+	ReplacedFrom  *string         `json:"replacedFrom"`
+	ReplacedLean  *float64        `json:"replacedLean"`
+	CloserMatch   *CloserMatch    `json:"closerMatch"`
 }
 
 func (b BulletLean) MarshalJSON() ([]byte, error) {
@@ -311,7 +320,10 @@ func (b BulletLean) MarshalJSON() ([]byte, error) {
 		AchievementID *string          `json:"achievementId"`
 		Lean          *float64         `json:"lean"`
 		State         *SuggestionState `json:"state"`
-	}{b.SlotID, b.AchievementID, b.Lean, state})
+		ReplacedFrom  *string          `json:"replacedFrom"`
+		ReplacedLean  *float64         `json:"replacedLean"`
+		CloserMatch   *CloserMatch     `json:"closerMatch"`
+	}{b.SlotID, b.AchievementID, b.Lean, state, b.ReplacedFrom, b.ReplacedLean, b.CloserMatch})
 }
 
 type DraftLeanQuery struct {

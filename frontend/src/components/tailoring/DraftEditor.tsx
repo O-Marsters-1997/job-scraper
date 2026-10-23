@@ -3,6 +3,7 @@ import {
 	createEffect,
 	createMemo,
 	createSignal,
+	For,
 	Match,
 	onCleanup,
 	onMount,
@@ -37,6 +38,7 @@ import {
 	PX_PER_PT,
 } from "./DocPage";
 import { PageMeter, SaveIndicator } from "./DraftMeters";
+import { Insights } from "./Insights";
 import { KeepControls, KeepNotices } from "./KeepFlow";
 import { MarginCards } from "./MarginCards";
 import { PrintPreview } from "./PrintPreview";
@@ -50,6 +52,8 @@ const NO_METRICS: PageMetrics = {
 	bodyLinePt: DEFAULT_BODY_LINE_PT,
 	fits: {},
 };
+
+type View = "document" | "changes" | "insights";
 
 const RAIL_PX = 320;
 const RAIL_GAP_PX = 48;
@@ -96,7 +100,7 @@ export function DraftEditor(props: {
 	const [active, setActive] = createSignal<string>();
 	const [metrics, setMetrics] = createSignal(NO_METRICS);
 	const [showCounts, setShowCounts] = createSignal(true);
-	const [showChanges, setShowChanges] = createSignal(false);
+	const [view, setView] = createSignal<View>("document");
 	const [preview, setPreview] = createSignal(false);
 	const [skillsOpen, setSkillsOpen] = createSignal(false);
 	const [stage, setStage] = createSignal<HTMLDivElement>();
@@ -179,6 +183,18 @@ export function DraftEditor(props: {
 			}
 		});
 	};
+	const editInDocument = (slotId: string) => {
+		setView("document");
+		activate(slotId);
+		focusLine(slotId, true);
+	};
+	const tabs = (): { id: View; label: string }[] => [
+		{ id: "document", label: "Document" },
+		...(changes() ? [{ id: "changes" as const, label: "Changes" }] : []),
+		...(leanQuery.data ? [{ id: "insights" as const, label: "Insights" }] : []),
+	];
+	const current = () =>
+		tabs().some((t) => t.id === view()) ? view() : "document";
 	const fitSlot = (slotId: string) => {
 		activate(slotId);
 		void suggestions.ask(slotId, "fit");
@@ -386,16 +402,20 @@ export function DraftEditor(props: {
 					</Show>
 				</div>
 				<div class="ml-auto flex flex-wrap items-center justify-end gap-1.5 lg:ml-0">
-					<Show when={changes()}>
-						<Button
-							variant="ghost"
-							size="sm"
-							aria-pressed={showChanges()}
-							onClick={() => setShowChanges((v) => !v)}
-						>
-							Changes
-						</Button>
-					</Show>
+					<nav aria-label="View" class="flex gap-0.5">
+						<For each={tabs()}>
+							{(tab) => (
+								<Button
+									variant="ghost"
+									size="sm"
+									aria-pressed={current() === tab.id}
+									onClick={() => setView(tab.id)}
+								>
+									{tab.label}
+								</Button>
+							)}
+						</For>
+					</nav>
 					<Show when={editable() && props.layout}>
 						<Button
 							variant="ghost"
@@ -450,7 +470,18 @@ export function DraftEditor(props: {
 				}}
 			>
 				<Switch fallback={<LayoutUnavailable reason={props.layoutError} />}>
-					<Match when={showChanges() && changes()}>
+					<Match when={current() === "insights" && leanQuery.data}>
+						{(lean) => (
+							<div class="mx-auto max-w-3xl px-6 py-10">
+								<Insights
+									lean={lean()}
+									text={ed.text}
+									onEdit={editInDocument}
+								/>
+							</div>
+						)}
+					</Match>
+					<Match when={current() === "changes" && changes()}>
 						{(c) => (
 							<div class="mx-auto max-w-3xl px-6 py-10">
 								<section

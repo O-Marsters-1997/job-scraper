@@ -1,3 +1,4 @@
+import type { JSX } from "solid-js";
 import { cn } from "@/lib/utils";
 import type { BulletLean } from "@/types/tailoring";
 
@@ -6,6 +7,17 @@ const TONE = {
 	unclear: "text-status-interview",
 	low: "text-destructive-strong",
 } as const;
+
+export function Tone(props: {
+	state: keyof typeof TONE | null;
+	children: JSX.Element;
+}) {
+	return (
+		<span class={props.state ? TONE[props.state] : "text-faint"}>
+			{props.children}
+		</span>
+	);
+}
 
 export function Lean(props: { lean: BulletLean }) {
 	return (
