@@ -214,6 +214,10 @@ func TestCreateDraft(t *testing.T) {
 		if _, err := e.svc.CreateDraft(t.Context(), userID, e.input); !apperr.IsKind(err, apperr.KindInvalid) {
 			t.Errorf("CreateDraft(rewrite) err = %v, want an invalid error", err)
 		}
+		e.input.Mode = dto.DraftModeGenerate
+		if got := e.draft(t, e.queueOnOtherJob(t)).Mode; got != dto.DraftModeGenerate {
+			t.Errorf("generate Draft without achievements Mode = %q, want generate", got)
+		}
 		e.input.Mode = dto.DraftModeAsIs
 		id := e.queue(t)
 
@@ -236,7 +240,6 @@ func TestCreateDraft(t *testing.T) {
 		user   string
 		mutate func(*dto.DraftInput)
 	}{
-		{"no achievements is invalid", userID, func(in *dto.DraftInput) { in.AchievementIDs = nil }},
 		{"repeated achievement is invalid", userID, func(in *dto.DraftInput) { in.AchievementIDs = []string{in.AchievementIDs[0], in.AchievementIDs[0]} }},
 		{"another user's achievement is invalid", otherUserID, func(*dto.DraftInput) {}},
 		{"achievement of an unmapped position is invalid", userID, func(in *dto.DraftInput) { in.AchievementIDs = []string{unmapped.ID} }},
