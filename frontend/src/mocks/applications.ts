@@ -148,6 +148,7 @@ export function createStatus(
 		Name: name,
 		Colour: colour,
 		ReplyWindowDays: replyWindowDays,
+		CountsAsReply: false,
 		SystemKey: "",
 		CreatedAt: new Date().toISOString(),
 	};
@@ -160,6 +161,7 @@ export function updateStatus(
 	name: string,
 	colour: string,
 	replyWindowDays: number | null,
+	countsAsReply: boolean,
 ): ApplicationStatus {
 	const idx = statuses.findIndex((s) => s.ID === id);
 	if (idx === -1) throw new Error("Status not found");
@@ -168,6 +170,7 @@ export function updateStatus(
 		Name: name,
 		Colour: colour,
 		ReplyWindowDays: replyWindowDays,
+		CountsAsReply: countsAsReply,
 	};
 	statuses = [...statuses.slice(0, idx), updated, ...statuses.slice(idx + 1)];
 	return updated;

@@ -37,7 +37,7 @@ func createApp(t *testing.T, f Fixture, in dto.CreateApplicationInput) dto.Appli
 
 func createWindowStatus(t *testing.T, f Fixture, days int) dto.ApplicationStatus {
 	t.Helper()
-	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, "Window", "#6366f1", &days)
+	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, "Window", "#6366f1", &days, false)
 	if err != nil {
 		t.Fatalf("CreateApplicationStatus(window=%d) err = %v", days, err)
 	}
@@ -51,7 +51,7 @@ func daysFromToday(days int) time.Time {
 
 func createStatus(t *testing.T, f Fixture, name string) dto.ApplicationStatus {
 	t.Helper()
-	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, name, "#6366f1", nil)
+	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, name, "#6366f1", nil, false)
 	if err != nil {
 		t.Fatalf("CreateApplicationStatus(%q) err = %v", name, err)
 	}
@@ -294,7 +294,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Run("create with another user's status returns not found", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
-		theirs, err := f.Store.CreateApplicationStatus(t.Context(), f.OtherUserID, "Theirs", "#6366f1", nil)
+		theirs, err := f.Store.CreateApplicationStatus(t.Context(), f.OtherUserID, "Theirs", "#6366f1", nil, false)
 		if err != nil {
 			t.Fatalf("CreateApplicationStatus(other user) err = %v", err)
 		}
@@ -307,7 +307,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Run("update with another user's status returns not found", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
-		theirs, err := f.Store.CreateApplicationStatus(t.Context(), f.OtherUserID, "Theirs", "#6366f1", nil)
+		theirs, err := f.Store.CreateApplicationStatus(t.Context(), f.OtherUserID, "Theirs", "#6366f1", nil, false)
 		if err != nil {
 			t.Fatalf("CreateApplicationStatus(other user) err = %v", err)
 		}
@@ -365,7 +365,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		t.Parallel()
 		f := newStore(t)
 		created := createStatus(t, f, "Offer")
-		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Offer!", "#22c55e", nil)
+		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Offer!", "#22c55e", nil, false)
 		if err != nil {
 			t.Fatalf("UpdateApplicationStatus(...) err = %v", err)
 		}
@@ -379,19 +379,32 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		f := newStore(t)
 		created := createStatus(t, f, "Applied")
 		days := 7
-		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", &days)
+		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", &days, false)
 		if err != nil {
 			t.Fatalf("UpdateApplicationStatus(set window) err = %v", err)
 		}
 		if got.ReplyWindowDays == nil || *got.ReplyWindowDays != days {
 			t.Errorf("UpdateApplicationStatus(set window) ReplyWindowDays = %v, want %d", got.ReplyWindowDays, days)
 		}
-		got, err = f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", nil)
+		got, err = f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", nil, false)
 		if err != nil {
 			t.Fatalf("UpdateApplicationStatus(clear window) err = %v", err)
 		}
 		if got.ReplyWindowDays != nil {
 			t.Errorf("UpdateApplicationStatus(clear window) ReplyWindowDays = %d, want nil", *got.ReplyWindowDays)
+		}
+	})
+
+	t.Run("update persists counts as reply", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		created := createStatus(t, f, "Applied")
+		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", nil, true)
+		if err != nil {
+			t.Fatalf("UpdateApplicationStatus(counts as reply) err = %v", err)
+		}
+		if !got.CountsAsReply {
+			t.Errorf("UpdateApplicationStatus(counts as reply) CountsAsReply = false, want true")
 		}
 	})
 
