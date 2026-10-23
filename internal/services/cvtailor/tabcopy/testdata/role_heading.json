@@ -1,0 +1,64 @@
+{
+  "cases": [
+    {
+      "name": "pipe-separated sibling keeps bold title, company and location",
+      "siblingRuns": [
+        { "text": "Backend lead", "bold": true, "field": "title" },
+        { "text": " | ", "bold": false, "field": "title" },
+        { "text": "Gadgets Ltd", "bold": true, "field": "company" },
+        { "text": " | London", "bold": false, "field": "location" },
+        { "text": "\t2020 - 2022", "bold": false, "field": "dates" }
+      ],
+      "from": { "title": "Engineer", "employer": "Acme", "start": null, "end": null },
+      "to": { "title": "Analyst", "employer": "Widgets", "start": "2016-04-01", "end": "2018-05-31" },
+      "wantRuns": [
+        { "text": "Analyst", "bold": true },
+        { "text": " | ", "bold": false },
+        { "text": "Widgets", "bold": true },
+        { "text": " | London", "bold": false },
+        { "text": "\t2016 - 2018", "bold": false }
+      ]
+    },
+    {
+      "name": "comma-separated sibling with an open-ended month range",
+      "siblingRuns": [
+        { "text": "Backend lead", "bold": true, "field": "title" },
+        { "text": ", Gadgets Ltd", "bold": false, "field": "company" },
+        { "text": "\tMarch 2020 - Present", "bold": false, "field": "dates" }
+      ],
+      "from": { "title": "Engineer", "employer": "Acme", "start": null, "end": null },
+      "to": { "title": "Analyst", "employer": "Widgets", "start": "2016-04-01", "end": null },
+      "wantRuns": [
+        { "text": "Analyst", "bold": true },
+        { "text": ", Widgets", "bold": false },
+        { "text": "\tApril 2016 - Present", "bold": false }
+      ]
+    },
+    {
+      "name": "sibling with a title only gains the company",
+      "siblingRuns": [
+        { "text": "Backend lead", "bold": true, "field": "title" },
+        { "text": "\t2020 - 2022", "bold": false, "field": "dates" }
+      ],
+      "from": { "title": "Engineer", "employer": "Acme", "start": null, "end": null },
+      "to": { "title": "Analyst", "employer": "Widgets", "start": "2016-04-01", "end": "2018-05-31" },
+      "wantRuns": [
+        { "text": "Analyst, Widgets", "bold": true },
+        { "text": "\t2016 - 2018", "bold": false }
+      ]
+    },
+    {
+      "name": "sibling naming the from role swaps in place",
+      "siblingRuns": [
+        { "text": "Engineer, Acme\t", "bold": true, "field": "title" },
+        { "text": "Apr 2020 – May 2022", "bold": false, "field": "dates" }
+      ],
+      "from": { "title": "Engineer", "employer": "Acme", "start": null, "end": null },
+      "to": { "title": "Analyst", "employer": "Widgets", "start": "2016-04-01", "end": "2018-05-31" },
+      "wantRuns": [
+        { "text": "Analyst, Widgets\t", "bold": true },
+        { "text": "Apr 2016 – May 2018", "bold": false }
+      ]
+    }
+  ]
+}

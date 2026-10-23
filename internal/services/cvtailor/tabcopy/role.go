@@ -40,10 +40,15 @@ func dateLike(sample string, iso *string, present string) string {
 	}
 }
 
-func restyleDates(text string, to Role) string {
+type edit struct {
+	from, to int
+	text     string
+}
+
+func dateEdit(text string, role Role) (edit, bool) {
 	loc := dateRange.FindStringSubmatchIndex(text)
 	if loc == nil {
-		return text
+		return edit{}, false
 	}
 	start, sep, end := text[loc[2]:loc[3]], text[loc[4]:loc[5]], text[loc[6]:loc[7]]
 	present, endSample := end, end
@@ -52,8 +57,77 @@ func restyleDates(text string, to Role) string {
 	} else {
 		endSample = start
 	}
-	dates := dateLike(start, to.Start, present) + sep + dateLike(endSample, to.End, present)
-	return text[:loc[0]] + dates + text[loc[1]:]
+	return edit{loc[0], loc[1], dateLike(start, role.Start, present) + sep + dateLike(endSample, role.End, present)}, true
+}
+
+func restyleDates(text string, to Role) string {
+	e, ok := dateEdit(text, to)
+	if !ok {
+		return text
+	}
+	return text[:e.from] + e.text + text[e.to:]
+}
+
+func fieldEnd(s string, from int) int {
+	if i := strings.IndexAny(s[from:], "|,\t\n"); i >= 0 {
+		return from + i
+	}
+	return len(s)
+}
+
+func trimmedEnd(s string, from, to int) int {
+	return from + len(strings.TrimRight(s[from:to], " "))
+}
+
+func fieldEdits(whole string, to Role) []edit {
+	sepAt := fieldEnd(whole, 0)
+	titleEnd := trimmedEnd(whole, 0, sepAt)
+	tailFrom := titleEnd
+	edits := []edit{{0, titleEnd, to.Title + ", " + to.Employer}}
+	if sepAt < len(whole) && (whole[sepAt] == '|' || whole[sepAt] == ',') {
+		start := sepAt + 1
+		for start < len(whole) && whole[start] == ' ' {
+			start++
+		}
+		end := trimmedEnd(whole, start, fieldEnd(whole, start))
+		edits = []edit{{0, titleEnd, to.Title}, {start, end, to.Employer}}
+		tailFrom = end
+	}
+	if d, ok := dateEdit(whole[tailFrom:], to); ok {
+		d.from, d.to = d.from+tailFrom, d.to+tailFrom
+		edits = append(edits, d)
+	}
+	return edits
+}
+
+func applyEdits(texts []string, edits []edit) []string {
+	total := 0
+	for _, t := range texts {
+		total += len(t)
+	}
+	out := make([]string, len(texts))
+	runStart := 0
+	for i, t := range texts {
+		runEnd := runStart + len(t)
+		var b strings.Builder
+		cursor := runStart
+		for _, e := range edits {
+			from, to := min(max(e.from, runStart), runEnd), min(max(e.to, runStart), runEnd)
+			owns := runStart <= e.from && (e.from < runEnd || e.from == total && i == len(texts)-1)
+			if from >= to && !owns {
+				continue
+			}
+			b.WriteString(t[cursor-runStart : max(cursor, from)-runStart])
+			if owns {
+				b.WriteString(e.text)
+			}
+			cursor = max(cursor, to)
+		}
+		b.WriteString(t[cursor-runStart:])
+		out[i] = b.String()
+		runStart = runEnd
+	}
+	return out
 }
 
 func utf16Len(s string) int { return len(utf16.Encode([]rune(s))) }
@@ -117,21 +191,16 @@ func restyle(runs []object, named, last bool, from, to Role) []object {
 	case !last:
 		return mapContent(runs[:1], func(string) string { return to.Title + "\n" })
 	}
-	var whole strings.Builder
-	tabRun := -1
+	texts := make([]string, len(runs))
 	for i, r := range runs {
-		c := contentOf(r)
-		if tabRun < 0 && strings.Contains(c, "\t") {
-			tabRun = i
-		}
-		whole.WriteString(c)
+		texts[i] = contentOf(r)
 	}
-	name := to.Title + ", " + to.Employer
-	_, tail, hasTab := strings.Cut(whole.String(), "\t")
-	if !hasTab {
-		return []object{withContent(runs[0], name+"\n")}
+	edited := applyEdits(texts, fieldEdits(strings.Join(texts, ""), to))
+	out := make([]object, len(runs))
+	for i, r := range runs {
+		out[i] = withContent(r, edited[i])
 	}
-	return []object{withContent(runs[0], name), withContent(runs[tabRun], "\t"+restyleDates(tail, to))}
+	return out
 }
 
 func cloneRole(content []object, paras []bodyParagraph, tpl block, mapped int, from, to Role, next int) ([]object, string, int, error) {
