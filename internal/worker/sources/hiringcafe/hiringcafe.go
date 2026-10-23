@@ -64,7 +64,7 @@ func New(state json.RawMessage, tab Tab) *Scraper {
 }
 
 func (s *Scraper) Cfg() sources.Config {
-	return sources.Config{Name: sourceName, Route: sources.RouteResidential, NewestFirst: true}
+	return sources.Config{Name: sourceName, Route: sources.RouteDirect, NewestFirst: true}
 }
 
 func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, string, error) {

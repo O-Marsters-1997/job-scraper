@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"time"
 
-	dto "github.com/prometheus/client_model/go"
-
-	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/hiringcafe"
 )
@@ -35,10 +33,14 @@ func hiringcafeSpike(searchURL string, d time.Duration, out io.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), d)
 	defer cancel()
 
-	chrome := hiringcafe.NewChrome(sources.NewGate(spikeGap, spikeBlock))
+	token := os.Getenv("DECODO_SCRAPE_TOKEN")
+	if token == "" {
+		return errors.New("DECODO_SCRAPE_TOKEN is required")
+	}
+	tab := hiringcafe.NewAPI(hiringcafe.DecodoScrapeURL, token, sources.NewGate(spikeGap, spikeBlock))
 	var pages, descriptions int
 	for ctx.Err() == nil {
-		n, descs, err := sweep(ctx, chrome, state)
+		n, descs, err := sweep(ctx, tab, state)
 		pages += n
 		descriptions += descs
 		var deferred *sources.DeferredError
@@ -56,9 +58,7 @@ func hiringcafeSpike(searchURL string, d time.Duration, out io.Writer) error {
 		}
 	}
 
-	stats := chrome.Stats()
-	_, err = fmt.Fprintf(out, "pages fetched: %d\ndescriptions fetched: %d\nchallenges met: %d\nrotations: %d\ndecodo bytes: %d\n",
-		pages, descriptions, stats.Challenges, stats.Rotations, wireBytes())
+	_, err = fmt.Fprintf(out, "pages fetched: %d\ndescriptions fetched: %d\n", pages, descriptions)
 	return err
 }
 
@@ -114,15 +114,4 @@ func hitIDs(tree any) []string {
 		}
 	}
 	return nil
-}
-
-func wireBytes() int64 {
-	var total float64
-	for _, dir := range []string{"read", "write"} {
-		var m dto.Metric
-		if err := proxy.FetchWireBytes.WithLabelValues("hiringcafe", "residential", dir).Write(&m); err == nil {
-			total += m.GetCounter().GetValue()
-		}
-	}
-	return int64(total)
 }

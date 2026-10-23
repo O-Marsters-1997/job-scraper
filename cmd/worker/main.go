@@ -69,6 +69,10 @@ func run(ctx context.Context) error {
 	if ingestToken == "" {
 		return errors.New("config invalid: INGEST_SERVICE_TOKEN is required")
 	}
+	decodoScrapeToken := os.Getenv("DECODO_SCRAPE_TOKEN")
+	if decodoScrapeToken == "" {
+		return errors.New("config invalid: DECODO_SCRAPE_TOKEN is required")
+	}
 	maxPages := 0
 	if raw := os.Getenv("SCRAPE_MAX_PAGES"); raw != "" {
 		var err error
@@ -105,7 +109,7 @@ func run(ctx context.Context) error {
 
 	exporter := scraper.NewAPIExporter(apiBaseURL, ingestToken)
 	wellfoundGate := wellfound.NewGate()
-	sourceBuilder := builder.New(wellfoundGate)
+	sourceBuilder := builder.New(wellfoundGate, decodoScrapeToken)
 	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{Build: sourceBuilder.BuildSource, Profiles: js}, exporter)
 	orch := scraper.New(js.Boards(), scoringModule, sourceBuilder.BuildSource, js.Targets())
 	processor := worker.NewProcessor(worker.Deps{
