@@ -30,7 +30,7 @@ const (
 	bodyTextScript   = `() => document.body?.innerText ?? ''`
 
 	cloudflareChallengeCode = "cloudflare_challenge"
-	nextDataScript          = `() => document.querySelector('script#__NEXT_DATA__')?.textContent ?? ''`
+	nextDataScript          = `() => document.readyState === 'loading' ? '' : document.querySelector('script#__NEXT_DATA__')?.textContent ?? ''`
 )
 
 var errChallenged = errors.New("cloudflare challenge")
@@ -300,7 +300,7 @@ func blockHeavy(h *rod.Hijack) {
 	blocked := []proto.NetworkResourceType{
 		proto.NetworkResourceTypeImage, proto.NetworkResourceTypeFont, proto.NetworkResourceTypeMedia,
 	}
-	if slices.Contains(blocked, h.Request.Type()) {
+	if slices.Contains(blocked, h.Request.Type()) || strings.HasPrefix(h.Request.URL().Path, "/_next/static/") {
 		h.Response.Fail(proto.NetworkErrorReasonBlockedByClient)
 		return
 	}
