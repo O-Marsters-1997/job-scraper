@@ -49,7 +49,7 @@ export function Insights(props: {
 		<div class="grid grid-cols-1 items-start lg:grid-cols-2 gap-4">
 			<section
 				aria-label="Insights"
-				class="rounded-xl border border-border bg-surface p-6 text-[14px]"
+				class="rounded-xl border border-border bg-surface p-6 text-base"
 			>
 				<div class="mb-3 flex items-center gap-3">
 					<h2 class="text-sm font-semibold">Insights</h2>

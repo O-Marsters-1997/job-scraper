@@ -14,6 +14,7 @@ import {
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { isSparse, maxCharsForFewerLines } from "@/lib/docLayout";
+import { htmlToText } from "@/lib/htmlToText";
 import { loadedData } from "@/lib/queryData";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
@@ -139,7 +140,7 @@ export function DraftEditor(props: {
 			{
 				label: "Job description",
 				source: "jd",
-				text: job.data?.Description ?? "",
+				text: htmlToText(job.data?.Description ?? ""),
 			},
 			{ label: "Your note", source: "note", text: note.data?.Body ?? "" },
 			...(comments.data ?? []).map(
@@ -508,7 +509,7 @@ export function DraftEditor(props: {
 				<Switch fallback={<LayoutUnavailable reason={props.layoutError} />}>
 					<Match when={current() === "insights" && leanQuery.data}>
 						{(lean) => (
-							<div class="mx-auto max-w-6xl px-6 py-10">
+							<div class="mx-auto max-w-[1600px] px-6 py-10">
 								<Insights
 									lean={lean()}
 									jobText={jobText()}
