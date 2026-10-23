@@ -18,7 +18,7 @@ func Restyle(runs []TestRun, from, to Role) []TestRun {
 		objs[i] = object{"textRun": mustMarshal(map[string]any{"content": r.Text, "textStyle": map[string]any{"bold": r.Bold}})}
 	}
 	whole := b.String()
-	named :=from.Title != "" && strings.Contains(whole, from.Title) || from.Employer != "" && strings.Contains(whole, from.Employer)
+	named := from.Title != "" && strings.Contains(whole, from.Title) || from.Employer != "" && strings.Contains(whole, from.Employer)
 	out := restyle(objs, named, true, from, to)
 	got := make([]TestRun, len(out))
 	for i, o := range out {
