@@ -63,3 +63,35 @@ UPDATE achievements a
 SET context = (sqlc.arg(contexts)::text[])[o.ord], updated_at = NOW()
 FROM unnest(sqlc.arg(ids)::uuid[]) WITH ORDINALITY AS o(id, ord)
 WHERE a.user_id = sqlc.arg(user_id) AND a.id = o.id;
+
+-- name: ListAchievementStats :many
+WITH reached AS (
+    SELECT a.id AS application_id, a.status_id
+    FROM applications a
+    WHERE a.user_id = sqlc.arg(user_id)
+    UNION
+    SELECT e.subject_id, (e.props->>'to_status_id')::uuid
+    FROM events e
+    WHERE e.user_id = sqlc.arg(user_id)
+      AND e.type = 'application_status_changed'
+      AND e.props->>'to_status_id' IS NOT NULL
+),
+progress AS (
+    SELECT r.application_id,
+           COALESCE(bool_or(s.system_key = 'applied'), FALSE) AS applied,
+           COALESCE(bool_or(s.counts_as_reply), FALSE) AS replied
+    FROM reached r
+    JOIN application_statuses s ON s.id = r.status_id
+    GROUP BY r.application_id
+)
+SELECT o.achievement_id,
+       (COUNT(*) FILTER (WHERE o.in_final_cv))::int AS in_cvs,
+       (COUNT(*) FILTER (WHERE o.outscored_kept_but_left_out))::int AS left_out,
+       (COUNT(*) FILTER (WHERE o.in_final_cv AND p.applied))::int AS applied,
+       (COUNT(*) FILTER (WHERE o.in_final_cv AND p.applied AND p.replied))::int AS replied
+FROM achievement_outcomes o
+JOIN tailored_cvs t ON t.id = o.draft_id AND t.outcome = 'kept'
+LEFT JOIN applications ap ON ap.user_id = o.user_id AND ap.job_id = o.job_id
+LEFT JOIN progress p ON p.application_id = ap.id
+WHERE o.user_id = sqlc.arg(user_id)
+GROUP BY o.achievement_id;

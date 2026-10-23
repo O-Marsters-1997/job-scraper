@@ -1,11 +1,21 @@
 import { z } from "zod";
 
+export const achievementStatsSchema = z.object({
+	inCvs: z.number(),
+	leftOut: z.number(),
+	applied: z.number(),
+	replied: z.number(),
+});
+
 export const achievementSchema = z.object({
 	id: z.string(),
 	positionId: z.string(),
 	text: z.string(),
 	context: z.string(),
+	stats: achievementStatsSchema.nullable(),
 });
+
+export type AchievementStats = z.infer<typeof achievementStatsSchema>;
 
 export const contextChangeSchema = z.object({
 	achievementId: z.string(),

@@ -187,6 +187,93 @@ func TestCompleteKeepRecordsAchievementOutcomes(t *testing.T) {
 	}
 }
 
+func TestListPositionsAchievementStats(t *testing.T) {
+	t.Parallel()
+	st, pool, uid := newStore(t)
+	ctx := t.Context()
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, sql, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	status := func(name string, key *string, reply bool) (id string) {
+		t.Helper()
+		err := pool.QueryRow(ctx, `INSERT INTO application_statuses (user_id, name, colour, counts_as_reply, system_key)
+			VALUES ($1, $2, '#000', $3, $4) RETURNING id::text`, uid, name, reply, key).Scan(&id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	applied := "applied"
+	appliedID, interviewID, rejectedID := status("Applied", &applied, false), status("Interview", nil, true), status("Rejected", nil, false)
+	pos, err := st.CreatePosition(ctx, uid, dto.PositionInput{Employer: "Acme", Title: "Engineer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ach, err := st.CreateAchievement(ctx, uid, dto.AchievementInput{PositionID: pos.ID, Text: "Cut latency"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unused, err := st.CreateAchievement(ctx, uid, dto.AchievementInput{PositionID: pos.ID, Text: "Mentored"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cv := func(jobID, outcome string, inFinal, leftOut bool) {
+		t.Helper()
+		var draftID string
+		err := pool.QueryRow(ctx, `INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, status, outcome)
+			VALUES ($1, $2, 'd', 't', '{}', 'ready', $3) RETURNING id::text`, uid, jobID, outcome).Scan(&draftID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exec(`INSERT INTO achievement_outcomes (draft_id, achievement_id, user_id, job_id, on_source_cv, in_final_cv, outscored_kept_but_left_out, reworded)
+			VALUES ($1, $2, $3, $4, FALSE, $5, $6, FALSE)`, draftID, ach.ID, uid, jobID, inFinal, leftOut)
+	}
+	application := func(jobID, statusID string) (id string) {
+		t.Helper()
+		err := pool.QueryRow(ctx, `INSERT INTO applications (user_id, job_id, status_id) VALUES ($1, $2, $3) RETURNING id::text`, uid, jobID, statusID).Scan(&id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	changedTo := func(appID, statusID string) {
+		t.Helper()
+		exec(`INSERT INTO events (user_id, type, subject_id, props) VALUES ($1, 'application_status_changed', $2, jsonb_build_object('to_status_id', $3::text))`, uid, appID, statusID)
+	}
+
+	movedOn := pgtest.InsertJob(t, pool, "Replied then rejected", "fp-1")
+	cv(movedOn, "kept", true, false)
+	app := application(movedOn, rejectedID)
+	changedTo(app, appliedID)
+	changedTo(app, interviewID)
+	changedTo(app, rejectedID)
+	createdApplied := pgtest.InsertJob(t, pool, "Created applied", "fp-2")
+	cv(createdApplied, "kept", true, true)
+	application(createdApplied, appliedID)
+	notApplied := pgtest.InsertJob(t, pool, "Never applied", "fp-3")
+	cv(notApplied, "kept", false, true)
+	application(notApplied, interviewID)
+	discarded := pgtest.InsertJob(t, pool, "Discarded draft", "fp-4")
+	cv(discarded, "discarded", true, false)
+
+	got, err := st.ListPositions(ctx, uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []*dto.AchievementStats{{InCVs: 2, LeftOut: 2, Applied: 2, Replied: 1}, nil}
+	var stats []*dto.AchievementStats
+	for _, a := range got[0].Achievements {
+		stats = append(stats, a.Stats)
+	}
+	if diff := cmp.Diff(want, stats); diff != "" {
+		t.Errorf("ListPositions() stats for %s, %s (-want +got):\n%s", ach.ID, unused.ID, diff)
+	}
+}
+
 func mustClaim(t *testing.T, st *store.Store) dto.DraftClaim {
 	t.Helper()
 	c, err := st.ClaimDraft(t.Context())
