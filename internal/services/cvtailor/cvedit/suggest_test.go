@@ -13,8 +13,15 @@ import (
 )
 
 func TestSuggest(t *testing.T) {
+	t.Parallel()
 	t.Run("streams a fit rewrite", func(t *testing.T) {
-		var got map[string]any
+		t.Parallel()
+		var got struct {
+			Model          string
+			Stream         bool
+			ResponseFormat json.RawMessage `json:"response_format"`
+			Messages       []struct{ Content string }
+		}
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 				t.Errorf("decode request: %v", err)
@@ -42,14 +49,16 @@ func TestSuggest(t *testing.T) {
 		if diff := cmp.Diff([]string{"Cut p99 ", "latency"}, deltas); diff != "" {
 			t.Errorf("deltas (-want +got):\n%s", diff)
 		}
-		if got["model"] != cvedit.SuggestModel || got["stream"] != true {
-			t.Errorf("request model/stream = %v/%v, want %s streaming", got["model"], got["stream"], cvedit.SuggestModel)
+		if got.Model != cvedit.SuggestModel || !got.Stream {
+			t.Errorf("request model/stream = %v/%v, want %s streaming", got.Model, got.Stream, cvedit.SuggestModel)
 		}
-		if _, ok := got["response_format"]; ok {
-			t.Errorf("request has response_format %v, want plain text", got["response_format"])
+		if got.ResponseFormat != nil {
+			t.Errorf("request has response_format %s, want plain text", got.ResponseFormat)
 		}
-		msgs := got["messages"].([]any)
-		system, user := msgs[0].(map[string]any)["content"].(string), msgs[1].(map[string]any)["content"].(string)
+		if len(got.Messages) != 2 {
+			t.Fatalf("request has %d messages, want 2", len(got.Messages))
+		}
+		system, user := got.Messages[0].Content, got.Messages[1].Content
 		if !strings.Contains(system, "You rewrite the bullets of an existing CV") {
 			t.Errorf("system prompt = %q, want it to include voice.md", system)
 		}
@@ -91,6 +100,7 @@ func TestSuggest(t *testing.T) {
 	}
 
 	t.Run("a reply within the rule is not retried", func(t *testing.T) {
+		t.Parallel()
 		res, prompts, _ := run(t, "Built k8s tooling")
 
 		if res.Text != "Built k8s tooling" || len(prompts) != 1 {
@@ -99,6 +109,7 @@ func TestSuggest(t *testing.T) {
 	})
 
 	t.Run("a reply with more words is retried with the reason", func(t *testing.T) {
+		t.Parallel()
 		res, prompts, _ := run(t, "Built Kubernetes tooling at scale", "Built k8s tooling")
 
 		if res.Text != "Built k8s tooling" || len(prompts) != 2 {
@@ -110,6 +121,7 @@ func TestSuggest(t *testing.T) {
 	})
 
 	t.Run("a second bad reply is returned after one retry", func(t *testing.T) {
+		t.Parallel()
 		res, prompts, _ := run(t, "Built Kubernetes tooling at scale", "Built Kubernetes tooling at huge scale")
 
 		if res.Text != "Built Kubernetes tooling at huge scale" || len(prompts) != 2 {
@@ -118,6 +130,7 @@ func TestSuggest(t *testing.T) {
 	})
 
 	t.Run("streams no deltas", func(t *testing.T) {
+		t.Parallel()
 		_, _, deltas := run(t, "Built Kubernetes tooling at scale", "Built k8s tooling")
 
 		if len(deltas) != 0 {
