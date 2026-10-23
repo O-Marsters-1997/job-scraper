@@ -100,6 +100,11 @@ type Store interface {
 	PutFetch(ctx context.Context, resp dto.CachedResponse) error
 	ForgetFetches(ctx context.Context, urls []string) error
 	DeleteExpiredFetches(ctx context.Context) error
+	ScrapeRunPageDone(ctx context.Context, runID string) error
+	ScrapeRunDeferred(ctx context.Context, runID string) error
+	ScrapeRunAttemptFailed(ctx context.Context, runID string, page, attempt int, message string) error
+	FinishScrapeRun(ctx context.Context, runID string, stop dto.StopReason) error
+	DeleteExpiredScrapeRuns(ctx context.Context) error
 	MarkBoardUKJobsSeen(ctx context.Context, source, token string) error
 	RecordDiscoverMiss(ctx context.Context, source, token string) error
 	DiscoverMissedSince(ctx context.Context, source, token string, since time.Time) (bool, error)

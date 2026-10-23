@@ -1190,7 +1190,16 @@ func (s *Store) CreateSourceTarget(ctx context.Context, userID, source, value st
 func (s *Store) CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string, window dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error) {
 	return s.createSourceTarget(ctx, "CreateSourceTargetWithRun", userID, source, value, enabled, filters, window, nextRunAt,
 		func(ctx context.Context, p sqlc.CreateSourceTargetParams) (sqlc.SourceTarget, error) {
-			return s.queries.CreateSourceTargetWithRun(ctx, sqlc.CreateSourceTargetWithRunParams(p))
+			var row sqlc.SourceTarget
+			err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+				queries := s.queries.WithTx(tx)
+				var err error
+				if row, err = queries.CreateSourceTargetWithRun(ctx, sqlc.CreateSourceTargetWithRunParams(p)); err != nil {
+					return err
+				}
+				return insertScrapeRun(ctx, queries, row, dto.TriggerManual)
+			})
+			return row, err
 		})
 }
 
@@ -1272,7 +1281,15 @@ func (s *Store) StartSourceTargetRun(ctx context.Context, id string, nextRunAt *
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	row, err := s.queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: tid, NextRunAt: timestamptz(nextRunAt)})
+	var row sqlc.SourceTarget
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		queries := s.queries.WithTx(tx)
+		var err error
+		if row, err = queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: tid, NextRunAt: timestamptz(nextRunAt)}); err != nil {
+			return err
+		}
+		return insertScrapeRun(ctx, queries, row, dto.TriggerManual)
+	})
 	if err != nil {
 		return dto.SourceTarget{}, data.QueryErr("StartSourceTargetRun", err)
 	}
@@ -1300,6 +1317,9 @@ func (s *Store) ClaimDueSourceTargets(ctx context.Context, limit int, nextRunAt 
 		started, err := queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: row.ID, NextRunAt: timestamptz(next)})
 		if err != nil {
 			return nil, data.QueryErr("StartSourceTargetRun", err)
+		}
+		if err := insertScrapeRun(ctx, queries, started, dto.TriggerScheduled); err != nil {
+			return nil, err
 		}
 		claimed = append(claimed, toSourceTargetDTO(started))
 	}
@@ -1413,6 +1433,7 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 	queries := s.queries.WithTx(tx)
 
 	out := make([]sourcetargets.Candidate, 0, len(cards))
+	var tally cardTally
 	for _, card := range cards {
 		if card.URL == "" {
 			continue
@@ -1423,6 +1444,11 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		}
 		card.URL = normalized
 		card.Source = target.Source
+		kind, err := queries.ClassifyScrapeCard(ctx, sqlc.ClassifyScrapeCardParams{NormalizedUrl: normalized, SourceTargetID: targetID})
+		if err != nil {
+			return nil, fmt.Errorf("classify scrape card: %w", err)
+		}
+		tally.add(kind)
 		var payload []byte
 		if sourcespec.CardComplete(target.Source) || card.RemoteCheckURL != "" || card.WorkArrangement != "" {
 			if payload, err = json.Marshal(card); err != nil {
@@ -1446,6 +1472,17 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 			return nil, fmt.Errorf("record candidate discovery: %w", err)
 		}
 		out = append(out, sourcetargets.Candidate{ID: id.String(), URL: normalized, Card: card})
+	}
+	if target.RunID != "" {
+		runID, err := data.UUID(target.RunID)
+		if err != nil {
+			return nil, err
+		}
+		if err := queries.AddScrapeRunCards(ctx, sqlc.AddScrapeRunCardsParams{
+			ID: runID, Listings: tally.total, NewListings: tally.fresh, Elsewhere: tally.elsewhere, RepeatListings: tally.repeat,
+		}); err != nil {
+			return nil, fmt.Errorf("add scrape run cards: %w", err)
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit candidate save: %w", err)

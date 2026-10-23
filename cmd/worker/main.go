@@ -153,6 +153,9 @@ func run(ctx context.Context) error {
 		return schedule.Every(gctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
 	})
 	g.Go(func() error {
+		return schedule.Every(gctx, "scrape run cleanup", 24*time.Hour, js.DeleteExpiredScrapeRuns)
+	})
+	g.Go(func() error {
 		return schedule.Every(gctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
 	})
 	g.Go(func() error { return schedule.Every(gctx, "harvest", time.Hour, harvest.RunOnce) })

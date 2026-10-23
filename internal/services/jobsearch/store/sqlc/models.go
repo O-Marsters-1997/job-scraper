@@ -569,6 +569,33 @@ type ScoringOption struct {
 	RetiredAt pgtype.Timestamptz
 }
 
+type ScrapeRun struct {
+	ID             pgtype.UUID
+	Kind           string
+	Source         string
+	SourceTargetID pgtype.UUID
+	Trigger        string
+	StartedAt      pgtype.Timestamptz
+	FinishedAt     pgtype.Timestamptz
+	StopReason     pgtype.Text
+	Pages          int32
+	Listings       int32
+	NewListings    int32
+	Elsewhere      int32
+	RepeatListings int32
+	Deferred       int32
+	Retries        int32
+}
+
+type ScrapeRunError struct {
+	ID      int64
+	RunID   pgtype.UUID
+	Page    int32
+	Attempt int32
+	Message string
+	At      pgtype.Timestamptz
+}
+
 type SearchConfig struct {
 	ID                    pgtype.UUID
 	UserID                pgtype.UUID
