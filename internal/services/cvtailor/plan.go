@@ -92,7 +92,7 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 				pp.texts[a.ID] = a.Text
 			}
 		}
-		asIs := claim.Mode == dto.DraftModeAsIs
+		asIs := buildsFromSource(claim.Mode, claim.AchievementIDs)
 		if len(pp.Achievements) == 0 && !asIs {
 			continue
 		}

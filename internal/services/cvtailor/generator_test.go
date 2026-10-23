@@ -177,6 +177,33 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 	})
 
+	t.Run("a generate Draft with no achievements replaces only low-lean bullets, with no model or key", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		addAchievements(t, e.pos.ID, e.store, "Ran on-call", "Led the incident review process")
+		e.asker.answers = map[string]dto.Answer{
+			"Would this job value a candidate who: Ran on-call":                     {PNo: 0.6},
+			"Would this job value a candidate who: Led the incident review process": {PYes: 0.7},
+		}
+		e.input.AchievementIDs = nil
+		id := e.queue(t)
+
+		e.run(t, tick{creds: cvtailortest.NoKey{}})
+
+		d := e.draft(t, id)
+		if d.Status != "ready" || d.Content == nil || len(d.Content.Positions) != 1 {
+			t.Fatalf("GetDraft(%s) = %+v, want a ready Draft with one Position", id, d)
+		}
+		var got []string
+		for _, b := range d.Content.Positions[0].Bullets {
+			got = append(got, b.Text)
+		}
+		want := []string{"Built and maintained the public APIs for the platform", "Led the incident review process", "Wrote docs"}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Draft bullets mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	refused := []struct {
 		name    string
 		bullets func(e draftEnv) []cvedit.Bullet

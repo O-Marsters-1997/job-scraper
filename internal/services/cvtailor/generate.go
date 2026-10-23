@@ -151,16 +151,25 @@ func (m *Module) fail(ctx context.Context, claim dto.DraftClaim, cause error, cl
 	return cause
 }
 
-func (m *Module) generateAsIs(ctx context.Context, claim dto.DraftClaim) (string, dto.DraftResult, error) {
+func (m *Module) generateFromSource(ctx context.Context, claim dto.DraftClaim) (string, dto.DraftResult, error) {
 	pl, err := m.svc.plan(ctx, claim, claim.DocID)
 	if err != nil {
 		return "", dto.DraftResult{}, err
+	}
+	edits := pl.keepAll()
+	if claim.Mode == dto.DraftModeGenerate {
+		if edits, err = m.svc.replaceLowLean(ctx, claim, pl); err != nil {
+			return "", dto.DraftResult{}, err
+		}
 	}
 	docID, err := m.copyTab(ctx, claim)
 	if err != nil {
 		return docID, dto.DraftResult{}, err
 	}
-	editSet, err := json.Marshal(pl.keepAll())
+	if err := m.svc.applyEdits(ctx, claim.UserID, docID, pl, edits); err != nil {
+		return docID, dto.DraftResult{}, err
+	}
+	editSet, err := json.Marshal(edits)
 	if err != nil {
 		return docID, dto.DraftResult{}, fmt.Errorf("marshal edit set: %w", err)
 	}
@@ -173,9 +182,22 @@ func (m *Module) generateAsIs(ctx context.Context, claim dto.DraftClaim) (string
 	}, nil
 }
 
+func (s *Service) replaceLowLean(ctx context.Context, claim dto.DraftClaim, pl plan) (cvedit.EditSet, error) {
+	bank, err := s.store.ListPositions(ctx, claim.UserID)
+	if err != nil {
+		return cvedit.EditSet{}, err
+	}
+	answers, err := s.asker.Ask(ctx, claim.UserID, claim.JobID, bankQuestions(bank))
+	if err != nil {
+		return cvedit.EditSet{}, err
+	}
+	reps := leanRule{}.Replacements(bank, pl.baseContent().content(), answers)
+	return pl.withReplacements(bank, reps), nil
+}
+
 func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dto.DraftResult, error) {
-	if claim.Mode == dto.DraftModeAsIs {
-		return m.generateAsIs(ctx, claim)
+	if buildsFromSource(claim.Mode, claim.AchievementIDs) {
+		return m.generateFromSource(ctx, claim)
 	}
 	key, err := m.creds.Get(ctx, claim.UserID, jev.Provider)
 	if errors.Is(err, data.ErrNotFound) {
