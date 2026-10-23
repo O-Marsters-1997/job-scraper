@@ -57,6 +57,8 @@ export interface FilterChip {
 const HIRINGCAFE_TITLE = "hiring.cafe search";
 
 interface HiringCafeState {
+	jobTitleQuery?: unknown;
+	searchQuery?: unknown;
 	searchText?: unknown;
 	locations?: unknown;
 	sortBy?: unknown;
@@ -73,21 +75,30 @@ function hiringCafeState(target: SourceTarget): HiringCafeState | undefined {
 	}
 }
 
+function trimmed(value: unknown): string {
+	return typeof value === "string" ? value.trim() : "";
+}
+
+function hiringCafeKeyword(state: HiringCafeState): string {
+	return trimmed(state.searchQuery) || trimmed(state.searchText);
+}
+
 export function searchTitle(target: SourceTarget): string {
 	const state = hiringCafeState(target);
 	if (!state) return target.Value;
-	const text =
-		typeof state.searchText === "string" ? state.searchText.trim() : "";
-	return text || HIRINGCAFE_TITLE;
+	return (
+		trimmed(state.jobTitleQuery) || hiringCafeKeyword(state) || HIRINGCAFE_TITLE
+	);
 }
 
 function describeHiringCafe(state: HiringCafeState): FilterChip[] {
 	const chips: FilterChip[] = [];
 	const add = (key: string, label: string, value: string) =>
 		chips.push({ key, label, display: `${label}: ${value}` });
-	if (typeof state.searchText === "string" && state.searchText.trim()) {
-		add("searchText", "Keyword", state.searchText.trim());
-	}
+	const title = trimmed(state.jobTitleQuery);
+	if (title) add("jobTitleQuery", "Title", title);
+	const keyword = hiringCafeKeyword(state);
+	if (keyword) add("searchText", "Keyword", keyword);
 	if (Array.isArray(state.locations)) {
 		for (const loc of state.locations) {
 			const name = loc?.formatted_address ?? loc?.name;

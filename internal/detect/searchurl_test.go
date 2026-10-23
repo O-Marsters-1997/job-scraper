@@ -100,6 +100,16 @@ func TestParseSearchURL(t *testing.T) {
 			},
 		},
 		{
+			name: "hiring.cafe keeps an OR job title query intact",
+			url:  "https://hiring.cafe/?searchState=%7B%22jobTitleQuery%22%3A%22%5C%22a%5C%22%20OR%20%5C%22b%5C%22%22%7D",
+			want: detect.SearchURL{
+				Source:  "hiringcafe",
+				Value:   `{"jobTitleQuery":"\"a\" OR \"b\""}`,
+				Filters: map[string]string{},
+				Dropped: []string{},
+			},
+		},
+		{
 			name: "wellfound role and location",
 			url:  "https://wellfound.com/role/l/software-engineer/london",
 			want: detect.SearchURL{Source: "wellfound", Value: "software-engineer", Filters: map[string]string{"location": "london"}, Dropped: []string{}},

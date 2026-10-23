@@ -175,6 +175,7 @@ func TestRecency(t *testing.T) {
 		{"narrows to whole days plus margin", `{"dateFetchedPastNDays":61}`, ago(30 * time.Hour), `{"dateFetchedPastNDays":2,"sortBy":"date"}`},
 		{"never wider than the pasted window", `{"dateFetchedPastNDays":3}`, ago(10 * 24 * time.Hour), `{"dateFetchedPastNDays":3,"sortBy":"date"}`},
 		{"sets a window when none was pasted", `{"locations":[]}`, ago(time.Hour), `{"dateFetchedPastNDays":1,"locations":[],"sortBy":"date"}`},
+		{"leaves the title query alone", `{"jobTitleQuery":"\"a\" OR \"b\""}`, ago(time.Hour), `{"dateFetchedPastNDays":1,"jobTitleQuery":"\"a\" OR \"b\"","sortBy":"date"}`},
 		{"not an object is untouched", `engineer`, ago(time.Hour), `engineer`},
 	}
 	for _, tt := range tests {
