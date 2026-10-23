@@ -86,6 +86,12 @@ const draftContentSchema = z.object({
 	),
 });
 
+const insightsSummarySchema = z.object({
+	anchored: z.number(),
+	total: z.number(),
+	stale: z.boolean(),
+});
+
 export const draftSchema = z.object({
 	id: z.string(),
 	jobId: z.string(),
@@ -101,6 +107,7 @@ export const draftSchema = z.object({
 	content: draftContentSchema.nullable(),
 	base: draftContentSchema.nullable(),
 	skillsEditable: z.boolean(),
+	insights: insightsSummarySchema.nullable(),
 	baseDocId: z.string(),
 	baseTabId: z.string(),
 });

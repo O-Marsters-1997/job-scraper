@@ -307,6 +307,6 @@ func (f *FakeStore) SetDraftInsights(_ context.Context, userID, id string, insig
 	if !ok || d.userID != userID {
 		return errDraftNotFound
 	}
-	d.Insights, d.InsightsFor = slices.Clone(insights), forHash
+	d.InsightLines, d.InsightsFor = slices.Clone(insights), forHash
 	return nil
 }

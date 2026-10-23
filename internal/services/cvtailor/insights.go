@@ -21,11 +21,15 @@ func (s *Service) DraftInsights(ctx context.Context, userID string, q dto.DraftQ
 	if err != nil {
 		return dto.DraftInsights{}, err
 	}
-	if len(draft.Insights) == 0 {
+	return s.storedInsights(ctx, userID, draft)
+}
+
+func (s *Service) storedInsights(ctx context.Context, userID string, draft dto.Draft) (dto.DraftInsights, error) {
+	if len(draft.InsightLines) == 0 {
 		return dto.DraftInsights{Lines: []dto.InsightLine{}}, nil
 	}
 	var lines []dto.InsightLine
-	if err := json.Unmarshal(draft.Insights, &lines); err != nil {
+	if err := json.Unmarshal(draft.InsightLines, &lines); err != nil {
 		return dto.DraftInsights{}, fmt.Errorf("decode insights: %w", err)
 	}
 	in, err := s.insightsInput(ctx, userID, draft)
@@ -37,6 +41,24 @@ func (s *Service) DraftInsights(ctx context.Context, userID string, q dto.DraftQ
 		return dto.DraftInsights{}, err
 	}
 	return dto.DraftInsights{Lines: lines, Stale: hash != draft.InsightsFor}, nil
+}
+
+func (s *Service) withInsightsSummary(ctx context.Context, userID string, draft dto.Draft) (dto.Draft, error) {
+	if len(draft.InsightLines) == 0 {
+		return draft, nil
+	}
+	stored, err := s.storedInsights(ctx, userID, draft)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	summary := dto.InsightsSummary{Total: len(stored.Lines), Stale: stored.Stale}
+	for _, l := range stored.Lines {
+		if l.Anchored {
+			summary.Anchored++
+		}
+	}
+	draft.Insights = &summary
+	return draft, nil
 }
 
 func (m *Module) ExplainDraft(ctx context.Context, userID string, in dto.ExplainDraftInput) (dto.DraftInsights, error) {
