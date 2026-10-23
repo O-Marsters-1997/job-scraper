@@ -1,6 +1,6 @@
 -- name: InsertDraft :one
-INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps)
-SELECT sqlc.arg(user_id)::uuid, j.id, sqlc.arg(base_doc_id)::text, sqlc.arg(base_tab_id)::text, sqlc.arg(achievement_ids)::uuid[], sqlc.arg(skill_swaps)::jsonb
+INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, mode)
+SELECT sqlc.arg(user_id)::uuid, j.id, sqlc.arg(base_doc_id)::text, sqlc.arg(base_tab_id)::text, sqlc.arg(achievement_ids)::uuid[], sqlc.arg(skill_swaps)::jsonb, sqlc.arg(mode)::text
 FROM jobs j WHERE j.id = sqlc.arg(job_id)::uuid
 RETURNING *;
 
@@ -20,7 +20,7 @@ UPDATE tailored_cvs t SET status = CASE WHEN t.status = 'keeping' THEN 'keeping'
 FROM next, jobs j
 LEFT JOIN companies c ON c.id = j.company_id
 WHERE t.id = next.id AND j.id = t.job_id
-RETURNING t.id, t.user_id, t.job_id, t.base_doc_id, t.base_tab_id, t.achievement_ids, t.skill_swaps, t.attempts,
+RETURNING t.id, t.user_id, t.job_id, t.base_doc_id, t.base_tab_id, t.achievement_ids, t.skill_swaps, t.mode, t.attempts,
     COALESCE(t.draft_doc_id, '')::text AS draft_doc_id,
     t.status = 'keeping' AS keeping,
     j.title AS job_title,
@@ -83,6 +83,16 @@ WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
 -- name: GetJobDescription :one
 SELECT description FROM jobs WHERE id = $1;
 
--- name: InsertBulletLabels :copyfrom
-INSERT INTO preference_labels (user_id, job_id, draft_id, kind, achievement_id, p_yes, p_no, p_not_stated, confidence, preselected, kept)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+-- name: SetDraftInsights :execrows
+UPDATE tailored_cvs SET insights = sqlc.arg(insights)::jsonb, insights_for = sqlc.arg(insights_for)::text
+WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
+
+-- name: GetJobNote :one
+SELECT body FROM job_notes WHERE user_id = $1 AND job_id = $2;
+
+-- name: ListJobCommentBodies :many
+SELECT body FROM job_comments WHERE user_id = $1 AND job_id = $2 ORDER BY created_at, id LIMIT 200;
+
+-- name: InsertAchievementOutcomes :copyfrom
+INSERT INTO achievement_outcomes (draft_id, achievement_id, user_id, job_id, p_yes, p_no, on_source_cv, in_final_cv, outscored_kept_but_left_out, reworded)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);

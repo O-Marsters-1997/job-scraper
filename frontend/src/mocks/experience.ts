@@ -25,6 +25,7 @@ let experience: Position[] = [
 				positionId: "position-1",
 				text: "Cut p99 API latency by 40% by moving hot paths to a read-through cache",
 				context: "",
+				stats: { inCvs: 8, leftOut: 1, applied: 6, replied: 3 },
 			},
 			{
 				id: "achievement-2",
@@ -32,12 +33,14 @@ let experience: Position[] = [
 				text: "Led the migration of 12 services from EC2 to Kubernetes",
 				context:
 					"Cost pressure forced the move; we kept Postgres on RDS to limit risk.",
+				stats: { inCvs: 3, leftOut: 4, applied: 2, replied: 0 },
 			},
 			{
 				id: "achievement-4",
 				positionId: "position-1",
 				text: "Mentored three engineers through their first on-call rotation",
 				context: "",
+				stats: null,
 			},
 		],
 	},
@@ -53,6 +56,7 @@ let experience: Position[] = [
 				positionId: "position-2",
 				text: "Built the billing export pipeline used by finance every month",
 				context: "",
+				stats: { inCvs: 5, leftOut: 0, applied: 1, replied: 1 },
 			},
 		],
 	},
@@ -68,6 +72,7 @@ let experience: Position[] = [
 				positionId: "position-3",
 				text: "Replaced a nightly batch job with a streaming pipeline",
 				context: "",
+				stats: null,
 			},
 		],
 	},
@@ -149,6 +154,7 @@ export function importExperience(
 				positionId: id,
 				text,
 				context: "",
+				stats: null,
 			})),
 		};
 	});
@@ -173,6 +179,7 @@ export function createAchievement(
 		positionId,
 		text,
 		context: "",
+		stats: null,
 	};
 	experience = experience.map((p) =>
 		p.id === positionId

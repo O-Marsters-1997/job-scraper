@@ -2,13 +2,15 @@ import { z } from "zod";
 import { createSseParser } from "../lib/sse";
 import { KeptDraftExistsError } from "../lib/tailoring";
 import {
-	type CVHeading,
-	cvHeadingSchema,
+	type BulletLean,
+	bulletLeanSchema,
 	type Draft,
 	type DraftInput,
+	type DraftInsights,
 	type DraftLayout,
 	type DraftPositionEdit,
 	type DraftRef,
+	draftInsightsSchema,
 	draftLayoutSchema,
 	draftRefSchema,
 	draftSchema,
@@ -44,16 +46,6 @@ export class LayoutUnsupportedError extends Error {}
 
 const cvPath = (docId: string, tabId: string) =>
 	`/tailoring/cvs/${encodeURIComponent(docId)}/${encodeURIComponent(tabId)}/headings`;
-
-export async function fetchHeadings(
-	docId: string,
-	tabId: string,
-): Promise<CVHeading[]> {
-	return mocked(
-		(db) => db.getHeadings(docId, tabId),
-		() => apiFetch(cvPath(docId, tabId), cvHeadingSchema.array()),
-	);
-}
 
 export async function saveHeadings(
 	docId: string,
@@ -175,6 +167,32 @@ export async function fetchDraftLayout(id: string): Promise<DraftLayout> {
 					422: (err) =>
 						new LayoutUnsupportedError(bodyError(err) ?? "unsupported layout"),
 				}),
+			),
+	);
+}
+
+export async function fetchDraftLean(id: string): Promise<BulletLean[]> {
+	return mocked(
+		(db) => db.getDraftLean(),
+		() => apiFetch(`/tailoring/drafts/${id}/lean`, z.array(bulletLeanSchema)),
+	);
+}
+
+export async function fetchDraftInsights(id: string): Promise<DraftInsights> {
+	return mocked(
+		(db) => db.getDraftInsights(),
+		() => apiFetch(`/tailoring/drafts/${id}/insights`, draftInsightsSchema),
+	);
+}
+
+export async function explainDraft(id: string): Promise<DraftInsights> {
+	return mocked(
+		(db) => db.getDraftInsights(),
+		() =>
+			apiFetch(
+				`/tailoring/drafts/${id}/insights`,
+				draftInsightsSchema,
+				jsonInit("POST", {}),
 			),
 	);
 }

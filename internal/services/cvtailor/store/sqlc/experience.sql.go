@@ -142,6 +142,73 @@ func (q *Queries) GetPosition(ctx context.Context, arg GetPositionParams) (Posit
 	return i, err
 }
 
+const listAchievementStats = `-- name: ListAchievementStats :many
+WITH reached AS (
+    SELECT a.id AS application_id, a.status_id
+    FROM applications a
+    WHERE a.user_id = $1
+    UNION
+    SELECT e.subject_id, (e.props->>'to_status_id')::uuid
+    FROM events e
+    WHERE e.user_id = $1
+      AND e.type = 'application_status_changed'
+      AND e.props->>'to_status_id' IS NOT NULL
+),
+progress AS (
+    SELECT r.application_id,
+           COALESCE(bool_or(s.system_key = 'applied'), FALSE) AS applied,
+           COALESCE(bool_or(s.counts_as_reply), FALSE) AS replied
+    FROM reached r
+    JOIN application_statuses s ON s.id = r.status_id
+    GROUP BY r.application_id
+)
+SELECT o.achievement_id,
+       (COUNT(*) FILTER (WHERE o.in_final_cv))::int AS in_cvs,
+       (COUNT(*) FILTER (WHERE o.outscored_kept_but_left_out))::int AS left_out,
+       (COUNT(*) FILTER (WHERE o.in_final_cv AND p.applied))::int AS applied,
+       (COUNT(*) FILTER (WHERE o.in_final_cv AND p.applied AND p.replied))::int AS replied
+FROM achievement_outcomes o
+JOIN tailored_cvs t ON t.id = o.draft_id AND t.outcome = 'kept'
+LEFT JOIN applications ap ON ap.user_id = o.user_id AND ap.job_id = o.job_id
+LEFT JOIN progress p ON p.application_id = ap.id
+WHERE o.user_id = $1
+GROUP BY o.achievement_id
+`
+
+type ListAchievementStatsRow struct {
+	AchievementID pgtype.UUID
+	InCvs         int32
+	LeftOut       int32
+	Applied       int32
+	Replied       int32
+}
+
+func (q *Queries) ListAchievementStats(ctx context.Context, userID pgtype.UUID) ([]ListAchievementStatsRow, error) {
+	rows, err := q.db.Query(ctx, listAchievementStats, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAchievementStatsRow
+	for rows.Next() {
+		var i ListAchievementStatsRow
+		if err := rows.Scan(
+			&i.AchievementID,
+			&i.InCvs,
+			&i.LeftOut,
+			&i.Applied,
+			&i.Replied,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAchievements = `-- name: ListAchievements :many
 SELECT id, position_id, user_id, text, sort_order, created_at, updated_at, context FROM achievements
 WHERE user_id = $1

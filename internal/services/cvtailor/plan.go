@@ -29,7 +29,7 @@ type plan struct {
 	bank       []string
 	skills     []cvedit.SkillGroup
 	bankSkills []string
-	swapped    bool
+	unlinked   []dto.DraftPosition
 }
 
 func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) (plan, error) {
@@ -59,18 +59,12 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 	for i, id := range claim.AchievementIDs {
 		chosenAt[id] = i
 	}
-	pl := plan{structure: ds}
+	pl := plan{structure: ds, unlinked: unlinkedRoles(ds, mappings)}
 	for _, b := range bankSkills {
 		pl.bankSkills = append(pl.bankSkills, b.Name)
 	}
 	if ds.Skills != nil {
-		pl.swapped = len(claim.SkillSwaps) > 0
-		pl.skills, err = applySkillSwaps(cvedit.SkillGroups(ds.Skills), claim.SkillSwaps)
-		if err != nil {
-			return plan{}, err
-		}
-	} else if len(claim.SkillSwaps) > 0 {
-		return plan{}, noSkillsSection()
+		pl.skills = cvedit.SkillGroups(ds.Skills)
 	}
 	found := 0
 	seen := map[string]bool{}
@@ -92,11 +86,15 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 				pp.texts[a.ID] = a.Text
 			}
 		}
-		if len(pp.Achievements) == 0 {
+		asIs := buildsFromSource(claim.Mode, claim.AchievementIDs)
+		if len(pp.Achievements) == 0 && !asIs {
 			continue
 		}
 		slices.SortFunc(pp.Achievements, func(a, b cvedit.Achievement) int { return chosenAt[a.ID] - chosenAt[b.ID] })
 		slots := slotsOf[p.ID]
+		if len(slots) == 0 && asIs {
+			continue
+		}
 		if len(slots) == 0 && !slices.Contains(claim.Roles, p.ID) {
 			return plan{}, apperr.Unprocessable("a chosen position is no longer mapped to a heading of the CV tab")
 		}
@@ -131,18 +129,28 @@ func slotsByPosition(ds docparse.DocStructure, mappings []dto.HeadingMapping) ma
 	return out
 }
 
-func (pl plan) input(jobDescription string) cvedit.Input {
-	in := cvedit.Input{JobDescription: jobDescription}
-	if pl.structure.Profile != nil {
-		in.HasProfile, in.BaseProfile = true, pl.structure.Profile.Text
+func unlinkedRoles(ds docparse.DocStructure, mappings []dto.HeadingMapping) []dto.DraftPosition {
+	linked := make(map[string]bool, len(mappings))
+	for _, hm := range mappings {
+		if hm.PositionID != nil {
+			linked[hm.HeadingText] = true
+		}
 	}
-	if pl.structure.Skills != nil {
-		in.HasSkills, in.BaseSkills = true, pl.skills
+	var out []dto.DraftPosition
+	at := map[int]int{}
+	for _, slot := range ds.Slots {
+		if slot.HeadingIndex < 0 || linked[ds.Headings[slot.HeadingIndex].Text] {
+			continue
+		}
+		i, ok := at[slot.HeadingIndex]
+		if !ok {
+			i = len(out)
+			at[slot.HeadingIndex] = i
+			out = append(out, dto.DraftPosition{HeadingText: ds.Headings[slot.HeadingIndex].Text, Bullets: []dto.DraftBullet{}})
+		}
+		out[i].Bullets = append(out[i].Bullets, dto.DraftBullet{Text: slot.Text, AchievementIDs: []string{}})
 	}
-	for _, p := range pl.positions {
-		in.Positions = append(in.Positions, p.Position)
-	}
-	return in
+	return out
 }
 
 func (pl plan) baseContent() baseContent {
@@ -154,13 +162,26 @@ func (pl plan) baseContent() baseContent {
 		c.Skills = cvedit.SkillGroups(pl.structure.Skills)
 	}
 	for _, p := range pl.positions {
-		dp := dto.DraftPosition{PositionID: p.ID, Bullets: []dto.DraftBullet{}}
+		dp := dto.DraftPosition{PositionID: p.ID, Linked: true, Bullets: []dto.DraftBullet{}}
 		for _, text := range p.SlotTexts {
 			dp.Bullets = append(dp.Bullets, dto.DraftBullet{Text: text, AchievementIDs: []string{}})
 		}
 		c.Positions = append(c.Positions, dp)
 	}
+	c.Positions = append(c.Positions, pl.unlinked...)
 	return c
+}
+
+func (pl plan) keepAll() cvedit.EditSet {
+	edits := cvedit.EditSet{Positions: []cvedit.PositionEdit{}}
+	for _, p := range pl.positions {
+		pe := cvedit.PositionEdit{PositionID: p.ID, Bullets: make([]cvedit.Bullet, len(p.SlotTexts))}
+		for i, text := range p.SlotTexts {
+			pe.Bullets[i] = cvedit.Bullet{Keep: true, Text: text}
+		}
+		edits.Positions = append(edits.Positions, pe)
+	}
+	return pl.withSlotIDs(edits)
 }
 
 func (pl plan) slotIDs() docedit.PositionSlots {
@@ -177,94 +198,6 @@ func (pl plan) byID() map[string]planned {
 		out[p.ID] = p
 	}
 	return out
-}
-
-func (pl plan) validate(edits cvedit.EditSet) error {
-	byID := pl.byID()
-	for _, pe := range edits.Positions {
-		p, ok := byID[pe.PositionID]
-		if !ok {
-			return fmt.Errorf("%w: unknown position %q", errInvalidEdit, pe.PositionID)
-		}
-		if len(pe.Bullets) > len(p.slotIDs) {
-			return fmt.Errorf("%w: %d bullets for %d slots", errInvalidEdit, len(pe.Bullets), len(p.slotIDs))
-		}
-		for _, b := range pe.Bullets {
-			if strings.TrimSpace(b.Text) == "" || (!b.Keep && len(b.AchievementIDs) == 0) {
-				return fmt.Errorf("%w: bullet with no text or citation", errInvalidEdit)
-			}
-			for _, id := range b.AchievementIDs {
-				if _, ok := p.texts[id]; !ok {
-					return fmt.Errorf("%w: achievement %q is not confirmed for position %q", errInvalidEdit, id, pe.PositionID)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (pl plan) orderBullets(edits cvedit.EditSet) cvedit.EditSet {
-	byID := pl.byID()
-	for _, pe := range edits.Positions {
-		rank := map[string]int{}
-		for i, a := range byID[pe.PositionID].Achievements {
-			rank[a.ID] = i
-		}
-		earliest := func(b cvedit.Bullet) int {
-			first := len(rank)
-			for _, id := range b.AchievementIDs {
-				first = min(first, rank[id])
-			}
-			return first
-		}
-		var cited []int
-		var bullets []cvedit.Bullet
-		for i, b := range pe.Bullets {
-			if len(b.AchievementIDs) > 0 {
-				cited = append(cited, i)
-				bullets = append(bullets, b)
-			}
-		}
-		slices.SortStableFunc(bullets, func(a, b cvedit.Bullet) int { return earliest(a) - earliest(b) })
-		for j, i := range cited {
-			pe.Bullets[i] = bullets[j]
-		}
-	}
-	return edits
-}
-
-func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
-	blocks := checks.Blocking(checks.Run(pl.draft(edits, 0, 0)))
-	blocked := make(map[string]bool, len(blocks))
-	var names []string
-	for _, f := range blocks {
-		names = append(names, f.Check)
-		if f.Check == checks.CheckSkills {
-			edits.Skills = pl.swappedSkills()
-			continue
-		}
-		blocked[f.SlotID] = true
-	}
-	if pl.structure.Profile != nil && blocked[pl.structure.Profile.ID] {
-		edits.Profile = nil
-	}
-	byID := pl.byID()
-	for _, pe := range edits.Positions {
-		p := byID[pe.PositionID]
-		for i := range pe.Bullets {
-			if blocked[p.slotIDs[i]] {
-				pe.Bullets[i] = cvedit.Bullet{Keep: true, Text: p.SlotTexts[i]}
-			}
-		}
-	}
-	return edits, names
-}
-
-func (pl plan) swappedSkills() []cvedit.SkillGroup {
-	if !pl.swapped {
-		return nil
-	}
-	return pl.skills
 }
 
 func (pl plan) baseText() []string {
@@ -344,6 +277,10 @@ func (pl plan) withSlotIDs(edits cvedit.EditSet) cvedit.EditSet {
 		}
 	}
 	return edits
+}
+
+func hasItem(items []string, want string) int {
+	return slices.IndexFunc(items, func(it string) bool { return strings.EqualFold(strings.TrimSpace(it), strings.TrimSpace(want)) })
 }
 
 func normalizeText(s string) string {

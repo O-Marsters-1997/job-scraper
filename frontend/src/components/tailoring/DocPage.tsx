@@ -22,11 +22,13 @@ import {
 import { cn } from "@/lib/utils";
 import type { WordOp } from "@/lib/wordDiff";
 import type {
+	BulletLean,
 	DraftLayout,
 	LayoutBlock,
 	LayoutBorder,
 	LayoutRun,
 } from "@/types/tailoring";
+import { Lean } from "./Lean";
 
 const INK = "#000000";
 const LINK_INK = "#1155cc";
@@ -51,6 +53,7 @@ export type PageEditor = {
 	active: string | undefined;
 	text: (slotId: string) => string;
 	label: (slotId: string) => string;
+	lean?: ((slotId: string) => BulletLean | undefined) | undefined;
 	diffFor: (slotId: string) => WordOp[] | null;
 	onInput: (slotId: string, text: string) => void;
 	onFocus: (slotId: string) => void;
@@ -362,6 +365,9 @@ function Block(props: {
 								aria-hidden="true"
 								class="absolute -left-2 inset-y-0 w-0.5 rounded-full bg-primary"
 							/>
+						</Show>
+						<Show when={ed().lean?.(props.block.slotId)}>
+							{(lean) => <Lean lean={lean()} />}
 						</Show>
 						<Show when={ed().showCounts && props.fit}>
 							{(fit) => (

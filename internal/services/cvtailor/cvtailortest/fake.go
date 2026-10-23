@@ -41,15 +41,16 @@ type FakeStore struct {
 	skills       map[string]*bankSkill
 	drafts       map[string]*draft
 	jobs         map[string]dto.Job
+	annotations  map[string]dto.JobAnnotations
 	skeletons    map[string]dto.LetterSkeleton
 	letterTabs   map[letterTab]bool
 	coverLetters []coverLetter
-	labels       []dto.BulletLabel
+	outcomes     map[string][]dto.AchievementOutcome
 	seq          int
 }
 
 func NewFakeStore() *FakeStore {
-	return &FakeStore{positions: map[string]*position{}, achievements: map[string]*achievement{}, mappings: map[headingKey]*string{}, skills: map[string]*bankSkill{}, drafts: map[string]*draft{}, jobs: map[string]dto.Job{}, skeletons: map[string]dto.LetterSkeleton{}, letterTabs: map[letterTab]bool{}}
+	return &FakeStore{positions: map[string]*position{}, achievements: map[string]*achievement{}, mappings: map[headingKey]*string{}, skills: map[string]*bankSkill{}, drafts: map[string]*draft{}, outcomes: map[string][]dto.AchievementOutcome{}, jobs: map[string]dto.Job{}, skeletons: map[string]dto.LetterSkeleton{}, letterTabs: map[letterTab]bool{}}
 }
 
 func (f *FakeStore) nextID() string {

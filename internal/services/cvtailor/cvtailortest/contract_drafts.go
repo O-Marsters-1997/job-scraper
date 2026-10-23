@@ -17,11 +17,11 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	ctx := t.Context()
 
 	input := func(f Fixture) dto.DraftInput {
-		return dto.DraftInput{JobID: f.JobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}}
+		return dto.DraftInput{JobID: f.JobID, DocID: "doc", TabID: "t.0"}
 	}
 	create := func(t *testing.T, f Fixture) dto.Draft {
 		t.Helper()
-		d, err := f.Store.CreateDraft(ctx, f.UserID, input(f), nil)
+		d, err := f.Store.CreateDraft(ctx, f.UserID, input(f))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -57,7 +57,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
-		if c.ID != d.ID || c.UserID != f.UserID || c.DocID != "doc" || c.TabID != "t.0" || len(c.AchievementIDs) != 1 || c.Attempts != 1 {
+		if c.ID != d.ID || c.UserID != f.UserID || c.DocID != "doc" || c.TabID != "t.0" || c.Attempts != 1 {
 			t.Errorf("ClaimDraft() = %+v, want the created Draft on attempt 1", c)
 		}
 		if _, err := f.Store.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
@@ -66,19 +66,6 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
 		if got.Status != "running" {
 			t.Errorf("GetDraft().Status = %q, want running", got.Status)
-		}
-	})
-
-	t.Run("a claim carries the Draft's skill swaps", func(t *testing.T) {
-		t.Parallel()
-		f := newStore(t)
-		in := input(f)
-		in.SkillSwaps = []dto.SkillSwap{{BankSkillID: "b1", Line: 1, Replaces: "SQL"}}
-		if _, err := f.Store.CreateDraft(ctx, f.UserID, in, nil); err != nil {
-			t.Fatal(err)
-		}
-		if diff := cmp.Diff(in.SkillSwaps, claim(t, f).SkillSwaps); diff != "" {
-			t.Errorf("ClaimDraft().SkillSwaps mismatch (-want +got):\n%s", diff)
 		}
 	})
 
@@ -140,6 +127,26 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("insights are stored with their hash for the owner only", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		d := create(t, f)
+		lines := json.RawMessage(`[{"slotId":"s1"}]`)
+		if err := f.Store.SetDraftInsights(ctx, f.Other, d.ID, lines, "h1"); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("SetDraftInsights(other user) err = %v, want not found", err)
+		}
+		if got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID); len(got.InsightLines) != 0 || got.InsightsFor != "" {
+			t.Errorf("GetDraft() before Explain = %s / %q, want none", got.InsightLines, got.InsightsFor)
+		}
+		if err := f.Store.SetDraftInsights(ctx, f.UserID, d.ID, lines, "h1"); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
+		if !jsonEqual(t, lines, got.InsightLines) || got.InsightsFor != "h1" {
+			t.Errorf("GetDraft() = %s / %q, want %s / h1", got.InsightLines, got.InsightsFor, lines)
+		}
+	})
+
 	t.Run("a terminal failure is failed with its reason and no Doc", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
@@ -177,7 +184,11 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Run("a Job's Drafts list newest first and only for their owner", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
-		first, second := create(t, f), create(t, f)
+		first := create(t, f)
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeDiscarded); err != nil {
+			t.Fatal(err)
+		}
+		second := create(t, f)
 		got, err := f.Store.ListJobDrafts(ctx, f.UserID, f.JobID)
 		if err != nil || len(got) != 2 {
 			t.Fatalf("ListJobDrafts() = %+v, %v, want two Drafts", got, err)
@@ -191,14 +202,39 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("a Job has one open Draft until it is discarded", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		asIs := input(f)
+		asIs.Mode = dto.DraftModeAsIs
+		first, err := f.Store.CreateDraft(ctx, f.UserID, asIs)
+		if err != nil || first.Mode != dto.DraftModeAsIs {
+			t.Fatalf("CreateDraft(as_is) = %+v, %v, want an as_is Draft", first, err)
+		}
+		if c := claim(t, f); c.ID != first.ID || c.Mode != dto.DraftModeAsIs {
+			t.Errorf("ClaimDraft() = %+v, want the as_is Draft with its mode", c)
+		}
+		_, err = f.Store.CreateDraft(ctx, f.UserID, input(f))
+		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindConflict.Status() {
+			t.Errorf("second CreateDraft() err = %v, want a conflict", err)
+		}
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeDiscarded); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Store.CreateDraft(ctx, f.UserID, input(f)); err != nil {
+			t.Errorf("CreateDraft() after discarding err = %v, want nil", err)
+		}
+	})
+
 	t.Run("a Job keeps at most one Draft", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
-		first, second := create(t, f), create(t, f)
+		first := create(t, f)
 		kept, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeKept)
 		if err != nil || kept.Outcome == nil || *kept.Outcome != dto.OutcomeKept {
 			t.Fatalf("SetDraftOutcome(kept) = %+v, %v", kept, err)
 		}
+		second := create(t, f)
 		_, err = f.Store.SetDraftOutcome(ctx, f.UserID, second.ID, dto.OutcomeKept)
 		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindConflict.Status() {
 			t.Errorf("second SetDraftOutcome(kept) err = %v, want a conflict", err)
@@ -259,7 +295,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if _, err := f.Store.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
 			t.Errorf("ClaimDraft() while leased err = %v, want ErrNotFound", err)
 		}
-		if err := f.Store.CompleteKeep(ctx, c); err != nil {
+		if err := f.Store.CompleteKeep(ctx, c, nil); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
@@ -306,4 +342,16 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Errorf("GetDraft() = %+v, want ready, unkept, last error set", got)
 		}
 	})
+}
+
+func jsonEqual(t *testing.T, a, b json.RawMessage) bool {
+	t.Helper()
+	var x, y any
+	if err := json.Unmarshal(a, &x); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &y); err != nil {
+		t.Fatal(err)
+	}
+	return cmp.Equal(x, y)
 }

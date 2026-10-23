@@ -168,7 +168,7 @@ func TestCreateStatusReplyWindowBounds(t *testing.T) {
 
 func TestUpdateStatusRejectsOutOfRangeWindow(t *testing.T) {
 	svc, st := newService(t)
-	created, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
+	created, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil, false)
 	if err != nil {
 		t.Fatalf("seed CreateApplicationStatus err = %v", err)
 	}
@@ -202,7 +202,7 @@ func TestCreateStatusErrors(t *testing.T) {
 func TestDeleteStatus(t *testing.T) {
 	t.Run("refuses a status in use", func(t *testing.T) {
 		svc, st := newService(t)
-		status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
+		status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil, false)
 		if err != nil {
 			t.Fatalf("seed CreateApplicationStatus err = %v", err)
 		}

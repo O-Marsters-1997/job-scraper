@@ -27,6 +27,9 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 	if draft.Status != statusReady || len(draft.EditSet) == 0 {
 		return draft, nil
 	}
+	if draft, err = s.withInsightsSummary(ctx, userID, draft); err != nil {
+		return dto.Draft{}, err
+	}
 	positions, err := s.store.ListPositions(ctx, userID)
 	if err != nil {
 		return dto.Draft{}, err
@@ -48,6 +51,11 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 	}
 	base := stored.content()
 	draft.Base = &base
+	for _, p := range stored.Positions {
+		if p.PositionID == "" {
+			content.Positions = append(content.Positions, p)
+		}
+	}
 	if content.Profile == nil {
 		content.Profile = draft.Base.Profile
 	}
@@ -65,7 +73,9 @@ func (s *Service) ListJobDrafts(ctx context.Context, userID string, q dto.DraftJ
 		return nil, err
 	}
 	for i := range drafts {
-		drafts[i] = withDocURL(drafts[i])
+		if drafts[i], err = s.withInsightsSummary(ctx, userID, withDocURL(drafts[i])); err != nil {
+			return nil, err
+		}
 	}
 	return drafts, nil
 }
@@ -113,8 +123,8 @@ func (s *Service) DiscardDraft(ctx context.Context, userID string, q dto.DraftQu
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	if draft.Status != statusReady {
-		return dto.Draft{}, apperr.Conflict("only a ready draft can be discarded")
+	if draft.Status != statusReady && draft.Status != statusFailed {
+		return dto.Draft{}, apperr.Conflict("only a ready or failed draft can be discarded")
 	}
 	if outcome(draft) == dto.OutcomeDiscarded {
 		return draft, nil
@@ -181,7 +191,7 @@ func editedContent(edits cvedit.EditSet) dto.DraftContent {
 	c := dto.DraftContent{Profile: edits.Profile, Positions: []dto.DraftPosition{}}
 	c.Skills, c.SkillGroups = skillContent(edits.Skills)
 	for _, pe := range edits.Positions {
-		dp := dto.DraftPosition{PositionID: pe.PositionID, Bullets: []dto.DraftBullet{}}
+		dp := dto.DraftPosition{PositionID: pe.PositionID, Linked: true, Bullets: []dto.DraftBullet{}}
 		for _, l := range pe.Lines() {
 			ids := l.AchievementIDs
 			if ids == nil {

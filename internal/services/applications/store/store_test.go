@@ -76,7 +76,7 @@ func TestListApplicationsFiltersByStatus(t *testing.T) {
 	st, pool, userID := newStore(t)
 	matching := pgtest.InsertJob(t, pool, "Match", "Match")
 	other := pgtest.InsertJob(t, pool, "Other", "Other")
-	status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
+	status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil, false)
 	if err != nil {
 		t.Fatalf("CreateApplicationStatus err = %v", err)
 	}
@@ -152,6 +152,27 @@ func TestSeedDefaultStatuses(t *testing.T) {
 	}
 }
 
+func TestSeededPositiveReplyStatuses(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+	pgtest.InTx(t, pool, true, func(tx pgx.Tx) error {
+		return st.SeedDefaultStatuses(t.Context(), tx, userID)
+	})
+
+	all, err := st.ListApplicationStatusesByUser(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ListApplicationStatusesByUser err = %v", err)
+	}
+	got := map[string]bool{}
+	for _, s := range all {
+		got[s.Name] = s.CountsAsReply
+	}
+	want := map[string]bool{"Draft": false, "Applied": false, "Interviewing": true, "Rejected": false, "Offer": true}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("seeded CountsAsReply mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestSeededSystemStatuses(t *testing.T) {
 	t.Parallel()
 	st, pool, userID := newStore(t)
@@ -202,7 +223,7 @@ func TestApplicationEventsShareTheApplicationsTransaction(t *testing.T) {
 	if !errors.Is(err, store.ErrApplicationExists) {
 		t.Fatalf("duplicate CreateApplication err = %v, want ErrApplicationExists", err)
 	}
-	status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
+	status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil, false)
 	if err != nil {
 		t.Fatalf("CreateApplicationStatus err = %v", err)
 	}
@@ -337,7 +358,7 @@ func TestApplyTaskSync(t *testing.T) {
 	t.Run("marking applied sets the chase date from the Applied reply window", func(t *testing.T) {
 		t.Parallel()
 		e := setup(t)
-		if _, err := e.st.UpdateApplicationStatus(t.Context(), e.applied, e.userID, "Applied", "#6366f1", new(5)); err != nil {
+		if _, err := e.st.UpdateApplicationStatus(t.Context(), e.applied, e.userID, "Applied", "#6366f1", new(5), false); err != nil {
 			t.Fatalf("UpdateApplicationStatus err = %v", err)
 		}
 		app, err := e.st.CreateApplication(t.Context(), e.userID, dto.CreateApplicationInput{JobID: e.jobID})

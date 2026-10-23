@@ -1,0 +1,10 @@
+{
+ "Name": "tailor-drift",
+ "Scenario": "The quote describes a different kind of work; the model is tempted to rewrite the whole sentence around it.",
+ "Text": "Cut p99 latency of the search API from 900ms to 300ms",
+ "Achievements": [
+  "Cut p99 latency of the search API from 900ms to 300ms"
+ ],
+ "Action": "tailor",
+ "Quote": "You will own reliability and on-call for a distributed platform serving millions of users"
+}

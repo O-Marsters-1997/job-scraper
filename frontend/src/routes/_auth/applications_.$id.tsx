@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/solid-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import {
 	createSignal,
 	For,
@@ -7,6 +7,7 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
+import { FormFeedback } from "@/components/FormFeedback";
 import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -36,10 +37,17 @@ import {
 	useUpdateApplication,
 } from "@/hooks/useApplications";
 import { useCoverLetters } from "@/hooks/useCoverLetters";
+import { useCVTemplates } from "@/hooks/useCVTemplates";
+import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { jobCommentsQueryOptions } from "@/hooks/useJobComments";
 import { jobNoteQueryOptions } from "@/hooks/useJobNotes";
 import { jobQueryOptions, useJob } from "@/hooks/useJobs";
-import { jobDraftsQueryOptions, useJobDrafts } from "@/hooks/useTailoring";
+import {
+	jobDraftsQueryOptions,
+	useCreateDraft,
+	useDiscardDraft,
+	useJobDrafts,
+} from "@/hooks/useTailoring";
 import {
 	jobOpenTasksQueryOptions,
 	useJobOpenTasks,
@@ -53,6 +61,7 @@ import { loadedData } from "@/lib/queryData";
 import { cn, titleCase } from "@/lib/utils";
 import type { ApplicationWithDetails } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
+import type { CV } from "@/types/cv";
 import type { Job } from "@/types/job";
 import type { Draft } from "@/types/tailoring";
 import { ChaseRow } from "./-jobs-detail/ChaseRow";
@@ -255,32 +264,67 @@ function ApplyRow(props: {
 	);
 }
 
-function TailorButton(props: {
-	jobId: string;
-	label: string;
-	variant?: "outline";
+function CvPicker(props: {
+	cvs: CV[];
+	value: CV | undefined;
+	onChange: (cv: CV) => void;
 }) {
 	return (
-		<Button
-			as={Link}
-			to={`/jobs/${props.jobId}/tailor`}
-			target="_blank"
-			variant={props.variant}
-			size="sm"
-			class="w-fit"
+		<Select
+			options={props.cvs}
+			optionValue={(c) => `${c?.DocID}/${c?.TabID}`}
+			optionTextValue={(c) => c?.Title ?? ""}
+			disallowEmptySelection
+			value={props.value}
+			onChange={(c) => c && props.onChange(c)}
+			itemComponent={(p) => (
+				<SelectItem item={p.item}>
+					<SelectItemLabel>{p.item.rawValue?.Title}</SelectItemLabel>
+				</SelectItem>
+			)}
 		>
-			{props.label}
-			<span aria-hidden="true">↗</span>
-			<span class="sr-only">(opens in new tab)</span>
-		</Button>
+			<SelectTrigger aria-label="Source CV" class="w-56">
+				<Select.Value<CV>>{(s) => s.selectedOption()?.Title}</Select.Value>
+			</SelectTrigger>
+			<SelectContent />
+		</Select>
 	);
 }
 
 function CvRowBody(props: {
 	jobId: string;
 	draft: Draft | undefined;
+	failed: Draft | undefined;
 	done: boolean;
 }) {
+	const navigate = useNavigate();
+	const cvs = useCVTemplates();
+	const create = useCreateDraft();
+	const discard = useDiscardDraft();
+	const [picked, setPicked] = createSignal<CV>();
+	const options = () => loadedData(cvs)?.filter((c) => c.Visible) ?? [];
+	const chosen = () => picked() ?? options()[0];
+
+	const openAsIs = useFormSubmit(async () => {
+		const cv = chosen();
+		if (!cv) return;
+		const stale = props.draft?.outcome
+			? undefined
+			: (props.draft ?? props.failed);
+		if (stale) await discard.mutateAsync(stale.id);
+		const ref = await create.mutateAsync({
+			jobId: props.jobId,
+			docId: cv.DocID,
+			tabId: cv.TabID,
+			mode: "as_is",
+		});
+		await navigate({ to: "/tailoring/drafts/$id", params: { id: ref.id } });
+	});
+	const startOver = () => {
+		if (window.confirm("Discard this draft and start a new one?"))
+			void openAsIs.submit();
+	};
+
 	return (
 		<Show
 			when={props.draft}
@@ -291,7 +335,18 @@ function CvRowBody(props: {
 							? "Marked done because the application moved on. No tailored CV linked."
 							: "No tailored CV for this role yet."}
 					</p>
-					<TailorButton jobId={props.jobId} label="Tailor CV" />
+					<FormFeedback error={openAsIs.error()} />
+					<div class="flex flex-wrap items-center gap-2">
+						<CvPicker cvs={options()} value={chosen()} onChange={setPicked} />
+						<Button
+							size="sm"
+							disabled={!chosen()}
+							loading={openAsIs.pending()}
+							onClick={() => void openAsIs.submit()}
+						>
+							Open as-is
+						</Button>
+					</div>
 				</>
 			}
 		>
@@ -302,7 +357,16 @@ function CvRowBody(props: {
 						params={{ id: draft().id }}
 						class="flex items-center justify-between gap-3 rounded-md py-1.5 pr-3 text-sm transition-colors hover:bg-surface-muted"
 					>
-						<span>Tailored CV, {formatDate(draft().createdAt)}</span>
+						<span>
+							Tailored CV, {formatDate(draft().createdAt)}
+							<Show when={draft().insights}>
+								{(i) => (
+									<span class="ml-2 text-xs text-muted">
+										Insights: {i().anchored}/{i().total} anchored
+									</span>
+								)}
+							</Show>
+						</span>
 						<Badge
 							variant={draft().outcome === "kept" ? "default" : "secondary"}
 							class={cn(
@@ -313,11 +377,33 @@ function CvRowBody(props: {
 						</Badge>
 					</Link>
 					<Show when={draft().outcome !== "kept"}>
-						<TailorButton
-							jobId={props.jobId}
-							label="Tailor again"
-							variant="outline"
-						/>
+						<FormFeedback error={openAsIs.error()} />
+						<div class="flex flex-wrap items-center gap-2">
+							<CvPicker cvs={options()} value={chosen()} onChange={setPicked} />
+							<Button
+								size="sm"
+								onClick={() =>
+									void navigate({
+										to: "/tailoring/drafts/$id",
+										params: { id: draft().id },
+									})
+								}
+							>
+								Open draft
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={
+									!chosen() ||
+									(draft().status !== "ready" && draft().status !== "failed")
+								}
+								loading={openAsIs.pending()}
+								onClick={startOver}
+							>
+								Start over
+							</Button>
+						</div>
 					</Show>
 				</>
 			)}
@@ -377,6 +463,9 @@ function ChecklistTab(props: {
 						<CvRowBody
 							jobId={props.app.JobID}
 							draft={draft()}
+							failed={loadedData(drafts)?.find(
+								(d) => !d.outcome && d.status === "failed",
+							)}
 							done={done().cv}
 						/>
 					</ChecklistRow>

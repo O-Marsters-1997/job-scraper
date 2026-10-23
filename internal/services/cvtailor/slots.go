@@ -59,12 +59,12 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 		}
 	}
 
-	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: chosen, Roles: roles, SkillSwaps: draft.SkillSwaps}
+	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: chosen, Roles: roles, Mode: draft.Mode}
 	basePlan, err := s.plan(ctx, claim, claim.DocID)
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	docClaim, err := s.withinRoles(ctx, withoutSwaps(claim), edits.Roles)
+	docClaim, err := s.withinRoles(ctx, claim, edits.Roles)
 	if err != nil {
 		return dto.Draft{}, err
 	}

@@ -16,11 +16,7 @@ func (e draftEnv) readyDrafts(t *testing.T, n int) []string {
 	t.Helper()
 	ids := make([]string, n)
 	for i := range ids {
-		ids[i] = e.queue(t)
-	}
-	editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency by quickly moving queries to Postgres", 0))
-	for range n {
-		e.run(t, tick{editor: editor})
+		ids[i] = e.readyWith(t, tick{}, e.citedEdit("Cut p99 latency by quickly moving queries to Postgres"))
 	}
 	return ids
 }
@@ -111,21 +107,82 @@ func TestKeepDraft(t *testing.T) {
 		}
 	})
 
+	t.Run("the keep records what happened to every bank Achievement", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		onCV := addAchievements(t, e.pos.ID, e.store, "Ran on-call")[0]
+		e.asker.answers = map[string]dto.Answer{
+			questionPrefix + e.pos.Achievements[0].Text: {PYes: 0.4, PNo: 0.1},
+			questionPrefix + e.pos.Achievements[1].Text: {PYes: 0.7, PNo: 0.1},
+		}
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+
+		e.run(t, tick{})
+
+		yes0, no, yes1 := 0.4, 0.1, 0.7
+		want := []dto.AchievementOutcome{
+			{AchievementID: e.pos.Achievements[0].ID, PYes: &yes0, PNo: &no, InFinalCV: true, Reworded: true},
+			{AchievementID: e.pos.Achievements[1].ID, PYes: &yes1, PNo: &no, OutscoredKeptButLeftOut: true},
+			{AchievementID: onCV.ID, OnSourceCV: true},
+		}
+		if diff := cmp.Diff(want, e.store.AchievementOutcomes(id)); diff != "" {
+			t.Errorf("outcomes (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("the keep still records outcomes when Jev cannot answer", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		e.asker.err = errors.New("jev down")
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+
+		e.run(t, tick{})
+
+		want := []dto.AchievementOutcome{
+			{AchievementID: e.pos.Achievements[0].ID, InFinalCV: true, Reworded: true},
+			{AchievementID: e.pos.Achievements[1].ID},
+		}
+		if diff := cmp.Diff(want, e.store.AchievementOutcomes(id)); diff != "" {
+			t.Errorf("outcomes (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("discarding a Draft records no outcomes", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+
+		if _, err := e.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		e.run(t, tick{})
+
+		if got := e.store.AchievementOutcomes(id); len(got) != 0 {
+			t.Errorf("outcomes = %+v, want none", got)
+		}
+	})
+
 	t.Run("a second Draft of a Job conflicts until the first is discarded", func(t *testing.T) {
 		e := newDraftEnv(t)
 		ctx := t.Context()
-		ids := e.readyDrafts(t, 2)
-		first, second := dto.DraftQuery{ID: ids[0]}, dto.DraftQuery{ID: ids[1]}
+		first := dto.DraftQuery{ID: e.readyDrafts(t, 1)[0]}
 		if _, err := e.svc.KeepDraft(ctx, userID, first); err != nil {
 			t.Fatal(err)
 		}
+		e.run(t, tick{})
+		second := dto.DraftQuery{ID: e.readyDrafts(t, 1)[0]}
 
 		_, err := e.svc.KeepDraft(ctx, userID, second)
 		if !apperr.IsKind(err, apperr.KindConflict) {
 			t.Fatalf("%s err = %v, want kind %v", "KeepDraft(second)", err, apperr.KindConflict)
 		}
 
-		e.run(t, tick{})
 		if _, err := e.svc.DiscardDraft(ctx, userID, first); err != nil {
 			t.Fatal(err)
 		}

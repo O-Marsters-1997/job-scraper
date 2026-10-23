@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"slices"
 	"time"
-	"unicode/utf8"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -21,23 +20,19 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/letterwrite"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
-	"github.com/ollymarsters/job-scraper/internal/services/jev"
 )
 
 const (
 	statusReady    = "ready"
 	statusKeeping  = "keeping"
+	statusFailed   = "failed"
 	cleanupTimeout = 30 * time.Second
-
-	shortenBullets = 3
 )
 
-var errInvalidEdit = errors.New("model returned an invalid edit")
-
 type Editor interface {
-	Edit(ctx context.Context, apiKey string, in cvedit.Input) (cvedit.Result, error)
 	Suggest(ctx context.Context, apiKey string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error)
 	Explain(ctx context.Context, apiKey string, in cvedit.ExplainInput) (cvedit.ExplainResult, error)
+	Insights(ctx context.Context, apiKey string, in cvedit.InsightsInput) (cvedit.InsightsResult, error)
 }
 
 type Scaffolder interface {
@@ -112,11 +107,13 @@ func (m *Module) keep(ctx context.Context, claim dto.DraftClaim) error {
 	if claim.Attempts > dto.MaxDraftAttempts {
 		return m.store.FailKeep(ctx, claim, dto.DraftFailure{Reason: "gave up after repeated crashes", Terminal: true})
 	}
-	name := claim.CompanyName + " \u2014 " + claim.JobTitle
+	name := claim.CompanyName + " — " + claim.JobTitle
 	cause := m.drive.RenameFile(ctx, claim.UserID, claim.DraftDocID, name)
 	if cause != nil {
 		cause = fmt.Errorf("rename kept doc: %w", cause)
-	} else if cause = m.store.CompleteKeep(ctx, claim); cause == nil {
+	} else if outcomes, err := m.svc.keepOutcomes(ctx, claim); err != nil {
+		cause = fmt.Errorf("compute outcomes: %w", err)
+	} else if cause = m.store.CompleteKeep(ctx, claim, outcomes); cause == nil {
 		return nil
 	} else if !errors.Is(cause, store.ErrKeptDraftExists) {
 		return cause
@@ -149,54 +146,24 @@ func (m *Module) fail(ctx context.Context, claim dto.DraftClaim, cause error, cl
 }
 
 func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dto.DraftResult, error) {
-	key, err := m.creds.Get(ctx, claim.UserID, jev.Provider)
-	if errors.Is(err, data.ErrNotFound) {
-		return "", dto.DraftResult{}, apperr.Unprocessable("connect an OpenRouter key in Settings, AI to tailor a CV")
-	}
-	if err != nil {
-		return "", dto.DraftResult{}, fmt.Errorf("load credential: %w", err)
-	}
-
 	pl, err := m.svc.plan(ctx, claim, claim.DocID)
 	if err != nil {
 		return "", dto.DraftResult{}, err
 	}
-	res, err := m.editClean(ctx, key, pl, pl.input(claim.JobDescription))
-	if err != nil {
-		return "", dto.DraftResult{}, err
+	edits := pl.keepAll()
+	if claim.Mode == dto.DraftModeGenerate {
+		if edits, err = m.svc.replaceLowLean(ctx, claim, pl); err != nil {
+			return "", dto.DraftResult{}, err
+		}
 	}
-	cost := res.Cost
-
 	docID, err := m.copyTab(ctx, claim)
 	if err != nil {
 		return docID, dto.DraftResult{}, err
 	}
-	if err := m.svc.applyEdits(ctx, claim.UserID, docID, pl, res.Edits); err != nil {
+	if err := m.svc.applyEdits(ctx, claim.UserID, docID, pl, edits); err != nil {
 		return docID, dto.DraftResult{}, err
 	}
-
-	basePages, draftPages, draftPDF, err := m.svc.pageCounts(ctx, claim, docID)
-	if err != nil {
-		return docID, dto.DraftResult{}, err
-	}
-	if draftPages > basePages {
-		slog.InfoContext(ctx, "draft runs over the base CV, shortening",
-			slog.Int("base_pages", basePages), slog.Int("draft_pages", draftPages))
-		short, err := m.shorten(ctx, claim, key, docID, pl, res)
-		if err != nil {
-			return docID, dto.DraftResult{}, err
-		}
-		res, cost = short, cost+short.Cost
-		if draftPDF, draftPages, err = m.svc.measure(ctx, claim.UserID, docID, claim.TabID); err != nil {
-			return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
-		}
-	}
-
-	res.Edits = pl.withSlotIDs(res.Edits)
-	finalDraft := pl.draft(res.Edits, basePages, draftPages)
-	finalDraft.Parse = parseInput(ctx, draftPDF, pl.structure.Headings)
-
-	editSet, err := json.Marshal(res.Edits)
+	editSet, err := json.Marshal(edits)
 	if err != nil {
 		return docID, dto.DraftResult{}, fmt.Errorf("marshal edit set: %w", err)
 	}
@@ -205,62 +172,21 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 		return docID, dto.DraftResult{}, fmt.Errorf("marshal base content: %w", err)
 	}
 	return docID, dto.DraftResult{
-		EditSet: editSet, BaseContent: baseContent, RawOutput: res.Raw, Model: cvedit.Model, PromptVersion: cvedit.PromptVersion,
-		JobFingerprint: claim.JobFingerprint, Cost: cost,
-		Findings: toDraftFindings(checks.Run(finalDraft)),
+		EditSet: editSet, BaseContent: baseContent, JobFingerprint: claim.JobFingerprint, Findings: []dto.DraftFinding{},
 	}, nil
 }
 
-func (m *Module) editClean(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, error) {
-	res, err := m.editValid(ctx, key, pl, in)
+func (s *Service) replaceLowLean(ctx context.Context, claim dto.DraftClaim, pl plan) (cvedit.EditSet, error) {
+	bank, err := s.store.ListPositions(ctx, claim.UserID)
 	if err != nil {
-		return cvedit.Result{}, err
+		return cvedit.EditSet{}, err
 	}
-	var reverted []string
-	res.Edits, reverted = pl.revertBlocked(pl.orderBullets(res.Edits))
-	if res.Edits.Skills == nil {
-		res.Edits.Skills = pl.swappedSkills()
-	}
-	if len(reverted) > 0 {
-		slog.InfoContext(ctx, "reverted blocked draft slots", slog.Any("checks", reverted))
-	}
-	return res, nil
-}
-
-func (m *Module) shorten(ctx context.Context, claim dto.DraftClaim, key, docID string, pl plan, prior cvedit.Result) (cvedit.Result, error) {
-	in := pl.input(claim.JobDescription)
-	in.PriorEdits, in.ShortenBullets = &prior.Edits, longestBullets(prior.Edits, shortenBullets)
-	res, err := m.editClean(ctx, key, pl, in)
+	answers, err := s.asker.Ask(ctx, claim.UserID, claim.JobID, bankQuestions(bank))
 	if err != nil {
-		return cvedit.Result{}, err
+		return cvedit.EditSet{}, err
 	}
-	copyPlan, err := m.svc.plan(ctx, withoutSwaps(claim), docID)
-	if err != nil {
-		return cvedit.Result{}, err
-	}
-	if err := m.svc.applyEdits(ctx, claim.UserID, docID, copyPlan, res.Edits); err != nil {
-		return cvedit.Result{}, err
-	}
-	return res, nil
-}
-
-func (m *Module) editValid(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, error) {
-	res, err := m.editor.Edit(ctx, key, in)
-	if err != nil {
-		return res, fmt.Errorf("edit: %w", err)
-	}
-	return res, pl.validate(res.Edits)
-}
-
-func longestBullets(edits cvedit.EditSet, n int) []string {
-	var texts []string
-	for _, pe := range edits.Positions {
-		for _, b := range pe.Bullets {
-			texts = append(texts, b.Text)
-		}
-	}
-	slices.SortStableFunc(texts, func(a, b string) int { return utf8.RuneCountInString(b) - utf8.RuneCountInString(a) })
-	return texts[:min(n, len(texts))]
+	reps := leanRule{}.Replacements(bank, pl.baseContent().content(), answers)
+	return pl.withReplacements(bank, reps), nil
 }
 
 func toDraftFindings(findings []checks.Finding) []dto.DraftFinding {

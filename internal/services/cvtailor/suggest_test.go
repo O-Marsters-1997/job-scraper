@@ -60,8 +60,7 @@ func TestSuggest(t *testing.T) {
 
 	t.Run("a bullet draws on its cited Achievements and the profile on the Draft's chosen ones", func(t *testing.T) {
 		e := newDraftEnv(t)
-		e.input.AchievementIDs = []string{e.pos.Achievements[0].ID, e.pos.Achievements[1].ID}
-		id, _ := e.readyWithProfile(t, "Engineer who ships.")
+		id, _ := e.readyWithProfile(t, "Engineer who ships.", e.pos.Achievements[1].ID)
 		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
 		editor := cvtailortest.Suggesting("ok")
 		m := e.suggestModule(editor, apiKey)
@@ -84,7 +83,7 @@ func TestSuggest(t *testing.T) {
 	t.Run("refuses before streaming", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		pending := e.queue(t)
+		pending := e.queueOnOtherJob(t)
 		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
 		ok := dto.SuggestInput{ID: id, SlotID: slot, Action: "tighten", Text: "Cut p99 latency"}
 		withInput := func(mutate func(*dto.SuggestInput)) dto.SuggestInput { in := ok; mutate(&in); return in }

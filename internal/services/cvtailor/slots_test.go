@@ -27,13 +27,12 @@ func profileTab(t *testing.T) cvtailortest.Docs {
 	return cvtailortest.Docs{TabJSON: tabJSON(t, head("Profile"), prose("Engineer who ships."), head(heading), bullet("Built and maintained the public APIs for the platform"))}
 }
 
-func (e draftEnv) readyWithProfile(t *testing.T, profile string) (string, *cvtailor.Service) {
+func (e draftEnv) readyWithProfile(t *testing.T, profile string, chosen ...string) (string, *cvtailor.Service) {
 	t.Helper()
 	docs := profileTab(t)
-	result := e.bulletResult("Cut p99 latency by moving queries to Postgres", 0)
-	result.Edits.Profile = &profile
-	id := e.queue(t)
-	e.run(t, tick{docs: docs, editor: cvtailortest.Editing(result)})
+	edits := e.citedEdit("Cut p99 latency by moving queries to Postgres")
+	edits.Profile = &profile
+	id := e.readyWith(t, tick{docs: docs}, edits, chosen...)
 	return id, cvtailor.NewService(e.store, docs, nil, e.drive)
 }
 
@@ -314,7 +313,7 @@ func TestSaveDraftSlots(t *testing.T) {
 	t.Run("refuses a draft that is not ready or was discarded", func(t *testing.T) {
 		e := newDraftEnv(t)
 		discarded := e.readyDrafts(t, 1)[0]
-		pending := e.queue(t)
+		pending := e.queueOnOtherJob(t)
 		if _, err := e.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: discarded}); err != nil {
 			t.Fatal(err)
 		}
@@ -360,10 +359,9 @@ func TestSaveDraftSlotsSkills(t *testing.T) {
 		t.Helper()
 		e := newDraftEnv(t)
 		e.bankSkill(t, "Rust")
-		res := e.bulletResult("Cut p99 latency", 0.25)
-		res.Edits.Skills = []cvedit.SkillGroup{{Label: "Languages", Items: []string{"Go", "SQL"}}}
-		id := e.queue(t)
-		e.run(t, tick{docs: skillsTab, editor: cvtailortest.Editing(res)})
+		edits := e.citedEdit("Cut p99 latency")
+		edits.Skills = []cvedit.SkillGroup{{Label: "Languages", Items: []string{"Go", "SQL"}}}
+		id := e.readyWith(t, tick{docs: skillsTab}, edits)
 		return e, id, cvtailor.NewService(e.store, skillsTab, nil, e.drive)
 	}
 	save := func(t *testing.T, svc *cvtailor.Service, id string, groups ...dto.SkillGroup) (dto.Draft, error) {

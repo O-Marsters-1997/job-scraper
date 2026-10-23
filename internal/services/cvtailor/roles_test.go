@@ -41,13 +41,11 @@ func newRolesEnv(t *testing.T) rolesEnv {
 		t.Fatal(err)
 	}
 	tab := baseTab(t, head(widgetsHeading), bullet("Built reports"), prose("Reference available"))
-	e.input.AchievementIDs = []string{e.pos.Achievements[0].ID, a.ID}
-	id := e.queue(t)
-	result := cvedit.Result{Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{
+	edits := cvedit.EditSet{Positions: []cvedit.PositionEdit{
 		{PositionID: e.pos.ID, Bullets: []cvedit.Bullet{{AchievementIDs: []string{e.pos.Achievements[0].ID}, Text: "Cut p99 latency by moving queries to Postgres"}}},
 		{PositionID: widgets.ID, Bullets: []cvedit.Bullet{{AchievementIDs: []string{a.ID}, Text: "Built reports for finance"}}},
-	}}}
-	e.run(t, tick{docs: cvtailortest.Docs{TabJSON: tab}, editor: cvtailortest.Editing(result)})
+	}}
+	id := e.readyWith(t, tick{docs: cvtailortest.Docs{TabJSON: tab}}, edits)
 	return rolesEnv{draftEnv: e, widgets: widgets, tab: tab, id: id}
 }
 

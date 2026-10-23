@@ -3,6 +3,7 @@ import {
 	createEffect,
 	createMemo,
 	createSignal,
+	For,
 	Match,
 	onCleanup,
 	onMount,
@@ -19,11 +20,18 @@ import { wordDiff } from "@/lib/wordDiff";
 import type { Draft, DraftLayout } from "@/types/tailoring";
 import { createDraftEditor } from "../../hooks/useDraftEditor";
 import { useExperience } from "../../hooks/useExperience";
+import { useJobComments } from "../../hooks/useJobComments";
+import { useJobNote } from "../../hooks/useJobNotes";
 import { useJob } from "../../hooks/useJobs";
 import { createKeepFlow } from "../../hooks/useKeepFlow";
 import { createRolePicks } from "../../hooks/useRolePicks";
 import { createSuggestions } from "../../hooks/useSuggestions";
-import { useSuggestions as useAchievementBank } from "../../hooks/useTailoring";
+import {
+	useSuggestions as useAchievementBank,
+	useDraftInsights,
+	useDraftLean,
+	useExplainDraft,
+} from "../../hooks/useTailoring";
 import { AchievementsDrawer } from "./AchievementsDrawer";
 import { ChangesDiff } from "./ChangesDiff";
 import {
@@ -34,11 +42,14 @@ import {
 	PX_PER_PT,
 } from "./DocPage";
 import { PageMeter, SaveIndicator } from "./DraftMeters";
+import { Insights } from "./Insights";
+import type { JobTextBlock } from "./JobText";
 import { KeepControls, KeepNotices } from "./KeepFlow";
 import { MarginCards } from "./MarginCards";
 import { PrintPreview } from "./PrintPreview";
 import { RolesDrawer } from "./RolesDrawer";
 import { SkillsPanel } from "./SkillsPanel";
+import { UnlinkedRoles } from "./UnlinkedRoles";
 import { WandMenu } from "./WandMenu";
 
 const NO_METRICS: PageMetrics = {
@@ -47,6 +58,8 @@ const NO_METRICS: PageMetrics = {
 	bodyLinePt: DEFAULT_BODY_LINE_PT,
 	fits: {},
 };
+
+type View = "document" | "changes" | "insights";
 
 const RAIL_PX = 320;
 const RAIL_GAP_PX = 48;
@@ -93,7 +106,7 @@ export function DraftEditor(props: {
 	const [active, setActive] = createSignal<string>();
 	const [metrics, setMetrics] = createSignal(NO_METRICS);
 	const [showCounts, setShowCounts] = createSignal(true);
-	const [showChanges, setShowChanges] = createSignal(false);
+	const [view, setView] = createSignal<View>("document");
 	const [preview, setPreview] = createSignal(false);
 	const [skillsOpen, setSkillsOpen] = createSignal(false);
 	const [stage, setStage] = createSignal<HTMLDivElement>();
@@ -109,6 +122,39 @@ export function DraftEditor(props: {
 		const { base, content } = props.draft;
 		return base && content ? { base, content } : null;
 	};
+
+	const leanQuery = useDraftLean(
+		() => props.draft.id,
+		() => props.draft.status === "ready",
+	);
+	const insightsQuery = useDraftInsights(
+		() => props.draft.id,
+		() => props.draft.status === "ready",
+	);
+	const explain = useExplainDraft(() => props.draft.id);
+	const note = useJobNote(() => props.draft.jobId);
+	const comments = useJobComments(() => props.draft.jobId);
+	const jobText = () => {
+		const blocks: JobTextBlock[] = [
+			{
+				label: "Job description",
+				source: "jd",
+				text: job.data?.Description ?? "",
+			},
+			{ label: "Your note", source: "note", text: note.data?.Body ?? "" },
+			...(comments.data ?? []).map(
+				(c): JobTextBlock => ({
+					label: "Comment",
+					source: "comment",
+					text: c.Body,
+				}),
+			),
+		];
+		return blocks.filter((b) => b.text !== "");
+	};
+	const leanBySlot = createMemo(
+		() => new Map(leanQuery.data?.map((b) => [b.slotId, b])),
+	);
 
 	const pagePx = () => (props.layout?.page.width ?? 0) * PX_PER_PT;
 	const narrow = () =>
@@ -144,6 +190,8 @@ export function DraftEditor(props: {
 		const key = activeSlot();
 		return key && editable() && !suggestions.get(key) ? key : undefined;
 	};
+	const tailorQuote = (slotId: string) =>
+		insightsQuery.data?.lines.find((l) => l.slotId === slotId && l.anchored);
 	const askOpen = () => askSlot() !== undefined && askSlot() === activeSlot();
 	const setAskOpen = (open: boolean) =>
 		setAskSlot(open ? activeSlot() : undefined);
@@ -168,6 +216,18 @@ export function DraftEditor(props: {
 			}
 		});
 	};
+	const editInDocument = (slotId: string) => {
+		setView("document");
+		activate(slotId);
+		focusLine(slotId, true);
+	};
+	const tabs = (): { id: View; label: string }[] => [
+		{ id: "document", label: "Document" },
+		...(changes() ? [{ id: "changes" as const, label: "Changes" }] : []),
+		...(leanQuery.data ? [{ id: "insights" as const, label: "Insights" }] : []),
+	];
+	const current = () =>
+		tabs().some((t) => t.id === view()) ? view() : "document";
 	const fitSlot = (slotId: string) => {
 		activate(slotId);
 		void suggestions.ask(slotId, "fit");
@@ -242,6 +302,7 @@ export function DraftEditor(props: {
 		},
 		text: ed.text,
 		label: ed.label,
+		lean: (slotId) => leanBySlot().get(slotId),
 		diffFor: (slotId) => {
 			const sug = suggestions.get(slotId);
 			if (!sug || sug.error !== undefined) return null;
@@ -374,16 +435,20 @@ export function DraftEditor(props: {
 					</Show>
 				</div>
 				<div class="ml-auto flex flex-wrap items-center justify-end gap-1.5 lg:ml-0">
-					<Show when={changes()}>
-						<Button
-							variant="ghost"
-							size="sm"
-							aria-pressed={showChanges()}
-							onClick={() => setShowChanges((v) => !v)}
-						>
-							Changes
-						</Button>
-					</Show>
+					<nav aria-label="View" class="flex gap-0.5">
+						<For each={tabs()}>
+							{(tab) => (
+								<Button
+									variant="ghost"
+									size="sm"
+									aria-pressed={current() === tab.id}
+									onClick={() => setView(tab.id)}
+								>
+									{tab.label}
+								</Button>
+							)}
+						</For>
+					</nav>
 					<Show when={editable() && props.layout}>
 						<Button
 							variant="ghost"
@@ -426,6 +491,9 @@ export function DraftEditor(props: {
 			</header>
 
 			<KeepNotices draft={props.draft} editable={editable()} flow={flow} />
+			<Show when={editable()}>
+				<UnlinkedRoles draft={props.draft} />
+			</Show>
 
 			<main
 				ref={(el) => watchSize(el, () => setMainWidth(el.clientWidth))}
@@ -438,7 +506,23 @@ export function DraftEditor(props: {
 				}}
 			>
 				<Switch fallback={<LayoutUnavailable reason={props.layoutError} />}>
-					<Match when={showChanges() && changes()}>
+					<Match when={current() === "insights" && leanQuery.data}>
+						{(lean) => (
+							<div class="mx-auto max-w-6xl px-6 py-10">
+								<Insights
+									lean={lean()}
+									jobText={jobText()}
+									insights={insightsQuery.data}
+									explaining={explain.isPending}
+									explainError={explain.error?.message}
+									text={ed.text}
+									onEdit={editInDocument}
+									onExplain={() => explain.mutate()}
+								/>
+							</div>
+						)}
+					</Match>
+					<Match when={current() === "changes" && changes()}>
 						{(c) => (
 							<div class="mx-auto max-w-3xl px-6 py-10">
 								<section
@@ -506,10 +590,11 @@ export function DraftEditor(props: {
 											<WandMenu
 												top={wandTop()}
 												canFit={(metrics().fits[key()]?.lines ?? 1) > 1}
+												tailor={tailorQuote(key())}
 												askOpen={askOpen()}
 												onAskOpen={setAskOpen}
-												onAction={(action, prompt) =>
-													void suggestions.ask(key(), action, prompt)
+												onAction={(action, prompt, quote) =>
+													void suggestions.ask(key(), action, prompt, quote)
 												}
 											/>
 										)}

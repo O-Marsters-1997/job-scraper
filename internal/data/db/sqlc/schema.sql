@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS application_statuses (
     colour     TEXT        NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     reply_window_days INT  CHECK (reply_window_days BETWEEN 1 AND 60),
+    counts_as_reply BOOLEAN NOT NULL DEFAULT FALSE,
     system_key TEXT        CHECK (system_key IN ('draft', 'applied'))
 );
 
@@ -218,35 +219,36 @@ CREATE TABLE tailored_cvs (
     draft_doc_id    TEXT,
     status          TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'keeping', 'ready', 'failed')),
     outcome         TEXT        CHECK (outcome IN ('kept', 'discarded')),
+    mode            TEXT        NOT NULL DEFAULT 'generate' CONSTRAINT tailored_cvs_mode_check CHECK (mode IN ('as_is', 'generate')),
     kept_as         TEXT        CHECK (kept_as IN ('tab', 'doc')),
     keep_note       TEXT        NOT NULL DEFAULT '',
     attempts        INT         NOT NULL DEFAULT 0,
     due_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     lease_until     TIMESTAMPTZ,
     last_error      TEXT        NOT NULL DEFAULT '',
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    insights        JSONB,
+    insights_for    TEXT        NOT NULL DEFAULT ''
 );
 CREATE UNIQUE INDEX tailored_cvs_kept_idx ON tailored_cvs (user_id, job_id) WHERE outcome = 'kept';
+CREATE UNIQUE INDEX tailored_cvs_live_idx ON tailored_cvs (user_id, job_id) WHERE outcome IS NULL;
 CREATE INDEX tailored_cvs_claim_idx ON tailored_cvs (due_at, id) WHERE status IN ('pending', 'running', 'keeping');
 
-CREATE TABLE preference_labels (
-    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id        UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    job_id         UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-    draft_id       UUID        REFERENCES tailored_cvs(id) ON DELETE SET NULL,
-    kind           TEXT        NOT NULL CHECK (kind IN ('bullet')),
-    achievement_id UUID        REFERENCES achievements(id) ON DELETE SET NULL,
-    p_yes          DOUBLE PRECISION,
-    p_no           DOUBLE PRECISION,
-    p_not_stated   DOUBLE PRECISION,
-    confidence     DOUBLE PRECISION,
-    preselected    BOOLEAN     NOT NULL,
-    kept           BOOLEAN     NOT NULL,
-    position       INT,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE achievement_outcomes (
+    draft_id                    UUID        NOT NULL REFERENCES tailored_cvs(id) ON DELETE CASCADE,
+    achievement_id              UUID        NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
+    user_id                     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id                      UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    p_yes                       DOUBLE PRECISION,
+    p_no                        DOUBLE PRECISION,
+    on_source_cv                BOOLEAN     NOT NULL,
+    in_final_cv                 BOOLEAN     NOT NULL,
+    outscored_kept_but_left_out BOOLEAN     NOT NULL,
+    reworded                    BOOLEAN     NOT NULL,
+    created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (draft_id, achievement_id)
 );
-CREATE INDEX preference_labels_user_job_idx ON preference_labels (user_id, job_id);
-CREATE INDEX preference_labels_draft_idx ON preference_labels (draft_id);
+CREATE INDEX achievement_outcomes_achievement_idx ON achievement_outcomes (achievement_id);
 
 CREATE TABLE IF NOT EXISTS job_scores (
     id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -27,7 +27,7 @@ func (s *Service) CreateStatus(ctx context.Context, userID string, in dto.Applic
 	if err := validateStatusInput(in); err != nil {
 		return dto.ApplicationStatus{}, err
 	}
-	return s.store.CreateApplicationStatus(ctx, userID, in.Name, in.Colour, in.ReplyWindowDays)
+	return s.store.CreateApplicationStatus(ctx, userID, in.Name, in.Colour, in.ReplyWindowDays, in.CountsAsReply)
 }
 
 func (s *Service) UpdateStatus(ctx context.Context, userID string, in dto.ApplicationStatusInput) (dto.ApplicationStatus, error) {
@@ -41,7 +41,7 @@ func (s *Service) UpdateStatus(ctx context.Context, userID string, in dto.Applic
 	if current.SystemKey != "" && in.Name != current.Name {
 		return dto.ApplicationStatus{}, apperr.Invalid(current.Name + " can't be renamed")
 	}
-	return s.store.UpdateApplicationStatus(ctx, in.ID, userID, in.Name, in.Colour, in.ReplyWindowDays)
+	return s.store.UpdateApplicationStatus(ctx, in.ID, userID, in.Name, in.Colour, in.ReplyWindowDays, in.CountsAsReply)
 }
 
 func (s *Service) statusOrZero(ctx context.Context, userID, id string) (dto.ApplicationStatus, error) {

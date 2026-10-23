@@ -24,6 +24,7 @@ var SuggestPromptVersion = hashPrompts(voice, suggestRules)
 type SuggestInput struct {
 	Action       string
 	Prompt       string
+	Quote        string
 	Text         string
 	MaxChars     int
 	Achievements []string
@@ -64,6 +65,8 @@ func renderSuggest(in SuggestInput) (string, error) {
 		b.WriteString("Tighten the line: cut filler words and keep every fact. It must not get longer.\n")
 	case "verb":
 		b.WriteString("Start the line with a stronger, more specific verb. Change nothing else.\n")
+	case "tailor":
+		fmt.Fprintf(&b, "Swap only the nouns and terms in the line that differ from the wording of this quote from the job description, keeping the same sentence shape, verb and voice. Never add a claim the Achievements lack, and never add words.\n\nQuote:\n%s\n", in.Quote)
 	case "ask":
 		fmt.Fprintf(&b, "Rewrite the line as the person asks, within the rules: %s\n", in.Prompt)
 	default:

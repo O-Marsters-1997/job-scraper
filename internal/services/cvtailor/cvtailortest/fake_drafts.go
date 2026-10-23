@@ -15,6 +15,7 @@ import (
 var (
 	errDraftNotFound = apperr.NotFound("draft not found")
 	errKeptExists    = apperr.Conflict("this job already has a kept draft")
+	errLiveExists    = apperr.Conflict("this job already has an open draft")
 )
 
 const statusKeeping = "keeping"
@@ -44,11 +45,10 @@ func (f *FakeStore) MakeDraftDue(id string) {
 	f.drafts[id].dueAt = time.Now()
 }
 
-// BulletLabels returns every label recorded by CreateDraft, in order.
-func (f *FakeStore) BulletLabels() []dto.BulletLabel {
+func (f *FakeStore) AchievementOutcomes(draftID string) []dto.AchievementOutcome {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return slices.Clone(f.labels)
+	return slices.Clone(f.outcomes[draftID])
 }
 
 // DraftResult returns what CompleteDraft recorded for the Draft.
@@ -58,12 +58,19 @@ func (f *FakeStore) DraftResult(id string) dto.DraftResult {
 	return f.drafts[id].result
 }
 
-func (f *FakeStore) CreateDraft(_ context.Context, userID string, in dto.DraftInput, labels []dto.BulletLabel) (dto.Draft, error) {
+func (f *FakeStore) CreateDraft(_ context.Context, userID string, in dto.DraftInput) (dto.Draft, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now(), BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIDs: slices.Clone(in.AchievementIDs), SkillSwaps: slices.Clone(in.SkillSwaps)}, userID: userID, input: in, dueAt: time.Now()}
+	for _, other := range f.drafts {
+		if other.userID == userID && other.JobID == in.JobID && other.Outcome == nil {
+			return dto.Draft{}, errLiveExists
+		}
+	}
+	if in.Mode == "" {
+		in.Mode = dto.DraftModeGenerate
+	}
+	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Mode: in.Mode, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now(), BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIDs: []string{}}, userID: userID, input: in, dueAt: time.Now()}
 	f.drafts[d.ID] = d
-	f.labels = append(f.labels, labels...)
 	return d.Draft, nil
 }
 
@@ -156,7 +163,7 @@ func (f *FakeStore) ClaimDraft(_ context.Context) (dto.DraftClaim, error) {
 	job := f.jobs[d.input.JobID]
 	return dto.DraftClaim{
 		ID: d.ID, UserID: d.userID, JobID: d.input.JobID, DocID: d.input.DocID, TabID: d.input.TabID,
-		AchievementIDs: slices.Clone(d.input.AchievementIDs), SkillSwaps: slices.Clone(d.input.SkillSwaps), Attempts: d.attempts, DraftDocID: d.DraftDocID,
+		AchievementIDs: slices.Clone(d.AchievementIDs), Mode: d.Mode, Attempts: d.attempts, DraftDocID: d.DraftDocID,
 		JobDescription: job.Description, JobFingerprint: job.ContentFingerprint,
 		Keeping: keeping, JobTitle: job.Title, CompanyName: job.CompanySlug,
 	}, nil
@@ -231,7 +238,7 @@ func (f *FakeStore) keeping(claim dto.DraftClaim) (*draft, error) {
 	return d, nil
 }
 
-func (f *FakeStore) CompleteKeep(_ context.Context, claim dto.DraftClaim) error {
+func (f *FakeStore) CompleteKeep(_ context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	d, err := f.keeping(claim)
@@ -245,6 +252,7 @@ func (f *FakeStore) CompleteKeep(_ context.Context, claim dto.DraftClaim) error 
 	}
 	kept := dto.OutcomeKept
 	d.Status, d.Outcome, d.KeptAs, d.leased, d.LastError = "ready", &kept, "doc", false, ""
+	f.outcomes[d.ID] = slices.Clone(outcomes)
 	return nil
 }
 
@@ -271,4 +279,34 @@ func (f *FakeStore) JobDescription(_ context.Context, jobID string) (string, err
 		return "", apperr.NotFound("job not found")
 	}
 	return job.Description, nil
+}
+
+func (f *FakeStore) SetAnnotations(jobID string, a dto.JobAnnotations) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.annotations == nil {
+		f.annotations = map[string]dto.JobAnnotations{}
+	}
+	f.annotations[jobID] = a
+}
+
+func (f *FakeStore) JobAnnotations(_ context.Context, _, jobID string) (dto.JobAnnotations, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	a := f.annotations[jobID]
+	if a.Comments == nil {
+		a.Comments = []string{}
+	}
+	return a, nil
+}
+
+func (f *FakeStore) SetDraftInsights(_ context.Context, userID, id string, insights json.RawMessage, forHash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.drafts[id]
+	if !ok || d.userID != userID {
+		return errDraftNotFound
+	}
+	d.InsightLines, d.InsightsFor = slices.Clone(insights), forHash
+	return nil
 }

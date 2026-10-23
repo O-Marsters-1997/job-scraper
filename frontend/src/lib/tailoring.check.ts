@@ -1,82 +1,13 @@
 import assert from "node:assert/strict";
-import type { CVHeading, DraftFinding, Suggestion } from "../types/tailoring";
+import type { DraftFinding } from "../types/tailoring";
 import {
-	allConfirmed,
 	isSettled,
 	keptDraft,
 	lineWithIds,
 	moveItem,
-	orderSuggestions,
 	reviewFindings,
-	selectedAchievementIds,
-	toMappings,
 } from "./tailoring";
 
-const heading = (text: string, confirmed: boolean): CVHeading => ({
-	text,
-	positionId: "p1",
-	confirmed,
-	slotCount: 2,
-});
-
-assert.ok(allConfirmed([]), "no headings counts as confirmed");
-assert.ok(
-	allConfirmed([heading("A", true), heading("B", true)]),
-	"all confirmed skips the mapping step",
-);
-assert.ok(
-	!allConfirmed([heading("A", true), heading("B", false)]),
-	"one unconfirmed heading keeps the mapping step",
-);
-
-const mappings = toMappings([heading("A", false), heading("B", false)], {
-	A: null,
-});
-assert.ok(
-	mappings[0]?.positionId === null,
-	"a chosen none overrides the auto-match",
-);
-assert.ok(
-	mappings[1]?.positionId === "p1",
-	"an untouched heading keeps its match",
-);
-
-const suggestion = (
-	id: string,
-	preselected: boolean,
-	state: Suggestion["state"] = "fit",
-): Suggestion => ({
-	achievementId: id,
-	positionId: "p1",
-	text: id,
-	score: 0.5,
-	preselected,
-	state,
-});
-
-const picked = selectedAchievementIds(
-	[suggestion("a", true), suggestion("b", true), suggestion("c", false)],
-	{ b: false, c: true },
-	[],
-);
-assert.ok(
-	picked.join() === "a,c",
-	"an override beats the preselection, either way",
-);
-assert.ok(
-	selectedAchievementIds(
-		[suggestion("a", true), suggestion("b", true), suggestion("c", true)],
-		{},
-		["c", "a"],
-	).join() === "c,a,b",
-	"chosen order comes first and unordered suggestions keep their rank",
-);
-assert.ok(
-	orderSuggestions([suggestion("a", true), suggestion("b", true)], ["b"])
-		.map((s) => s.achievementId)
-		.join() === "b,a",
-	"a chosen order puts its ids first",
-);
 assert.ok(
 	isSettled("ready") && isSettled("failed"),
 	"ready and failed stop polling",

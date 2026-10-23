@@ -22,7 +22,10 @@ var (
 	ErrCoverLetterNotFound = apperr.NotFound("cover letter not found")
 )
 
-var ErrKeptDraftExists = apperr.Conflict("this job already has a kept draft")
+var (
+	ErrKeptDraftExists = apperr.Conflict("this job already has a kept draft")
+	ErrLiveDraftExists = apperr.Conflict("this job already has an open draft")
+)
 
 func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 	findings := []dto.DraftFinding{}
@@ -33,33 +36,19 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 	for i, id := range t.AchievementIds {
 		achievementIDs[i] = id.String()
 	}
-	swaps, err := decodeSwaps(t.SkillSwaps)
-	if err != nil {
-		return dto.Draft{}, err
-	}
 	var outcome *string
 	if t.Outcome.Valid {
 		outcome = &t.Outcome.String
 	}
 	return dto.Draft{
-		ID: t.ID.String(), JobID: t.JobID.String(), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, LastError: t.LastError,
+		ID: t.ID.String(), JobID: t.JobID.String(), Mode: dto.DraftMode(t.Mode), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, LastError: t.LastError,
 		CreatedAt: t.CreatedAt.Time, Findings: findings, DraftDocID: t.DraftDocID.String, EditSet: t.EditSet, BaseContent: t.BaseContent,
 		BaseDocID: t.BaseDocID, BaseTabID: t.BaseTabID, AchievementIDs: achievementIDs,
-		SkillSwaps: swaps,
+		InsightLines: t.Insights, InsightsFor: t.InsightsFor,
 	}, nil
 }
 
-func decodeSwaps(raw []byte) ([]dto.SkillSwap, error) {
-	var swaps []dto.SkillSwap
-	if err := json.Unmarshal(raw, &swaps); err != nil {
-		return nil, fmt.Errorf("decode skill swaps: %w", err)
-	}
-	return swaps, nil
-}
-
-// CreateDraft inserts a pending Draft for userID with its bullet labels;
-// ErrJobNotFound when the Job does not exist.
-func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInput, labels []dto.BulletLabel) (dto.Draft, error) {
+func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInput) (dto.Draft, error) {
 	uid, err := parseID(userID, ErrDraftNotFound)
 	if err != nil {
 		return dto.Draft{}, err
@@ -68,64 +57,45 @@ func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInpu
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	achievements, err := data.UUIDs(in.AchievementIDs)
-	if err != nil {
-		return dto.Draft{}, apperr.Invalid("unknown achievement")
+	if in.Mode == "" {
+		in.Mode = dto.DraftModeGenerate
 	}
-	swaps, err := json.Marshal(in.SkillSwaps)
-	if err != nil {
-		return dto.Draft{}, fmt.Errorf("store.CreateDraft: encode skill swaps: %w", err)
-	}
-	var row sqlc.TailoredCv
-	err = s.inTx(ctx, func(q *sqlc.Queries) error {
-		var err error
-		row, err = q.InsertDraft(ctx, sqlc.InsertDraftParams{
-			UserID: uid, JobID: jid, BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIds: achievements, SkillSwaps: swaps,
-		})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrJobNotFound
-		}
-		if err != nil {
-			return fmt.Errorf("store.CreateDraft: %w", err)
-		}
-		params, err := bulletLabelParams(uid, jid, row.ID, labels)
-		if err != nil {
-			return fmt.Errorf("store.CreateDraft: %w", err)
-		}
-		if _, err := q.InsertBulletLabels(ctx, params); err != nil {
-			return fmt.Errorf("store.CreateDraft: labels: %w", err)
-		}
-		return nil
+	row, err := s.queries.InsertDraft(ctx, sqlc.InsertDraftParams{
+		UserID: uid, JobID: jid, BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIds: []pgtype.UUID{}, SkillSwaps: []byte("[]"), Mode: string(in.Mode),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.Draft{}, ErrJobNotFound
+	}
+	if data.IsUniqueViolation(err) {
+		return dto.Draft{}, ErrLiveDraftExists
+	}
 	if err != nil {
-		return dto.Draft{}, err
+		return dto.Draft{}, fmt.Errorf("store.CreateDraft: %w", err)
 	}
 	return toDraft(row)
 }
 
-func bulletLabelParams(userID, jobID, draftID pgtype.UUID, labels []dto.BulletLabel) ([]sqlc.InsertBulletLabelsParams, error) {
-	params := make([]sqlc.InsertBulletLabelsParams, len(labels))
-	for i, l := range labels {
-		aid, err := data.UUID(l.AchievementID)
+func achievementOutcomeParams(draftID, userID, jobID pgtype.UUID, outcomes []dto.AchievementOutcome) ([]sqlc.InsertAchievementOutcomesParams, error) {
+	params := make([]sqlc.InsertAchievementOutcomesParams, len(outcomes))
+	for i, o := range outcomes {
+		aid, err := data.UUID(o.AchievementID)
 		if err != nil {
 			return nil, err
 		}
-		params[i] = sqlc.InsertBulletLabelsParams{
-			UserID: userID, JobID: jobID, DraftID: draftID, Kind: "bullet", AchievementID: aid,
-			Preselected: l.Preselected, Kept: l.Kept,
-		}
-		if a := l.Answer; a != nil {
-			params[i].PYes = float8(a.PYes)
-			params[i].PNo = float8(a.PNo)
-			params[i].PNotStated = float8(a.PNotStated)
-			params[i].Confidence = float8(a.Confidence)
+		params[i] = sqlc.InsertAchievementOutcomesParams{
+			DraftID: draftID, AchievementID: aid, UserID: userID, JobID: jobID,
+			PYes: float8(o.PYes), PNo: float8(o.PNo),
+			OnSourceCv: o.OnSourceCV, InFinalCv: o.InFinalCV, OutscoredKeptButLeftOut: o.OutscoredKeptButLeftOut, Reworded: o.Reworded,
 		}
 	}
 	return params, nil
 }
 
-func float8(f float64) pgtype.Float8 {
-	return pgtype.Float8{Float64: f, Valid: true}
+func float8(f *float64) pgtype.Float8 {
+	if f == nil {
+		return pgtype.Float8{}
+	}
+	return pgtype.Float8{Float64: *f, Valid: true}
 }
 
 func (s *Store) GetDraft(ctx context.Context, userID, id string) (dto.Draft, error) {
@@ -205,13 +175,9 @@ func (s *Store) ClaimDraft(ctx context.Context) (dto.DraftClaim, error) {
 	for i, id := range row.AchievementIds {
 		ids[i] = id.String()
 	}
-	swaps, err := decodeSwaps(row.SkillSwaps)
-	if err != nil {
-		return dto.DraftClaim{}, err
-	}
 	return dto.DraftClaim{
-		SkillSwaps: swaps,
-		ID:         row.ID.String(), UserID: row.UserID.String(), JobID: row.JobID.String(),
+		Mode: dto.DraftMode(row.Mode),
+		ID:   row.ID.String(), UserID: row.UserID.String(), JobID: row.JobID.String(),
 		DocID: row.BaseDocID, TabID: row.BaseTabID, AchievementIDs: ids,
 		Attempts: int(row.Attempts), DraftDocID: row.DraftDocID,
 		JobDescription: row.JobDescription, JobFingerprint: row.JobFingerprint,
@@ -299,22 +265,39 @@ func (s *Store) QueueKeep(ctx context.Context, userID, id string) (dto.Draft, er
 
 // CompleteKeep marks the claimed Draft kept as a Doc. A stale claim is
 // ErrDraftNotFound; a second kept Draft of the Job is ErrKeptDraftExists.
-func (s *Store) CompleteKeep(ctx context.Context, claim dto.DraftClaim) error {
+func (s *Store) CompleteKeep(ctx context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error {
 	id, err := parseID(claim.ID, ErrDraftNotFound)
 	if err != nil {
 		return err
 	}
-	n, err := s.queries.CompleteKeep(ctx, sqlc.CompleteKeepParams{ID: id, Attempts: int32(claim.Attempts)})
-	if data.IsUniqueViolation(err) {
-		return ErrKeptDraftExists
+	uid, err := parseID(claim.UserID, ErrDraftNotFound)
+	if err != nil {
+		return err
 	}
+	jid, err := parseID(claim.JobID, ErrJobNotFound)
+	if err != nil {
+		return err
+	}
+	params, err := achievementOutcomeParams(id, uid, jid, outcomes)
 	if err != nil {
 		return fmt.Errorf("store.CompleteKeep: %w", err)
 	}
-	if n == 0 {
-		return ErrDraftNotFound
-	}
-	return nil
+	return s.inTx(ctx, func(q *sqlc.Queries) error {
+		n, err := q.CompleteKeep(ctx, sqlc.CompleteKeepParams{ID: id, Attempts: int32(claim.Attempts)}) //nolint:gosec // G115: pedantic, attempts never exceed dto.MaxDraftAttempts
+		if data.IsUniqueViolation(err) {
+			return ErrKeptDraftExists
+		}
+		if err != nil {
+			return fmt.Errorf("store.CompleteKeep: %w", err)
+		}
+		if n == 0 {
+			return ErrDraftNotFound
+		}
+		if _, err := q.InsertAchievementOutcomes(ctx, params); err != nil {
+			return fmt.Errorf("store.CompleteKeep: outcomes: %w", err)
+		}
+		return nil
+	})
 }
 
 // FailKeep releases the claimed Draft for a backed-off retry, or returns it
@@ -379,4 +362,50 @@ func (s *Store) JobDescription(ctx context.Context, jobID string) (string, error
 		return "", fmt.Errorf("store.JobDescription: %w", err)
 	}
 	return desc, nil
+}
+
+// SetDraftInsights stores the Explain result and the hash of what it was
+// computed from; ErrDraftNotFound when userID does not own the Draft.
+func (s *Store) SetDraftInsights(ctx context.Context, userID, id string, insights json.RawMessage, forHash string) error {
+	uid, err := parseID(userID, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	did, err := parseID(id, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.SetDraftInsights(ctx, sqlc.SetDraftInsightsParams{ID: did, UserID: uid, Insights: insights, InsightsFor: forHash})
+	if err != nil {
+		return fmt.Errorf("store.SetDraftInsights: %w", err)
+	}
+	if n == 0 {
+		return ErrDraftNotFound
+	}
+	return nil
+}
+
+// JobAnnotations returns the User's note and comments on a Job; both are
+// empty when there are none.
+func (s *Store) JobAnnotations(ctx context.Context, userID, jobID string) (dto.JobAnnotations, error) {
+	uid, err := parseID(userID, ErrDraftNotFound)
+	if err != nil {
+		return dto.JobAnnotations{}, err
+	}
+	jid, err := parseID(jobID, ErrJobNotFound)
+	if err != nil {
+		return dto.JobAnnotations{}, err
+	}
+	note, err := s.queries.GetJobNote(ctx, sqlc.GetJobNoteParams{UserID: uid, JobID: jid})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return dto.JobAnnotations{}, fmt.Errorf("store.JobAnnotations: note: %w", err)
+	}
+	comments, err := s.queries.ListJobCommentBodies(ctx, sqlc.ListJobCommentBodiesParams{UserID: uid, JobID: jid})
+	if err != nil {
+		return dto.JobAnnotations{}, fmt.Errorf("store.JobAnnotations: comments: %w", err)
+	}
+	if comments == nil {
+		comments = []string{}
+	}
+	return dto.JobAnnotations{Note: note, Comments: comments}, nil
 }

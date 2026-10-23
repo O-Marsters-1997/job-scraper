@@ -10,10 +10,18 @@ type Position struct {
 }
 
 type Achievement struct {
-	ID         string `json:"id"`
-	PositionID string `json:"positionId"`
-	Text       string `json:"text"`
-	Context    string `json:"context"`
+	ID         string            `json:"id"`
+	PositionID string            `json:"positionId"`
+	Text       string            `json:"text"`
+	Context    string            `json:"context"`
+	Stats      *AchievementStats `json:"stats"`
+}
+
+type AchievementStats struct {
+	InCVs   int `json:"inCvs"`
+	LeftOut int `json:"leftOut"`
+	Applied int `json:"applied"`
+	Replied int `json:"replied"`
 }
 
 // PositionInput dates are YYYY-MM-DD; a nil EndDate means the Position is current.

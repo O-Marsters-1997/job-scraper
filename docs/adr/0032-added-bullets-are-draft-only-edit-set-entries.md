@@ -32,5 +32,4 @@ the User adds has no base paragraph and no slot ID.
 
 ## Consequences
 
-- The AI path is untouched: it still fills base slots only (`cvedit/rules.md`).
 - Draft Docs made before this change load unchanged, since `Added` is optional.

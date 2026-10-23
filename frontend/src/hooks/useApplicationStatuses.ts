@@ -39,12 +39,15 @@ export function useUpdateApplicationStatus() {
 			name,
 			colour,
 			replyWindowDays,
+			countsAsReply,
 		}: {
 			id: string;
 			name: string;
 			colour: string;
 			replyWindowDays: number | null;
-		}) => updateApplicationStatus(id, name, colour, replyWindowDays),
+			countsAsReply: boolean;
+		}) =>
+			updateApplicationStatus(id, name, colour, replyWindowDays, countsAsReply),
 		[keys.statuses, keys.applications.all],
 	);
 }

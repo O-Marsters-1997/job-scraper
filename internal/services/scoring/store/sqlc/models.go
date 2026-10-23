@@ -157,6 +157,20 @@ type Achievement struct {
 	Context    string
 }
 
+type AchievementOutcome struct {
+	DraftID                 pgtype.UUID
+	AchievementID           pgtype.UUID
+	UserID                  pgtype.UUID
+	JobID                   pgtype.UUID
+	PYes                    pgtype.Float8
+	PNo                     pgtype.Float8
+	OnSourceCv              bool
+	InFinalCv               bool
+	OutscoredKeptButLeftOut bool
+	Reworded                bool
+	CreatedAt               pgtype.Timestamptz
+}
+
 type AnswerCorrection struct {
 	UserID    pgtype.UUID
 	JobID     pgtype.UUID
@@ -184,6 +198,7 @@ type ApplicationStatus struct {
 	Colour          string
 	CreatedAt       pgtype.Timestamptz
 	ReplyWindowDays pgtype.Int4
+	CountsAsReply   bool
 	SystemKey       pgtype.Text
 }
 
@@ -514,23 +529,6 @@ type Position struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
-type PreferenceLabel struct {
-	ID            pgtype.UUID
-	UserID        pgtype.UUID
-	JobID         pgtype.UUID
-	DraftID       pgtype.UUID
-	Kind          string
-	AchievementID pgtype.UUID
-	PYes          pgtype.Float8
-	PNo           pgtype.Float8
-	PNotStated    pgtype.Float8
-	Confidence    pgtype.Float8
-	Preselected   bool
-	Kept          bool
-	Position      pgtype.Int4
-	CreatedAt     pgtype.Timestamptz
-}
-
 type PushSubscription struct {
 	ID        pgtype.UUID
 	UserID    pgtype.UUID
@@ -637,6 +635,7 @@ type TailoredCv struct {
 	DraftDocID     pgtype.Text
 	Status         string
 	Outcome        pgtype.Text
+	Mode           string
 	KeptAs         pgtype.Text
 	KeepNote       string
 	Attempts       int32
@@ -644,6 +643,8 @@ type TailoredCv struct {
 	LeaseUntil     pgtype.Timestamptz
 	LastError      string
 	CreatedAt      pgtype.Timestamptz
+	Insights       []byte
+	InsightsFor    string
 }
 
 type Task struct {

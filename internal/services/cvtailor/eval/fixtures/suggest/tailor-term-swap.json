@@ -1,0 +1,10 @@
+{
+ "Name": "tailor-term-swap",
+ "Scenario": "A job description quote uses a different term for something the Achievement already says; only the term should move.",
+ "Text": "Built REST services in Go for the payments team",
+ "Achievements": [
+  "Built REST services in Go for the payments team"
+ ],
+ "Action": "tailor",
+ "Quote": "Experience building microservices in Go"
+}

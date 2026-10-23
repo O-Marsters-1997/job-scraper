@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const cvHeadingSchema = z.object({
+const cvHeadingSchema = z.object({
 	text: z.string(),
 	positionId: z.string().nullable(),
 	confirmed: z.boolean(),
@@ -32,6 +32,9 @@ const draftStatusSchema = z.enum([
 	"ready",
 	"failed",
 ]);
+
+const draftModeSchema = z.enum(["as_is", "generate"]);
+type DraftMode = z.infer<typeof draftModeSchema>;
 
 const draftOutcomeSchema = z.enum(["kept", "discarded"]);
 
@@ -74,6 +77,8 @@ const draftContentSchema = z.object({
 	positions: z.array(
 		z.object({
 			positionId: z.string(),
+			headingText: z.string(),
+			linked: z.boolean(),
 			bullets: z.array(
 				z.object({ text: z.string(), achievementIds: z.array(z.string()) }),
 			),
@@ -81,9 +86,16 @@ const draftContentSchema = z.object({
 	),
 });
 
+const insightsSummarySchema = z.object({
+	anchored: z.number(),
+	total: z.number(),
+	stale: z.boolean(),
+});
+
 export const draftSchema = z.object({
 	id: z.string(),
 	jobId: z.string(),
+	mode: draftModeSchema,
 	status: draftStatusSchema,
 	outcome: draftOutcomeSchema.nullable(),
 	keptAs: z.string(),
@@ -95,6 +107,7 @@ export const draftSchema = z.object({
 	content: draftContentSchema.nullable(),
 	base: draftContentSchema.nullable(),
 	skillsEditable: z.boolean(),
+	insights: insightsSummarySchema.nullable(),
 	baseDocId: z.string(),
 	baseTabId: z.string(),
 });
@@ -177,8 +190,34 @@ export type DraftInput = {
 	jobId: string;
 	docId: string;
 	tabId: string;
-	achievementIds: string[];
+	mode: DraftMode;
 };
+export const bulletLeanSchema = z.object({
+	slotId: z.string(),
+	achievementId: z.string().nullable(),
+	lean: z.number().nullable(),
+	state: z.enum(["fit", "unclear", "low"]).nullable(),
+	replacedFrom: z.string().nullable(),
+	replacedLean: z.number().nullable(),
+	closerMatch: z
+		.object({ achievementId: z.string(), text: z.string(), lean: z.number() })
+		.nullable(),
+});
+export type BulletLean = z.infer<typeof bulletLeanSchema>;
+const insightSourceSchema = z.enum(["jd", "note", "comment"]);
+const insightLineSchema = z.object({
+	slotId: z.string(),
+	lean: z.number().nullable(),
+	source: insightSourceSchema,
+	quote: z.string(),
+	why: z.string(),
+	anchored: z.boolean(),
+});
+export const draftInsightsSchema = z.object({
+	lines: z.array(insightLineSchema),
+	stale: z.boolean(),
+});
+export type DraftInsights = z.infer<typeof draftInsightsSchema>;
 export type CVHeading = z.infer<typeof cvHeadingSchema>;
 export type Suggestion = z.infer<typeof suggestionSchema>;
 export type ExperienceMatch = z.infer<typeof experienceMatchSchema>;
@@ -193,11 +232,12 @@ export const suggestDoneSchema = z.object({
 	findings: list(draftFindingSchema),
 });
 
-export type SuggestAction = "fit" | "tighten" | "verb" | "ask";
+export type SuggestAction = "fit" | "tighten" | "verb" | "ask" | "tailor";
 export type SuggestDone = z.infer<typeof suggestDoneSchema>;
 export type SuggestRequest = {
 	action: SuggestAction;
 	prompt: string;
+	quote: string;
 	text: string;
 	maxChars: number;
 };

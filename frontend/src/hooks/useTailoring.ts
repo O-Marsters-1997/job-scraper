@@ -4,10 +4,12 @@ import { keys } from "../api/keys";
 import {
 	createDraft,
 	discardDraft,
+	explainDraft,
 	fetchDraft,
+	fetchDraftInsights,
 	fetchDraftLayout,
+	fetchDraftLean,
 	fetchExperienceMatch,
-	fetchHeadings,
 	fetchJobDrafts,
 	fetchSuggestions,
 	keepDraft,
@@ -19,18 +21,6 @@ import type { HeadingMapping, SkillGroup, SlotEdit } from "../types/tailoring";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export type CVRef = { docId: string; tabId: string };
-
-export function useHeadings(cv: Accessor<CVRef | undefined>) {
-	return createQuery(() => {
-		const ref = cv();
-		const { docId = "", tabId = "" } = ref ?? {};
-		return {
-			queryKey: keys.tailoring.headings(docId, tabId),
-			queryFn: () => fetchHeadings(docId, tabId),
-			enabled: ref !== undefined,
-		};
-	});
-}
 
 export function useSaveHeadings() {
 	return useInvalidatingMutation(
@@ -98,6 +88,38 @@ export function useDraftLayout(id: Accessor<string>) {
 	}));
 }
 
+export function useDraftLean(id: Accessor<string>, enabled: Accessor<boolean>) {
+	return createQuery(() => ({
+		queryKey: keys.tailoring.draftLean(id()),
+		queryFn: () => fetchDraftLean(id()),
+		enabled: enabled(),
+		retry: false,
+		refetchOnWindowFocus: false,
+		staleTime: 5 * 60 * 1000,
+	}));
+}
+
+export function useDraftInsights(
+	id: Accessor<string>,
+	enabled: Accessor<boolean>,
+) {
+	return createQuery(() => ({
+		queryKey: keys.tailoring.draftInsights(id()),
+		queryFn: () => fetchDraftInsights(id()),
+		enabled: enabled(),
+		retry: false,
+		refetchOnWindowFocus: false,
+		staleTime: Number.POSITIVE_INFINITY,
+	}));
+}
+
+export function useExplainDraft(id: Accessor<string>) {
+	return useInvalidatingMutation(
+		() => explainDraft(id()),
+		() => [keys.tailoring.draftInsights(id())],
+	);
+}
+
 export const jobDraftsQueryOptions = (jobId: string) =>
 	queryOptions({
 		queryKey: keys.tailoring.jobDrafts(jobId),
@@ -120,14 +142,18 @@ export function useKeepDraft() {
 export function useSaveDraftSlots(id: Accessor<string>) {
 	return useInvalidatingMutation(
 		(slots: SlotEdit[]) => saveDraftSlots(id(), slots),
-		() => [keys.tailoring.draft(id())],
+		() => [keys.tailoring.draft(id()), keys.tailoring.draftInsights(id())],
 	);
 }
 
 export function useSaveDraftSkills(id: Accessor<string>) {
 	return useInvalidatingMutation(
 		(skills: SkillGroup[]) => saveDraftSlots(id(), [], skills),
-		() => [keys.tailoring.draft(id()), keys.tailoring.draftLayout(id())],
+		() => [
+			keys.tailoring.draft(id()),
+			keys.tailoring.draftLayout(id()),
+			keys.tailoring.draftInsights(id()),
+		],
 	);
 }
 
