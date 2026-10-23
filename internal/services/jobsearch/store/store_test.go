@@ -116,6 +116,23 @@ func TestStore_RetireHarvestSeenIDs(t *testing.T) {
 	}
 }
 
+func TestStore_RecordHarvestSeenIDs_ATSCheck(t *testing.T) {
+	t.Parallel()
+	st, _ := newStore(t)
+	ctx := t.Context()
+
+	if err := st.RecordHarvestSeenIDs(ctx, "wttj", "ats_check", []string{"a1"}); err != nil {
+		t.Fatalf("RecordHarvestSeenIDs: %v", err)
+	}
+	got, err := st.HarvestSeenIDs(ctx, "wttj")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != "a1" {
+		t.Errorf("HarvestSeenIDs = %v, want [a1]", got)
+	}
+}
+
 func insertCompany(t *testing.T, pool *pgxpool.Pool, slug string) string {
 	t.Helper()
 	var id string

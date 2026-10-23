@@ -463,7 +463,7 @@ CREATE TABLE harvest_runs (
 CREATE TABLE harvest_seen_ids (
     source        TEXT        NOT NULL,
     external_id   TEXT        NOT NULL,
-    outcome       TEXT        NOT NULL CONSTRAINT harvest_seen_ids_outcome_check CHECK (outcome IN ('backfill', 'ineligible', 'exported')),
+    outcome       TEXT        NOT NULL CONSTRAINT harvest_seen_ids_outcome_check CHECK (outcome IN ('backfill', 'ineligible', 'exported', 'ats_check')),
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (source, external_id)
 );
