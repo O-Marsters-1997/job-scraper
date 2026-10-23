@@ -34,13 +34,13 @@ type SkillSwap struct {
 	Name string `json:"name"`
 }
 
-// BulletLabel is what one offered Achievement looked like when a Draft was
-// created; Answer is nil when Jev had no cached answer for it.
-type BulletLabel struct {
-	AchievementID string
-	Answer        *Answer
-	Preselected   bool
-	Kept          bool
+type AchievementOutcome struct {
+	AchievementID           string
+	PYes, PNo               *float64
+	OnSourceCV              bool
+	InFinalCV               bool
+	OutscoredKeptButLeftOut bool
+	Reworded                bool
 }
 
 // MaxDraftAttempts is how many times a Draft is claimed before it fails for

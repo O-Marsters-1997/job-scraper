@@ -61,7 +61,7 @@ func TestClaimDraftReclaimsAfterLeaseExpiry(t *testing.T) {
 	st, pool, uid := newStore(t)
 	ctx := t.Context()
 	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
-	d, err := st.CreateDraft(ctx, uid, dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}}, nil)
+	d, err := st.CreateDraft(ctx, uid, dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,14 +95,14 @@ func TestCreateDraftUnknownJobIsNotFound(t *testing.T) {
 	t.Parallel()
 	st, _, uid := newStore(t)
 
-	_, err := st.CreateDraft(t.Context(), uid, dto.DraftInput{JobID: missingID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}}, nil)
+	_, err := st.CreateDraft(t.Context(), uid, dto.DraftInput{JobID: missingID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}})
 
 	if !errors.Is(err, store.ErrJobNotFound) {
 		t.Errorf("CreateDraft() err = %v, want ErrJobNotFound", err)
 	}
 }
 
-func TestCreateDraftAppendsBulletLabelsPerAttempt(t *testing.T) {
+func TestCompleteKeepRecordsAchievementOutcomes(t *testing.T) {
 	t.Parallel()
 	st, pool, uid := newStore(t)
 	ctx := t.Context()
@@ -120,30 +120,52 @@ func TestCreateDraftAppendsBulletLabelsPerAttempt(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{kept.ID}}
-	labels := []dto.BulletLabel{
-		{AchievementID: kept.ID, Answer: &dto.Answer{PYes: 0.7, PNo: 0.1, PNotStated: 0.2, Confidence: 0.6}, Preselected: true, Kept: true},
-		{AchievementID: unseen.ID},
+	yes, no := 0.7, 0.1
+	outcomes := []dto.AchievementOutcome{
+		{AchievementID: kept.ID, PYes: &yes, PNo: &no, OnSourceCV: true, InFinalCV: true, Reworded: true},
+		{AchievementID: unseen.ID, OutscoredKeptButLeftOut: true},
 	}
-
-	for range 2 {
-		d, err := st.CreateDraft(ctx, uid, in, labels)
-		if err != nil {
-			t.Fatalf("CreateDraft() err = %v", err)
-		}
-		if _, err := st.SetDraftOutcome(ctx, uid, d.ID, dto.OutcomeDiscarded); err != nil {
+	d, err := st.CreateDraft(ctx, uid, in)
+	if err != nil {
+		t.Fatalf("CreateDraft() err = %v", err)
+	}
+	if err := st.CompleteDraft(ctx, mustClaim(t, st), dto.DraftResult{EditSet: json.RawMessage(`{}`), DraftDocID: "copy"}); err != nil {
+		t.Fatal(err)
+	}
+	countOutcomes := func() (n int) {
+		t.Helper()
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM achievement_outcomes WHERE draft_id = $1`, d.ID).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
+		return n
+	}
+
+	if _, err := st.QueueKeep(ctx, uid, d.ID); err != nil {
+		t.Fatal(err)
+	}
+	claim := mustClaim(t, st)
+	if got := countOutcomes(); got != 0 {
+		t.Fatalf("outcomes before CompleteKeep = %d, want 0", got)
+	}
+	stale := claim
+	stale.Attempts++
+	if err := st.CompleteKeep(ctx, stale, outcomes); !errors.Is(err, store.ErrDraftNotFound) {
+		t.Fatalf("CompleteKeep(stale claim) err = %v, want ErrDraftNotFound", err)
+	}
+	if got := countOutcomes(); got != 0 {
+		t.Fatalf("outcomes after a stale CompleteKeep = %d, want 0", got)
+	}
+	if err := st.CompleteKeep(ctx, claim, outcomes); err != nil {
+		t.Fatalf("CompleteKeep() err = %v", err)
 	}
 
 	type row struct {
-		AchievementID     string
-		PYes, Confidence  *float64
-		Preselected, Kept bool
-		Kind              string
-		Position          *int
+		AchievementID                                  string
+		PYes, PNo                                      *float64
+		OnSourceCV, InFinalCV, OutscoredKept, Reworded bool
 	}
-	rows, err := pool.Query(ctx, `SELECT achievement_id::text, p_yes, confidence, preselected, kept, kind, position
-		FROM preference_labels WHERE user_id = $1 AND job_id = $2 AND draft_id IS NOT NULL ORDER BY created_at, preselected DESC`, uid, jobID)
+	rows, err := pool.Query(ctx, `SELECT achievement_id::text, p_yes, p_no, on_source_cv, in_final_cv, outscored_kept_but_left_out, reworded
+		FROM achievement_outcomes WHERE draft_id = $1 AND user_id = $2 AND job_id = $3 ORDER BY in_final_cv DESC`, d.ID, uid, jobID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,17 +173,27 @@ func TestCreateDraftAppendsBulletLabelsPerAttempt(t *testing.T) {
 	var got []row
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.AchievementID, &r.PYes, &r.Confidence, &r.Preselected, &r.Kept, &r.Kind, &r.Position); err != nil {
+		if err := rows.Scan(&r.AchievementID, &r.PYes, &r.PNo, &r.OnSourceCV, &r.InFinalCV, &r.OutscoredKept, &r.Reworded); err != nil {
 			t.Fatal(err)
 		}
 		got = append(got, r)
 	}
-	yes, conf := 0.7, 0.6
-	one := row{AchievementID: kept.ID, PYes: &yes, Confidence: &conf, Preselected: true, Kept: true, Kind: "bullet"}
-	two := row{AchievementID: unseen.ID, Kind: "bullet"}
-	if diff := cmp.Diff([]row{one, two, one, two}, got); diff != "" {
-		t.Errorf("preference_labels mismatch (-want +got):\n%s", diff)
+	want := []row{
+		{AchievementID: kept.ID, PYes: &yes, PNo: &no, OnSourceCV: true, InFinalCV: true, Reworded: true},
+		{AchievementID: unseen.ID, OutscoredKept: true},
 	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("achievement_outcomes mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func mustClaim(t *testing.T, st *store.Store) dto.DraftClaim {
+	t.Helper()
+	c, err := st.ClaimDraft(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
 
 func TestOnlyOneKeptTailoredCVPerJob(t *testing.T) {

@@ -83,7 +83,7 @@ func (e draftEnv) run(t *testing.T, tk tick) {
 	if tk.creds == nil {
 		tk.creds = apiKey
 	}
-	m := cvtailor.Build(cvtailor.Deps{Store: e.store, Docs: tk.docs, Drive: tk.drive, Editor: tk.editor, Creds: tk.creds})
+	m := cvtailor.Build(cvtailor.Deps{Store: e.store, Docs: tk.docs, Drive: tk.drive, Asker: e.asker, Editor: tk.editor, Creds: tk.creds})
 	if err := m.RunTick(t.Context()); err != nil {
 		t.Fatalf("RunTick() error = %v", err)
 	}

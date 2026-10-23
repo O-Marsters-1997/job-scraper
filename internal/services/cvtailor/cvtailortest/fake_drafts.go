@@ -45,11 +45,10 @@ func (f *FakeStore) MakeDraftDue(id string) {
 	f.drafts[id].dueAt = time.Now()
 }
 
-// BulletLabels returns every label recorded by CreateDraft, in order.
-func (f *FakeStore) BulletLabels() []dto.BulletLabel {
+func (f *FakeStore) AchievementOutcomes(draftID string) []dto.AchievementOutcome {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return slices.Clone(f.labels)
+	return slices.Clone(f.outcomes[draftID])
 }
 
 // DraftResult returns what CompleteDraft recorded for the Draft.
@@ -59,7 +58,7 @@ func (f *FakeStore) DraftResult(id string) dto.DraftResult {
 	return f.drafts[id].result
 }
 
-func (f *FakeStore) CreateDraft(_ context.Context, userID string, in dto.DraftInput, labels []dto.BulletLabel) (dto.Draft, error) {
+func (f *FakeStore) CreateDraft(_ context.Context, userID string, in dto.DraftInput) (dto.Draft, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, other := range f.drafts {
@@ -72,7 +71,6 @@ func (f *FakeStore) CreateDraft(_ context.Context, userID string, in dto.DraftIn
 	}
 	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Mode: in.Mode, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now(), BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIDs: slices.Clone(in.AchievementIDs), SkillSwaps: slices.Clone(in.SkillSwaps)}, userID: userID, input: in, dueAt: time.Now()}
 	f.drafts[d.ID] = d
-	f.labels = append(f.labels, labels...)
 	return d.Draft, nil
 }
 
@@ -240,7 +238,7 @@ func (f *FakeStore) keeping(claim dto.DraftClaim) (*draft, error) {
 	return d, nil
 }
 
-func (f *FakeStore) CompleteKeep(_ context.Context, claim dto.DraftClaim) error {
+func (f *FakeStore) CompleteKeep(_ context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	d, err := f.keeping(claim)
@@ -254,6 +252,7 @@ func (f *FakeStore) CompleteKeep(_ context.Context, claim dto.DraftClaim) error 
 	}
 	kept := dto.OutcomeKept
 	d.Status, d.Outcome, d.KeptAs, d.leased, d.LastError = "ready", &kept, "doc", false, ""
+	f.outcomes[d.ID] = slices.Clone(outcomes)
 	return nil
 }
 

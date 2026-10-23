@@ -117,7 +117,9 @@ func (m *Module) keep(ctx context.Context, claim dto.DraftClaim) error {
 	cause := m.drive.RenameFile(ctx, claim.UserID, claim.DraftDocID, name)
 	if cause != nil {
 		cause = fmt.Errorf("rename kept doc: %w", cause)
-	} else if cause = m.store.CompleteKeep(ctx, claim); cause == nil {
+	} else if outcomes, err := m.svc.keepOutcomes(ctx, claim); err != nil {
+		cause = fmt.Errorf("compute outcomes: %w", err)
+	} else if cause = m.store.CompleteKeep(ctx, claim, outcomes); cause == nil {
 		return nil
 	} else if !errors.Is(cause, store.ErrKeptDraftExists) {
 		return cause

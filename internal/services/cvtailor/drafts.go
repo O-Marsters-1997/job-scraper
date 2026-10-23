@@ -17,7 +17,7 @@ func (s *Service) CreateDraft(ctx context.Context, userID string, in dto.DraftIn
 	switch in.Mode {
 	case dto.DraftModeAsIs:
 		in.AchievementIDs, in.SkillSwaps = []string{}, []dto.SkillSwap{}
-		draft, err := s.store.CreateDraft(ctx, userID, in, nil)
+		draft, err := s.store.CreateDraft(ctx, userID, in)
 		if err != nil {
 			return dto.DraftRef{}, err
 		}
@@ -67,7 +67,7 @@ func (s *Service) CreateDraft(ctx context.Context, userID string, in dto.DraftIn
 		return dto.DraftRef{}, err
 	}
 	in.SkillSwaps = swaps
-	draft, err := s.store.CreateDraft(ctx, userID, in, s.bulletLabels(ctx, userID, in, positions))
+	draft, err := s.store.CreateDraft(ctx, userID, in)
 	if err != nil {
 		return dto.DraftRef{}, err
 	}

@@ -21,7 +21,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 	create := func(t *testing.T, f Fixture) dto.Draft {
 		t.Helper()
-		d, err := f.Store.CreateDraft(ctx, f.UserID, input(f), nil)
+		d, err := f.Store.CreateDraft(ctx, f.UserID, input(f))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -74,7 +74,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		f := newStore(t)
 		in := input(f)
 		in.SkillSwaps = []dto.SkillSwap{{BankSkillID: "b1", Line: 1, Replaces: "SQL"}}
-		if _, err := f.Store.CreateDraft(ctx, f.UserID, in, nil); err != nil {
+		if _, err := f.Store.CreateDraft(ctx, f.UserID, in); err != nil {
 			t.Fatal(err)
 		}
 		if diff := cmp.Diff(in.SkillSwaps, claim(t, f).SkillSwaps); diff != "" {
@@ -200,21 +200,21 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		f := newStore(t)
 		asIs := input(f)
 		asIs.Mode = dto.DraftModeAsIs
-		first, err := f.Store.CreateDraft(ctx, f.UserID, asIs, nil)
+		first, err := f.Store.CreateDraft(ctx, f.UserID, asIs)
 		if err != nil || first.Mode != dto.DraftModeAsIs {
 			t.Fatalf("CreateDraft(as_is) = %+v, %v, want an as_is Draft", first, err)
 		}
 		if c := claim(t, f); c.ID != first.ID || c.Mode != dto.DraftModeAsIs {
 			t.Errorf("ClaimDraft() = %+v, want the as_is Draft with its mode", c)
 		}
-		_, err = f.Store.CreateDraft(ctx, f.UserID, input(f), nil)
+		_, err = f.Store.CreateDraft(ctx, f.UserID, input(f))
 		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindConflict.Status() {
 			t.Errorf("second CreateDraft() err = %v, want a conflict", err)
 		}
 		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeDiscarded); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.Store.CreateDraft(ctx, f.UserID, input(f), nil); err != nil {
+		if _, err := f.Store.CreateDraft(ctx, f.UserID, input(f)); err != nil {
 			t.Errorf("CreateDraft() after discarding err = %v, want nil", err)
 		}
 	})
@@ -288,7 +288,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if _, err := f.Store.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
 			t.Errorf("ClaimDraft() while leased err = %v, want ErrNotFound", err)
 		}
-		if err := f.Store.CompleteKeep(ctx, c); err != nil {
+		if err := f.Store.CompleteKeep(ctx, c, nil); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
