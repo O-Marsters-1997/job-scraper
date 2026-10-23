@@ -44,7 +44,7 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 		ID: t.ID.String(), JobID: t.JobID.String(), Mode: dto.DraftMode(t.Mode), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, LastError: t.LastError,
 		CreatedAt: t.CreatedAt.Time, Findings: findings, DraftDocID: t.DraftDocID.String, EditSet: t.EditSet, BaseContent: t.BaseContent,
 		BaseDocID: t.BaseDocID, BaseTabID: t.BaseTabID, AchievementIDs: achievementIDs,
-		Insights: t.Insights, InsightsFor: t.InsightsFor,
+		InsightLines: t.Insights, InsightsFor: t.InsightsFor,
 	}, nil
 }
 

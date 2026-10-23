@@ -51,24 +51,25 @@ type DraftFinding struct {
 // is nil until the User keeps or discards a ready Draft. Provenance is set
 // by GetDraft only.
 type Draft struct {
-	ID          string           `json:"id"`
-	JobID       string           `json:"jobId"`
-	Mode        DraftMode        `json:"mode"`
-	Status      string           `json:"status"`
-	Outcome     *string          `json:"outcome"`
-	KeptAs      string           `json:"keptAs"`
-	DraftDocURL *string          `json:"draftDocUrl"`
-	LastError   string           `json:"lastError"`
-	CreatedAt   time.Time        `json:"createdAt"`
-	Findings    []DraftFinding   `json:"findings"`
-	Provenance  *DraftProvenance `json:"provenance"`
-	DraftDocID  string           `json:"-"`
-	EditSet     json.RawMessage  `json:"-"`
-	Content     *DraftContent    `json:"content"`
-	Base        *DraftContent    `json:"base"`
-	BaseContent json.RawMessage  `json:"-"`
-	Insights    json.RawMessage  `json:"-"`
-	InsightsFor string           `json:"-"`
+	ID           string           `json:"id"`
+	JobID        string           `json:"jobId"`
+	Mode         DraftMode        `json:"mode"`
+	Status       string           `json:"status"`
+	Outcome      *string          `json:"outcome"`
+	KeptAs       string           `json:"keptAs"`
+	DraftDocURL  *string          `json:"draftDocUrl"`
+	LastError    string           `json:"lastError"`
+	CreatedAt    time.Time        `json:"createdAt"`
+	Findings     []DraftFinding   `json:"findings"`
+	Provenance   *DraftProvenance `json:"provenance"`
+	DraftDocID   string           `json:"-"`
+	EditSet      json.RawMessage  `json:"-"`
+	Content      *DraftContent    `json:"content"`
+	Base         *DraftContent    `json:"base"`
+	BaseContent  json.RawMessage  `json:"-"`
+	InsightLines json.RawMessage  `json:"-"`
+	InsightsFor  string           `json:"-"`
+	Insights     *InsightsSummary `json:"insights"`
 	// SkillsEditable is false for a Draft made before Skill Lines.
 	SkillsEditable bool `json:"skillsEditable"`
 
@@ -337,6 +338,12 @@ type InsightLine struct {
 type DraftInsights struct {
 	Lines []InsightLine `json:"lines"`
 	Stale bool          `json:"stale"`
+}
+
+type InsightsSummary struct {
+	Anchored int  `json:"anchored"`
+	Total    int  `json:"total"`
+	Stale    bool `json:"stale"`
 }
 
 type ExplainDraftInput struct {

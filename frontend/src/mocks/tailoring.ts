@@ -223,6 +223,7 @@ export function createDraft(input: DraftInput): DraftRef {
 			content: null,
 			base: null,
 			skillsEditable: false,
+			insights: null,
 			baseDocId: input.docId,
 			baseTabId: input.tabId,
 		},
@@ -255,6 +256,7 @@ export function getDraft(id: string): Draft {
 			draftDocUrl: MOCK_DOC_URL,
 			provenance: mockProvenance(),
 			skillsEditable: true,
+			insights: null,
 			...mockContent(),
 			findings: [
 				{
@@ -471,6 +473,7 @@ function seedDraft(id: string, outcome: Draft["outcome"], jobId?: string) {
 			],
 			provenance: mockProvenance(),
 			skillsEditable: true,
+			insights: null,
 			baseDocId: "mock-doc",
 			baseTabId: "mock-tab",
 			...mockContent(),

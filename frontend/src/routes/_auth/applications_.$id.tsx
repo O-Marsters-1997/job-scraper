@@ -357,7 +357,16 @@ function CvRowBody(props: {
 						params={{ id: draft().id }}
 						class="flex items-center justify-between gap-3 rounded-md py-1.5 pr-3 text-sm transition-colors hover:bg-surface-muted"
 					>
-						<span>Tailored CV, {formatDate(draft().createdAt)}</span>
+						<span>
+							Tailored CV, {formatDate(draft().createdAt)}
+							<Show when={draft().insights}>
+								{(i) => (
+									<span class="ml-2 text-xs text-muted">
+										Insights: {i().anchored}/{i().total} anchored
+									</span>
+								)}
+							</Show>
+						</span>
 						<Badge
 							variant={draft().outcome === "kept" ? "default" : "secondary"}
 							class={cn(

@@ -131,6 +131,27 @@ func TestModule_ExplainDraft(t *testing.T) {
 		}
 	})
 
+	t.Run("the draft summarises its stored insights, and has none before an Explain", func(t *testing.T) {
+		t.Parallel()
+		e, id, slot := setup(t)
+		before, err := e.svc.GetDraft(t.Context(), userID, dto.DraftQuery{ID: id})
+		if err != nil || before.Insights != nil {
+			t.Fatalf("GetDraft() before Explain = %+v, %v, want no insights", before.Insights, err)
+		}
+		editor := cvtailortest.Insighting(cvedit.InsightLine{SlotID: slot, Source: "jd", Quote: "Go engineer", Why: "fits"})
+		if _, err := module(e, editor, cvtailortest.Key(apiKey)).ExplainDraft(t.Context(), userID, dto.ExplainDraftInput{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := e.svc.GetDraft(t.Context(), userID, dto.DraftQuery{ID: id})
+		listed, listErr := e.svc.ListJobDrafts(t.Context(), userID, dto.DraftJobQuery{JobID: jobID})
+
+		want := &dto.InsightsSummary{Anchored: 1, Total: 1}
+		if err != nil || listErr != nil || len(listed) == 0 || cmp.Diff(want, got.Insights) != "" || cmp.Diff(want, listed[0].Insights) != "" {
+			t.Errorf("summaries = %+v, %+v (%v, %v), want %+v", got.Insights, listed, err, listErr, want)
+		}
+	})
+
 	t.Run("a draft never explained has no lines", func(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)

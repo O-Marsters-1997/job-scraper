@@ -20,6 +20,8 @@ import { wordDiff } from "@/lib/wordDiff";
 import type { Draft, DraftLayout } from "@/types/tailoring";
 import { createDraftEditor } from "../../hooks/useDraftEditor";
 import { useExperience } from "../../hooks/useExperience";
+import { useJobComments } from "../../hooks/useJobComments";
+import { useJobNote } from "../../hooks/useJobNotes";
 import { useJob } from "../../hooks/useJobs";
 import { createKeepFlow } from "../../hooks/useKeepFlow";
 import { createRolePicks } from "../../hooks/useRolePicks";
@@ -41,6 +43,7 @@ import {
 } from "./DocPage";
 import { PageMeter, SaveIndicator } from "./DraftMeters";
 import { Insights } from "./Insights";
+import type { JobTextBlock } from "./JobText";
 import { KeepControls, KeepNotices } from "./KeepFlow";
 import { MarginCards } from "./MarginCards";
 import { PrintPreview } from "./PrintPreview";
@@ -129,6 +132,26 @@ export function DraftEditor(props: {
 		() => props.draft.status === "ready",
 	);
 	const explain = useExplainDraft(() => props.draft.id);
+	const note = useJobNote(() => props.draft.jobId);
+	const comments = useJobComments(() => props.draft.jobId);
+	const jobText = () => {
+		const blocks: JobTextBlock[] = [
+			{
+				label: "Job description",
+				source: "jd",
+				text: job.data?.Description ?? "",
+			},
+			{ label: "Your note", source: "note", text: note.data?.Body ?? "" },
+			...(comments.data ?? []).map(
+				(c): JobTextBlock => ({
+					label: "Comment",
+					source: "comment",
+					text: c.Body,
+				}),
+			),
+		];
+		return blocks.filter((b) => b.text !== "");
+	};
 	const leanBySlot = createMemo(
 		() => new Map(leanQuery.data?.map((b) => [b.slotId, b])),
 	);
@@ -483,9 +506,10 @@ export function DraftEditor(props: {
 				<Switch fallback={<LayoutUnavailable reason={props.layoutError} />}>
 					<Match when={current() === "insights" && leanQuery.data}>
 						{(lean) => (
-							<div class="mx-auto max-w-3xl px-6 py-10">
+							<div class="mx-auto max-w-6xl px-6 py-10">
 								<Insights
 									lean={lean()}
+									jobText={jobText()}
 									insights={insightsQuery.data}
 									explaining={explain.isPending}
 									explainError={explain.error?.message}

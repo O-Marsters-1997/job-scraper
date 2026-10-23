@@ -27,6 +27,9 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 	if draft.Status != statusReady || len(draft.EditSet) == 0 {
 		return draft, nil
 	}
+	if draft, err = s.withInsightsSummary(ctx, userID, draft); err != nil {
+		return dto.Draft{}, err
+	}
 	positions, err := s.store.ListPositions(ctx, userID)
 	if err != nil {
 		return dto.Draft{}, err
@@ -70,7 +73,9 @@ func (s *Service) ListJobDrafts(ctx context.Context, userID string, q dto.DraftJ
 		return nil, err
 	}
 	for i := range drafts {
-		drafts[i] = withDocURL(drafts[i])
+		if drafts[i], err = s.withInsightsSummary(ctx, userID, withDocURL(drafts[i])); err != nil {
+			return nil, err
+		}
 	}
 	return drafts, nil
 }

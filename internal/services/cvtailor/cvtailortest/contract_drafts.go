@@ -135,15 +135,15 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if err := f.Store.SetDraftInsights(ctx, f.Other, d.ID, lines, "h1"); !apperr.IsKind(err, apperr.KindNotFound) {
 			t.Errorf("SetDraftInsights(other user) err = %v, want not found", err)
 		}
-		if got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID); len(got.Insights) != 0 || got.InsightsFor != "" {
-			t.Errorf("GetDraft() before Explain = %s / %q, want none", got.Insights, got.InsightsFor)
+		if got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID); len(got.InsightLines) != 0 || got.InsightsFor != "" {
+			t.Errorf("GetDraft() before Explain = %s / %q, want none", got.InsightLines, got.InsightsFor)
 		}
 		if err := f.Store.SetDraftInsights(ctx, f.UserID, d.ID, lines, "h1"); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
-		if !jsonEqual(t, lines, got.Insights) || got.InsightsFor != "h1" {
-			t.Errorf("GetDraft() = %s / %q, want %s / h1", got.Insights, got.InsightsFor, lines)
+		if !jsonEqual(t, lines, got.InsightLines) || got.InsightsFor != "h1" {
+			t.Errorf("GetDraft() = %s / %q, want %s / h1", got.InsightLines, got.InsightsFor, lines)
 		}
 	})
 
