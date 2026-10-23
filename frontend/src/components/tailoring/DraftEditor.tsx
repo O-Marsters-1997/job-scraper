@@ -167,6 +167,8 @@ export function DraftEditor(props: {
 		const key = activeSlot();
 		return key && editable() && !suggestions.get(key) ? key : undefined;
 	};
+	const tailorQuote = (slotId: string) =>
+		insightsQuery.data?.lines.find((l) => l.slotId === slotId && l.anchored);
 	const askOpen = () => askSlot() !== undefined && askSlot() === activeSlot();
 	const setAskOpen = (open: boolean) =>
 		setAskSlot(open ? activeSlot() : undefined);
@@ -564,10 +566,11 @@ export function DraftEditor(props: {
 											<WandMenu
 												top={wandTop()}
 												canFit={(metrics().fits[key()]?.lines ?? 1) > 1}
+												tailor={tailorQuote(key())}
 												askOpen={askOpen()}
 												onAskOpen={setAskOpen}
-												onAction={(action, prompt) =>
-													void suggestions.ask(key(), action, prompt)
+												onAction={(action, prompt, quote) =>
+													void suggestions.ask(key(), action, prompt, quote)
 												}
 											/>
 										)}

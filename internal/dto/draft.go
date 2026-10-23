@@ -270,6 +270,11 @@ type LayoutRun struct {
 	Link      string  `json:"link"`
 }
 
+const (
+	SuggestActionTailor   = "tailor"
+	TailorMaxChangedShare = 1.0 / 3
+)
+
 // SuggestInput asks for one inline edit of a slot. Text is the client's
 // current, possibly unsaved, text; MaxChars applies to the fit action.
 type SuggestInput struct {
@@ -277,6 +282,7 @@ type SuggestInput struct {
 	SlotID   string `json:"-" path:"slotId"`
 	Action   string `json:"action"`
 	Prompt   string `json:"prompt"`
+	Quote    string `json:"quote"`
 	Text     string `json:"text"`
 	MaxChars int    `json:"maxChars"`
 }

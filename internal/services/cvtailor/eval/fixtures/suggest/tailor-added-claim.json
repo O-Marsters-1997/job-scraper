@@ -1,0 +1,10 @@
+{
+ "Name": "tailor-added-claim",
+ "Scenario": "The quote names tools the Achievement does not mention; the model must not claim them.",
+ "Text": "Moved the billing service to Kubernetes",
+ "Achievements": [
+  "Moved the billing service to Kubernetes"
+ ],
+ "Action": "tailor",
+ "Quote": "Hands-on with Terraform, AWS and cloud cost optimisation"
+}

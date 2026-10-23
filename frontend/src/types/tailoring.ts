@@ -225,11 +225,12 @@ export const suggestDoneSchema = z.object({
 	findings: list(draftFindingSchema),
 });
 
-export type SuggestAction = "fit" | "tighten" | "verb" | "ask";
+export type SuggestAction = "fit" | "tighten" | "verb" | "ask" | "tailor";
 export type SuggestDone = z.infer<typeof suggestDoneSchema>;
 export type SuggestRequest = {
 	action: SuggestAction;
 	prompt: string;
+	quote: string;
 	text: string;
 	maxChars: number;
 };
