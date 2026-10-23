@@ -44,3 +44,29 @@ export const scrapeRunPageSchema = z.object({
 export type ScrapeRun = z.infer<typeof scrapeRunSchema>;
 export type ScrapeRunOutcome = z.infer<typeof scrapeRunOutcomeSchema>;
 export type ScrapeRunPage = z.infer<typeof scrapeRunPageSchema>;
+
+const sourceHealthSchema = z.object({
+	Kind: z.enum(["search"]),
+	TargetID: z.string(),
+	Source: z.string(),
+	TargetValue: z.string(),
+	TargetFilters: z.record(z.string(), z.string()),
+	Status: z.enum(["red", "amber", "green"]),
+	Reason: z.enum([
+		"last_failed",
+		"failing_streak",
+		"retried",
+		"no_new",
+		"no_runs",
+		"ok",
+	]),
+	Recent: z.array(scrapeRunOutcomeSchema),
+	LastRunAt: z.string().nullable(),
+	New: z.number(),
+	Elsewhere: z.number(),
+	Retries: z.number(),
+});
+
+export const sourceHealthListSchema = z.array(sourceHealthSchema);
+
+export type SourceHealth = z.infer<typeof sourceHealthSchema>;

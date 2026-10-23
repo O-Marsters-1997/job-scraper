@@ -21,6 +21,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/jobs/{id}", handlers.GetByID(m.jobs.Get))
 
 	r.Get("/scrape-runs", handlers.Query(m.jobs.ListScrapeRuns))
+	r.Get("/scrape-runs/health", handlers.GetAll(m.jobs.SourceHealth))
 
 	r.Get("/sources", handlers.GetAll(m.jobs.ListSources))
 	r.Get("/sources/resolve", handlers.Query(m.jobs.ResolveBoard))

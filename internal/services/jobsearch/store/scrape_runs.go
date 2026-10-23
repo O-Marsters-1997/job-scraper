@@ -161,15 +161,54 @@ func toScrapeRunDTO(row sqlc.ListScrapeRunsRow) dto.ScrapeRun {
 	if len(row.TargetFilters) > 0 {
 		_ = json.Unmarshal(row.TargetFilters, &run.TargetFilters)
 	}
-	switch {
-	case run.FinishedAt == nil:
-		run.Outcome = dto.OutcomeRunning
-	case run.StopReason == dto.StopFailed:
-		run.Outcome = dto.OutcomeFailed
-	case run.Retries > 0:
-		run.Outcome = dto.OutcomeRetried
-	default:
-		run.Outcome = dto.OutcomeSucceeded
-	}
+	run.Outcome = scrapeRunOutcome(run.FinishedAt != nil, run.StopReason, run.Retries)
 	return run
+}
+
+func scrapeRunOutcome(finished bool, stop dto.StopReason, retries int) dto.ScrapeRunOutcome {
+	switch {
+	case !finished:
+		return dto.OutcomeRunning
+	case stop == dto.StopFailed:
+		return dto.OutcomeFailed
+	case retries > 0:
+		return dto.OutcomeRetried
+	default:
+		return dto.OutcomeSucceeded
+	}
+}
+
+func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, ErrInvalidID
+	}
+	rows, err := s.queries.ListSourceHealthRuns(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListSourceHealth: %w", err)
+	}
+	var out []dto.SourceHealth
+	for _, row := range rows {
+		id := row.SourceTargetID.String()
+		if len(out) == 0 || out[len(out)-1].TargetID != id {
+			h := dto.SourceHealth{
+				Kind: dto.ScrapeRunSearch, TargetID: id, Source: row.Source, TargetValue: row.TargetValue,
+				TargetFilters: map[string]string{}, Recent: []dto.ScrapeRunOutcome{},
+			}
+			if len(row.TargetFilters) > 0 {
+				_ = json.Unmarshal(row.TargetFilters, &h.TargetFilters)
+			}
+			out = append(out, h)
+		}
+		if !row.StartedAt.Valid {
+			continue
+		}
+		h := &out[len(out)-1]
+		h.Recent = append(h.Recent, scrapeRunOutcome(true, dto.StopReason(row.StopReason.String), int(row.Retries)))
+		h.LastRunAt = &row.StartedAt.Time
+		h.New += int(row.NewListings)
+		h.Elsewhere += int(row.Elsewhere)
+		h.Retries += int(row.Retries)
+	}
+	return out, nil
 }

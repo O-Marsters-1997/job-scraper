@@ -1,4 +1,9 @@
-import { type ScrapeRunPage, scrapeRunPageSchema } from "../types/scrapeRun";
+import {
+	type ScrapeRunPage,
+	type SourceHealth,
+	scrapeRunPageSchema,
+	sourceHealthListSchema,
+} from "../types/scrapeRun";
 import { apiFetch } from "./client";
 import { mocked } from "./config";
 
@@ -18,5 +23,12 @@ export async function fetchScrapeRuns(
 			if (params.before) query.set("before", params.before);
 			return apiFetch(`/scrape-runs?${query}`, scrapeRunPageSchema);
 		},
+	);
+}
+
+export async function fetchSourceHealth(): Promise<SourceHealth[]> {
+	return mocked(
+		(db) => db.getSourceHealth(),
+		() => apiFetch("/scrape-runs/health", sourceHealthListSchema),
 	);
 }

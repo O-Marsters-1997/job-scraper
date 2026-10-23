@@ -1,3 +1,5 @@
+import type { SourceHealth } from "@/types/scrapeRun";
+
 export interface ActivitySearch {
 	target?: string | undefined;
 	before?: string | undefined;
@@ -36,4 +38,39 @@ export function formatDuration(startedAt: string, finishedAt: string): string {
 	);
 	if (seconds < 60) return `${seconds}s`;
 	return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+const STATUS_RANK = { red: 0, amber: 1, green: 2 } as const;
+
+export function splitHealth(rows: SourceHealth[]): {
+	attention: SourceHealth[];
+	healthy: SourceHealth[];
+} {
+	const lastRun = (r: SourceHealth) =>
+		r.LastRunAt ? Date.parse(r.LastRunAt) : 0;
+	const byWorst = [...rows].sort(
+		(a, b) =>
+			STATUS_RANK[a.Status] - STATUS_RANK[b.Status] || lastRun(b) - lastRun(a),
+	);
+	return {
+		attention: byWorst.filter((r) => r.Status !== "green"),
+		healthy: byWorst.filter((r) => r.Status === "green"),
+	};
+}
+
+export function healthLabel(row: SourceHealth): string {
+	switch (row.Reason) {
+		case "last_failed":
+			return "Last run failed";
+		case "failing_streak":
+			return "Failing repeatedly";
+		case "retried":
+			return `${row.Retries} retried ${row.Retries === 1 ? "attempt" : "attempts"}`;
+		case "no_new":
+			return "Nothing new in 5 runs";
+		case "no_runs":
+			return "No runs yet";
+		case "ok":
+			return "Healthy";
+	}
 }

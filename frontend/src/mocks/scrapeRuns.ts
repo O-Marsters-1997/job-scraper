@@ -1,4 +1,4 @@
-import type { ScrapeRun, ScrapeRunPage } from "@/types/scrapeRun";
+import type { ScrapeRun, ScrapeRunPage, SourceHealth } from "@/types/scrapeRun";
 
 const PAGE_SIZE = 50;
 const TOTAL = 120;
@@ -86,4 +86,37 @@ export function getScrapeRuns(params: {
 	const last = items[items.length - 1];
 	const more = start + PAGE_SIZE < matching.length;
 	return { Items: items, NextCursor: more && last ? last.ID : null };
+}
+
+export function getSourceHealth(): SourceHealth[] {
+	return TARGETS.map((target, n): SourceHealth => {
+		const targetRuns = RUNS.filter(
+			(r) => r.TargetID === `target-${n}` && r.FinishedAt,
+		);
+		const last5 = targetRuns.slice(0, 5).reverse();
+		const recent = last5.map((r) => r.Outcome);
+		const sum = (pick: (r: ScrapeRun) => number) =>
+			last5.reduce((total, r) => total + pick(r), 0);
+		const retries = sum((r) => r.Retries);
+		const classify = (): [SourceHealth["Status"], SourceHealth["Reason"]] => {
+			if (recent.length === 0) return ["green", "no_runs"];
+			if (recent.at(-1) === "failed") return ["red", "last_failed"];
+			if (retries > 0) return ["amber", "retried"];
+			return ["green", "ok"];
+		};
+		const [status, reason] = classify();
+		return {
+			Kind: "search",
+			TargetID: `target-${n}`,
+			...target,
+			TargetFilters: {},
+			Status: status,
+			Reason: reason,
+			Recent: recent,
+			LastRunAt: last5.at(-1)?.StartedAt ?? null,
+			New: sum((r) => r.New),
+			Elsewhere: sum((r) => r.Elsewhere),
+			Retries: retries,
+		};
+	});
 }

@@ -260,3 +260,55 @@ func TestStore_ListScrapeRuns(t *testing.T) {
 		}
 	})
 }
+
+func TestStore_ListSourceHealth(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newUserStore(t)
+	ctx := t.Context()
+	startRun(t, st, createTarget(t, st, pgtest.InsertUser(t, pool), "linkedin", "theirs").ID)
+	createTarget(t, st, userID, "linkedin", "idle")
+	busy := createTarget(t, st, userID, "linkedin", "busy")
+
+	for i := range 6 {
+		run := startRun(t, st, busy.ID)
+		if _, err := pool.Exec(ctx, "UPDATE scrape_runs SET started_at = NOW() - $2 * INTERVAL '1 minute', new_listings = 2 WHERE id = $1::uuid", run.RunID, 10-i); err != nil {
+			t.Fatal(err)
+		}
+		stop := dto.StopLastPage
+		if i == 5 {
+			stop = dto.StopFailed
+		}
+		if i == 4 {
+			if err := st.ScrapeRunAttemptFailed(ctx, run.RunID, 0, 1, "boom"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := st.FinishScrapeRun(ctx, run.RunID, stop); err != nil {
+			t.Fatal(err)
+		}
+	}
+	startRun(t, st, busy.ID)
+
+	got, err := st.ListSourceHealth(ctx, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListSourceHealth() returned %d rows, want 2 (the caller's searches)", len(got))
+	}
+	byValue := map[string]dto.SourceHealth{}
+	for _, h := range got {
+		byValue[h.TargetValue] = h
+	}
+	if h := byValue["idle"]; len(h.Recent) != 0 || h.LastRunAt != nil {
+		t.Errorf("idle = %+v, want no runs", h)
+	}
+	h := byValue["busy"]
+	wantRecent := []dto.ScrapeRunOutcome{dto.OutcomeSucceeded, dto.OutcomeSucceeded, dto.OutcomeSucceeded, dto.OutcomeRetried, dto.OutcomeFailed}
+	if diff := cmp.Diff(wantRecent, h.Recent); diff != "" {
+		t.Errorf("busy Recent (-want +got):\n%s", diff)
+	}
+	if h.New != 10 || h.Retries != 1 || h.LastRunAt == nil {
+		t.Errorf("busy = %+v, want New 10 over the last 5 finished runs, Retries 1 and a last run", h)
+	}
+}

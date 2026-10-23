@@ -67,3 +67,57 @@ func TestService_ListScrapeRuns(t *testing.T) {
 		}
 	})
 }
+
+type healthStore struct {
+	*jobsearchtest.FakeStore
+	rows []dto.SourceHealth
+}
+
+func (s *healthStore) ListSourceHealth(context.Context, string) ([]dto.SourceHealth, error) {
+	return s.rows, nil
+}
+
+func TestService_SourceHealth(t *testing.T) {
+	t.Parallel()
+	ok, retried, failed := dto.OutcomeSucceeded, dto.OutcomeRetried, dto.OutcomeFailed
+	tests := []struct {
+		name    string
+		recent  []dto.ScrapeRunOutcome
+		new     int
+		retries int
+		status  dto.HealthStatus
+		reason  dto.HealthReason
+	}{
+		{"no finished runs is green", nil, 0, 0, dto.HealthGreen, dto.ReasonNoRuns},
+		{"last run failed", []dto.ScrapeRunOutcome{ok, ok, failed}, 4, 3, dto.HealthRed, dto.ReasonLastFailed},
+		{"two failures in a row", []dto.ScrapeRunOutcome{ok, failed, failed, ok}, 4, 6, dto.HealthRed, dto.ReasonFailingStreak},
+		{"separated failures are not a streak", []dto.ScrapeRunOutcome{failed, ok, failed, ok}, 4, 6, dto.HealthAmber, dto.ReasonRetried},
+		{"a retried attempt", []dto.ScrapeRunOutcome{ok, retried, ok}, 4, 1, dto.HealthAmber, dto.ReasonRetried},
+		{"five runs with nothing new", []dto.ScrapeRunOutcome{ok, ok, ok, ok, ok}, 0, 0, dto.HealthAmber, dto.ReasonNoNew},
+		{"fewer than five runs with nothing new is healthy", []dto.ScrapeRunOutcome{ok, ok, ok, ok}, 0, 0, dto.HealthGreen, dto.ReasonOK},
+		{"five runs with one new", []dto.ScrapeRunOutcome{ok, ok, ok, ok, ok}, 1, 0, dto.HealthGreen, dto.ReasonOK},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			st := &healthStore{FakeStore: jobsearchtest.NewFakeStore(), rows: []dto.SourceHealth{{Recent: tt.recent, New: tt.new, Retries: tt.retries}}}
+			svc := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring())
+			got, err := svc.SourceHealth(t.Context(), userID)
+			if err != nil || len(got) != 1 {
+				t.Fatalf("SourceHealth() = %v, %v, want one row", got, err)
+			}
+			if got[0].Status != tt.status || got[0].Reason != tt.reason {
+				t.Errorf("SourceHealth() = %s/%s, want %s/%s", got[0].Status, got[0].Reason, tt.status, tt.reason)
+			}
+		})
+	}
+
+	t.Run("no searches is an empty list", func(t *testing.T) {
+		t.Parallel()
+		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
+		got, err := svc.SourceHealth(t.Context(), userID)
+		if err != nil || got == nil || len(got) != 0 {
+			t.Errorf("SourceHealth() = %#v, %v, want empty non-nil", got, err)
+		}
+	})
+}
