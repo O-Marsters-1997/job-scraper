@@ -1,7 +1,8 @@
 # ADR 0033 — hiring.cafe is read through a stealth Chrome tab
 
-Issue: [#1024](https://github.com/O-Marsters-1997/job-scraper/issues/1024). Status: proposed, pending the
-spike result below.
+Issue: [#1024](https://github.com/O-Marsters-1997/job-scraper/issues/1024). Status: superseded by
+[#1250](https://github.com/O-Marsters-1997/job-scraper/issues/1250): the Source now fetches through Decodo's Web
+Data API (`hiringcafe.API`, `DECODO_SCRAPE_TOKEN`), with no Chrome or tunnel. The rest is history.
 
 ## Context
 

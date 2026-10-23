@@ -43,13 +43,13 @@ type Builder struct {
 	registry map[string]entry
 }
 
-func New(wellfoundGate *sources.Gate) *Builder {
-	return &Builder{registry: newRegistry(wellfoundGate)}
+func New(wellfoundGate *sources.Gate, decodoScrapeToken string) *Builder {
+	return &Builder{registry: newRegistry(wellfoundGate, decodoScrapeToken)}
 }
 
-func newRegistry(wellfoundGate *sources.Gate) map[string]entry {
+func newRegistry(wellfoundGate *sources.Gate, decodoScrapeToken string) map[string]entry {
 	linkedinGate := linkedin.NewGate()
-	hiringcafeChrome := hiringcafe.NewChrome(hiringcafe.NewGate())
+	hiringcafeTab := hiringcafe.NewAPI(hiringcafe.DecodoScrapeURL, decodoScrapeToken, hiringcafe.NewGate())
 	workableGate := workable.NewGate()
 	recruiteeGate := recruitee.NewGate()
 	wisGate := wis.NewGate()
@@ -73,9 +73,9 @@ func newRegistry(wellfoundGate *sources.Gate) map[string]entry {
 		"hiringcafe": {
 			build: func(t dto.SourceTarget) sources.Source {
 				state := hiringcafe.Recency(json.RawMessage(t.Value), t.LastSucceededAt, time.Now())
-				return hiringcafe.New(state, hiringcafeChrome)
+				return hiringcafe.New(state, hiringcafeTab)
 			},
-			detail: hiringcafe.New(nil, hiringcafeChrome),
+			detail: hiringcafe.New(nil, hiringcafeTab),
 		},
 		"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
 		"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},

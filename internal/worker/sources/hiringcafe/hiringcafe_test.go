@@ -155,8 +155,8 @@ func TestScraper_GetDetails(t *testing.T) {
 func TestScraper_Cfg(t *testing.T) {
 	t.Parallel()
 	cfg := hiringcafe.New(nil, &fakeTab{}).Cfg()
-	if cfg.Name != "hiringcafe" || cfg.Route != sources.RouteResidential || !cfg.NewestFirst {
-		t.Errorf("Cfg() = %+v, want a newest-first residential hiringcafe source", cfg)
+	if cfg.Name != "hiringcafe" || cfg.Route != sources.RouteDirect || !cfg.NewestFirst {
+		t.Errorf("Cfg() = %+v, want a newest-first direct hiringcafe source", cfg)
 	}
 }
 

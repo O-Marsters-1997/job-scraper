@@ -26,7 +26,7 @@ func TestBuildSource_EveryRegisteredSourceInstantiates(t *testing.T) {
 			t.Fatalf("source %q has unknown kind %q", info.Name, info.Kind)
 		}
 
-		src, ok := builder.New(wellfound.NewGate()).BuildSource(target)
+		src, ok := builder.New(wellfound.NewGate(), "tok").BuildSource(target)
 		if !ok || src.Cfg().Name != info.Name {
 			t.Errorf("source %q (kind %q) is registered but not wired into BuildSource", info.Name, info.Kind)
 		}
@@ -35,14 +35,14 @@ func TestBuildSource_EveryRegisteredSourceInstantiates(t *testing.T) {
 
 func TestBuildSource_DisabledTargetExcluded(t *testing.T) {
 	target := dto.SourceTarget{Source: "greenhouse", Value: "acme", Enabled: false}
-	if _, ok := builder.New(wellfound.NewGate()).BuildSource(target); ok {
+	if _, ok := builder.New(wellfound.NewGate(), "tok").BuildSource(target); ok {
 		t.Error("disabled target should not produce a source")
 	}
 }
 
 func TestBuildSource_UnknownSourceIgnored(t *testing.T) {
 	target := dto.SourceTarget{Source: "unknown-ats", Value: "sometoken", Enabled: true}
-	if _, ok := builder.New(wellfound.NewGate()).BuildSource(target); ok {
+	if _, ok := builder.New(wellfound.NewGate(), "tok").BuildSource(target); ok {
 		t.Error("unknown source should not produce a source")
 	}
 }
