@@ -248,14 +248,14 @@ SELECT t.id AS source_target_id, t.source, t.value AS target_value, t.filters AS
        COALESCE(r.retries, 0)::int AS retries
 FROM source_targets t
 LEFT JOIN LATERAL (
-    SELECT started_at, stop_reason, new_listings, elsewhere, retries
+    SELECT id, started_at, stop_reason, new_listings, elsewhere, retries
     FROM scrape_runs
     WHERE source_target_id = t.id AND finished_at IS NOT NULL
     ORDER BY started_at DESC, id DESC
     LIMIT 5
 ) r ON TRUE
 WHERE t.user_id = $1
-ORDER BY t.id, r.started_at
+ORDER BY t.id, r.started_at, r.id
 `
 
 type ListSourceHealthRunsRow struct {
