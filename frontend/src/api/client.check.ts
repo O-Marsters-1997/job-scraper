@@ -23,7 +23,14 @@ try {
 		(err) =>
 			err instanceof ApiError &&
 			err.status === 409 &&
-			(err.body as { error: string }).error === "taken",
+			(err.body as { error: string }).error === "taken" &&
+			err.message === "taken",
+	);
+
+	response = () => new Response("bad gateway", { status: 502 });
+	await assert.rejects(
+		apiFetch("/jobs", z.unknown()),
+		(err) => err instanceof ApiError && err.message === "/jobs: 502",
 	);
 } finally {
 	globalThis.fetch = originalFetch;

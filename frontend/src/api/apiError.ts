@@ -4,6 +4,9 @@ export class ApiError extends Error {
 		path: string,
 		readonly body: unknown,
 	) {
-		super(`${path}: ${status}`);
+		const message = (body as { error?: unknown } | undefined)?.error;
+		super(
+			typeof message === "string" && message ? message : `${path}: ${status}`,
+		);
 	}
 }
