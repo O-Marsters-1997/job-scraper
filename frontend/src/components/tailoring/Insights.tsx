@@ -46,7 +46,7 @@ export function Insights(props: {
 				: [];
 		});
 	return (
-		<div class="grid grid-cols-2 items-start gap-4">
+		<div class="grid grid-cols-1 items-start lg:grid-cols-2 gap-4">
 			<section
 				aria-label="Insights"
 				class="rounded-xl border border-border bg-surface p-6 text-[14px]"
