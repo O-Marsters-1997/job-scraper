@@ -201,7 +201,7 @@ func (q *Queries) FailKeep(ctx context.Context, arg FailKeepParams) (int64, erro
 }
 
 const getDraft = `-- name: GetDraft :one
-SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at FROM tailored_cvs WHERE id = $1 AND user_id = $2
+SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at, insights, insights_for FROM tailored_cvs WHERE id = $1 AND user_id = $2
 `
 
 type GetDraftParams struct {
@@ -239,6 +239,8 @@ func (q *Queries) GetDraft(ctx context.Context, arg GetDraftParams) (TailoredCv,
 		&i.LeaseUntil,
 		&i.LastError,
 		&i.CreatedAt,
+		&i.Insights,
+		&i.InsightsFor,
 	)
 	return i, err
 }
@@ -252,6 +254,22 @@ func (q *Queries) GetJobDescription(ctx context.Context, id pgtype.UUID) (string
 	var description string
 	err := row.Scan(&description)
 	return description, err
+}
+
+const getJobNote = `-- name: GetJobNote :one
+SELECT body FROM job_notes WHERE user_id = $1 AND job_id = $2
+`
+
+type GetJobNoteParams struct {
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+}
+
+func (q *Queries) GetJobNote(ctx context.Context, arg GetJobNoteParams) (string, error) {
+	row := q.db.QueryRow(ctx, getJobNote, arg.UserID, arg.JobID)
+	var body string
+	err := row.Scan(&body)
+	return body, err
 }
 
 type InsertAchievementOutcomesParams struct {
@@ -271,7 +289,7 @@ const insertDraft = `-- name: InsertDraft :one
 INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, mode)
 SELECT $1::uuid, j.id, $2::text, $3::text, $4::uuid[], $5::jsonb, $6::text
 FROM jobs j WHERE j.id = $7::uuid
-RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at
+RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at, insights, insights_for
 `
 
 type InsertDraftParams struct {
@@ -322,12 +340,43 @@ func (q *Queries) InsertDraft(ctx context.Context, arg InsertDraftParams) (Tailo
 		&i.LeaseUntil,
 		&i.LastError,
 		&i.CreatedAt,
+		&i.Insights,
+		&i.InsightsFor,
 	)
 	return i, err
 }
 
+const listJobCommentBodies = `-- name: ListJobCommentBodies :many
+SELECT body FROM job_comments WHERE user_id = $1 AND job_id = $2 ORDER BY created_at, id LIMIT 200
+`
+
+type ListJobCommentBodiesParams struct {
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+}
+
+func (q *Queries) ListJobCommentBodies(ctx context.Context, arg ListJobCommentBodiesParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listJobCommentBodies, arg.UserID, arg.JobID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var body string
+		if err := rows.Scan(&body); err != nil {
+			return nil, err
+		}
+		items = append(items, body)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobDrafts = `-- name: ListJobDrafts :many
-SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at FROM tailored_cvs WHERE job_id = $1 AND user_id = $2 ORDER BY created_at DESC, id
+SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at, insights, insights_for FROM tailored_cvs WHERE job_id = $1 AND user_id = $2 ORDER BY created_at DESC, id
 `
 
 type ListJobDraftsParams struct {
@@ -371,6 +420,8 @@ func (q *Queries) ListJobDrafts(ctx context.Context, arg ListJobDraftsParams) ([
 			&i.LeaseUntil,
 			&i.LastError,
 			&i.CreatedAt,
+			&i.Insights,
+			&i.InsightsFor,
 		); err != nil {
 			return nil, err
 		}
@@ -385,7 +436,7 @@ func (q *Queries) ListJobDrafts(ctx context.Context, arg ListJobDraftsParams) ([
 const queueKeep = `-- name: QueueKeep :one
 UPDATE tailored_cvs SET status = 'keeping', attempts = 0, due_at = NOW(), lease_until = NULL, last_error = ''
 WHERE id = $1 AND user_id = $2 AND status = 'ready' AND outcome IS NULL
-RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at
+RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at, insights, insights_for
 `
 
 type QueueKeepParams struct {
@@ -423,6 +474,8 @@ func (q *Queries) QueueKeep(ctx context.Context, arg QueueKeepParams) (TailoredC
 		&i.LeaseUntil,
 		&i.LastError,
 		&i.CreatedAt,
+		&i.Insights,
+		&i.InsightsFor,
 	)
 	return i, err
 }
@@ -471,11 +524,36 @@ func (q *Queries) SetDraftEdits(ctx context.Context, arg SetDraftEditsParams) (i
 	return result.RowsAffected(), nil
 }
 
+const setDraftInsights = `-- name: SetDraftInsights :execrows
+UPDATE tailored_cvs SET insights = $1::jsonb, insights_for = $2::text
+WHERE id = $3::uuid AND user_id = $4::uuid
+`
+
+type SetDraftInsightsParams struct {
+	Insights    []byte
+	InsightsFor string
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+}
+
+func (q *Queries) SetDraftInsights(ctx context.Context, arg SetDraftInsightsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setDraftInsights,
+		arg.Insights,
+		arg.InsightsFor,
+		arg.ID,
+		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setDraftOutcome = `-- name: SetDraftOutcome :one
 UPDATE tailored_cvs SET outcome = $1::text,
     draft_doc_id = CASE WHEN $1::text = 'discarded' THEN NULL ELSE draft_doc_id END
 WHERE id = $2::uuid AND user_id = $3::uuid
-RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at
+RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at, insights, insights_for
 `
 
 type SetDraftOutcomeParams struct {
@@ -514,6 +592,8 @@ func (q *Queries) SetDraftOutcome(ctx context.Context, arg SetDraftOutcomeParams
 		&i.LeaseUntil,
 		&i.LastError,
 		&i.CreatedAt,
+		&i.Insights,
+		&i.InsightsFor,
 	)
 	return i, err
 }

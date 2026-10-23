@@ -212,6 +212,9 @@ export function createDraftEditor(
 		rekey(result, sent);
 		setGoogleSaved(true);
 		queryClient.setQueryData(keys.tailoring.draft(id), result);
+		void queryClient.invalidateQueries({
+			queryKey: keys.tailoring.draftInsights(id),
+		});
 	};
 
 	const sendRoles = async () => {
@@ -270,6 +273,9 @@ export function createDraftEditor(
 		setRemoved((now) => now.filter((r) => !gone.includes(r)));
 		setGoogleSaved(true);
 		queryClient.setQueryData(keys.tailoring.draft(id), result);
+		void queryClient.invalidateQueries({
+			queryKey: keys.tailoring.draftInsights(id),
+		});
 	};
 	const loop = createSaveLoop({
 		delay: SAVE_DELAY_MS,

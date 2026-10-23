@@ -280,3 +280,33 @@ func (f *FakeStore) JobDescription(_ context.Context, jobID string) (string, err
 	}
 	return job.Description, nil
 }
+
+func (f *FakeStore) SetAnnotations(jobID string, a dto.JobAnnotations) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.annotations == nil {
+		f.annotations = map[string]dto.JobAnnotations{}
+	}
+	f.annotations[jobID] = a
+}
+
+func (f *FakeStore) JobAnnotations(_ context.Context, _, jobID string) (dto.JobAnnotations, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	a := f.annotations[jobID]
+	if a.Comments == nil {
+		a.Comments = []string{}
+	}
+	return a, nil
+}
+
+func (f *FakeStore) SetDraftInsights(_ context.Context, userID, id string, insights json.RawMessage, forHash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.drafts[id]
+	if !ok || d.userID != userID {
+		return errDraftNotFound
+	}
+	d.Insights, d.InsightsFor = slices.Clone(insights), forHash
+	return nil
+}

@@ -82,6 +82,8 @@ type Draft struct {
 	Content     *DraftContent    `json:"content"`
 	Base        *DraftContent    `json:"base"`
 	BaseContent json.RawMessage  `json:"-"`
+	Insights    json.RawMessage  `json:"-"`
+	InsightsFor string           `json:"-"`
 	// SkillsEditable is false for a Draft made before Skill Lines.
 	SkillsEditable bool `json:"skillsEditable"`
 
@@ -330,6 +332,37 @@ func (b BulletLean) MarshalJSON() ([]byte, error) {
 
 type DraftLeanQuery struct {
 	ID string `json:"-" path:"id"`
+}
+
+type InsightSource string
+
+const (
+	InsightSourceJD      InsightSource = "jd"
+	InsightSourceNote    InsightSource = "note"
+	InsightSourceComment InsightSource = "comment"
+)
+
+type InsightLine struct {
+	SlotID   string        `json:"slotId"`
+	Lean     *float64      `json:"lean"`
+	Source   InsightSource `json:"source"`
+	Quote    string        `json:"quote"`
+	Why      string        `json:"why"`
+	Anchored bool          `json:"anchored"`
+}
+
+type DraftInsights struct {
+	Lines []InsightLine `json:"lines"`
+	Stale bool          `json:"stale"`
+}
+
+type ExplainDraftInput struct {
+	ID string `json:"-" path:"id"`
+}
+
+type JobAnnotations struct {
+	Note     string
+	Comments []string
 }
 
 // SuggestDone is the final event of a suggestion stream.

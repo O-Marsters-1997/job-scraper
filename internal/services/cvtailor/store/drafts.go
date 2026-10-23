@@ -48,7 +48,7 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 		ID: t.ID.String(), JobID: t.JobID.String(), Mode: dto.DraftMode(t.Mode), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, LastError: t.LastError,
 		CreatedAt: t.CreatedAt.Time, Findings: findings, DraftDocID: t.DraftDocID.String, EditSet: t.EditSet, BaseContent: t.BaseContent,
 		BaseDocID: t.BaseDocID, BaseTabID: t.BaseTabID, AchievementIDs: achievementIDs,
-		SkillSwaps: swaps,
+		SkillSwaps: swaps, Insights: t.Insights, InsightsFor: t.InsightsFor,
 	}, nil
 }
 
@@ -386,4 +386,50 @@ func (s *Store) JobDescription(ctx context.Context, jobID string) (string, error
 		return "", fmt.Errorf("store.JobDescription: %w", err)
 	}
 	return desc, nil
+}
+
+// SetDraftInsights stores the Explain result and the hash of what it was
+// computed from; ErrDraftNotFound when userID does not own the Draft.
+func (s *Store) SetDraftInsights(ctx context.Context, userID, id string, insights json.RawMessage, forHash string) error {
+	uid, err := parseID(userID, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	did, err := parseID(id, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.SetDraftInsights(ctx, sqlc.SetDraftInsightsParams{ID: did, UserID: uid, Insights: insights, InsightsFor: forHash})
+	if err != nil {
+		return fmt.Errorf("store.SetDraftInsights: %w", err)
+	}
+	if n == 0 {
+		return ErrDraftNotFound
+	}
+	return nil
+}
+
+// JobAnnotations returns the User's note and comments on a Job; both are
+// empty when there are none.
+func (s *Store) JobAnnotations(ctx context.Context, userID, jobID string) (dto.JobAnnotations, error) {
+	uid, err := parseID(userID, ErrDraftNotFound)
+	if err != nil {
+		return dto.JobAnnotations{}, err
+	}
+	jid, err := parseID(jobID, ErrJobNotFound)
+	if err != nil {
+		return dto.JobAnnotations{}, err
+	}
+	note, err := s.queries.GetJobNote(ctx, sqlc.GetJobNoteParams{UserID: uid, JobID: jid})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return dto.JobAnnotations{}, fmt.Errorf("store.JobAnnotations: note: %w", err)
+	}
+	comments, err := s.queries.ListJobCommentBodies(ctx, sqlc.ListJobCommentBodiesParams{UserID: uid, JobID: jid})
+	if err != nil {
+		return dto.JobAnnotations{}, fmt.Errorf("store.JobAnnotations: comments: %w", err)
+	}
+	if comments == nil {
+		comments = []string{}
+	}
+	return dto.JobAnnotations{Note: note, Comments: comments}, nil
 }

@@ -83,6 +83,16 @@ WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
 -- name: GetJobDescription :one
 SELECT description FROM jobs WHERE id = $1;
 
+-- name: SetDraftInsights :execrows
+UPDATE tailored_cvs SET insights = sqlc.arg(insights)::jsonb, insights_for = sqlc.arg(insights_for)::text
+WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
+
+-- name: GetJobNote :one
+SELECT body FROM job_notes WHERE user_id = $1 AND job_id = $2;
+
+-- name: ListJobCommentBodies :many
+SELECT body FROM job_comments WHERE user_id = $1 AND job_id = $2 ORDER BY created_at, id LIMIT 200;
+
 -- name: InsertAchievementOutcomes :copyfrom
 INSERT INTO achievement_outcomes (draft_id, achievement_id, user_id, job_id, p_yes, p_no, on_source_cv, in_final_cv, outscored_kept_but_left_out, reworded)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);

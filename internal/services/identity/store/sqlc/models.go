@@ -643,6 +643,8 @@ type TailoredCv struct {
 	LeaseUntil     pgtype.Timestamptz
 	LastError      string
 	CreatedAt      pgtype.Timestamptz
+	Insights       []byte
+	InsightsFor    string
 }
 
 type Task struct {
