@@ -44,6 +44,7 @@ import { MarginCards } from "./MarginCards";
 import { PrintPreview } from "./PrintPreview";
 import { RolesDrawer } from "./RolesDrawer";
 import { SkillsPanel } from "./SkillsPanel";
+import { UnlinkedRoles } from "./UnlinkedRoles";
 import { WandMenu } from "./WandMenu";
 
 const NO_METRICS: PageMetrics = {
@@ -458,6 +459,9 @@ export function DraftEditor(props: {
 			</header>
 
 			<KeepNotices draft={props.draft} editable={editable()} flow={flow} />
+			<Show when={editable()}>
+				<UnlinkedRoles draft={props.draft} />
+			</Show>
 
 			<main
 				ref={(el) => watchSize(el, () => setMainWidth(el.clientWidth))}

@@ -109,8 +109,10 @@ type SkillGroup struct {
 }
 
 type DraftPosition struct {
-	PositionID string        `json:"positionId"`
-	Bullets    []DraftBullet `json:"bullets"`
+	PositionID  string        `json:"positionId"`
+	HeadingText string        `json:"headingText"`
+	Linked      bool          `json:"linked"`
+	Bullets     []DraftBullet `json:"bullets"`
 }
 
 type DraftBullet struct {

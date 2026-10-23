@@ -77,6 +77,8 @@ const draftContentSchema = z.object({
 	positions: z.array(
 		z.object({
 			positionId: z.string(),
+			headingText: z.string(),
+			linked: z.boolean(),
 			bullets: z.array(
 				z.object({ text: z.string(), achievementIds: z.array(z.string()) }),
 			),
