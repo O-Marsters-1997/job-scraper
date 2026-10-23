@@ -45,3 +45,22 @@ WHERE id = $1 AND finished_at IS NULL;
 
 -- name: DeleteExpiredScrapeRuns :exec
 DELETE FROM scrape_runs WHERE started_at < NOW() - INTERVAL '30 days';
+
+-- name: ListScrapeRuns :many
+SELECT r.id, r.kind, r.source, r.source_target_id, t.value AS target_value, t.filters AS target_filters,
+       r.trigger, r.started_at, r.finished_at, r.stop_reason,
+       r.pages, r.listings, r.new_listings, r.elsewhere, r.repeat_listings, r.deferred, r.retries
+FROM scrape_runs r
+JOIN source_targets t ON t.id = r.source_target_id
+WHERE t.user_id = sqlc.arg('user_id')
+  AND (sqlc.narg('target_id')::uuid IS NULL OR r.source_target_id = sqlc.narg('target_id'))
+  AND (sqlc.narg('before_started_at')::timestamptz IS NULL
+       OR (r.started_at, r.id) < (sqlc.narg('before_started_at')::timestamptz, sqlc.narg('before_id')::uuid))
+ORDER BY r.started_at DESC, r.id DESC
+LIMIT sqlc.arg('row_limit');
+
+-- name: ListScrapeRunErrors :many
+SELECT run_id, page, attempt, message, at
+FROM scrape_run_errors
+WHERE run_id = ANY(sqlc.arg('run_ids')::uuid[])
+ORDER BY run_id, id;

@@ -114,6 +114,133 @@ func (q *Queries) InsertScrapeRun(ctx context.Context, arg InsertScrapeRunParams
 	return err
 }
 
+const listScrapeRunErrors = `-- name: ListScrapeRunErrors :many
+SELECT run_id, page, attempt, message, at
+FROM scrape_run_errors
+WHERE run_id = ANY($1::uuid[])
+ORDER BY run_id, id
+`
+
+type ListScrapeRunErrorsRow struct {
+	RunID   pgtype.UUID
+	Page    int32
+	Attempt int32
+	Message string
+	At      pgtype.Timestamptz
+}
+
+func (q *Queries) ListScrapeRunErrors(ctx context.Context, runIds []pgtype.UUID) ([]ListScrapeRunErrorsRow, error) {
+	rows, err := q.db.Query(ctx, listScrapeRunErrors, runIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListScrapeRunErrorsRow
+	for rows.Next() {
+		var i ListScrapeRunErrorsRow
+		if err := rows.Scan(
+			&i.RunID,
+			&i.Page,
+			&i.Attempt,
+			&i.Message,
+			&i.At,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listScrapeRuns = `-- name: ListScrapeRuns :many
+SELECT r.id, r.kind, r.source, r.source_target_id, t.value AS target_value, t.filters AS target_filters,
+       r.trigger, r.started_at, r.finished_at, r.stop_reason,
+       r.pages, r.listings, r.new_listings, r.elsewhere, r.repeat_listings, r.deferred, r.retries
+FROM scrape_runs r
+JOIN source_targets t ON t.id = r.source_target_id
+WHERE t.user_id = $1
+  AND ($2::uuid IS NULL OR r.source_target_id = $2)
+  AND ($3::timestamptz IS NULL
+       OR (r.started_at, r.id) < ($3::timestamptz, $4::uuid))
+ORDER BY r.started_at DESC, r.id DESC
+LIMIT $5
+`
+
+type ListScrapeRunsParams struct {
+	UserID          pgtype.UUID
+	TargetID        pgtype.UUID
+	BeforeStartedAt pgtype.Timestamptz
+	BeforeID        pgtype.UUID
+	RowLimit        int32
+}
+
+type ListScrapeRunsRow struct {
+	ID             pgtype.UUID
+	Kind           string
+	Source         string
+	SourceTargetID pgtype.UUID
+	TargetValue    string
+	TargetFilters  []byte
+	Trigger        string
+	StartedAt      pgtype.Timestamptz
+	FinishedAt     pgtype.Timestamptz
+	StopReason     pgtype.Text
+	Pages          int32
+	Listings       int32
+	NewListings    int32
+	Elsewhere      int32
+	RepeatListings int32
+	Deferred       int32
+	Retries        int32
+}
+
+func (q *Queries) ListScrapeRuns(ctx context.Context, arg ListScrapeRunsParams) ([]ListScrapeRunsRow, error) {
+	rows, err := q.db.Query(ctx, listScrapeRuns,
+		arg.UserID,
+		arg.TargetID,
+		arg.BeforeStartedAt,
+		arg.BeforeID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListScrapeRunsRow
+	for rows.Next() {
+		var i ListScrapeRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Source,
+			&i.SourceTargetID,
+			&i.TargetValue,
+			&i.TargetFilters,
+			&i.Trigger,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.StopReason,
+			&i.Pages,
+			&i.Listings,
+			&i.NewListings,
+			&i.Elsewhere,
+			&i.RepeatListings,
+			&i.Deferred,
+			&i.Retries,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const scrapeRunAttemptFailed = `-- name: ScrapeRunAttemptFailed :exec
 WITH bumped AS (
     UPDATE scrape_runs SET retries = retries + 1 WHERE scrape_runs.id = $4 RETURNING scrape_runs.id

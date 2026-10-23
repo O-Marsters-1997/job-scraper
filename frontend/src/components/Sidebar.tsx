@@ -99,6 +99,12 @@ const NAV: NavItem[] = [
 		desktopOnly: true,
 	},
 	{
+		to: "/activity",
+		label: "Activity",
+		icon: "history",
+		desktopOnly: true,
+	},
+	{
 		to: "/insights",
 		label: "Insights",
 		icon: "barChart",

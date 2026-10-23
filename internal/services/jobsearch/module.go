@@ -105,6 +105,7 @@ type Store interface {
 	ScrapeRunAttemptFailed(ctx context.Context, runID string, page, attempt int, message string) error
 	FinishScrapeRun(ctx context.Context, runID string, stop dto.StopReason) error
 	DeleteExpiredScrapeRuns(ctx context.Context) error
+	ListScrapeRuns(ctx context.Context, userID string, opts dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error)
 	MarkBoardUKJobsSeen(ctx context.Context, source, token string) error
 	RecordDiscoverMiss(ctx context.Context, source, token string) error
 	DiscoverMissedSince(ctx context.Context, source, token string, since time.Time) (bool, error)

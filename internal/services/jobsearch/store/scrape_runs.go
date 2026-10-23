@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 
@@ -89,4 +90,86 @@ func (s *Store) DeleteExpiredScrapeRuns(ctx context.Context) error {
 		return fmt.Errorf("store.DeleteExpiredScrapeRuns: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) ListScrapeRuns(ctx context.Context, userID string, opts dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, ErrInvalidID
+	}
+	if opts.Limit < 1 || opts.Limit > math.MaxInt32 {
+		return nil, fmt.Errorf("store.ListScrapeRuns: limit %d out of range", opts.Limit)
+	}
+	params := sqlc.ListScrapeRunsParams{UserID: uid, RowLimit: int32(opts.Limit)}
+	if opts.TargetID != "" {
+		if params.TargetID, err = data.UUID(opts.TargetID); err != nil {
+			return nil, ErrInvalidID
+		}
+	}
+	if opts.BeforeID != "" {
+		if params.BeforeID, err = data.UUID(opts.BeforeID); err != nil {
+			return nil, ErrInvalidID
+		}
+		params.BeforeStartedAt = pgtype.Timestamptz{Time: opts.BeforeStartedAt, Valid: true}
+	}
+	rows, err := s.queries.ListScrapeRuns(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListScrapeRuns: %w", err)
+	}
+	runs := make([]dto.ScrapeRun, len(rows))
+	ids := make([]pgtype.UUID, len(rows))
+	index := make(map[string]int, len(rows))
+	for i, row := range rows {
+		runs[i] = toScrapeRunDTO(row)
+		ids[i] = row.ID
+		index[runs[i].ID] = i
+	}
+	errRows, err := s.queries.ListScrapeRunErrors(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListScrapeRuns errors: %w", err)
+	}
+	for _, e := range errRows {
+		i := index[e.RunID.String()]
+		runs[i].Errors = append(runs[i].Errors, dto.ScrapeRunError{
+			Page: int(e.Page), Attempt: int(e.Attempt), Message: e.Message, At: e.At.Time,
+		})
+	}
+	return runs, nil
+}
+
+func toScrapeRunDTO(row sqlc.ListScrapeRunsRow) dto.ScrapeRun {
+	run := dto.ScrapeRun{
+		ID:            row.ID.String(),
+		Kind:          dto.ScrapeRunKind(row.Kind),
+		Source:        row.Source,
+		TargetID:      row.SourceTargetID.String(),
+		TargetValue:   row.TargetValue,
+		TargetFilters: map[string]string{},
+		Trigger:       dto.ScrapeRunTrigger(row.Trigger),
+		StopReason:    dto.StopReason(row.StopReason.String),
+		StartedAt:     row.StartedAt.Time,
+		FinishedAt:    data.TimePtr(row.FinishedAt),
+		Pages:         int(row.Pages),
+		Listings:      int(row.Listings),
+		New:           int(row.NewListings),
+		Elsewhere:     int(row.Elsewhere),
+		Repeat:        int(row.RepeatListings),
+		Deferred:      int(row.Deferred),
+		Retries:       int(row.Retries),
+		Errors:        []dto.ScrapeRunError{},
+	}
+	if len(row.TargetFilters) > 0 {
+		_ = json.Unmarshal(row.TargetFilters, &run.TargetFilters)
+	}
+	switch {
+	case run.FinishedAt == nil:
+		run.Outcome = dto.OutcomeRunning
+	case run.StopReason == dto.StopFailed:
+		run.Outcome = dto.OutcomeFailed
+	case run.Retries > 0:
+		run.Outcome = dto.OutcomeRetried
+	default:
+		run.Outcome = dto.OutcomeSucceeded
+	}
+	return run
 }

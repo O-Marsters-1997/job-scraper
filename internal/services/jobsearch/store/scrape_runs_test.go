@@ -4,9 +4,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 )
 
@@ -172,4 +174,89 @@ func TestDeleteExpiredScrapeRuns(t *testing.T) {
 	if n := countRows(t, pool, "SELECT count(*) FROM scrape_runs WHERE id = $1::uuid", recent.RunID); n != 1 {
 		t.Errorf("recent run rows = %d, want 1", n)
 	}
+}
+
+func TestStore_ListScrapeRuns(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newUserStore(t)
+	ctx := t.Context()
+	other := createTarget(t, st, pgtest.InsertUser(t, pool), "linkedin", "theirs")
+	startRun(t, st, other.ID)
+
+	mine := createTarget(t, st, userID, "linkedin", "mine")
+	failing := createTarget(t, st, userID, "linkedin", "failing")
+	var ids []string
+	for _, id := range []string{mine.ID, mine.ID, mine.ID, failing.ID} {
+		run := startRun(t, st, id)
+		ids = append(ids, run.RunID)
+		if _, err := pool.Exec(ctx, "UPDATE scrape_runs SET started_at = NOW() + $2 * INTERVAL '1 minute' WHERE id = $1::uuid", run.RunID, len(ids)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.ScrapeRunAttemptFailed(ctx, ids[1], 2, 1, "boom"); err != nil {
+		t.Fatal(err)
+	}
+	for id, stop := range map[string]dto.StopReason{ids[0]: dto.StopLastPage, ids[1]: dto.StopLastPage, ids[3]: dto.StopFailed} {
+		if err := st.FinishScrapeRun(ctx, id, stop); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("lists only the caller's runs newest first with outcome and errors", func(t *testing.T) {
+		t.Parallel()
+		runs, err := st.ListScrapeRuns(ctx, userID, dto.ScrapeRunListOptions{Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		type row struct {
+			ID      string
+			Outcome dto.ScrapeRunOutcome
+			Errors  int
+		}
+		var got []row
+		for _, r := range runs {
+			got = append(got, row{r.ID, r.Outcome, len(r.Errors)})
+		}
+		want := []row{
+			{ids[3], dto.OutcomeFailed, 0},
+			{ids[2], dto.OutcomeRunning, 0},
+			{ids[1], dto.OutcomeRetried, 1},
+			{ids[0], dto.OutcomeSucceeded, 0},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Fatalf("ListScrapeRuns (-want +got):\n%s", diff)
+		}
+		if runs[2].TargetValue != "mine" || runs[2].Errors[0].Message != "boom" {
+			t.Errorf("run = %+v, want target mine with error boom", runs[2])
+		}
+	})
+
+	t.Run("target narrows to one search", func(t *testing.T) {
+		t.Parallel()
+		runs, err := st.ListScrapeRuns(ctx, userID, dto.ScrapeRunListOptions{TargetID: failing.ID, Limit: 10})
+		if err != nil || len(runs) != 1 || runs[0].ID != ids[3] {
+			t.Errorf("ListScrapeRuns(target) = %v, %v, want only %s", runs, err, ids[3])
+		}
+	})
+
+	t.Run("before pages without gaps or repeats", func(t *testing.T) {
+		t.Parallel()
+		first, err := st.ListScrapeRuns(ctx, userID, dto.ScrapeRunListOptions{Limit: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		last := first[1]
+		second, err := st.ListScrapeRuns(ctx, userID, dto.ScrapeRunListOptions{Limit: 2, BeforeStartedAt: last.StartedAt, BeforeID: last.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, r := range append(first, second...) {
+			got = append(got, r.ID)
+		}
+		want := []string{ids[3], ids[2], ids[1], ids[0]}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("paged ids (-want +got):\n%s", diff)
+		}
+	})
 }
