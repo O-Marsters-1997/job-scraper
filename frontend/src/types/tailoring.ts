@@ -179,6 +179,13 @@ export type DraftInput = {
 	tabId: string;
 	achievementIds: string[];
 };
+export const bulletLeanSchema = z.object({
+	slotId: z.string(),
+	achievementId: z.string().nullable(),
+	lean: z.number().nullable(),
+	state: z.enum(["fit", "unclear", "low"]).nullable(),
+});
+export type BulletLean = z.infer<typeof bulletLeanSchema>;
 export type CVHeading = z.infer<typeof cvHeadingSchema>;
 export type Suggestion = z.infer<typeof suggestionSchema>;
 export type ExperienceMatch = z.infer<typeof experienceMatchSchema>;

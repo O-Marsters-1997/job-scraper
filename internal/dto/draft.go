@@ -284,6 +284,30 @@ type SuggestInput struct {
 	MaxChars int    `json:"maxChars"`
 }
 
+type BulletLean struct {
+	SlotID        string          `json:"slotId"`
+	AchievementID *string         `json:"achievementId"`
+	Lean          *float64        `json:"lean"`
+	State         SuggestionState `json:"state"`
+}
+
+func (b BulletLean) MarshalJSON() ([]byte, error) {
+	var state *SuggestionState
+	if b.State != "" {
+		state = &b.State
+	}
+	return json.Marshal(struct {
+		SlotID        string           `json:"slotId"`
+		AchievementID *string          `json:"achievementId"`
+		Lean          *float64         `json:"lean"`
+		State         *SuggestionState `json:"state"`
+	}{b.SlotID, b.AchievementID, b.Lean, state})
+}
+
+type DraftLeanQuery struct {
+	ID string `json:"-" path:"id"`
+}
+
 // SuggestDone is the final event of a suggestion stream.
 type SuggestDone struct {
 	Text     string         `json:"text"`
