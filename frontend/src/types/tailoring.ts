@@ -189,6 +189,11 @@ export const bulletLeanSchema = z.object({
 	achievementId: z.string().nullable(),
 	lean: z.number().nullable(),
 	state: z.enum(["fit", "unclear", "low"]).nullable(),
+	replacedFrom: z.string().nullable(),
+	replacedLean: z.number().nullable(),
+	closerMatch: z
+		.object({ achievementId: z.string(), text: z.string(), lean: z.number() })
+		.nullable(),
 });
 export type BulletLean = z.infer<typeof bulletLeanSchema>;
 export type CVHeading = z.infer<typeof cvHeadingSchema>;
