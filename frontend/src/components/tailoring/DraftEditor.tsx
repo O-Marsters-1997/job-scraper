@@ -26,7 +26,9 @@ import { createRolePicks } from "../../hooks/useRolePicks";
 import { createSuggestions } from "../../hooks/useSuggestions";
 import {
 	useSuggestions as useAchievementBank,
+	useDraftInsights,
 	useDraftLean,
+	useExplainDraft,
 } from "../../hooks/useTailoring";
 import { AchievementsDrawer } from "./AchievementsDrawer";
 import { ChangesDiff } from "./ChangesDiff";
@@ -122,6 +124,11 @@ export function DraftEditor(props: {
 		() => props.draft.id,
 		() => props.draft.status === "ready",
 	);
+	const insightsQuery = useDraftInsights(
+		() => props.draft.id,
+		() => props.draft.status === "ready",
+	);
+	const explain = useExplainDraft(() => props.draft.id);
 	const leanBySlot = createMemo(
 		() => new Map(leanQuery.data?.map((b) => [b.slotId, b])),
 	);
@@ -479,8 +486,12 @@ export function DraftEditor(props: {
 							<div class="mx-auto max-w-3xl px-6 py-10">
 								<Insights
 									lean={lean()}
+									insights={insightsQuery.data}
+									explaining={explain.isPending}
+									explainError={explain.error?.message}
 									text={ed.text}
 									onEdit={editInDocument}
+									onExplain={() => explain.mutate()}
 								/>
 							</div>
 						)}

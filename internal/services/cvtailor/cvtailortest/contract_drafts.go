@@ -140,6 +140,26 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("insights are stored with their hash for the owner only", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		d := create(t, f)
+		lines := json.RawMessage(`[{"slotId":"s1"}]`)
+		if err := f.Store.SetDraftInsights(ctx, f.Other, d.ID, lines, "h1"); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("SetDraftInsights(other user) err = %v, want not found", err)
+		}
+		if got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID); len(got.Insights) != 0 || got.InsightsFor != "" {
+			t.Errorf("GetDraft() before Explain = %s / %q, want none", got.Insights, got.InsightsFor)
+		}
+		if err := f.Store.SetDraftInsights(ctx, f.UserID, d.ID, lines, "h1"); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
+		if !jsonEqual(t, lines, got.Insights) || got.InsightsFor != "h1" {
+			t.Errorf("GetDraft() = %s / %q, want %s / h1", got.Insights, got.InsightsFor, lines)
+		}
+	})
+
 	t.Run("a terminal failure is failed with its reason and no Doc", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
@@ -335,4 +355,16 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Errorf("GetDraft() = %+v, want ready, unkept, last error set", got)
 		}
 	})
+}
+
+func jsonEqual(t *testing.T, a, b json.RawMessage) bool {
+	t.Helper()
+	var x, y any
+	if err := json.Unmarshal(a, &x); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &y); err != nil {
+		t.Fatal(err)
+	}
+	return cmp.Equal(x, y)
 }

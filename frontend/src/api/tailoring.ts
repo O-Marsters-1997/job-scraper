@@ -8,9 +8,11 @@ import {
 	cvHeadingSchema,
 	type Draft,
 	type DraftInput,
+	type DraftInsights,
 	type DraftLayout,
 	type DraftPositionEdit,
 	type DraftRef,
+	draftInsightsSchema,
 	draftLayoutSchema,
 	draftRefSchema,
 	draftSchema,
@@ -185,6 +187,25 @@ export async function fetchDraftLean(id: string): Promise<BulletLean[]> {
 	return mocked(
 		(db) => db.getDraftLean(),
 		() => apiFetch(`/tailoring/drafts/${id}/lean`, z.array(bulletLeanSchema)),
+	);
+}
+
+export async function fetchDraftInsights(id: string): Promise<DraftInsights> {
+	return mocked(
+		(db) => db.getDraftInsights(),
+		() => apiFetch(`/tailoring/drafts/${id}/insights`, draftInsightsSchema),
+	);
+}
+
+export async function explainDraft(id: string): Promise<DraftInsights> {
+	return mocked(
+		(db) => db.getDraftInsights(),
+		() =>
+			apiFetch(
+				`/tailoring/drafts/${id}/insights`,
+				draftInsightsSchema,
+				jsonInit("POST", {}),
+			),
 	);
 }
 

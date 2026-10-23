@@ -340,3 +340,34 @@ func TestJobDescription(t *testing.T) {
 		t.Errorf("JobDescription(unknown) err = %v, want ErrJobNotFound", err)
 	}
 }
+
+func TestJobAnnotations(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+	other := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
+	ctx := t.Context()
+
+	empty, err := st.JobAnnotations(ctx, userID, jobID)
+	if err != nil || empty.Note != "" || len(empty.Comments) != 0 {
+		t.Fatalf("JobAnnotations() with none = %+v, %v, want empty", empty, err)
+	}
+
+	for _, q := range []struct{ sql, user, body string }{
+		{`INSERT INTO job_notes (user_id, job_id, body) VALUES ($1, $2, $3)`, userID, "Likes Go"},
+		{`INSERT INTO job_comments (user_id, job_id, body, quote) VALUES ($1, $2, $3, 'q')`, userID, "first"},
+		{`INSERT INTO job_comments (user_id, job_id, body, quote) VALUES ($1, $2, $3, 'q')`, userID, "second"},
+		{`INSERT INTO job_comments (user_id, job_id, body, quote) VALUES ($1, $2, $3, 'q')`, other, "not mine"},
+	} {
+		if _, err := pool.Exec(ctx, q.sql, q.user, jobID, q.body); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := st.JobAnnotations(ctx, userID, jobID)
+
+	want := dto.JobAnnotations{Note: "Likes Go", Comments: []string{"first", "second"}}
+	if diff := cmp.Diff(want, got); err != nil || diff != "" {
+		t.Errorf("JobAnnotations() = %+v, %v (-want +got):\n%s", got, err, diff)
+	}
+}

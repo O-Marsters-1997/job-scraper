@@ -64,6 +64,8 @@ export const keys = {
 		draft: (id: string) => [...tailoringAll, "draft", id] as const,
 		draftLayout: (id: string) => [...tailoringAll, "draft-layout", id] as const,
 		draftLean: (id: string) => [...tailoringAll, "draft-lean", id] as const,
+		draftInsights: (id: string) =>
+			[...tailoringAll, "draft-insights", id] as const,
 		jobDrafts: (jobId: string) =>
 			[...tailoringAll, "job-drafts", jobId] as const,
 	},
