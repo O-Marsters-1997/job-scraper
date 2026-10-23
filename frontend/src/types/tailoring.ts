@@ -33,7 +33,7 @@ const draftStatusSchema = z.enum([
 	"failed",
 ]);
 
-export const draftModeSchema = z.enum(["as_is", "generate"]);
+const draftModeSchema = z.enum(["as_is", "generate"]);
 type DraftMode = z.infer<typeof draftModeSchema>;
 
 const draftOutcomeSchema = z.enum(["kept", "discarded"]);
