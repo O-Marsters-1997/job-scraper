@@ -70,6 +70,7 @@ export const keys = {
 			[...tailoringAll, "job-drafts", jobId] as const,
 	},
 	sourceTargets: ["source-targets"] as const,
+	scrapeRuns: (params: object) => ["scrape-runs", params] as const,
 	sources: ["sources"] as const,
 	profile: ["profile"] as const,
 	aiPrefs: ["ai-prefs"] as const,

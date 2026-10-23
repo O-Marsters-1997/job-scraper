@@ -14,6 +14,7 @@ export * from "./push";
 export * from "./recruiterContacts";
 export * from "./scoreFeedback";
 export * from "./scoring";
+export * from "./scrapeRuns";
 export * from "./seen";
 export * from "./settings";
 export * from "./sources";

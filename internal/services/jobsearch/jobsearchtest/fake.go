@@ -1333,6 +1333,10 @@ func (f *FakeStore) FinishScrapeRun(context.Context, string, dto.StopReason) err
 
 func (f *FakeStore) DeleteExpiredScrapeRuns(context.Context) error { return nil }
 
+func (f *FakeStore) ListScrapeRuns(context.Context, string, dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error) {
+	return nil, nil
+}
+
 var _ Store = (*FakeStore)(nil)
 
 func (f *FakeStore) LookupFetch(_ context.Context, url string) (dto.CachedResponse, bool, error) {

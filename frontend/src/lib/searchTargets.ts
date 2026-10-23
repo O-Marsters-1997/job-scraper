@@ -65,7 +65,9 @@ interface HiringCafeState {
 	dateFetchedPastNDays?: unknown;
 }
 
-function hiringCafeState(target: SourceTarget): HiringCafeState | undefined {
+function hiringCafeState(
+	target: Pick<SourceTarget, "Source" | "Value">,
+): HiringCafeState | undefined {
 	if (target.Source !== "hiringcafe") return undefined;
 	try {
 		const state: unknown = JSON.parse(target.Value);
@@ -83,7 +85,9 @@ function hiringCafeKeyword(state: HiringCafeState): string {
 	return trimmed(state.searchQuery) || trimmed(state.searchText);
 }
 
-export function searchTitle(target: SourceTarget): string {
+export function searchTitle(
+	target: Pick<SourceTarget, "Source" | "Value">,
+): string {
 	const state = hiringCafeState(target);
 	if (!state) return target.Value;
 	return (
