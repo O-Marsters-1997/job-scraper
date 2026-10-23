@@ -30,6 +30,7 @@ type plan struct {
 	skills     []cvedit.SkillGroup
 	bankSkills []string
 	swapped    bool
+	unlinked   []dto.DraftPosition
 }
 
 func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) (plan, error) {
@@ -59,7 +60,7 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 	for i, id := range claim.AchievementIDs {
 		chosenAt[id] = i
 	}
-	pl := plan{structure: ds}
+	pl := plan{structure: ds, unlinked: unlinkedRoles(ds, mappings)}
 	for _, b := range bankSkills {
 		pl.bankSkills = append(pl.bankSkills, b.Name)
 	}
@@ -135,6 +136,30 @@ func slotsByPosition(ds docparse.DocStructure, mappings []dto.HeadingMapping) ma
 	return out
 }
 
+func unlinkedRoles(ds docparse.DocStructure, mappings []dto.HeadingMapping) []dto.DraftPosition {
+	linked := make(map[string]bool, len(mappings))
+	for _, hm := range mappings {
+		if hm.PositionID != nil {
+			linked[hm.HeadingText] = true
+		}
+	}
+	var out []dto.DraftPosition
+	at := map[int]int{}
+	for _, slot := range ds.Slots {
+		if slot.HeadingIndex < 0 || linked[ds.Headings[slot.HeadingIndex].Text] {
+			continue
+		}
+		i, ok := at[slot.HeadingIndex]
+		if !ok {
+			i = len(out)
+			at[slot.HeadingIndex] = i
+			out = append(out, dto.DraftPosition{HeadingText: ds.Headings[slot.HeadingIndex].Text, Bullets: []dto.DraftBullet{}})
+		}
+		out[i].Bullets = append(out[i].Bullets, dto.DraftBullet{Text: slot.Text, AchievementIDs: []string{}})
+	}
+	return out
+}
+
 func (pl plan) input(jobDescription string) cvedit.Input {
 	in := cvedit.Input{JobDescription: jobDescription}
 	if pl.structure.Profile != nil {
@@ -158,12 +183,13 @@ func (pl plan) baseContent() baseContent {
 		c.Skills = cvedit.SkillGroups(pl.structure.Skills)
 	}
 	for _, p := range pl.positions {
-		dp := dto.DraftPosition{PositionID: p.ID, Bullets: []dto.DraftBullet{}}
+		dp := dto.DraftPosition{PositionID: p.ID, Linked: true, Bullets: []dto.DraftBullet{}}
 		for _, text := range p.SlotTexts {
 			dp.Bullets = append(dp.Bullets, dto.DraftBullet{Text: text, AchievementIDs: []string{}})
 		}
 		c.Positions = append(c.Positions, dp)
 	}
+	c.Positions = append(c.Positions, pl.unlinked...)
 	return c
 }
 

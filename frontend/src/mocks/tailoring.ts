@@ -145,11 +145,22 @@ function mockContent(): Pick<Draft, "content" | "base"> {
 		profile,
 		skills: skillGroups.flatMap((g) => g.items),
 		skillGroups,
-		positions: p ? [{ positionId: p.id, bullets: bullets.map(bullet) }] : [],
+		positions: p
+			? [
+					{
+						positionId: p.id,
+						headingText: "",
+						linked: true,
+						bullets: bullets.map(bullet),
+					},
+				]
+			: [],
 	});
 	const [first = "", second = "", third = ""] = texts;
 	const generated = (positionId: string, slotIds: string[]) => ({
 		positionId,
+		headingText: "",
+		linked: true,
 		bullets: slotIds.map((slotId) => ({
 			text: MOCK_BULLET_TEXT[slotId] ?? "",
 			achievementIds: MOCK_ACHIEVEMENTS.filter(
@@ -178,6 +189,12 @@ function mockContent(): Pick<Draft, "content" | "base"> {
 			positions: [
 				generated("position-1", ["s1", "s2"]),
 				generated("position-2", ["s3"]),
+				{
+					positionId: "",
+					headingText: "Contractor, Initech",
+					linked: false,
+					bullets: [],
+				},
 			],
 		},
 	};
@@ -348,7 +365,10 @@ function addMockRole(entry: ReturnType<typeof mockEntry>, positionId: string) {
 		},
 		content: content && {
 			...content,
-			positions: [...content.positions, { positionId, bullets: [] }],
+			positions: [
+				...content.positions,
+				{ positionId, headingText: "", linked: true, bullets: [] },
+			],
 		},
 	};
 }
@@ -359,9 +379,10 @@ function replaceContent(
 ): DraftContent {
 	return {
 		...content,
-		positions: content.positions.map(
-			(p) => positions.find((r) => r.positionId === p.positionId) ?? p,
-		),
+		positions: content.positions.map((p) => {
+			const replaced = positions.find((r) => r.positionId === p.positionId);
+			return replaced ? { ...p, ...replaced } : p;
+		}),
 	};
 }
 

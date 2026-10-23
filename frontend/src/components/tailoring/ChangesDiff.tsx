@@ -198,7 +198,7 @@ export function ChangesDiff(props: {
 					</div>
 				</section>
 			</Show>
-			<For each={props.content.positions}>
+			<For each={props.content.positions.filter((p) => p.linked)}>
 				{(p) => (
 					<section>
 						<h3 class="mb-2 text-xs font-medium text-muted">
