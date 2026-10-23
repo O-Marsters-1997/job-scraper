@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
@@ -70,7 +72,7 @@ func (s *Service) DraftLean(ctx context.Context, userID string, q dto.DraftLeanQ
 		return out, nil
 	}
 	questions := make([]string, 0, len(texts))
-	for t := range texts {
+	for _, t := range slices.Sorted(maps.Keys(texts)) {
 		questions = append(questions, achievementQuestion(t))
 	}
 	answers, err := s.asker.Ask(ctx, userID, draft.JobID, questions)

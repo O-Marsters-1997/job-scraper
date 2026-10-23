@@ -193,6 +193,8 @@ export function DraftEditor(props: {
 		...(changes() ? [{ id: "changes" as const, label: "Changes" }] : []),
 		...(leanQuery.data ? [{ id: "insights" as const, label: "Insights" }] : []),
 	];
+	const current = () =>
+		tabs().some((t) => t.id === view()) ? view() : "document";
 	const fitSlot = (slotId: string) => {
 		activate(slotId);
 		void suggestions.ask(slotId, "fit");
@@ -400,14 +402,13 @@ export function DraftEditor(props: {
 					</Show>
 				</div>
 				<div class="ml-auto flex flex-wrap items-center justify-end gap-1.5 lg:ml-0">
-					<div role="tablist" aria-label="View" class="flex gap-0.5">
+					<div role="group" aria-label="View" class="flex gap-0.5">
 						<For each={tabs()}>
 							{(tab) => (
 								<Button
-									role="tab"
 									variant="ghost"
 									size="sm"
-									aria-selected={view() === tab.id}
+									aria-pressed={current() === tab.id}
 									onClick={() => setView(tab.id)}
 								>
 									{tab.label}
@@ -469,7 +470,7 @@ export function DraftEditor(props: {
 				}}
 			>
 				<Switch fallback={<LayoutUnavailable reason={props.layoutError} />}>
-					<Match when={view() === "insights" && leanQuery.data}>
+					<Match when={current() === "insights" && leanQuery.data}>
 						{(lean) => (
 							<div class="mx-auto max-w-3xl px-6 py-10">
 								<Insights
@@ -480,7 +481,7 @@ export function DraftEditor(props: {
 							</div>
 						)}
 					</Match>
-					<Match when={view() === "changes" && changes()}>
+					<Match when={current() === "changes" && changes()}>
 						{(c) => (
 							<div class="mx-auto max-w-3xl px-6 py-10">
 								<section
