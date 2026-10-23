@@ -8,3 +8,4 @@ assert.equal(
 	"Hi & bye\n\n• One\n• Two",
 );
 assert.equal(htmlToText("plain\ntext"), "plain\ntext");
+assert.equal(htmlToText("<p>a &ndash; b &#99999999;</p>"), "a – b &#99999999;");

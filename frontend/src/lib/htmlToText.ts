@@ -5,6 +5,16 @@ const NAMED: Record<string, string> = {
 	quot: '"',
 	apos: "'",
 	nbsp: " ",
+	ndash: "–",
+	mdash: "—",
+	lsquo: "‘",
+	rsquo: "’",
+	ldquo: "“",
+	rdquo: "”",
+	hellip: "…",
+	bull: "•",
+	pound: "£",
+	eacute: "é",
 };
 
 function decode(s: string): string {
@@ -12,7 +22,7 @@ function decode(s: string): string {
 		if (e[0] !== "#") return NAMED[e.toLowerCase()] ?? m;
 		const code =
 			e[1] === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-		return String.fromCodePoint(code);
+		return code <= 0x10ffff ? String.fromCodePoint(code) : m;
 	});
 }
 
