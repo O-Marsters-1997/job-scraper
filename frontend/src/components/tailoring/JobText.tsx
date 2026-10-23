@@ -68,7 +68,7 @@ export function JobText(props: {
 	return (
 		<section
 			aria-label="Job text"
-			class="flex flex-col gap-4 self-start rounded-xl border border-border bg-surface p-6 text-[14px] leading-relaxed"
+			class="flex flex-col gap-4 self-start rounded-xl border border-border bg-surface p-6 text-base leading-relaxed"
 		>
 			<For each={props.blocks}>
 				{(block) => (
