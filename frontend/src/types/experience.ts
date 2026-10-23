@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const achievementStatsSchema = z.object({
+const achievementStatsSchema = z.object({
 	inCvs: z.number(),
 	leftOut: z.number(),
 	applied: z.number(),
