@@ -402,7 +402,7 @@ export function DraftEditor(props: {
 					</Show>
 				</div>
 				<div class="ml-auto flex flex-wrap items-center justify-end gap-1.5 lg:ml-0">
-					<div role="group" aria-label="View" class="flex gap-0.5">
+					<nav aria-label="View" class="flex gap-0.5">
 						<For each={tabs()}>
 							{(tab) => (
 								<Button
@@ -415,7 +415,7 @@ export function DraftEditor(props: {
 								</Button>
 							)}
 						</For>
-					</div>
+					</nav>
 					<Show when={editable() && props.layout}>
 						<Button
 							variant="ghost"
