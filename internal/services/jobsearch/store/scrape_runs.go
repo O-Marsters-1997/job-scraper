@@ -100,11 +100,14 @@ func (s *Store) ListScrapeRuns(ctx context.Context, userID string, opts dto.Scra
 	if opts.Limit < 1 || opts.Limit > math.MaxInt32 {
 		return nil, fmt.Errorf("store.ListScrapeRuns: limit %d out of range", opts.Limit)
 	}
-	params := sqlc.ListScrapeRunsParams{UserID: uid, RowLimit: int32(opts.Limit)}
-	if opts.TargetID != "" {
-		if params.TargetID, err = data.UUID(opts.TargetID); err != nil {
-			return nil, ErrInvalidID
-		}
+	f, err := toRunFilter(opts.ScrapeRunFilter)
+	if err != nil {
+		return nil, err
+	}
+	params := sqlc.ListScrapeRunsParams{
+		UserID: uid, TargetID: f.target, FromAt: f.from, ToAt: f.to, Q: f.q,
+		Outcomes: opts.Outcome, Kinds: opts.Kind, Sources: opts.Source, Triggers: opts.Trigger,
+		RowLimit: int32(opts.Limit),
 	}
 	if opts.BeforeID != "" {
 		if params.BeforeID, err = data.UUID(opts.BeforeID); err != nil {
