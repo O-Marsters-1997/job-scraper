@@ -36,7 +36,7 @@ func TestSuggestFixturesCoverEveryActionAndEmbellishment(t *testing.T) {
 		}
 		actions = append(actions, f.Action)
 	}
-	for _, want := range []string{"fit", "tighten", "verb", "ask"} {
+	for _, want := range []string{"fit", "tighten", "verb", "ask", "tailor"} {
 		if !slices.Contains(actions, want) {
 			t.Errorf("no suggest fixture for action %q", want)
 		}
@@ -57,6 +57,9 @@ func TestRunSuggestScoresGroundingBannedWordsAndLength(t *testing.T) {
 		{"a made-up number fails", "ask-embellish-metric", "Moved the billing service to Kubernetes, 3x faster", false},
 		{"a banned word fails", "verb-weak", "Spearheaded the weekly release train for six squads", false},
 		{"a fit over the limit fails", "fit-latency", strings.Repeat("Cut p99 latency ", 10), false},
+		{"a tailor term swap passes", "tailor-term-swap", "Built microservices in Go for the payments team", true},
+		{"a drifting tailor fails", "tailor-drift", "Owned reliability of a distributed platform serving millions", false},
+		{"a tailor that adds a claim fails", "tailor-added-claim", "Moved the billing service to Kubernetes on AWS with Terraform", false},
 		{"a tighten that grows fails", "tighten-onboarding", "Mentored four junior engineers through their very first on-call rotation, and also wrote the runbook that they used, every time", false},
 	}
 	for _, tc := range cases {

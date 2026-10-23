@@ -6,6 +6,7 @@ import type { DraftFinding, SuggestAction } from "@/types/tailoring";
 export type SlotSuggestion = {
 	action: SuggestAction;
 	prompt: string;
+	quote: string;
 	before: string;
 	text: string;
 	done: boolean;
@@ -33,7 +34,12 @@ export function createSuggestions(opts: {
 		);
 	};
 
-	const ask = async (slotId: string, action: SuggestAction, prompt = "") => {
+	const ask = async (
+		slotId: string,
+		action: SuggestAction,
+		prompt = "",
+		quote = "",
+	) => {
 		controllers.get(slotId)?.abort();
 		const ctrl = new AbortController();
 		controllers.set(slotId, ctrl);
@@ -42,6 +48,7 @@ export function createSuggestions(opts: {
 		setItems(slotId, {
 			action,
 			prompt,
+			quote,
 			before,
 			text: "",
 			done: false,
@@ -52,7 +59,13 @@ export function createSuggestions(opts: {
 			const result = await streamSuggestion(
 				opts.draftId,
 				slotId,
-				{ action, prompt, text: before, maxChars: opts.maxChars(slotId) },
+				{
+					action,
+					prompt,
+					quote,
+					text: before,
+					maxChars: action === "tailor" ? before.length : opts.maxChars(slotId),
+				},
 				(delta) => setItems(slotId, "text", (t) => t + delta),
 				ctrl.signal,
 			);
@@ -82,7 +95,7 @@ export function createSuggestions(opts: {
 		ask,
 		retry: (slotId: string) => {
 			const s = items[slotId];
-			if (s) void ask(slotId, s.action, s.prompt);
+			if (s) void ask(slotId, s.action, s.prompt, s.quote);
 		},
 		accept: (slotId: string) => {
 			const s = items[slotId];

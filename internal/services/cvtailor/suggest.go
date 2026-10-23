@@ -27,7 +27,7 @@ const (
 	suggestBuffer   = 16
 )
 
-var suggestActions = []string{"fit", "tighten", "verb", "ask"}
+var suggestActions = []string{"fit", "tighten", "verb", "ask", dto.SuggestActionTailor}
 
 // SuggestEvent is one step of a suggestion stream: a Delta, then either Done
 // or Err.
@@ -96,7 +96,7 @@ func (m *Module) streamSuggestion(ctx context.Context, events chan<- SuggestEven
 		}
 	}
 	res, err := m.editor.Suggest(ctx, key, cvedit.SuggestInput{
-		Action: in.Action, Prompt: in.Prompt, Text: in.Text, MaxChars: in.MaxChars, Achievements: target.achievements,
+		Action: in.Action, Prompt: in.Prompt, Quote: in.Quote, Text: in.Text, MaxChars: in.MaxChars, Achievements: target.achievements,
 	}, func(delta string) { send(SuggestEvent{Delta: delta}) })
 	slog.InfoContext(ctx, "draft suggestion", slog.String("draft_id", in.ID), slog.String("action", in.Action),
 		slog.String("model", cvedit.SuggestModel), slog.String("prompt_version", cvedit.SuggestPromptVersion),
@@ -104,6 +104,16 @@ func (m *Module) streamSuggestion(ctx context.Context, events chan<- SuggestEven
 	if err != nil {
 		send(SuggestEvent{Err: suggestError(err)})
 		return
+	}
+	if in.Action == dto.SuggestActionTailor {
+		limit := utf8.RuneCountInString(in.Text)
+		if in.MaxChars > 0 {
+			limit = min(limit, in.MaxChars)
+		}
+		if why := cvedit.TailorViolation(in.Text, res.Text, limit, dto.TailorMaxChangedShare); why != "" {
+			send(SuggestEvent{Err: apperr.Unprocessable(why + "; try again")})
+			return
+		}
 	}
 	send(SuggestEvent{Done: &dto.SuggestDone{Text: res.Text, Findings: target.findings(res.Text)}})
 }
@@ -118,6 +128,8 @@ func validateSuggest(in dto.SuggestInput) error {
 		return apperr.Invalid("fit needs a character limit")
 	case in.Action == "ask" && strings.TrimSpace(in.Prompt) == "":
 		return apperr.Invalid("ask needs a prompt")
+	case in.Action == dto.SuggestActionTailor && (strings.TrimSpace(in.Quote) == "" || utf8.RuneCountInString(in.Quote) > maxSuggestChars):
+		return apperr.Invalid("tailor needs a quote")
 	case utf8.RuneCountInString(in.Prompt) > maxSuggestChars:
 		return apperr.Invalid("prompt is too long")
 	}

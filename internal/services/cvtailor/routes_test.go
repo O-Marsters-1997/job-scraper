@@ -1,6 +1,7 @@
 package cvtailor_test
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -227,6 +228,63 @@ func TestSuggestRoute(t *testing.T) {
 		if ct := w.Header().Get("Content-Type"); w.Code != http.StatusUnprocessableEntity || !strings.HasPrefix(ct, "application/json") {
 			t.Errorf("POST suggest without a key = %d %q, want a 422 JSON error", w.Code, ct)
 		}
+	})
+
+	t.Run("tailor", func(t *testing.T) {
+		t.Parallel()
+		const text = "Built REST services in Go for the payments team"
+		tailor := func(reply, quote string, maxChars int) (*cvtailortest.RecordingEditor, string) {
+			editor := cvtailortest.Suggesting(reply)
+			r := newRouter(cvtailor.Deps{Store: e.store, Editor: editor, Creds: apiKey})
+			in, err := json.Marshal(dto.SuggestInput{Action: "tailor", Quote: quote, Text: text, MaxChars: maxChars})
+			if err != nil {
+				t.Fatalf("marshal body: %v", err)
+			}
+			w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", string(in))
+			return editor, w.Body.String()
+		}
+
+		t.Run("a term swap is done and the quote reaches the model", func(t *testing.T) {
+			t.Parallel()
+			editor, body := tailor("Built microservices in Go for the payments team", "microservices in Go", len(text))
+
+			if !strings.Contains(body, "event: done") {
+				t.Errorf("tailor body = %q, want a done event", body)
+			}
+			if len(editor.SuggestInputs) != 1 || editor.SuggestInputs[0].Quote != "microservices in Go" {
+				t.Errorf("model inputs = %+v, want the quote forwarded", editor.SuggestInputs)
+			}
+		})
+
+		for name, tc := range map[string]struct {
+			reply    string
+			maxChars int
+		}{
+			"more words":                        {"Built REST services in Go for the payments team daily", 100},
+			"longer than maxChars":              {"Built microservices in Go for the payments team", 20},
+			"longer than the text, no maxChars": {"Built infrastructure services in Go for the payments team", 0},
+			"too much of it rewritten":          {"Owned reliability of services for payments", 100},
+		} {
+			t.Run("rejects "+name, func(t *testing.T) {
+				t.Parallel()
+				_, body := tailor(tc.reply, "microservices in Go", tc.maxChars)
+
+				if !strings.Contains(body, "event: error") || strings.Contains(body, "event: done") {
+					t.Errorf("tailor body = %q, want an error event and no done", body)
+				}
+			})
+		}
+
+		t.Run("needs a quote", func(t *testing.T) {
+			t.Parallel()
+			r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.Suggesting("x"), Creds: apiKey})
+
+			w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", `{"action":"tailor","text":"Cut"}`)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("POST suggest tailor without a quote = %d, want 400", w.Code)
+			}
+		})
 	})
 
 	t.Run("the path ids win over the body's", func(t *testing.T) {

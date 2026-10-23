@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 )
@@ -21,6 +22,7 @@ type SuggestFixture struct {
 	Achievements []string
 	Action       string
 	Prompt       string
+	Quote        string
 	MaxChars     int
 }
 
@@ -49,7 +51,7 @@ func (o SuggestOutcome) Passed() bool {
 
 func RunSuggest(ctx context.Context, s Suggester, apiKey string, f SuggestFixture) (SuggestOutcome, error) {
 	res, err := s.Suggest(ctx, apiKey, cvedit.SuggestInput{
-		Action: f.Action, Prompt: f.Prompt, Text: f.Text, MaxChars: f.MaxChars, Achievements: f.Achievements,
+		Action: f.Action, Prompt: f.Prompt, Quote: f.Quote, Text: f.Text, MaxChars: f.MaxChars, Achievements: f.Achievements,
 	}, func(string) {})
 	out := SuggestOutcome{Fixture: f.Name, Action: f.Action, Output: res.Text, Cost: res.Cost}
 	if err != nil {
@@ -67,6 +69,8 @@ func RunSuggest(ctx context.Context, s Suggester, apiKey string, f SuggestFixtur
 		out.OverLimit = length > f.MaxChars
 	case "tighten":
 		out.OverLimit = length > utf8.RuneCountInString(f.Text)
+	case dto.SuggestActionTailor:
+		out.OverLimit = cvedit.TailorViolation(f.Text, res.Text, utf8.RuneCountInString(f.Text), dto.TailorMaxChangedShare) != ""
 	}
 	return out, nil
 }
