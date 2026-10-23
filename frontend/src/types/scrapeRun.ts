@@ -1,13 +1,13 @@
 import { z } from "zod";
 
-export const scrapeRunOutcomeSchema = z.enum([
+const scrapeRunOutcomeSchema = z.enum([
 	"running",
 	"succeeded",
 	"retried",
 	"failed",
 ]);
 
-export const scrapeRunSchema = z.object({
+const scrapeRunSchema = z.object({
 	ID: z.string(),
 	Kind: z.enum(["search"]),
 	Source: z.string(),
