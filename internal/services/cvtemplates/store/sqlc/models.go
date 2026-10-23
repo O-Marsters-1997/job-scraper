@@ -638,6 +638,7 @@ type TailoredCv struct {
 	DraftDocID     pgtype.Text
 	Status         string
 	Outcome        pgtype.Text
+	Mode           string
 	KeptAs         pgtype.Text
 	KeepNote       string
 	Attempts       int32

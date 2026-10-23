@@ -49,6 +49,7 @@ export function CvSheet(props: CvSheetProps) {
 			jobId: props.job.ID,
 			docId,
 			tabId,
+			mode: "generate",
 			achievementIds: suggestions
 				.filter((s) => s.preselected)
 				.map((s) => s.achievementId),

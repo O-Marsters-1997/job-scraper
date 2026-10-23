@@ -92,11 +92,15 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 				pp.texts[a.ID] = a.Text
 			}
 		}
-		if len(pp.Achievements) == 0 {
+		asIs := claim.Mode == dto.DraftModeAsIs
+		if len(pp.Achievements) == 0 && !asIs {
 			continue
 		}
 		slices.SortFunc(pp.Achievements, func(a, b cvedit.Achievement) int { return chosenAt[a.ID] - chosenAt[b.ID] })
 		slots := slotsOf[p.ID]
+		if len(slots) == 0 && asIs {
+			continue
+		}
 		if len(slots) == 0 && !slices.Contains(claim.Roles, p.ID) {
 			return plan{}, apperr.Unprocessable("a chosen position is no longer mapped to a heading of the CV tab")
 		}
@@ -161,6 +165,18 @@ func (pl plan) baseContent() baseContent {
 		c.Positions = append(c.Positions, dp)
 	}
 	return c
+}
+
+func (pl plan) keepAll() cvedit.EditSet {
+	edits := cvedit.EditSet{Positions: []cvedit.PositionEdit{}}
+	for _, p := range pl.positions {
+		pe := cvedit.PositionEdit{PositionID: p.ID, Bullets: make([]cvedit.Bullet, len(p.SlotTexts))}
+		for i, text := range p.SlotTexts {
+			pe.Bullets[i] = cvedit.Bullet{Keep: true, Text: text}
+		}
+		edits.Positions = append(edits.Positions, pe)
+	}
+	return pl.withSlotIDs(edits)
 }
 
 func (pl plan) slotIDs() docedit.PositionSlots {

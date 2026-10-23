@@ -126,8 +126,12 @@ func TestCreateDraftAppendsBulletLabelsPerAttempt(t *testing.T) {
 	}
 
 	for range 2 {
-		if _, err := st.CreateDraft(ctx, uid, in, labels); err != nil {
+		d, err := st.CreateDraft(ctx, uid, in, labels)
+		if err != nil {
 			t.Fatalf("CreateDraft() err = %v", err)
+		}
+		if _, err := st.SetDraftOutcome(ctx, uid, d.ID, dto.OutcomeDiscarded); err != nil {
+			t.Fatal(err)
 		}
 	}
 

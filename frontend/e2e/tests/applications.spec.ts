@@ -76,19 +76,14 @@ test.describe("Application page", () => {
 		await expect(cvRegion).toBeHidden();
 	});
 
-	test("a fresh application's CV row links Tailor CV in a new tab", async ({
-		page,
-	}) => {
+	test("a fresh application's CV row opens a draft as-is", async ({ page }) => {
 		await openFirstApplication(page);
 		await page.getByRole("button", { name: /^(To do|Done) CV/ }).click();
-		const link = page
+		await page
 			.getByRole("region", { name: /^(To do|Done) CV/ })
-			.getByRole("link", { name: /Tailor CV/ });
-		await expect(link).toHaveAttribute("target", "_blank");
-		await expect(link).toHaveAttribute("href", /^\/jobs\/[^/]+\/tailor$/);
-		await expect(page.getByRole("button", { name: "Tailor CV" })).toHaveCount(
-			0,
-		);
+			.getByRole("button", { name: "Open as-is" })
+			.click();
+		await expect(page).toHaveURL(/\/tailoring\/drafts\/[^/]+$/);
 	});
 
 	test("an application with a kept draft shows Complete linking to it", async ({

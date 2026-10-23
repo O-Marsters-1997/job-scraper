@@ -84,7 +84,7 @@ func TestSuggest(t *testing.T) {
 	t.Run("refuses before streaming", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		pending := e.queue(t)
+		pending := e.queueOnOtherJob(t)
 		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
 		ok := dto.SuggestInput{ID: id, SlotID: slot, Action: "tighten", Text: "Cut p99 latency"}
 		withInput := func(mutate func(*dto.SuggestInput)) dto.SuggestInput { in := ok; mutate(&in); return in }

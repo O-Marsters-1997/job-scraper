@@ -219,6 +219,7 @@ CREATE TABLE tailored_cvs (
     draft_doc_id    TEXT,
     status          TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'keeping', 'ready', 'failed')),
     outcome         TEXT        CHECK (outcome IN ('kept', 'discarded')),
+    mode            TEXT        NOT NULL DEFAULT 'generate' CONSTRAINT tailored_cvs_mode_check CHECK (mode IN ('as_is', 'generate')),
     kept_as         TEXT        CHECK (kept_as IN ('tab', 'doc')),
     keep_note       TEXT        NOT NULL DEFAULT '',
     attempts        INT         NOT NULL DEFAULT 0,
@@ -228,6 +229,7 @@ CREATE TABLE tailored_cvs (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX tailored_cvs_kept_idx ON tailored_cvs (user_id, job_id) WHERE outcome = 'kept';
+CREATE UNIQUE INDEX tailored_cvs_live_idx ON tailored_cvs (user_id, job_id) WHERE outcome IS NULL;
 CREATE INDEX tailored_cvs_claim_idx ON tailored_cvs (due_at, id) WHERE status IN ('pending', 'running', 'keeping');
 
 CREATE TABLE preference_labels (

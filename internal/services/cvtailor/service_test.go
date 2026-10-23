@@ -200,9 +200,26 @@ func TestCreateDraft(t *testing.T) {
 
 		id := e.queue(t)
 
-		want := dto.Draft{ID: id, JobID: jobID, Status: "pending", Findings: []dto.DraftFinding{}}
+		want := dto.Draft{ID: id, JobID: jobID, Mode: dto.DraftModeGenerate, Status: "pending", Findings: []dto.DraftFinding{}}
 		if diff := cmp.Diff(want, e.draft(t, id), cmpopts.IgnoreFields(dto.Draft{}, "CreatedAt", "BaseDocID", "BaseTabID", "AchievementIDs")); diff != "" {
 			t.Errorf("GetDraft(%s) mismatch (-want +got):\n%s", id, diff)
+		}
+	})
+
+	t.Run("as_is needs no achievements and an unknown mode is invalid", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		e.input.AchievementIDs = nil
+
+		e.input.Mode = "rewrite"
+		if _, err := e.svc.CreateDraft(t.Context(), userID, e.input); !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("CreateDraft(rewrite) err = %v, want an invalid error", err)
+		}
+		e.input.Mode = dto.DraftModeAsIs
+		id := e.queue(t)
+
+		if got := e.draft(t, id).Mode; got != dto.DraftModeAsIs {
+			t.Errorf("GetDraft(%s).Mode = %q, want as_is", id, got)
 		}
 	})
 

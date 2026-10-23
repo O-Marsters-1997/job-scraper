@@ -22,7 +22,10 @@ var (
 	ErrCoverLetterNotFound = apperr.NotFound("cover letter not found")
 )
 
-var ErrKeptDraftExists = apperr.Conflict("this job already has a kept draft")
+var (
+	ErrKeptDraftExists = apperr.Conflict("this job already has a kept draft")
+	ErrLiveDraftExists = apperr.Conflict("this job already has an open draft")
+)
 
 func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 	findings := []dto.DraftFinding{}
@@ -42,7 +45,7 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 		outcome = &t.Outcome.String
 	}
 	return dto.Draft{
-		ID: t.ID.String(), JobID: t.JobID.String(), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, LastError: t.LastError,
+		ID: t.ID.String(), JobID: t.JobID.String(), Mode: dto.DraftMode(t.Mode), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, LastError: t.LastError,
 		CreatedAt: t.CreatedAt.Time, Findings: findings, DraftDocID: t.DraftDocID.String, EditSet: t.EditSet, BaseContent: t.BaseContent,
 		BaseDocID: t.BaseDocID, BaseTabID: t.BaseTabID, AchievementIDs: achievementIDs,
 		SkillSwaps: swaps,
@@ -76,14 +79,20 @@ func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInpu
 	if err != nil {
 		return dto.Draft{}, fmt.Errorf("store.CreateDraft: encode skill swaps: %w", err)
 	}
+	if in.Mode == "" {
+		in.Mode = dto.DraftModeGenerate
+	}
 	var row sqlc.TailoredCv
 	err = s.inTx(ctx, func(q *sqlc.Queries) error {
 		var err error
 		row, err = q.InsertDraft(ctx, sqlc.InsertDraftParams{
-			UserID: uid, JobID: jid, BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIds: achievements, SkillSwaps: swaps,
+			UserID: uid, JobID: jid, BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIds: achievements, SkillSwaps: swaps, Mode: string(in.Mode),
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrJobNotFound
+		}
+		if data.IsUniqueViolation(err) {
+			return ErrLiveDraftExists
 		}
 		if err != nil {
 			return fmt.Errorf("store.CreateDraft: %w", err)
@@ -210,8 +219,8 @@ func (s *Store) ClaimDraft(ctx context.Context) (dto.DraftClaim, error) {
 		return dto.DraftClaim{}, err
 	}
 	return dto.DraftClaim{
-		SkillSwaps: swaps,
-		ID:         row.ID.String(), UserID: row.UserID.String(), JobID: row.JobID.String(),
+		SkillSwaps: swaps, Mode: dto.DraftMode(row.Mode),
+		ID: row.ID.String(), UserID: row.UserID.String(), JobID: row.JobID.String(),
 		DocID: row.BaseDocID, TabID: row.BaseTabID, AchievementIDs: ids,
 		Attempts: int(row.Attempts), DraftDocID: row.DraftDocID,
 		JobDescription: row.JobDescription, JobFingerprint: row.JobFingerprint,
