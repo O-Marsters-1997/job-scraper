@@ -105,6 +105,12 @@ const NAV: NavItem[] = [
 		exact: true,
 		desktopOnly: true,
 	},
+	{
+		to: "/activity-prototype",
+		label: "Activity",
+		icon: "history",
+		desktopOnly: true,
+	},
 	{ to: "/settings", label: "Settings", icon: "settings", desktopOnly: true },
 ];
 
