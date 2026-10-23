@@ -71,6 +71,7 @@ func TestBulkExport(t *testing.T) {
 	})
 
 	t.Run("counts new and merged outcomes", func(t *testing.T) {
+		t.Parallel()
 		body := `{"results":[{"status":"new"},{"status":"merged"},{"status":"changed"},{"status":"new"},{"status":"unchanged"}]}`
 		exporter := newExporter(t, respondWith(http.StatusOK, body))
 		jobs := make([]dto.Job, 5)

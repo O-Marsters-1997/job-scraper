@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 package dto
 
 type ScrapeRunKind string
@@ -19,9 +18,6 @@ const (
 	StopPageCap  StopReason = "page_cap"
 	StopFailed   StopReason = "failed"
 )
-||||||| parent of 5ab4f84f (Board polls report new, elsewhere and removed counts)
-=======
-package dto
 
 type BoardTally struct {
 	Claimed                         bool
@@ -31,4 +27,3 @@ type BoardTally struct {
 type IngestTally struct {
 	New, Merged int
 }
->>>>>>> 5ab4f84f (Board polls report new, elsewhere and removed counts)

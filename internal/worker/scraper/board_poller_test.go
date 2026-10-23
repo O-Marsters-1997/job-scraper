@@ -147,6 +147,7 @@ func TestBoardPollUnclaimableCheck(t *testing.T) {
 }
 
 func TestBoardPollTalliesWhatIngestAndCompletionDid(t *testing.T) {
+	t.Parallel()
 	store := &boardStoreStub{board: dto.BoardPoll{ID: "board"}, removed: 2}
 	ingester := &boardIngesterStub{tally: dto.IngestTally{New: 3, Merged: 1}}
 	jobs := []dto.Job{{URL: "https://example.com/1"}, {URL: "https://example.com/2"}, {URL: "https://example.com/3"}, {URL: "https://example.com/4"}}
@@ -204,7 +205,7 @@ func TestPollPrefetchedCompletesTheFullListWithHint(t *testing.T) {
 	if want := (dto.BoardTally{Claimed: true, Listed: 2}); tally != want {
 		t.Errorf("PollPrefetched() tally = %+v, want %+v", tally, want)
 	}
-	if len(ingester.jobs) != 2|| ingester.jobs[0].CompanyID != "company" || ingester.jobs[0].BoardID != "board" {
+	if len(ingester.jobs) != 2 || ingester.jobs[0].CompanyID != "company" || ingester.jobs[0].BoardID != "board" {
 		t.Errorf("ingested jobs = %+v, want both stamped with the board's identity", ingester.jobs)
 	}
 	if store.state != "completed" || !store.snapshot.Complete || store.snapshot.NextPollIn != hint {
