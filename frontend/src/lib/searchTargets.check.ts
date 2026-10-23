@@ -154,6 +154,22 @@ assert.deepEqual(
 	],
 );
 assert.equal(searchTitle(cafe({ locations: [] })), "hiring.cafe search");
+const titles = cafe({
+	jobTitleQuery: '"full stack engineer" OR "product engineer"',
+	searchQuery: "remote",
+});
+assert.equal(
+	searchTitle(titles),
+	'"full stack engineer" OR "product engineer"',
+);
+assert.deepEqual(
+	describeFilters(titles, undefined).map((f) => f.display),
+	['Title: "full stack engineer" OR "product engineer"', "Keyword: remote"],
+);
+assert.equal(
+	searchTitle(cafe({ searchQuery: "product engineer" })),
+	"product engineer",
+);
 assert.equal(
 	searchTitle(target({ Source: "hiringcafe", Value: "not json" })),
 	"not json",
