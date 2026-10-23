@@ -298,7 +298,7 @@ func (s *Store) CompleteKeep(ctx context.Context, claim dto.DraftClaim, outcomes
 		return fmt.Errorf("store.CompleteKeep: %w", err)
 	}
 	return s.inTx(ctx, func(q *sqlc.Queries) error {
-		n, err := q.CompleteKeep(ctx, sqlc.CompleteKeepParams{ID: id, Attempts: int32(claim.Attempts)})
+		n, err := q.CompleteKeep(ctx, sqlc.CompleteKeepParams{ID: id, Attempts: int32(claim.Attempts)}) //nolint:gosec // G115: pedantic, attempts never exceed dto.MaxDraftAttempts
 		if data.IsUniqueViolation(err) {
 			return ErrKeptDraftExists
 		}
