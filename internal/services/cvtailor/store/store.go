@@ -119,6 +119,16 @@ func listPositions(ctx context.Context, q *sqlc.Queries, uid pgtype.UUID) ([]dto
 	if err != nil {
 		return nil, fmt.Errorf("store.ListPositions achievements: %w", err)
 	}
+	stats, err := q.ListAchievementStats(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListPositions stats: %w", err)
+	}
+	statsOf := make(map[pgtype.UUID]*dto.AchievementStats, len(stats))
+	for _, st := range stats {
+		statsOf[st.AchievementID] = &dto.AchievementStats{
+			InCVs: int(st.InCvs), LeftOut: int(st.LeftOut), Applied: int(st.Applied), Replied: int(st.Replied),
+		}
+	}
 	out := make([]dto.Position, len(positions))
 	byID := make(map[pgtype.UUID]int, len(positions))
 	for i, p := range positions {
@@ -127,7 +137,9 @@ func listPositions(ctx context.Context, q *sqlc.Queries, uid pgtype.UUID) ([]dto
 	}
 	for _, a := range achievements {
 		if i, ok := byID[a.PositionID]; ok {
-			out[i].Achievements = append(out[i].Achievements, toAchievement(a))
+			ach := toAchievement(a)
+			ach.Stats = statsOf[a.ID]
+			out[i].Achievements = append(out[i].Achievements, ach)
 		}
 	}
 	return out, nil
