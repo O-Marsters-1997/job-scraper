@@ -104,7 +104,7 @@ func TestSuggestTailor(t *testing.T) {
 		if res.Text != "Built k8s tooling" || len(prompts) != 2 {
 			t.Fatalf("Suggest() = %q after %d calls, want the second reply after 2", res.Text, len(prompts))
 		}
-		if strings.Contains(prompts[0], "previous reply was rejected") || !strings.Contains(prompts[1], "more words than the original") {
+		if strings.Contains(prompts[0], "previous reply was rejected") || !strings.Contains(prompts[1], "more words than the original. Yours had 5 words and 33 characters; use at most 3 words and 24 characters") {
 			t.Errorf("prompts = %q, want the reason only on the retry", prompts)
 		}
 	})

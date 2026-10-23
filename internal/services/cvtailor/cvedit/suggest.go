@@ -55,10 +55,12 @@ func (c *Client) Suggest(ctx context.Context, apiKey string, in SuggestInput, on
 		if err != nil {
 			return res, err
 		}
-		in.Feedback = TailorViolation(in.Text, res.Text, limit, dto.TailorMaxChangedShare)
-		if in.Feedback == "" || attempt == 1 {
+		why := TailorViolation(in.Text, res.Text, limit, dto.TailorMaxChangedShare)
+		if why == "" || attempt == 1 {
 			return res, nil
 		}
+		in.Feedback = fmt.Sprintf("%s. Yours had %d words and %d characters; use at most %d words and %d characters",
+			why, len(words(res.Text)), utf8.RuneCountInString(res.Text), len(words(in.Text)), limit)
 	}
 }
 
@@ -94,7 +96,7 @@ func renderSuggest(in SuggestInput) (string, error) {
 	case "tailor":
 		fmt.Fprintf(&b, "Swap only the nouns and terms in the line that differ from the wording of this quote from the job description, keeping the same sentence shape, verb and voice. Never add a claim the Achievements lack, and never add words.\n\nQuote:\n%s\n", in.Quote)
 		if in.Feedback != "" {
-			fmt.Fprintf(&b, "\nYour previous reply was rejected: %s. Fix that.\n", in.Feedback)
+			fmt.Fprintf(&b, "\nYour previous reply was rejected: %s. If no swap fits that budget, return the line unchanged. Reply with only the line.\n", in.Feedback)
 		}
 	case "ask":
 		fmt.Fprintf(&b, "Rewrite the line as the person asks, within the rules: %s\n", in.Prompt)
