@@ -305,30 +305,32 @@ function CvRowBody(props: {
 	const options = () => loadedData(cvs)?.filter((c) => c.Visible) ?? [];
 	const chosen = () => picked() ?? options()[0];
 
-	const start = (mode: "as_is" | "generate") =>
-		useFormSubmit(async () => {
-			const cv = chosen();
-			if (!cv) return;
-			await openDraftInNewTab(async () => {
-				const stale = props.draft?.outcome
-					? undefined
-					: (props.draft ?? props.failed);
-				if (stale) await discard.mutateAsync(stale.id);
-				return create.mutateAsync({
-					jobId: props.jobId,
-					docId: cv.DocID,
-					tabId: cv.TabID,
-					mode,
-				});
+	const [mode, setMode] = createSignal<"as_is" | "generate">("as_is");
+	const start = useFormSubmit(async () => {
+		const cv = chosen();
+		if (!cv) return;
+		const draftMode = mode();
+		await openDraftInNewTab(async () => {
+			const stale = props.draft?.outcome
+				? undefined
+				: (props.draft ?? props.failed);
+			if (stale) await discard.mutateAsync(stale.id);
+			return create.mutateAsync({
+				jobId: props.jobId,
+				docId: cv.DocID,
+				tabId: cv.TabID,
+				mode: draftMode,
 			});
 		});
-	const openAsIs = start("as_is");
-	const generate = start("generate");
-	const pending = () => openAsIs.pending() || generate.pending();
-	const error = () => openAsIs.error() ?? generate.error();
-	const startOver = (run: typeof openAsIs) => () => {
-		if (window.confirm("Discard this draft and start a new one?"))
-			void run.submit();
+	});
+	const pending = start.pending;
+	const error = start.error;
+	const go = (next: "as_is" | "generate") => {
+		setMode(next);
+		void start.submit();
+	};
+	const startOver = (next: "as_is" | "generate") => () => {
+		if (window.confirm("Discard this draft and start a new one?")) go(next);
 	};
 
 	return (
@@ -347,8 +349,8 @@ function CvRowBody(props: {
 						<Button
 							size="sm"
 							disabled={!chosen() || pending()}
-							loading={openAsIs.pending()}
-							onClick={() => void openAsIs.submit()}
+							loading={pending() && mode() === "as_is"}
+							onClick={() => go("as_is")}
 						>
 							Open as-is
 						</Button>
@@ -356,8 +358,8 @@ function CvRowBody(props: {
 							variant="outline"
 							size="sm"
 							disabled={!chosen() || pending()}
-							loading={generate.pending()}
-							onClick={() => void generate.submit()}
+							loading={pending() && mode() === "generate"}
+							onClick={() => go("generate")}
 						>
 							Generate
 						</Button>
@@ -398,7 +400,9 @@ function CvRowBody(props: {
 							<CvPicker cvs={options()} value={chosen()} onChange={setPicked} />
 							<Button
 								size="sm"
-								onClick={() => window.open(draftPath(draft().id), "_blank")}
+								onClick={() =>
+									window.open(draftPath(draft().id), "_blank", "noopener")
+								}
 							>
 								Open draft
 							</Button>
@@ -409,8 +413,8 @@ function CvRowBody(props: {
 									!chosen() ||
 									(draft().status !== "ready" && draft().status !== "failed")
 								}
-								loading={openAsIs.pending()}
-								onClick={startOver(openAsIs)}
+								loading={pending() && mode() === "as_is"}
+								onClick={startOver("as_is")}
 							>
 								Start over
 							</Button>
@@ -422,8 +426,8 @@ function CvRowBody(props: {
 									pending() ||
 									(draft().status !== "ready" && draft().status !== "failed")
 								}
-								loading={generate.pending()}
-								onClick={startOver(generate)}
+								loading={pending() && mode() === "generate"}
+								onClick={startOver("generate")}
 							>
 								Start over and generate
 							</Button>
