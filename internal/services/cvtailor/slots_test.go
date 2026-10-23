@@ -314,7 +314,7 @@ func TestSaveDraftSlots(t *testing.T) {
 	t.Run("refuses a draft that is not ready or was discarded", func(t *testing.T) {
 		e := newDraftEnv(t)
 		discarded := e.readyDrafts(t, 1)[0]
-		pending := e.queue(t)
+		pending := e.queueOnOtherJob(t)
 		if _, err := e.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: discarded}); err != nil {
 			t.Fatal(err)
 		}

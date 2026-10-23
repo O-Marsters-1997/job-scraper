@@ -15,6 +15,7 @@ import (
 var (
 	errDraftNotFound = apperr.NotFound("draft not found")
 	errKeptExists    = apperr.Conflict("this job already has a kept draft")
+	errLiveExists    = apperr.Conflict("this job already has an open draft")
 )
 
 const statusKeeping = "keeping"
@@ -61,7 +62,15 @@ func (f *FakeStore) DraftResult(id string) dto.DraftResult {
 func (f *FakeStore) CreateDraft(_ context.Context, userID string, in dto.DraftInput, labels []dto.BulletLabel) (dto.Draft, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now(), BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIDs: slices.Clone(in.AchievementIDs), SkillSwaps: slices.Clone(in.SkillSwaps)}, userID: userID, input: in, dueAt: time.Now()}
+	for _, other := range f.drafts {
+		if other.userID == userID && other.JobID == in.JobID && other.Outcome == nil {
+			return dto.Draft{}, errLiveExists
+		}
+	}
+	if in.Mode == "" {
+		in.Mode = dto.DraftModeGenerate
+	}
+	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Mode: in.Mode, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now(), BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIDs: slices.Clone(in.AchievementIDs), SkillSwaps: slices.Clone(in.SkillSwaps)}, userID: userID, input: in, dueAt: time.Now()}
 	f.drafts[d.ID] = d
 	f.labels = append(f.labels, labels...)
 	return d.Draft, nil
@@ -156,7 +165,7 @@ func (f *FakeStore) ClaimDraft(_ context.Context) (dto.DraftClaim, error) {
 	job := f.jobs[d.input.JobID]
 	return dto.DraftClaim{
 		ID: d.ID, UserID: d.userID, JobID: d.input.JobID, DocID: d.input.DocID, TabID: d.input.TabID,
-		AchievementIDs: slices.Clone(d.input.AchievementIDs), SkillSwaps: slices.Clone(d.input.SkillSwaps), Attempts: d.attempts, DraftDocID: d.DraftDocID,
+		AchievementIDs: slices.Clone(d.input.AchievementIDs), SkillSwaps: slices.Clone(d.input.SkillSwaps), Mode: d.Mode, Attempts: d.attempts, DraftDocID: d.DraftDocID,
 		JobDescription: job.Description, JobFingerprint: job.ContentFingerprint,
 		Keeping: keeping, JobTitle: job.Title, CompanyName: job.CompanySlug,
 	}, nil

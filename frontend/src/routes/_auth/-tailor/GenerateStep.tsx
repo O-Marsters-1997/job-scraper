@@ -35,6 +35,7 @@ export function GenerateStep(props: {
 			{
 				jobId: props.jobId(),
 				...ref,
+				mode: "generate",
 				achievementIds: achievementIds(),
 			},
 			{ onSuccess: (r) => setDraftId(r.id) },

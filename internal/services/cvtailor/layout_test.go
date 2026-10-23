@@ -92,7 +92,7 @@ func TestDraftLayout(t *testing.T) {
 
 func TestDraftLayoutRefusals(t *testing.T) {
 	e, id, docs := renumberedDraft(t)
-	pending := e.queue(t)
+	pending := e.queueOnOtherJob(t)
 	e2, discarded, _ := renumberedDraft(t)
 	if _, err := e2.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: discarded}); err != nil {
 		t.Fatal(err)

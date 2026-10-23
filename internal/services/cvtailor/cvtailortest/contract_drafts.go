@@ -177,7 +177,11 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Run("a Job's Drafts list newest first and only for their owner", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
-		first, second := create(t, f), create(t, f)
+		first := create(t, f)
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeDiscarded); err != nil {
+			t.Fatal(err)
+		}
+		second := create(t, f)
 		got, err := f.Store.ListJobDrafts(ctx, f.UserID, f.JobID)
 		if err != nil || len(got) != 2 {
 			t.Fatalf("ListJobDrafts() = %+v, %v, want two Drafts", got, err)
@@ -191,14 +195,39 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("a Job has one open Draft until it is discarded", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		asIs := input(f)
+		asIs.Mode = dto.DraftModeAsIs
+		first, err := f.Store.CreateDraft(ctx, f.UserID, asIs, nil)
+		if err != nil || first.Mode != dto.DraftModeAsIs {
+			t.Fatalf("CreateDraft(as_is) = %+v, %v, want an as_is Draft", first, err)
+		}
+		if c := claim(t, f); c.ID != first.ID || c.Mode != dto.DraftModeAsIs {
+			t.Errorf("ClaimDraft() = %+v, want the as_is Draft with its mode", c)
+		}
+		_, err = f.Store.CreateDraft(ctx, f.UserID, input(f), nil)
+		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindConflict.Status() {
+			t.Errorf("second CreateDraft() err = %v, want a conflict", err)
+		}
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeDiscarded); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Store.CreateDraft(ctx, f.UserID, input(f), nil); err != nil {
+			t.Errorf("CreateDraft() after discarding err = %v, want nil", err)
+		}
+	})
+
 	t.Run("a Job keeps at most one Draft", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
-		first, second := create(t, f), create(t, f)
+		first := create(t, f)
 		kept, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeKept)
 		if err != nil || kept.Outcome == nil || *kept.Outcome != dto.OutcomeKept {
 			t.Fatalf("SetDraftOutcome(kept) = %+v, %v", kept, err)
 		}
+		second := create(t, f)
 		_, err = f.Store.SetDraftOutcome(ctx, f.UserID, second.ID, dto.OutcomeKept)
 		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindConflict.Status() {
 			t.Errorf("second SetDraftOutcome(kept) err = %v, want a conflict", err)

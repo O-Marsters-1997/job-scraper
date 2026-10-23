@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+type DraftMode string
+
+const (
+	DraftModeAsIs     DraftMode = "as_is"
+	DraftModeGenerate DraftMode = "generate"
+)
+
 // DraftInput asks for a Tailored CV Draft of one Job from one base CV Tab,
 // citing the Achievements the User confirmed.
 type DraftInput struct {
@@ -13,6 +20,7 @@ type DraftInput struct {
 	TabID          string      `json:"tabId"`
 	AchievementIDs []string    `json:"achievementIds"`
 	SkillSwaps     []SkillSwap `json:"skillSwaps"`
+	Mode           DraftMode   `json:"mode"`
 }
 
 // SkillSwap puts a Bank Skill into the Skill Line at index Line (0-based, in
@@ -60,6 +68,7 @@ type DraftFinding struct {
 type Draft struct {
 	ID          string           `json:"id"`
 	JobID       string           `json:"jobId"`
+	Mode        DraftMode        `json:"mode"`
 	Status      string           `json:"status"`
 	Outcome     *string          `json:"outcome"`
 	KeptAs      string           `json:"keptAs"`
@@ -148,6 +157,7 @@ type DraftClaim struct {
 	AchievementIDs []string
 	Roles          []string
 	SkillSwaps     []SkillSwap
+	Mode           DraftMode
 	Attempts       int
 	DraftDocID     string
 	JobDescription string
