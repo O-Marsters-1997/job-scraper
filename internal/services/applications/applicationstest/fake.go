@@ -217,22 +217,22 @@ func (f *FakeStore) GetApplicationsForJobs(_ context.Context, userID string, job
 	return out, nil
 }
 
-func (f *FakeStore) CreateApplicationStatus(_ context.Context, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error) {
+func (f *FakeStore) CreateApplicationStatus(_ context.Context, userID, name, colour string, replyWindowDays *int, countsAsReply bool) (dto.ApplicationStatus, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	s := dto.ApplicationStatus{ID: fmt.Sprintf("status-%d", len(f.statuses)+1), UserID: userID, Name: name, Colour: colour, ReplyWindowDays: replyWindowDays}
+	s := dto.ApplicationStatus{ID: fmt.Sprintf("status-%d", len(f.statuses)+1), UserID: userID, Name: name, Colour: colour, ReplyWindowDays: replyWindowDays, CountsAsReply: countsAsReply}
 	f.statuses[s.ID] = s
 	return s, nil
 }
 
-func (f *FakeStore) UpdateApplicationStatus(_ context.Context, id, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error) {
+func (f *FakeStore) UpdateApplicationStatus(_ context.Context, id, userID, name, colour string, replyWindowDays *int, countsAsReply bool) (dto.ApplicationStatus, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	s, ok := f.statuses[id]
 	if !ok || s.UserID != userID {
 		return dto.ApplicationStatus{}, apperr.NotFound("status not found")
 	}
-	s.Name, s.Colour, s.ReplyWindowDays = name, colour, replyWindowDays
+	s.Name, s.Colour, s.ReplyWindowDays, s.CountsAsReply = name, colour, replyWindowDays, countsAsReply
 	f.statuses[id] = s
 	return s, nil
 }

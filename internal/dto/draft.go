@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+type DraftMode string
+
+const (
+	DraftModeAsIs     DraftMode = "as_is"
+	DraftModeGenerate DraftMode = "generate"
+)
+
 // DraftInput asks for a Tailored CV Draft of one Job from one base CV Tab,
 // citing the Achievements the User confirmed.
 type DraftInput struct {
@@ -13,6 +20,7 @@ type DraftInput struct {
 	TabID          string      `json:"tabId"`
 	AchievementIDs []string    `json:"achievementIds"`
 	SkillSwaps     []SkillSwap `json:"skillSwaps"`
+	Mode           DraftMode   `json:"mode"`
 }
 
 // SkillSwap puts a Bank Skill into the Skill Line at index Line (0-based, in
@@ -60,6 +68,7 @@ type DraftFinding struct {
 type Draft struct {
 	ID          string           `json:"id"`
 	JobID       string           `json:"jobId"`
+	Mode        DraftMode        `json:"mode"`
 	Status      string           `json:"status"`
 	Outcome     *string          `json:"outcome"`
 	KeptAs      string           `json:"keptAs"`
@@ -148,6 +157,7 @@ type DraftClaim struct {
 	AchievementIDs []string
 	Roles          []string
 	SkillSwaps     []SkillSwap
+	Mode           DraftMode
 	Attempts       int
 	DraftDocID     string
 	JobDescription string
@@ -282,6 +292,30 @@ type SuggestInput struct {
 	Prompt   string `json:"prompt"`
 	Text     string `json:"text"`
 	MaxChars int    `json:"maxChars"`
+}
+
+type BulletLean struct {
+	SlotID        string          `json:"slotId"`
+	AchievementID *string         `json:"achievementId"`
+	Lean          *float64        `json:"lean"`
+	State         SuggestionState `json:"state"`
+}
+
+func (b BulletLean) MarshalJSON() ([]byte, error) {
+	var state *SuggestionState
+	if b.State != "" {
+		state = &b.State
+	}
+	return json.Marshal(struct {
+		SlotID        string           `json:"slotId"`
+		AchievementID *string          `json:"achievementId"`
+		Lean          *float64         `json:"lean"`
+		State         *SuggestionState `json:"state"`
+	}{b.SlotID, b.AchievementID, b.Lean, state})
+}
+
+type DraftLeanQuery struct {
+	ID string `json:"-" path:"id"`
 }
 
 // SuggestDone is the final event of a suggestion stream.

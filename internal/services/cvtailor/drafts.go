@@ -14,6 +14,19 @@ func (s *Service) CreateDraft(ctx context.Context, userID string, in dto.DraftIn
 	if in.JobID == "" || in.DocID == "" || in.TabID == "" {
 		return dto.DraftRef{}, apperr.Invalid("jobId, docId and tabId are required")
 	}
+	switch in.Mode {
+	case dto.DraftModeAsIs:
+		in.AchievementIDs, in.SkillSwaps = []string{}, []dto.SkillSwap{}
+		draft, err := s.store.CreateDraft(ctx, userID, in)
+		if err != nil {
+			return dto.DraftRef{}, err
+		}
+		return dto.DraftRef{ID: draft.ID}, nil
+	case "", dto.DraftModeGenerate:
+		in.Mode = dto.DraftModeGenerate
+	default:
+		return dto.DraftRef{}, apperr.Invalid("unknown mode")
+	}
 	if len(in.AchievementIDs) == 0 {
 		return dto.DraftRef{}, apperr.Invalid("choose at least one achievement")
 	}

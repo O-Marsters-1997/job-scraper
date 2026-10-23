@@ -33,6 +33,9 @@ const draftStatusSchema = z.enum([
 	"failed",
 ]);
 
+const draftModeSchema = z.enum(["as_is", "generate"]);
+type DraftMode = z.infer<typeof draftModeSchema>;
+
 const draftOutcomeSchema = z.enum(["kept", "discarded"]);
 
 const draftFindingSchema = z.object({
@@ -84,6 +87,7 @@ const draftContentSchema = z.object({
 export const draftSchema = z.object({
 	id: z.string(),
 	jobId: z.string(),
+	mode: draftModeSchema,
 	status: draftStatusSchema,
 	outcome: draftOutcomeSchema.nullable(),
 	keptAs: z.string(),
@@ -178,7 +182,15 @@ export type DraftInput = {
 	docId: string;
 	tabId: string;
 	achievementIds: string[];
+	mode: DraftMode;
 };
+export const bulletLeanSchema = z.object({
+	slotId: z.string(),
+	achievementId: z.string().nullable(),
+	lean: z.number().nullable(),
+	state: z.enum(["fit", "unclear", "low"]).nullable(),
+});
+export type BulletLean = z.infer<typeof bulletLeanSchema>;
 export type CVHeading = z.infer<typeof cvHeadingSchema>;
 export type Suggestion = z.infer<typeof suggestionSchema>;
 export type ExperienceMatch = z.infer<typeof experienceMatchSchema>;

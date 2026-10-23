@@ -113,8 +113,8 @@ func (s *Service) DiscardDraft(ctx context.Context, userID string, q dto.DraftQu
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	if draft.Status != statusReady {
-		return dto.Draft{}, apperr.Conflict("only a ready draft can be discarded")
+	if draft.Status != statusReady && draft.Status != statusFailed {
+		return dto.Draft{}, apperr.Conflict("only a ready or failed draft can be discarded")
 	}
 	if outcome(draft) == dto.OutcomeDiscarded {
 		return draft, nil

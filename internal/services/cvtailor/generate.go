@@ -27,6 +27,7 @@ import (
 const (
 	statusReady    = "ready"
 	statusKeeping  = "keeping"
+	statusFailed   = "failed"
 	cleanupTimeout = 30 * time.Second
 
 	shortenBullets = 3
@@ -150,7 +151,32 @@ func (m *Module) fail(ctx context.Context, claim dto.DraftClaim, cause error, cl
 	return cause
 }
 
+func (m *Module) generateAsIs(ctx context.Context, claim dto.DraftClaim) (string, dto.DraftResult, error) {
+	pl, err := m.svc.plan(ctx, claim, claim.DocID)
+	if err != nil {
+		return "", dto.DraftResult{}, err
+	}
+	docID, err := m.copyTab(ctx, claim)
+	if err != nil {
+		return docID, dto.DraftResult{}, err
+	}
+	editSet, err := json.Marshal(pl.keepAll())
+	if err != nil {
+		return docID, dto.DraftResult{}, fmt.Errorf("marshal edit set: %w", err)
+	}
+	baseContent, err := json.Marshal(pl.baseContent())
+	if err != nil {
+		return docID, dto.DraftResult{}, fmt.Errorf("marshal base content: %w", err)
+	}
+	return docID, dto.DraftResult{
+		EditSet: editSet, BaseContent: baseContent, JobFingerprint: claim.JobFingerprint, Findings: []dto.DraftFinding{},
+	}, nil
+}
+
 func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dto.DraftResult, error) {
+	if claim.Mode == dto.DraftModeAsIs {
+		return m.generateAsIs(ctx, claim)
+	}
 	key, err := m.creds.Get(ctx, claim.UserID, jev.Provider)
 	if errors.Is(err, data.ErrNotFound) {
 		return "", dto.DraftResult{}, apperr.Unprocessable("connect an OpenRouter key in Settings, AI to tailor a CV")

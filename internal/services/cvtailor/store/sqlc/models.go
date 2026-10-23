@@ -198,6 +198,7 @@ type ApplicationStatus struct {
 	Colour          string
 	CreatedAt       pgtype.Timestamptz
 	ReplyWindowDays pgtype.Int4
+	CountsAsReply   bool
 	SystemKey       pgtype.Text
 }
 
@@ -634,6 +635,7 @@ type TailoredCv struct {
 	DraftDocID     pgtype.Text
 	Status         string
 	Outcome        pgtype.Text
+	Mode           string
 	KeptAs         pgtype.Text
 	KeepNote       string
 	Attempts       int32

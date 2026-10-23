@@ -1,4 +1,5 @@
 import type {
+	BulletLean,
 	CVHeading,
 	Draft,
 	DraftContent,
@@ -52,6 +53,10 @@ export function saveHeadings(
 ): HeadingMapping[] {
 	savedHeadings.set(`${docId}/${tabId}`, mappings);
 	return mappings;
+}
+
+export function getDraftLean(): BulletLean[] {
+	return [];
 }
 
 export function getExperienceMatch(): ExperienceMatch {
@@ -184,6 +189,7 @@ export function createDraft(input: DraftInput): DraftRef {
 		draft: {
 			id,
 			jobId: input.jobId,
+			mode: input.mode,
 			status: "pending",
 			outcome: null,
 			keptAs: "",
@@ -412,6 +418,7 @@ function seedDraft(id: string, outcome: Draft["outcome"], jobId?: string) {
 		draft: {
 			id,
 			jobId: jobId ?? getJobs().at(-1)?.ID ?? "",
+			mode: "generate",
 			status: "ready",
 			outcome,
 			keptAs: outcome === "kept" ? "doc" : "",

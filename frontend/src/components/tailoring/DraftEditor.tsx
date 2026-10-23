@@ -23,7 +23,10 @@ import { useJob } from "../../hooks/useJobs";
 import { createKeepFlow } from "../../hooks/useKeepFlow";
 import { createRolePicks } from "../../hooks/useRolePicks";
 import { createSuggestions } from "../../hooks/useSuggestions";
-import { useSuggestions as useAchievementBank } from "../../hooks/useTailoring";
+import {
+	useSuggestions as useAchievementBank,
+	useDraftLean,
+} from "../../hooks/useTailoring";
 import { AchievementsDrawer } from "./AchievementsDrawer";
 import { ChangesDiff } from "./ChangesDiff";
 import {
@@ -109,6 +112,14 @@ export function DraftEditor(props: {
 		const { base, content } = props.draft;
 		return base && content ? { base, content } : null;
 	};
+
+	const leanQuery = useDraftLean(
+		() => props.draft.id,
+		() => props.draft.status === "ready",
+	);
+	const leanBySlot = createMemo(
+		() => new Map(leanQuery.data?.map((b) => [b.slotId, b])),
+	);
 
 	const pagePx = () => (props.layout?.page.width ?? 0) * PX_PER_PT;
 	const narrow = () =>
@@ -242,6 +253,7 @@ export function DraftEditor(props: {
 		},
 		text: ed.text,
 		label: ed.label,
+		lean: (slotId) => leanBySlot().get(slotId),
 		diffFor: (slotId) => {
 			const sug = suggestions.get(slotId);
 			if (!sug || sug.error !== undefined) return null;

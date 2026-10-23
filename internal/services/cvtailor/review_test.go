@@ -175,18 +175,18 @@ func TestKeepDraft(t *testing.T) {
 	t.Run("a second Draft of a Job conflicts until the first is discarded", func(t *testing.T) {
 		e := newDraftEnv(t)
 		ctx := t.Context()
-		ids := e.readyDrafts(t, 2)
-		first, second := dto.DraftQuery{ID: ids[0]}, dto.DraftQuery{ID: ids[1]}
+		first := dto.DraftQuery{ID: e.readyDrafts(t, 1)[0]}
 		if _, err := e.svc.KeepDraft(ctx, userID, first); err != nil {
 			t.Fatal(err)
 		}
+		e.run(t, tick{})
+		second := dto.DraftQuery{ID: e.readyDrafts(t, 1)[0]}
 
 		_, err := e.svc.KeepDraft(ctx, userID, second)
 		if !apperr.IsKind(err, apperr.KindConflict) {
 			t.Fatalf("%s err = %v, want kind %v", "KeepDraft(second)", err, apperr.KindConflict)
 		}
 
-		e.run(t, tick{})
 		if _, err := e.svc.DiscardDraft(ctx, userID, first); err != nil {
 			t.Fatal(err)
 		}

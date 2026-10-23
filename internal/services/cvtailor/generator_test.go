@@ -43,6 +43,13 @@ func (e draftEnv) queue(t *testing.T) string {
 	return ref.ID
 }
 
+func (e draftEnv) queueOnOtherJob(t *testing.T) string {
+	t.Helper()
+	other := e
+	other.input.JobID = "job-other"
+	return other.queue(t)
+}
+
 func newQueuedDraft(t *testing.T) (draftEnv, string) {
 	t.Helper()
 	e := newDraftEnv(t)
@@ -111,7 +118,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		e.run(t, tick{editor: cvtailortest.Editing(res)})
 
 		url := "https://docs.google.com/document/d/copy-1/edit"
-		wantDraft := dto.Draft{ID: id, JobID: jobID, Status: "ready", DraftDocURL: &url, DraftDocID: "copy-1"}
+		wantDraft := dto.Draft{ID: id, JobID: jobID, Mode: dto.DraftModeGenerate, Status: "ready", DraftDocURL: &url, DraftDocID: "copy-1"}
 		if diff := cmp.Diff(wantDraft, e.draft(t, id), cmpopts.IgnoreFields(dto.Draft{}, "Findings", "CreatedAt", "EditSet", "Provenance", "Content", "Base", "BaseContent", "BaseDocID", "BaseTabID", "AchievementIDs")); diff != "" {
 			t.Errorf("GetDraft(%s) mismatch (-want +got):\n%s", id, diff)
 		}
@@ -142,6 +149,31 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 		if diff := cmp.Diff([]string{"Cut p99 latency"}, inserted); diff != "" {
 			t.Errorf("inserted text mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("an as-is Draft copies the base tab unchanged without a model or key", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		e.input.Mode, e.input.AchievementIDs = dto.DraftModeAsIs, nil
+		id := e.queue(t)
+
+		e.run(t, tick{creds: cvtailortest.NoKey{}})
+
+		d := e.draft(t, id)
+		wantBullets := []dto.DraftBullet{
+			{Text: "Built and maintained the public APIs for the platform", AchievementIDs: []string{}},
+			{Text: "Ran on-call", AchievementIDs: []string{}},
+			{Text: "Wrote docs", AchievementIDs: []string{}},
+		}
+		if d.Status != "ready" || d.Content == nil || len(d.Content.Positions) != 1 {
+			t.Fatalf("GetDraft(%s) = %+v, want a ready Draft with one Position", id, d)
+		}
+		if diff := cmp.Diff(wantBullets, d.Content.Positions[0].Bullets); diff != "" {
+			t.Errorf("Draft bullets mismatch (-want +got):\n%s", diff)
+		}
+		if len(e.drive.Updates) != 1 {
+			t.Errorf("Docs writes = %d batches, want only the tab trim", len(e.drive.Updates))
 		}
 	})
 

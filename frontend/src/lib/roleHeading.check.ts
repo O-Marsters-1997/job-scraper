@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import type { LayoutBlock, LayoutRun } from "@/types/tailoring";
 import { cloneRoleHeading } from "./roleHeading";
 
@@ -58,4 +59,44 @@ const textOf = (b: LayoutBlock) => b.runs.map((r) => r.text);
 		to,
 	);
 	assert.deepEqual(textOf(got), ["Analyst, Widgets", "\t2016 - 2018"]);
+}
+
+type FixtureRole = {
+	title: string;
+	employer: string;
+	start: string | null;
+	end: string | null;
+};
+type FixtureRun = { text: string; bold: boolean };
+const fixture = JSON.parse(
+	readFileSync(
+		"../internal/services/cvtailor/tabcopy/testdata/role_heading.json",
+		"utf8",
+	),
+) as {
+	cases: {
+		name: string;
+		siblingRuns: FixtureRun[];
+		from: FixtureRole;
+		to: FixtureRole;
+		wantRuns: FixtureRun[];
+	}[];
+};
+
+for (const c of fixture.cases) {
+	const got = cloneRoleHeading(
+		heading(...c.siblingRuns.map((r) => run(r.text, r.bold))),
+		c.from,
+		{
+			title: c.to.title,
+			employer: c.to.employer,
+			startDate: c.to.start,
+			endDate: c.to.end,
+		},
+	);
+	assert.deepEqual(
+		got.runs.map((r) => ({ text: r.text, bold: r.bold })),
+		c.wantRuns,
+		c.name,
+	);
 }

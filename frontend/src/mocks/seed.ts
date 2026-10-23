@@ -42,6 +42,7 @@ const statuses: ApplicationStatus[] = STATUS_DEFINITIONS.map((s, i) => ({
 	Name: s.name,
 	Colour: s.colour,
 	ReplyWindowDays: null,
+	CountsAsReply: s.name === "Interview" || s.name === "Offer",
 	SystemKey: s.systemKey,
 	CreatedAt: new Date("2024-01-01").toISOString(),
 }));

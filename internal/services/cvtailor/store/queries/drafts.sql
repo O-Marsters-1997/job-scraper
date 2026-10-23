@@ -1,6 +1,6 @@
 -- name: InsertDraft :one
-INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps)
-SELECT sqlc.arg(user_id)::uuid, j.id, sqlc.arg(base_doc_id)::text, sqlc.arg(base_tab_id)::text, sqlc.arg(achievement_ids)::uuid[], sqlc.arg(skill_swaps)::jsonb
+INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, mode)
+SELECT sqlc.arg(user_id)::uuid, j.id, sqlc.arg(base_doc_id)::text, sqlc.arg(base_tab_id)::text, sqlc.arg(achievement_ids)::uuid[], sqlc.arg(skill_swaps)::jsonb, sqlc.arg(mode)::text
 FROM jobs j WHERE j.id = sqlc.arg(job_id)::uuid
 RETURNING *;
 
@@ -20,7 +20,7 @@ UPDATE tailored_cvs t SET status = CASE WHEN t.status = 'keeping' THEN 'keeping'
 FROM next, jobs j
 LEFT JOIN companies c ON c.id = j.company_id
 WHERE t.id = next.id AND j.id = t.job_id
-RETURNING t.id, t.user_id, t.job_id, t.base_doc_id, t.base_tab_id, t.achievement_ids, t.skill_swaps, t.attempts,
+RETURNING t.id, t.user_id, t.job_id, t.base_doc_id, t.base_tab_id, t.achievement_ids, t.skill_swaps, t.mode, t.attempts,
     COALESCE(t.draft_doc_id, '')::text AS draft_doc_id,
     t.status = 'keeping' AS keeping,
     j.title AS job_title,
