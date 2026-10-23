@@ -38,7 +38,6 @@ import { Route as AuthApplicationsIdRouteImport } from './routes/_auth/applicati
 import { Route as AuthSettingsScoringIndexRouteImport } from './routes/_auth/settings/scoring/index'
 import { Route as AuthTailoringDraftsIdRouteImport } from './routes/_auth/tailoring.drafts.$id'
 import { Route as AuthSettingsScoringSectionRouteImport } from './routes/_auth/settings/scoring/$section'
-import { Route as AuthJobsIdTailorRouteImport } from './routes/_auth/jobs_.$id_.tailor'
 import { Route as AuthCvTemplatesDocIdTabIdRouteImport } from './routes/_auth/cv-templates_.$docId.$tabId'
 
 const SignupRoute = SignupRouteImport.update({
@@ -188,11 +187,6 @@ const AuthSettingsScoringSectionRoute =
     path: '/$section',
     getParentRoute: () => AuthSettingsScoringRoute,
   } as any)
-const AuthJobsIdTailorRoute = AuthJobsIdTailorRouteImport.update({
-  id: '/jobs_/$id_/tailor',
-  path: '/jobs/$id/tailor',
-  getParentRoute: () => AuthRoute,
-} as any)
 const AuthCvTemplatesDocIdTabIdRoute =
   AuthCvTemplatesDocIdTabIdRouteImport.update({
     id: '/cv-templates_/$docId/$tabId',
@@ -227,7 +221,6 @@ export interface FileRoutesByFullPath {
   '/settings/usage': typeof AuthSettingsUsageRoute
   '/settings/': typeof AuthSettingsIndexRoute
   '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
-  '/jobs/$id/tailor': typeof AuthJobsIdTailorRoute
   '/settings/scoring/$section': typeof AuthSettingsScoringSectionRoute
   '/tailoring/drafts/$id': typeof AuthTailoringDraftsIdRoute
   '/settings/scoring/': typeof AuthSettingsScoringIndexRoute
@@ -257,7 +250,6 @@ export interface FileRoutesByTo {
   '/settings/usage': typeof AuthSettingsUsageRoute
   '/settings': typeof AuthSettingsIndexRoute
   '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
-  '/jobs/$id/tailor': typeof AuthJobsIdTailorRoute
   '/settings/scoring/$section': typeof AuthSettingsScoringSectionRoute
   '/tailoring/drafts/$id': typeof AuthTailoringDraftsIdRoute
   '/settings/scoring': typeof AuthSettingsScoringIndexRoute
@@ -291,7 +283,6 @@ export interface FileRoutesById {
   '/_auth/settings/usage': typeof AuthSettingsUsageRoute
   '/_auth/settings/': typeof AuthSettingsIndexRoute
   '/_auth/cv-templates_/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
-  '/_auth/jobs_/$id_/tailor': typeof AuthJobsIdTailorRoute
   '/_auth/settings/scoring/$section': typeof AuthSettingsScoringSectionRoute
   '/_auth/tailoring/drafts/$id': typeof AuthTailoringDraftsIdRoute
   '/_auth/settings/scoring/': typeof AuthSettingsScoringIndexRoute
@@ -325,7 +316,6 @@ export interface FileRouteTypes {
     | '/settings/usage'
     | '/settings/'
     | '/cv-templates/$docId/$tabId'
-    | '/jobs/$id/tailor'
     | '/settings/scoring/$section'
     | '/tailoring/drafts/$id'
     | '/settings/scoring/'
@@ -355,7 +345,6 @@ export interface FileRouteTypes {
     | '/settings/usage'
     | '/settings'
     | '/cv-templates/$docId/$tabId'
-    | '/jobs/$id/tailor'
     | '/settings/scoring/$section'
     | '/tailoring/drafts/$id'
     | '/settings/scoring'
@@ -388,7 +377,6 @@ export interface FileRouteTypes {
     | '/_auth/settings/usage'
     | '/_auth/settings/'
     | '/_auth/cv-templates_/$docId/$tabId'
-    | '/_auth/jobs_/$id_/tailor'
     | '/_auth/settings/scoring/$section'
     | '/_auth/tailoring/drafts/$id'
     | '/_auth/settings/scoring/'
@@ -606,13 +594,6 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthSettingsScoringSectionRouteImport
       parentRoute: typeof AuthSettingsScoringRoute
     }
-    '/_auth/jobs_/$id_/tailor': {
-      id: '/_auth/jobs_/$id_/tailor'
-      path: '/jobs/$id/tailor'
-      fullPath: '/jobs/$id/tailor'
-      preLoaderRoute: typeof AuthJobsIdTailorRouteImport
-      parentRoute: typeof AuthRoute
-    }
     '/_auth/cv-templates_/$docId/$tabId': {
       id: '/_auth/cv-templates_/$docId/$tabId'
       path: '/cv-templates/$docId/$tabId'
@@ -679,7 +660,6 @@ interface AuthRouteChildren {
   AuthCompaniesNewRoute: typeof AuthCompaniesNewRoute
   AuthJobsIdRoute: typeof AuthJobsIdRoute
   AuthCvTemplatesDocIdTabIdRoute: typeof AuthCvTemplatesDocIdTabIdRoute
-  AuthJobsIdTailorRoute: typeof AuthJobsIdTailorRoute
   AuthTailoringDraftsIdRoute: typeof AuthTailoringDraftsIdRoute
 }
 
@@ -698,7 +678,6 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthCompaniesNewRoute: AuthCompaniesNewRoute,
   AuthJobsIdRoute: AuthJobsIdRoute,
   AuthCvTemplatesDocIdTabIdRoute: AuthCvTemplatesDocIdTabIdRoute,
-  AuthJobsIdTailorRoute: AuthJobsIdTailorRoute,
   AuthTailoringDraftsIdRoute: AuthTailoringDraftsIdRoute,
 }
 

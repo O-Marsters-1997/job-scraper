@@ -26,15 +26,7 @@ var (
 	_ cvtailor.Credentials = NoKey{}
 )
 
-type Reply struct {
-	Result cvedit.Result
-	Err    error
-}
-
 type RecordingEditor struct {
-	replies []Reply
-	Inputs  []cvedit.Input
-
 	deltas        []string
 	suggestErr    error
 	pace          time.Duration
@@ -88,24 +80,6 @@ func (e *RecordingEditor) Suggest(_ context.Context, _ string, in cvedit.Suggest
 		onDelta(d)
 	}
 	return cvedit.SuggestResult{Text: strings.Join(e.deltas, ""), Cost: 0.001}, e.suggestErr
-}
-
-func ReplyingWith(replies ...Reply) *RecordingEditor {
-	return &RecordingEditor{replies: replies}
-}
-
-func Editing(results ...cvedit.Result) *RecordingEditor {
-	replies := make([]Reply, len(results))
-	for i, r := range results {
-		replies[i] = Reply{Result: r}
-	}
-	return ReplyingWith(replies...)
-}
-
-func (e *RecordingEditor) Edit(_ context.Context, _ string, in cvedit.Input) (cvedit.Result, error) {
-	e.Inputs = append(e.Inputs, in)
-	r := e.replies[min(len(e.Inputs), len(e.replies))-1]
-	return r.Result, r.Err
 }
 
 var _ cvtailor.Editor = (*RecordingEditor)(nil)

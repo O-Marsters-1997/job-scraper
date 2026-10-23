@@ -60,8 +60,7 @@ func TestSuggest(t *testing.T) {
 
 	t.Run("a bullet draws on its cited Achievements and the profile on the Draft's chosen ones", func(t *testing.T) {
 		e := newDraftEnv(t)
-		e.input.AchievementIDs = []string{e.pos.Achievements[0].ID, e.pos.Achievements[1].ID}
-		id, _ := e.readyWithProfile(t, "Engineer who ships.")
+		id, _ := e.readyWithProfile(t, "Engineer who ships.", e.pos.Achievements[1].ID)
 		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
 		editor := cvtailortest.Suggesting("ok")
 		m := e.suggestModule(editor, apiKey)

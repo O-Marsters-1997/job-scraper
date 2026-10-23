@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const cvHeadingSchema = z.object({
+const cvHeadingSchema = z.object({
 	text: z.string(),
 	positionId: z.string().nullable(),
 	confirmed: z.boolean(),
@@ -183,7 +183,6 @@ export type DraftInput = {
 	jobId: string;
 	docId: string;
 	tabId: string;
-	achievementIds: string[];
 	mode: DraftMode;
 };
 export const bulletLeanSchema = z.object({

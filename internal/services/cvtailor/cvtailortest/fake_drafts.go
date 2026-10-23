@@ -69,7 +69,7 @@ func (f *FakeStore) CreateDraft(_ context.Context, userID string, in dto.DraftIn
 	if in.Mode == "" {
 		in.Mode = dto.DraftModeGenerate
 	}
-	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Mode: in.Mode, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now(), BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIDs: slices.Clone(in.AchievementIDs), SkillSwaps: slices.Clone(in.SkillSwaps)}, userID: userID, input: in, dueAt: time.Now()}
+	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Mode: in.Mode, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now(), BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIDs: []string{}}, userID: userID, input: in, dueAt: time.Now()}
 	f.drafts[d.ID] = d
 	return d.Draft, nil
 }
@@ -163,7 +163,7 @@ func (f *FakeStore) ClaimDraft(_ context.Context) (dto.DraftClaim, error) {
 	job := f.jobs[d.input.JobID]
 	return dto.DraftClaim{
 		ID: d.ID, UserID: d.userID, JobID: d.input.JobID, DocID: d.input.DocID, TabID: d.input.TabID,
-		AchievementIDs: slices.Clone(d.input.AchievementIDs), SkillSwaps: slices.Clone(d.input.SkillSwaps), Mode: d.Mode, Attempts: d.attempts, DraftDocID: d.DraftDocID,
+		AchievementIDs: slices.Clone(d.AchievementIDs), Mode: d.Mode, Attempts: d.attempts, DraftDocID: d.DraftDocID,
 		JobDescription: job.Description, JobFingerprint: job.ContentFingerprint,
 		Keeping: keeping, JobTitle: job.Title, CompanyName: job.CompanySlug,
 	}, nil

@@ -50,16 +50,14 @@ func renumberedDraft(t *testing.T) (draftEnv, string, cvtailor.DocFetcher) {
 	if err := e.store.SaveHeadingMappings(t.Context(), userID, docID, tabID, mappings); err != nil {
 		t.Fatal(err)
 	}
-	e.input.AchievementIDs = []string{e.pos.Achievements[0].ID, ach.ID}
 	base := tabJSON(t, head("Profile"), prose("Engineer who ships."), head(heading), bullet("a0"), bullet("a1"), bullet("a2"), head("Beta"), bullet("b0"), head("Skills"), prose("Go, SQL"))
 	copyTab := tabJSON(t, head("Profile"), prose("Engineer who ships."), head(heading), bullet("Cut p99 latency by moving queries to Postgres"), head("Beta"), bullet("Shipped billing"), head("Skills"), prose("Go, SQL"))
 	docs := cvtailortest.EditedCopyDocs{BaseDocID: docID, Base: base, Copy: copyTab}
-	result := cvedit.Result{Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{
+	edits := cvedit.EditSet{Positions: []cvedit.PositionEdit{
 		{PositionID: e.pos.ID, Bullets: []cvedit.Bullet{{AchievementIDs: []string{e.pos.Achievements[0].ID}, Text: "Cut p99 latency by moving queries to Postgres"}}},
 		{PositionID: second.ID, Bullets: []cvedit.Bullet{{AchievementIDs: []string{ach.ID}, Text: "Shipped billing"}}},
-	}}}
-	id := e.queue(t)
-	e.run(t, tick{docs: docs, editor: cvtailortest.Editing(result)})
+	}}
+	id := e.readyWith(t, tick{docs: docs}, edits)
 	return e, id, docs
 }
 

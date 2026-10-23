@@ -316,7 +316,6 @@ function CvRowBody(props: {
 			jobId: props.jobId,
 			docId: cv.DocID,
 			tabId: cv.TabID,
-			achievementIds: [],
 			mode: "as_is",
 		});
 		await navigate({ to: "/tailoring/drafts/$id", params: { id: ref.id } });

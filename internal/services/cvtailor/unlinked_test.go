@@ -16,8 +16,7 @@ func TestGetDraftUnlinkedHeadings(t *testing.T) {
 		const other = "Analyst, Globex"
 		e := newDraftEnv(t)
 		docs := cvtailortest.Docs{TabJSON: baseTab(t, head(other), bullet("Reported weekly numbers"))}
-		id := e.queue(t)
-		e.run(t, tick{docs: docs, editor: cvtailortest.Editing(e.bulletResult("Cut p99 latency by quickly moving queries to Postgres", 0))})
+		id := e.readyWith(t, tick{docs: docs}, e.citedEdit("Cut p99 latency by quickly moving queries to Postgres"))
 
 		got := e.draft(t, id).Content.Positions
 
@@ -35,15 +34,13 @@ func TestGetDraftUnlinkedHeadings(t *testing.T) {
 		const other = "Analyst, Globex"
 		e := newDraftEnv(t)
 		docs := cvtailortest.Docs{TabJSON: baseTab(t, head(other), bullet("Reported weekly numbers"))}
-		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency by quickly moving queries to Postgres", 0))
 		if _, err := e.svc.SaveHeadings(t.Context(), userID, dto.HeadingMappingsInput{
 			DocID: e.input.DocID, TabID: e.input.TabID,
 			Mappings: []dto.HeadingMapping{{HeadingText: other, PositionID: &e.pos.ID}},
 		}); err != nil {
 			t.Fatalf("SaveHeadings() error = %v", err)
 		}
-		id := e.queue(t)
-		e.run(t, tick{docs: docs, editor: editor})
+		id := e.readyWith(t, tick{docs: docs}, e.citedEdit("Cut p99 latency by quickly moving queries to Postgres"))
 
 		for _, p := range e.draft(t, id).Content.Positions {
 			if !p.Linked {

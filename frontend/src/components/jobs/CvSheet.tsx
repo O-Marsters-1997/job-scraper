@@ -17,7 +17,7 @@ import { loadedData } from "@/lib/queryData";
 import { sharePdf } from "@/lib/sharePdf";
 import type { Job } from "@/types/job";
 import { fetchCVPdf } from "../../api/cvTemplates";
-import { fetchDraftPdf, fetchSuggestions } from "../../api/tailoring";
+import { fetchDraftPdf } from "../../api/tailoring";
 
 interface CvSheetProps {
 	job: Pick<Job, "ID" | "CompanySlug">;
@@ -44,15 +44,11 @@ export function CvSheet(props: CvSheetProps) {
 	let baseCv = { DocID: "", TabID: "" };
 	const tailor = useFormSubmit(async () => {
 		const { DocID: docId, TabID: tabId } = baseCv;
-		const suggestions = await fetchSuggestions(props.job.ID, docId, tabId);
 		const draft = await createDraft.mutateAsync({
 			jobId: props.job.ID,
 			docId,
 			tabId,
 			mode: "generate",
-			achievementIds: suggestions
-				.filter((s) => s.preselected)
-				.map((s) => s.achievementId),
 		});
 		await navigate({ to: "/tailoring/drafts/$id", params: { id: draft.id } });
 	});

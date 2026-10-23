@@ -218,7 +218,7 @@ linters:
       - path: ^internal/services/
         linters:
           - gochecknoglobals
-        text: '\b(foldText|PromptVersion|SuggestPromptVersion|checkNames|titleSeps|dateForms|suggestActions|promptTemplate|picksSchema|dummyHash|choiceCriteria|likeEscaper|individualTemplate|sizeOptionIDs|stageOptionIDs|pickStrength|defaultBands|cellEscaper|gradeValues|gradeReasons|Dimensions|dimensionSpecs|ladderLevels|currencySymbols)\b'
+        text: '\b(foldText|SuggestPromptVersion|titleSeps|dateForms|suggestActions|promptTemplate|picksSchema|dummyHash|choiceCriteria|likeEscaper|individualTemplate|sizeOptionIDs|stageOptionIDs|pickStrength|defaultBands|cellEscaper|gradeValues|gradeReasons|Dimensions|dimensionSpecs|ladderLevels|currencySymbols)\b'
       - path: ^internal/worker/(discover|sources)/
         linters:
           - gochecknoglobals

@@ -162,7 +162,7 @@ func (s *Service) rebuildDoc(ctx context.Context, claim dto.DraftClaim, draftDoc
 	if err != nil {
 		return docparse.DocStructure{}, fmt.Errorf("parse rearranged tab: %w", err)
 	}
-	kept, err := s.withinRoles(ctx, withoutSwaps(claim), edits.Roles)
+	kept, err := s.withinRoles(ctx, claim, edits.Roles)
 	if err != nil {
 		return docparse.DocStructure{}, err
 	}

@@ -4,8 +4,6 @@ import { KeptDraftExistsError } from "../lib/tailoring";
 import {
 	type BulletLean,
 	bulletLeanSchema,
-	type CVHeading,
-	cvHeadingSchema,
 	type Draft,
 	type DraftInput,
 	type DraftInsights,
@@ -48,16 +46,6 @@ export class LayoutUnsupportedError extends Error {}
 
 const cvPath = (docId: string, tabId: string) =>
 	`/tailoring/cvs/${encodeURIComponent(docId)}/${encodeURIComponent(tabId)}/headings`;
-
-export async function fetchHeadings(
-	docId: string,
-	tabId: string,
-): Promise<CVHeading[]> {
-	return mocked(
-		(db) => db.getHeadings(docId, tabId),
-		() => apiFetch(cvPath(docId, tabId), cvHeadingSchema.array()),
-	);
-}
 
 export async function saveHeadings(
 	docId: string,

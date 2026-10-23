@@ -16,11 +16,7 @@ func (e draftEnv) readyDrafts(t *testing.T, n int) []string {
 	t.Helper()
 	ids := make([]string, n)
 	for i := range ids {
-		ids[i] = e.queue(t)
-	}
-	editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency by quickly moving queries to Postgres", 0))
-	for range n {
-		e.run(t, tick{editor: editor})
+		ids[i] = e.readyWith(t, tick{}, e.citedEdit("Cut p99 latency by quickly moving queries to Postgres"))
 	}
 	return ids
 }
@@ -140,8 +136,8 @@ func TestKeepDraft(t *testing.T) {
 	t.Run("the keep still records outcomes when Jev cannot answer", func(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
-		e.asker.err = errors.New("jev down")
 		id := e.readyDrafts(t, 1)[0]
+		e.asker.err = errors.New("jev down")
 		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}

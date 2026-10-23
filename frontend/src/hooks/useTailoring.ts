@@ -10,7 +10,6 @@ import {
 	fetchDraftLayout,
 	fetchDraftLean,
 	fetchExperienceMatch,
-	fetchHeadings,
 	fetchJobDrafts,
 	fetchSuggestions,
 	keepDraft,
@@ -22,18 +21,6 @@ import type { HeadingMapping, SkillGroup, SlotEdit } from "../types/tailoring";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export type CVRef = { docId: string; tabId: string };
-
-export function useHeadings(cv: Accessor<CVRef | undefined>) {
-	return createQuery(() => {
-		const ref = cv();
-		const { docId = "", tabId = "" } = ref ?? {};
-		return {
-			queryKey: keys.tailoring.headings(docId, tabId),
-			queryFn: () => fetchHeadings(docId, tabId),
-			enabled: ref !== undefined,
-		};
-	});
-}
 
 export function useSaveHeadings() {
 	return useInvalidatingMutation(
