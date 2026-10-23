@@ -260,9 +260,10 @@ func TestSuggestRoute(t *testing.T) {
 			reply    string
 			maxChars int
 		}{
-			"more words":               {"Built REST services in Go for the payments team daily", 100},
-			"longer than maxChars":     {"Built microservices in Go for the payments team", 20},
-			"too much of it rewritten": {"Owned reliability of services for payments", 100},
+			"more words":                        {"Built REST services in Go for the payments team daily", 100},
+			"longer than maxChars":              {"Built microservices in Go for the payments team", 20},
+			"longer than the text, no maxChars": {"Built infrastructure services in Go for the payments team", 0},
+			"too much of it rewritten":          {"Owned reliability of services for payments", 100},
 		} {
 			t.Run("rejects "+name, func(t *testing.T) {
 				t.Parallel()

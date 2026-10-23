@@ -106,7 +106,11 @@ func (m *Module) streamSuggestion(ctx context.Context, events chan<- SuggestEven
 		return
 	}
 	if in.Action == dto.SuggestActionTailor {
-		if why := cvedit.TailorViolation(in.Text, res.Text, in.MaxChars, dto.TailorMaxChangedShare); why != "" {
+		limit := utf8.RuneCountInString(in.Text)
+		if in.MaxChars > 0 {
+			limit = min(limit, in.MaxChars)
+		}
+		if why := cvedit.TailorViolation(in.Text, res.Text, limit, dto.TailorMaxChangedShare); why != "" {
 			send(SuggestEvent{Err: apperr.Unprocessable(why + "; try again")})
 			return
 		}
