@@ -107,6 +107,26 @@ func TestFetchPage(t *testing.T) {
 		sourcetest.MatchGolden(t, "company_faculty.json", jobs)
 	})
 
+	t.Run("only backend, frontend and full-stack jobs under 6 years are looked up", func(t *testing.T) {
+		t.Parallel()
+		a, client := newAPI(t, "company_faculty.json")
+		a.company = `{"data": {"company": {"jobLocations": ["LONDON"], "liveJobs": [
+			{"externalId": "keep1", "locationPreferences": [{"location": "LONDON"}], "subFunction": {"value": "Backend Engineer"}, "minYearsExperienceRequired": 3},
+			{"externalId": "keep2", "locationPreferences": [{"location": "LONDON"}], "subFunction": {"value": "Frontend Engineer"}, "minYearsExperienceRequired": null},
+			{"externalId": "hw", "locationPreferences": [{"location": "LONDON"}], "subFunction": {"value": "Embedded Engineer"}},
+			{"externalId": "senior", "locationPreferences": [{"location": "LONDON"}], "subFunction": {"value": "Backend Engineer"}, "minYearsExperienceRequired": 6}
+		]}}}`
+		if _, _, err := source(client).FetchPage(t.Context(), ""); err != nil {
+			t.Fatal(err)
+		}
+		q := a.queries[len(a.queries)-1]
+		for id, want := range map[string]bool{"keep1": true, "keep2": true, "hw": false, "senior": false} {
+			if got := strings.Contains(q, `"`+id+`"`); got != want {
+				t.Errorf("job query mentions %s = %v, want %v", id, got, want)
+			}
+		}
+	})
+
 	t.Run("US-only company looks up no jobs", func(t *testing.T) {
 		t.Parallel()
 		a, client := newAPI(t, "company_us_only.json")
@@ -176,6 +196,34 @@ func TestFetchPage(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestListing_Eligible(t *testing.T) {
+	t.Parallel()
+	six, five := 6, 5
+	tests := []struct {
+		name string
+		l    wttj.Listing
+		want bool
+	}{
+		{"backend in London", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Backend Engineer"}, true},
+		{"frontend remote", wttj.Listing{Locations: []string{"REMOTE"}, SubFunction: "Frontend Engineer"}, true},
+		{"full-stack", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Full-stack Engineer"}, true},
+		{"other sub-function", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Security Engineer"}, false},
+		{"no sub-function", wttj.Listing{Locations: []string{"LONDON"}}, false},
+		{"non-UK location", wttj.Listing{Locations: []string{"PARIS_FR"}, SubFunction: "Backend Engineer"}, false},
+		{"unknown experience", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Backend Engineer", MinYears: nil}, true},
+		{"5 years", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Backend Engineer", MinYears: &five}, true},
+		{"6 years", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Backend Engineer", MinYears: &six}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.l.Eligible(); got != tt.want {
+				t.Errorf("Eligible() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
 
 func TestPollBoard(t *testing.T) {

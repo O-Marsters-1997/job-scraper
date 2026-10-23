@@ -23,13 +23,13 @@ const (
 )
 
 const (
-	roleFields    = `locationPreferences { location } function { value }`
+	roleFields    = `locationPreferences { location } subFunction { value } minYearsExperienceRequired`
 	listingFields = roleFields + ` originalUrl actualOriginalUrl company { name urlSafeName }`
 	detailFields  = listingFields + ` title firstLiveAt insertedAt involvesBullets { value } requirements { value }`
 	companyFields = `name jobLocations mission parsedHqAddress glassdoorRating yearEmployeeGrowthPercentage
 sectorTags { value } size { value } visaSponsorshipCountries { location offersVisa }
 totalFunding(currency: USD) { amount } fundingRounds(currency: USD) { id }
-liveJobs { externalId locationPreferences { location } function { value } }`
+liveJobs { externalId ` + roleFields + ` }`
 )
 
 type Client struct {
@@ -44,10 +44,17 @@ func NewClient(gap time.Duration) *Client {
 type Listing struct {
 	ID           string
 	Locations    []string
-	Function     string
+	SubFunction  string
+	MinYears     *int
 	ApplyURL     string
 	CompanyName  string
 	CompanyToken string
+}
+
+const maxMinYears = 5
+
+func eligibleSubFunction(v string) bool {
+	return slices.Contains([]string{"Backend Engineer", "Frontend Engineer", "Full-stack Engineer"}, v)
 }
 
 func (l Listing) Eligible() bool {
@@ -57,7 +64,8 @@ func (l Listing) Eligible() bool {
 			ukOrRemote = true
 		}
 	}
-	return ukOrRemote && strings.Contains(l.Function, "Engineering")
+	senior := l.MinYears != nil && *l.MinYears > maxMinYears
+	return ukOrRemote && eligibleSubFunction(l.SubFunction) && !senior
 }
 
 func (c *Client) EligibleListings(ctx context.Context, ids []string) ([]Listing, error) {
@@ -107,7 +115,8 @@ type apiJob struct {
 	Title             string       `json:"title"`
 	FirstLiveAt       string       `json:"firstLiveAt"`
 	InsertedAt        string       `json:"insertedAt"`
-	Function          *valueField  `json:"function"`
+	SubFunction       *valueField  `json:"subFunction"`
+	MinYears          *int         `json:"minYearsExperienceRequired"`
 	InvolvesBullets   []valueField `json:"involvesBullets"`
 	Requirements      []valueField `json:"requirements"`
 	LocationPrefs     []struct {
@@ -125,9 +134,10 @@ func (j apiJob) listing() Listing {
 		ApplyURL:     cmp.Or(j.ActualOriginalURL, j.OriginalURL),
 		CompanyName:  j.Company.Name,
 		CompanyToken: j.Company.URLSafeName,
+		MinYears:     j.MinYears,
 	}
-	if j.Function != nil {
-		l.Function = j.Function.Value
+	if j.SubFunction != nil {
+		l.SubFunction = j.SubFunction.Value
 	}
 	for _, p := range j.LocationPrefs {
 		l.Locations = append(l.Locations, p.Location)

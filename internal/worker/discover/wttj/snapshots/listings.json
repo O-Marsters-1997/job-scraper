@@ -1,13 +1,13 @@
 {"data": {
   "j0": {"externalId": "ats1", "originalUrl": "https://jobs.ashbyhq.com/acme/1?utm_source=Otta", "actualOriginalUrl": "https://jobs.ashbyhq.com/acme/1",
-         "locationPreferences": [{"location": "LONDON"}], "function": {"value": "Software Engineering"}, "company": {"name": "Acme", "urlSafeName": "Acme"}},
+         "locationPreferences": [{"location": "LONDON"}], "subFunction": {"value": "Backend Engineer"}, "company": {"name": "Acme", "urlSafeName": "Acme"}},
   "j1": {"externalId": "ats2", "originalUrl": "https://jobs.ashbyhq.com/acme/2", "actualOriginalUrl": "",
-         "locationPreferences": [{"location": "REMOTE_UK"}], "function": {"value": "Data Engineering"}, "company": {"name": "Acme", "urlSafeName": "Acme"}},
+         "locationPreferences": [{"location": "REMOTE_UK"}], "subFunction": {"value": "Frontend Engineer"}, "company": {"name": "Acme", "urlSafeName": "Acme"}},
   "j2": {"externalId": "noats1", "originalUrl": "https://ats.rippling.com/steno/jobs/1", "actualOriginalUrl": "https://ats.rippling.com/steno/jobs/1",
-         "locationPreferences": [{"location": "MANCHESTER"}], "function": {"value": "Software Engineering"}, "company": {"name": "Steno Labs", "urlSafeName": "Steno-Labs"}},
+         "locationPreferences": [{"location": "MANCHESTER"}], "subFunction": {"value": "Full-stack Engineer"}, "company": {"name": "Steno Labs", "urlSafeName": "Steno-Labs"}},
   "j3": {"externalId": "us1", "originalUrl": "https://job-boards.greenhouse.io/usco/jobs/1", "actualOriginalUrl": "https://job-boards.greenhouse.io/usco/jobs/1",
-         "locationPreferences": [{"location": "NEW_YORK_US"}], "function": {"value": "Software Engineering"}, "company": {"name": "US Co", "urlSafeName": "US-Co"}},
+         "locationPreferences": [{"location": "NEW_YORK_US"}], "subFunction": {"value": "Backend Engineer"}, "company": {"name": "US Co", "urlSafeName": "US-Co"}},
   "j4": {"externalId": "mkt1", "originalUrl": "https://job-boards.greenhouse.io/mktco/jobs/1", "actualOriginalUrl": "https://job-boards.greenhouse.io/mktco/jobs/1",
-         "locationPreferences": [{"location": "LONDON"}], "function": {"value": "Marketing"}, "company": {"name": "Mkt Co", "urlSafeName": "Mkt-Co"}},
+         "locationPreferences": [{"location": "LONDON"}], "subFunction": {"value": "Marketing Manager"}, "company": {"name": "Mkt Co", "urlSafeName": "Mkt-Co"}},
   "j5": null
 }, "errors": [{"message": "Job does not exist.", "path": ["j5"]}]}
