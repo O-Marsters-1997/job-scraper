@@ -10,6 +10,7 @@ import (
 )
 
 func TestGetDraftUnlinkedHeadings(t *testing.T) {
+	t.Parallel()
 	t.Run("carries a heading with no mapped Position, flagged unlinked", func(t *testing.T) {
 		t.Parallel()
 		const other = "Analyst, Globex"
