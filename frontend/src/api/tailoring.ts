@@ -2,6 +2,8 @@ import { z } from "zod";
 import { createSseParser } from "../lib/sse";
 import { KeptDraftExistsError } from "../lib/tailoring";
 import {
+	type BulletLean,
+	bulletLeanSchema,
 	type CVHeading,
 	cvHeadingSchema,
 	type Draft,
@@ -176,6 +178,13 @@ export async function fetchDraftLayout(id: string): Promise<DraftLayout> {
 						new LayoutUnsupportedError(bodyError(err) ?? "unsupported layout"),
 				}),
 			),
+	);
+}
+
+export async function fetchDraftLean(id: string): Promise<BulletLean[]> {
+	return mocked(
+		(db) => db.getDraftLean(),
+		() => apiFetch(`/tailoring/drafts/${id}/lean`, z.array(bulletLeanSchema)),
 	);
 }
 

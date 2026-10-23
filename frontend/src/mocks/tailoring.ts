@@ -1,4 +1,5 @@
 import type {
+	BulletLean,
 	CVHeading,
 	Draft,
 	DraftContent,
@@ -52,6 +53,10 @@ export function saveHeadings(
 ): HeadingMapping[] {
 	savedHeadings.set(`${docId}/${tabId}`, mappings);
 	return mappings;
+}
+
+export function getDraftLean(): BulletLean[] {
+	return [];
 }
 
 export function getExperienceMatch(): ExperienceMatch {

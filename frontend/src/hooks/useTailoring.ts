@@ -6,6 +6,7 @@ import {
 	discardDraft,
 	fetchDraft,
 	fetchDraftLayout,
+	fetchDraftLean,
 	fetchExperienceMatch,
 	fetchHeadings,
 	fetchJobDrafts,
@@ -95,6 +96,17 @@ export function useDraftLayout(id: Accessor<string>) {
 		retry: false,
 		refetchOnWindowFocus: false,
 		gcTime: 0,
+	}));
+}
+
+export function useDraftLean(id: Accessor<string>, enabled: Accessor<boolean>) {
+	return createQuery(() => ({
+		queryKey: keys.tailoring.draftLean(id()),
+		queryFn: () => fetchDraftLean(id()),
+		enabled: enabled(),
+		retry: false,
+		refetchOnWindowFocus: false,
+		staleTime: 5 * 60 * 1000,
 	}));
 }
 
