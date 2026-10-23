@@ -226,7 +226,9 @@ CREATE TABLE tailored_cvs (
     due_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     lease_until     TIMESTAMPTZ,
     last_error      TEXT        NOT NULL DEFAULT '',
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    insights        JSONB,
+    insights_for    TEXT        NOT NULL DEFAULT ''
 );
 CREATE UNIQUE INDEX tailored_cvs_kept_idx ON tailored_cvs (user_id, job_id) WHERE outcome = 'kept';
 CREATE UNIQUE INDEX tailored_cvs_live_idx ON tailored_cvs (user_id, job_id) WHERE outcome IS NULL;

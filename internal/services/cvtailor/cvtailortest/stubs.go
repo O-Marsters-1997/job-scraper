@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -33,6 +34,18 @@ type RecordingEditor struct {
 
 	explanation   string
 	ExplainInputs []cvedit.ExplainInput
+
+	insightLines  []cvedit.InsightLine
+	InsightInputs []cvedit.InsightsInput
+}
+
+func Insighting(lines ...cvedit.InsightLine) *RecordingEditor {
+	return &RecordingEditor{insightLines: lines}
+}
+
+func (e *RecordingEditor) Insights(_ context.Context, _ string, in cvedit.InsightsInput) (cvedit.InsightsResult, error) {
+	e.InsightInputs = append(e.InsightInputs, in)
+	return cvedit.InsightsResult{Lines: slices.Clone(e.insightLines), Cost: 0.01}, nil
 }
 
 // Explaining is an Editor whose explanations reply with text.

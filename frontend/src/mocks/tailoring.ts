@@ -4,6 +4,7 @@ import type {
 	Draft,
 	DraftContent,
 	DraftInput,
+	DraftInsights,
 	DraftLayout,
 	DraftPositionEdit,
 	DraftProvenance,
@@ -57,6 +58,10 @@ export function saveHeadings(
 
 export function getDraftLean(): BulletLean[] {
 	return [];
+}
+
+export function getDraftInsights(): DraftInsights {
+	return { lines: [], stale: false };
 }
 
 export function getExperienceMatch(): ExperienceMatch {

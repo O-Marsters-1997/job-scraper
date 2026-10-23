@@ -32,6 +32,7 @@ const (
 type Editor interface {
 	Suggest(ctx context.Context, apiKey string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error)
 	Explain(ctx context.Context, apiKey string, in cvedit.ExplainInput) (cvedit.ExplainResult, error)
+	Insights(ctx context.Context, apiKey string, in cvedit.InsightsInput) (cvedit.InsightsResult, error)
 }
 
 type Scaffolder interface {

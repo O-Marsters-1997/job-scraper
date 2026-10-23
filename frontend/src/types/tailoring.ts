@@ -197,6 +197,20 @@ export const bulletLeanSchema = z.object({
 		.nullable(),
 });
 export type BulletLean = z.infer<typeof bulletLeanSchema>;
+const insightSourceSchema = z.enum(["jd", "note", "comment"]);
+const insightLineSchema = z.object({
+	slotId: z.string(),
+	lean: z.number().nullable(),
+	source: insightSourceSchema,
+	quote: z.string(),
+	why: z.string(),
+	anchored: z.boolean(),
+});
+export const draftInsightsSchema = z.object({
+	lines: z.array(insightLineSchema),
+	stale: z.boolean(),
+});
+export type DraftInsights = z.infer<typeof draftInsightsSchema>;
 export type CVHeading = z.infer<typeof cvHeadingSchema>;
 export type Suggestion = z.infer<typeof suggestionSchema>;
 export type ExperienceMatch = z.infer<typeof experienceMatchSchema>;
