@@ -315,6 +315,45 @@ func (q *Queries) ListScrapeRunErrors(ctx context.Context, runIds []pgtype.UUID)
 	return items, nil
 }
 
+const listScrapeRunJobChanges = `-- name: ListScrapeRunJobChanges :many
+SELECT run_id, job_id, change, (snapshot->>'Title')::text AS title
+FROM scrape_run_job_changes
+WHERE run_id = ANY($1::uuid[])
+ORDER BY run_id, change, title, job_id
+`
+
+type ListScrapeRunJobChangesRow struct {
+	RunID  pgtype.UUID
+	JobID  pgtype.UUID
+	Change string
+	Title  string
+}
+
+func (q *Queries) ListScrapeRunJobChanges(ctx context.Context, runIds []pgtype.UUID) ([]ListScrapeRunJobChangesRow, error) {
+	rows, err := q.db.Query(ctx, listScrapeRunJobChanges, runIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListScrapeRunJobChangesRow
+	for rows.Next() {
+		var i ListScrapeRunJobChangesRow
+		if err := rows.Scan(
+			&i.RunID,
+			&i.JobID,
+			&i.Change,
+			&i.Title,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScrapeRuns = `-- name: ListScrapeRuns :many
 SELECT r.id, r.kind, r.source, r.source_target_id, COALESCE(t.value, '')::text AS target_value, t.filters AS target_filters,
        r.board_id, b.company_id, COALESCE(c.name, '')::text AS company_name,
