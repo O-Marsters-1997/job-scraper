@@ -212,7 +212,7 @@ func (s *Store) ListScrapeRuns(ctx context.Context, userID string, opts dto.Scra
 		return nil, err
 	}
 	params := sqlc.ListScrapeRunsParams{
-		UserID: uid, TargetID: f.target, FromAt: f.from, ToAt: f.to, Q: f.q,
+		UserID: uid, TargetID: f.target, CompanyID: f.company, FromAt: f.from, ToAt: f.to, Q: f.q,
 		Outcomes: opts.Outcome, Kinds: opts.Kind, Sources: opts.Source, Triggers: opts.Trigger,
 		RowLimit: int32(opts.Limit),
 	}

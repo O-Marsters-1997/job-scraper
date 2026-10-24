@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -441,6 +442,39 @@ func TestStore_BoardRuns(t *testing.T) {
 	byName := dto.ScrapeRunListOptions{ScrapeRunFilter: dto.ScrapeRunFilter{Q: "poll"}, Limit: 10}
 	if runs, err := env.st.ListScrapeRuns(ctx, env.userID, byName); err != nil || len(runs) != 1 {
 		t.Errorf("ListScrapeRuns(q=poll) = %d runs, %v, want the Company name to match", len(runs), err)
+	}
+
+	summaryFor := func(user, company string) dto.ScrapeRunSummary {
+		t.Helper()
+		from := time.Now().Add(-time.Hour)
+		summary, err := env.st.ScrapeRunSummary(ctx, user, dto.ScrapeRunSummaryOptions{
+			ScrapeRunFilter: dto.ScrapeRunFilter{CompanyID: company, From: from},
+			Bucket:          time.Hour, End: time.Now(),
+		})
+		if err != nil {
+			t.Fatalf("ScrapeRunSummary(company=%s) err = %v", company, err)
+		}
+		return summary
+	}
+	if got := summaryFor(env.userID, env.companyID); got.Total != 1 || got.New != 2 || got.Removed != 1 || got.LastStartedAt == nil {
+		t.Errorf("summary(company) = %+v, want 1 run with New 2, Removed 1 and a last start", got)
+	}
+	if got := summaryFor(outsider, env.companyID); got.Total != 0 || got.LastStartedAt != nil {
+		t.Errorf("summary(outsider) = %+v, want nothing for an untracked Company", got)
+	}
+	if got := summaryFor(env.userID, uuid.NewString()); got.Total != 0 {
+		t.Errorf("summary(other company) = %+v, want nothing", got)
+	}
+	byCompany := dto.ScrapeRunListOptions{ScrapeRunFilter: dto.ScrapeRunFilter{CompanyID: env.companyID}, Limit: 10}
+	if runs, err := env.st.ListScrapeRuns(ctx, env.userID, byCompany); err != nil || len(runs) != 1 {
+		t.Errorf("ListScrapeRuns(company) = %d runs, %v, want 1", len(runs), err)
+	}
+	if runs, err := env.st.ListScrapeRuns(ctx, outsider, byCompany); err != nil || len(runs) != 0 {
+		t.Errorf("ListScrapeRuns(outsider, company) = %d runs, %v, want none", len(runs), err)
+	}
+	invalid := dto.ScrapeRunListOptions{ScrapeRunFilter: dto.ScrapeRunFilter{CompanyID: "nope"}, Limit: 10}
+	if _, err := env.st.ListScrapeRuns(ctx, env.userID, invalid); !errors.Is(err, store.ErrInvalidID) {
+		t.Errorf("ListScrapeRuns(bad company) err = %v, want ErrInvalidID", err)
 	}
 
 	health, err := env.st.ListSourceHealth(ctx, env.userID)

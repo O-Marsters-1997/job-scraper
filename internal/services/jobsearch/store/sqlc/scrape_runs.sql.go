@@ -327,25 +327,27 @@ LEFT JOIN companies c ON c.id = b.company_id
 WHERE (t.user_id = $1
        OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = $1 AND tc.company_id = b.company_id))
   AND ($2::uuid IS NULL OR r.source_target_id = $2)
-  AND ($3::timestamptz IS NULL OR r.started_at >= $3)
-  AND ($4::timestamptz IS NULL OR r.started_at <= $4)
-  AND ($5::text IS NULL
-       OR t.value ILIKE '%' || $5 || '%'
-       OR c.name ILIKE '%' || $5 || '%'
-       OR EXISTS (SELECT 1 FROM scrape_run_errors e WHERE e.run_id = r.id AND e.message ILIKE '%' || $5 || '%'))
-  AND (COALESCE(cardinality($6::text[]), 0) = 0 OR (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'failed' THEN 'failed' WHEN r.retries > 0 THEN 'retried' ELSE 'succeeded' END) = ANY($6::text[]))
-  AND (COALESCE(cardinality($7::text[]), 0) = 0 OR r.kind = ANY($7::text[]))
-  AND (COALESCE(cardinality($8::text[]), 0) = 0 OR r.source = ANY($8::text[]))
-  AND (COALESCE(cardinality($9::text[]), 0) = 0 OR r.trigger = ANY($9::text[]))
-  AND ($10::timestamptz IS NULL
-       OR (r.started_at, r.id) < ($10::timestamptz, $11::uuid))
+  AND ($3::uuid IS NULL OR b.company_id = $3)
+  AND ($4::timestamptz IS NULL OR r.started_at >= $4)
+  AND ($5::timestamptz IS NULL OR r.started_at <= $5)
+  AND ($6::text IS NULL
+       OR t.value ILIKE '%' || $6 || '%'
+       OR c.name ILIKE '%' || $6 || '%'
+       OR EXISTS (SELECT 1 FROM scrape_run_errors e WHERE e.run_id = r.id AND e.message ILIKE '%' || $6 || '%'))
+  AND (COALESCE(cardinality($7::text[]), 0) = 0 OR (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'failed' THEN 'failed' WHEN r.retries > 0 THEN 'retried' ELSE 'succeeded' END) = ANY($7::text[]))
+  AND (COALESCE(cardinality($8::text[]), 0) = 0 OR r.kind = ANY($8::text[]))
+  AND (COALESCE(cardinality($9::text[]), 0) = 0 OR r.source = ANY($9::text[]))
+  AND (COALESCE(cardinality($10::text[]), 0) = 0 OR r.trigger = ANY($10::text[]))
+  AND ($11::timestamptz IS NULL
+       OR (r.started_at, r.id) < ($11::timestamptz, $12::uuid))
 ORDER BY r.started_at DESC, r.id DESC
-LIMIT $12
+LIMIT $13
 `
 
 type ListScrapeRunsParams struct {
 	UserID          pgtype.UUID
 	TargetID        pgtype.UUID
+	CompanyID       pgtype.UUID
 	FromAt          pgtype.Timestamptz
 	ToAt            pgtype.Timestamptz
 	Q               pgtype.Text
@@ -387,6 +389,7 @@ func (q *Queries) ListScrapeRuns(ctx context.Context, arg ListScrapeRunsParams) 
 	rows, err := q.db.Query(ctx, listScrapeRuns,
 		arg.UserID,
 		arg.TargetID,
+		arg.CompanyID,
 		arg.FromAt,
 		arg.ToAt,
 		arg.Q,
@@ -544,7 +547,9 @@ func (q *Queries) ScrapeRunPageDone(ctx context.Context, id pgtype.UUID) error {
 const summariseScrapeRuns = `-- name: SummariseScrapeRuns :many
 SELECT (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'failed' THEN 'failed' WHEN r.retries > 0 THEN 'retried' ELSE 'succeeded' END)::text AS outcome, r.kind, r.source, r.trigger,
        date_bin(make_interval(secs => $1::float8), r.started_at, TIMESTAMPTZ '1970-01-01')::timestamptz AS bucket,
-       COUNT(*)::int AS runs
+       COUNT(*)::int AS runs,
+       COALESCE(SUM(r.new_listings), 0)::int AS new_listings, COALESCE(SUM(r.removed), 0)::int AS removed,
+       MAX(r.started_at)::timestamptz AS last_started_at
 FROM scrape_runs r
 LEFT JOIN source_targets t ON t.id = r.source_target_id
 LEFT JOIN company_boards b ON b.id = r.board_id
@@ -552,12 +557,13 @@ LEFT JOIN companies c ON c.id = b.company_id
 WHERE (t.user_id = $2
        OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = $2 AND tc.company_id = b.company_id))
   AND ($3::uuid IS NULL OR r.source_target_id = $3)
-  AND ($4::timestamptz IS NULL OR r.started_at >= $4)
-  AND ($5::timestamptz IS NULL OR r.started_at <= $5)
-  AND ($6::text IS NULL
-       OR t.value ILIKE '%' || $6 || '%'
-       OR c.name ILIKE '%' || $6 || '%'
-       OR EXISTS (SELECT 1 FROM scrape_run_errors e WHERE e.run_id = r.id AND e.message ILIKE '%' || $6 || '%'))
+  AND ($4::uuid IS NULL OR b.company_id = $4)
+  AND ($5::timestamptz IS NULL OR r.started_at >= $5)
+  AND ($6::timestamptz IS NULL OR r.started_at <= $6)
+  AND ($7::text IS NULL
+       OR t.value ILIKE '%' || $7 || '%'
+       OR c.name ILIKE '%' || $7 || '%'
+       OR EXISTS (SELECT 1 FROM scrape_run_errors e WHERE e.run_id = r.id AND e.message ILIKE '%' || $7 || '%'))
 GROUP BY 1, 2, 3, 4, 5
 `
 
@@ -565,18 +571,22 @@ type SummariseScrapeRunsParams struct {
 	BucketSecs float64
 	UserID     pgtype.UUID
 	TargetID   pgtype.UUID
+	CompanyID  pgtype.UUID
 	FromAt     pgtype.Timestamptz
 	ToAt       pgtype.Timestamptz
 	Q          pgtype.Text
 }
 
 type SummariseScrapeRunsRow struct {
-	Outcome string
-	Kind    string
-	Source  string
-	Trigger string
-	Bucket  pgtype.Timestamptz
-	Runs    int32
+	Outcome       string
+	Kind          string
+	Source        string
+	Trigger       string
+	Bucket        pgtype.Timestamptz
+	Runs          int32
+	NewListings   int32
+	Removed       int32
+	LastStartedAt pgtype.Timestamptz
 }
 
 func (q *Queries) SummariseScrapeRuns(ctx context.Context, arg SummariseScrapeRunsParams) ([]SummariseScrapeRunsRow, error) {
@@ -584,6 +594,7 @@ func (q *Queries) SummariseScrapeRuns(ctx context.Context, arg SummariseScrapeRu
 		arg.BucketSecs,
 		arg.UserID,
 		arg.TargetID,
+		arg.CompanyID,
 		arg.FromAt,
 		arg.ToAt,
 		arg.Q,
@@ -602,6 +613,9 @@ func (q *Queries) SummariseScrapeRuns(ctx context.Context, arg SummariseScrapeRu
 			&i.Trigger,
 			&i.Bucket,
 			&i.Runs,
+			&i.NewListings,
+			&i.Removed,
+			&i.LastStartedAt,
 		); err != nil {
 			return nil, err
 		}

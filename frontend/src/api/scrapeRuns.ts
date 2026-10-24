@@ -11,6 +11,7 @@ import { mocked } from "./config";
 
 export interface ScrapeRunFilters {
 	target?: string | undefined;
+	company?: string | undefined;
 	q?: string | undefined;
 	outcome?: string | undefined;
 	kind?: string | undefined;
