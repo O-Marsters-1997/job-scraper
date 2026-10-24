@@ -2,6 +2,7 @@ import type { ScrapeRunFilters, ScrapeRunsParams } from "@/api/scrapeRuns";
 import type {
 	ScrapeRun,
 	ScrapeRunFacet,
+	ScrapeRunJobSnapshot,
 	ScrapeRunPage,
 	ScrapeRunSummary,
 	SourceHealth,
@@ -199,7 +200,9 @@ export function getScrapeRuns(params: ScrapeRunsParams): ScrapeRunPage {
 	return { Items: items, NextCursor: more && last ? last.ID : null };
 }
 
-export function getScrapeRunJobSnapshots(_runId: string) {
+export function getScrapeRunJobSnapshots(
+	_runId: string,
+): ScrapeRunJobSnapshot[] {
 	return [];
 }
 
