@@ -46,7 +46,11 @@ test.describe("Roles drawer", () => {
 		await rows.nth(2).click();
 		await expect(rows.nth(2).getByRole("button")).toHaveText("3");
 		await expect(
-			page.getByRole("main").getByText("Developer, Initech").first(),
+			page
+				.getByRole("main")
+				.getByText("Developer, Initech")
+				.locator("visible=true")
+				.first(),
 		).toBeVisible();
 		await expect(
 			page.getByRole("textbox", { name: /Developer bullet 1/ }),

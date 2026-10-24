@@ -87,7 +87,7 @@ type Store interface {
 	ClearBoardCheckPublished(ctx context.Context, id string) error
 	ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error)
 	ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error)
-	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error
+	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) (removed int, err error)
 	FailBoard(ctx context.Context, poll dto.BoardPoll) error
 	ListUntrackedDiscoveredBoards(ctx context.Context, uk bool, ukSince time.Time) ([]dto.CompanyBoard, error)
 	ListVerifiedBoardsBySlug(ctx context.Context, slugs []string) ([]dto.CardBoard, error)
@@ -100,6 +100,16 @@ type Store interface {
 	PutFetch(ctx context.Context, resp dto.CachedResponse) error
 	ForgetFetches(ctx context.Context, urls []string) error
 	DeleteExpiredFetches(ctx context.Context) error
+	ScrapeRunPageDone(ctx context.Context, runID string) error
+	ScrapeRunDeferred(ctx context.Context, runID string) error
+	ScrapeRunAttemptFailed(ctx context.Context, runID string, page, attempt int, message string) error
+	FinishScrapeRun(ctx context.Context, runID string, stop dto.StopReason) error
+	BoardRunAttemptFailed(ctx context.Context, run dto.BoardRunStart, attempt int, message string) error
+	FinishBoardRun(ctx context.Context, run dto.BoardRunStart, stop dto.StopReason, tally dto.BoardTally) error
+	DeleteExpiredScrapeRuns(ctx context.Context) error
+	ListScrapeRuns(ctx context.Context, userID string, opts dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error)
+	ListSourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error)
+	ScrapeRunSummary(ctx context.Context, userID string, opts dto.ScrapeRunSummaryOptions) (dto.ScrapeRunSummary, error)
 	MarkBoardUKJobsSeen(ctx context.Context, source, token string) error
 	RecordDiscoverMiss(ctx context.Context, source, token string) error
 	DiscoverMissedSince(ctx context.Context, source, token string, since time.Time) (bool, error)

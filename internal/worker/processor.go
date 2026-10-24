@@ -33,14 +33,26 @@ func (p *Processor) FailRun(ctx context.Context, task queue.Task) error {
 			return err
 		}
 	}
+	var boardErr error
+	if task.Kind == queue.BoardCheckTask {
+		boardErr = p.js.FinishBoardRun(ctx, boardRunStart(task), dto.StopFailed, dto.BoardTally{})
+	}
 	if task.Kind == queue.DetailTask || task.TargetID == "" || task.RunID == "" {
-		return nil
+		return boardErr
 	}
 	_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "Work failed after retries. Try running it again.")
 	if errors.Is(err, data.ErrNotFound) {
-		return nil
+		err = nil
 	}
-	return err
+	return errors.Join(boardErr, err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
+}
+
+func boardRunStart(task queue.Task) dto.BoardRunStart {
+	trigger := dto.TriggerScheduled
+	if task.Manual {
+		trigger = dto.TriggerManual
+	}
+	return dto.BoardRunStart{ID: task.ID, BoardID: task.BoardID, Source: task.Source, Trigger: trigger, StartedAt: time.Now()}
 }
 
 type Publisher interface {
@@ -172,7 +184,7 @@ func (p *Processor) verifyBoard(ctx context.Context, task queue.Task) error {
 	if !task.Poll {
 		return nil
 	}
-	if err := p.boards.PollBoard(ctx, board.ID, true, taskListing(task)); err != nil {
+	if _, err := p.boards.PollBoard(ctx, board.ID, true, taskListing(task)); err != nil {
 		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
 			return &queue.DeferError{Until: until, Err: err}
 		}
@@ -270,7 +282,8 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 			return err
 		}
 	}
-	return p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0, taskListing(task))
+	_, err = p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0, taskListing(task))
+	return err
 }
 
 func taskListing(task queue.Task) scraper.Listing {
@@ -395,9 +408,12 @@ func (p *Processor) processPage(ctx context.Context, task queue.Task) error {
 	}
 	next, err := p.orchestrator.ScrapePage(ctx, target, task.Cursor)
 	if errors.Is(err, sources.ErrSourceKeyRejected) {
-		return p.disableSource(ctx, task.Source, err)
+		return errors.Join(p.disableSource(ctx, task.Source, err), p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
 	}
 	if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
+		if err := p.js.ScrapeRunDeferred(ctx, task.RunID); err != nil {
+			return err
+		}
 		msg := waitingPrefix + until.Format(time.RFC3339)
 		if _, transitionErr := p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", msg); transitionErr != nil {
 			return transitionErr
@@ -405,15 +421,29 @@ func (p *Processor) processPage(ctx context.Context, task queue.Task) error {
 		return &queue.DeferError{Until: until, Err: err}
 	}
 	if err != nil {
+		if recordErr := p.js.ScrapeRunAttemptFailed(ctx, task.RunID, task.Page, task.Attempt, err.Error()); recordErr != nil {
+			p.log.WarnContext(ctx, "record scrape run attempt failed", slog.Any(logger.KeyErr, recordErr))
+		}
+		return err
+	}
+	if err := p.js.ScrapeRunPageDone(ctx, task.RunID); err != nil {
 		return err
 	}
 	task.Page++
-	if next != "" && (p.maxPages == 0 || task.Page < p.maxPages) {
+	capped := next != "" && p.maxPages != 0 && task.Page >= p.maxPages
+	if next != "" && !capped {
 		task.ID, task.Cursor = uuid.NewString(), next
 		if err := p.broker.Publish(ctx, task); err != nil {
 			return err
 		}
 		_, err = p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", "")
+		return err
+	}
+	stop := dto.StopLastPage
+	if capped {
+		stop = dto.StopPageCap
+	}
+	if err := p.js.FinishScrapeRun(ctx, task.RunID, stop); err != nil {
 		return err
 	}
 	_, err = p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "succeeded", "")
@@ -431,6 +461,13 @@ func (p *Processor) disableSource(ctx context.Context, source string, cause erro
 	return nil
 }
 
+func (p *Processor) finishBoardRun(ctx context.Context, run dto.BoardRunStart, stop dto.StopReason, tally dto.BoardTally) error {
+	if !tally.Claimed {
+		return nil
+	}
+	return p.js.FinishBoardRun(ctx, run, stop, tally)
+}
+
 func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 	if task.TargetID != "" {
 		target, active, err := p.currentTarget(ctx, task)
@@ -441,23 +478,34 @@ func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 			return err
 		}
 	}
-	if err := p.boards.PollBoard(ctx, task.BoardID, task.Manual, taskListing(task)); err != nil {
+	run := boardRunStart(task)
+	tally, err := p.boards.PollBoard(ctx, task.BoardID, task.Manual, taskListing(task))
+	if err != nil {
 		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
 			return &queue.DeferError{Until: until, Err: err}
 		}
 		if !errors.Is(err, sources.ErrUnparseable) {
+			if tally.Claimed {
+				if recordErr := p.js.BoardRunAttemptFailed(ctx, run, task.Attempt, err.Error()); recordErr != nil {
+					p.log.WarnContext(ctx, "record board run attempt failed", slog.Any(logger.KeyErr, recordErr))
+				}
+			}
 			return err
 		}
 		p.log.WarnContext(ctx, "board page unparseable", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyBoardID, task.BoardID), slog.Any(logger.KeyErr, err))
+		boardErr := p.finishBoardRun(ctx, run, dto.StopFailed, tally)
 		if task.TargetID == "" {
-			return nil
+			return boardErr
 		}
 		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "The board's page could not be read.")
+		return errors.Join(boardErr, err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
+	}
+	if err := p.finishBoardRun(ctx, run, dto.StopLastPage, tally); err != nil {
 		return err
 	}
 	if task.TargetID != "" {
 		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "succeeded", "")
-		return err
+		return errors.Join(err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopLastPage))
 	}
 	return nil
 }

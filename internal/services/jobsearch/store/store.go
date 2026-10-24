@@ -1190,7 +1190,16 @@ func (s *Store) CreateSourceTarget(ctx context.Context, userID, source, value st
 func (s *Store) CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string, window dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error) {
 	return s.createSourceTarget(ctx, "CreateSourceTargetWithRun", userID, source, value, enabled, filters, window, nextRunAt,
 		func(ctx context.Context, p sqlc.CreateSourceTargetParams) (sqlc.SourceTarget, error) {
-			return s.queries.CreateSourceTargetWithRun(ctx, sqlc.CreateSourceTargetWithRunParams(p))
+			var row sqlc.SourceTarget
+			err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+				queries := s.queries.WithTx(tx)
+				var err error
+				if row, err = queries.CreateSourceTargetWithRun(ctx, sqlc.CreateSourceTargetWithRunParams(p)); err != nil {
+					return err
+				}
+				return insertScrapeRun(ctx, queries, row, dto.TriggerManual)
+			})
+			return row, err
 		})
 }
 
@@ -1272,7 +1281,15 @@ func (s *Store) StartSourceTargetRun(ctx context.Context, id string, nextRunAt *
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	row, err := s.queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: tid, NextRunAt: timestamptz(nextRunAt)})
+	var row sqlc.SourceTarget
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		queries := s.queries.WithTx(tx)
+		var err error
+		if row, err = queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: tid, NextRunAt: timestamptz(nextRunAt)}); err != nil {
+			return err
+		}
+		return insertScrapeRun(ctx, queries, row, dto.TriggerManual)
+	})
 	if err != nil {
 		return dto.SourceTarget{}, data.QueryErr("StartSourceTargetRun", err)
 	}
@@ -1300,6 +1317,9 @@ func (s *Store) ClaimDueSourceTargets(ctx context.Context, limit int, nextRunAt 
 		started, err := queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: row.ID, NextRunAt: timestamptz(next)})
 		if err != nil {
 			return nil, data.QueryErr("StartSourceTargetRun", err)
+		}
+		if err := insertScrapeRun(ctx, queries, started, dto.TriggerScheduled); err != nil {
+			return nil, err
 		}
 		claimed = append(claimed, toSourceTargetDTO(started))
 	}
@@ -1413,6 +1433,7 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 	queries := s.queries.WithTx(tx)
 
 	out := make([]sourcetargets.Candidate, 0, len(cards))
+	var tally cardTally
 	for _, card := range cards {
 		if card.URL == "" {
 			continue
@@ -1423,6 +1444,11 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		}
 		card.URL = normalized
 		card.Source = target.Source
+		kind, err := queries.ClassifyScrapeCard(ctx, sqlc.ClassifyScrapeCardParams{NormalizedUrl: normalized, SourceTargetID: targetID})
+		if err != nil {
+			return nil, fmt.Errorf("classify scrape card: %w", err)
+		}
+		tally.add(kind)
 		var payload []byte
 		if sourcespec.CardComplete(target.Source) || card.RemoteCheckURL != "" || card.WorkArrangement != "" {
 			if payload, err = json.Marshal(card); err != nil {
@@ -1446,6 +1472,17 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 			return nil, fmt.Errorf("record candidate discovery: %w", err)
 		}
 		out = append(out, sourcetargets.Candidate{ID: id.String(), URL: normalized, Card: card})
+	}
+	if target.RunID != "" {
+		runID, err := data.UUID(target.RunID)
+		if err != nil {
+			return nil, err
+		}
+		if err := queries.AddScrapeRunCards(ctx, sqlc.AddScrapeRunCardsParams{
+			ID: runID, Listings: tally.total, NewListings: tally.fresh, Elsewhere: tally.elsewhere, RepeatListings: tally.repeat,
+		}); err != nil {
+			return nil, fmt.Errorf("add scrape run cards: %w", err)
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit candidate save: %w", err)
@@ -1763,21 +1800,21 @@ func (s *Store) FailBoard(ctx context.Context, poll dto.BoardPoll) error {
 	return nil
 }
 
-func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error {
+func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) (removed int, err error) {
 	if !snapshot.Complete {
-		return errors.New("incomplete board snapshot")
+		return 0, errors.New("incomplete board snapshot")
 	}
 	poll := snapshot.Poll
 	id, err := data.UUID(poll.ID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	urls := make([]string, 0, len(snapshot.Jobs))
 	seenURLs := make(map[string]bool, len(snapshot.Jobs))
 	for _, job := range snapshot.Jobs {
 		url, err := normalizeJobURL(job.URL)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if !seenURLs[url] {
 			urls = append(urls, url)
@@ -1786,26 +1823,26 @@ func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) e
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("begin board completion: %w", err)
+		return 0, fmt.Errorf("begin board completion: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.queries.WithTx(tx)
 	state, err := q.LockPollState(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrBoardClaimUnavailable
+		return 0, ErrBoardClaimUnavailable
 	}
 	if err != nil {
-		return fmt.Errorf("lock board state: %w", err)
+		return 0, fmt.Errorf("lock board state: %w", err)
 	}
 	if state.LastSnapshotVersion != poll.Version || !state.LeaseOwner.Valid || state.LeaseOwner.String != poll.LeaseOwner || !state.LeaseUntil.Valid || !state.LeaseUntil.Time.After(time.Now()) {
-		return ErrBoardClaimUnavailable
+		return 0, ErrBoardClaimUnavailable
 	}
 	aliases, err := q.FindBoardJobAliases(ctx, urls)
 	if err != nil {
-		return fmt.Errorf("resolve board jobs: %w", err)
+		return 0, fmt.Errorf("resolve board jobs: %w", err)
 	}
 	if len(aliases) != len(urls) {
-		return errors.New("board ingest incomplete: job URL missing")
+		return 0, errors.New("board ingest incomplete: job URL missing")
 	}
 	seenJobs := make(map[pgtype.UUID]bool, len(aliases))
 	for _, alias := range aliases {
@@ -1814,33 +1851,35 @@ func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) e
 		}
 		seenJobs[alias.JobID] = true
 		if err := q.ObserveBoardJob(ctx, sqlc.ObserveBoardJobParams{BoardID: id, JobID: alias.JobID, LastSnapshotVersion: poll.Version}); err != nil {
-			return fmt.Errorf("observe board job: %w", err)
+			return 0, fmt.Errorf("observe board job: %w", err)
 		}
 	}
 	if err := q.ReopenObservedBoardJobs(ctx, sqlc.ReopenObservedBoardJobsParams{BoardID: id, LastSnapshotVersion: poll.Version}); err != nil {
-		return fmt.Errorf("reopen board jobs: %w", err)
+		return 0, fmt.Errorf("reopen board jobs: %w", err)
 	}
 	if len(urls) > 0 || state.ConsecutiveCompleteEmpty >= 1 {
-		if err := q.CloseMissingBoardJobs(ctx, sqlc.CloseMissingBoardJobsParams{PrimaryBoardID: id, LastSnapshotVersion: poll.Version}); err != nil {
-			return fmt.Errorf("close missing board jobs: %w", err)
+		closed, err := q.CloseMissingBoardJobs(ctx, sqlc.CloseMissingBoardJobsParams{PrimaryBoardID: id, LastSnapshotVersion: poll.Version})
+		if err != nil {
+			return 0, fmt.Errorf("close missing board jobs: %w", err)
 		}
+		removed = int(closed)
 	}
 	if len(urls) == 0 && state.ConsecutiveCompleteEmpty >= 1 {
 		if err := q.RetireSupersededBoard(ctx, id); err != nil {
-			return fmt.Errorf("retire board: %w", err)
+			return 0, fmt.Errorf("retire board: %w", err)
 		}
 	}
 	n, err := q.CompletePollState(ctx, sqlc.CompletePollStateParams{Manual: poll.Manual, IntervalMinutes: pollIntervalMinutes(poll, snapshot.NextPollIn), Empty: len(urls) == 0, Reported: int32(snapshot.Reported), Parsed: int32(len(urls)), BoardID: id, LeaseOwner: poll.LeaseOwner, Version: poll.Version})
 	if err != nil {
-		return fmt.Errorf("complete board state: %w", err)
+		return 0, fmt.Errorf("complete board state: %w", err)
 	}
 	if n != 1 {
-		return ErrBoardClaimUnavailable
+		return 0, ErrBoardClaimUnavailable
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit board completion: %w", err)
+		return 0, fmt.Errorf("commit board completion: %w", err)
 	}
-	return nil
+	return removed, nil
 }
 
 func pollIntervalMinutes(poll dto.BoardPoll, hint time.Duration) int32 {

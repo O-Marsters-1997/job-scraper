@@ -911,16 +911,16 @@ func (f *FakeStore) FailBoard(_ context.Context, poll dto.BoardPoll) error {
 	return nil
 }
 
-func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot) error {
+func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !snapshot.Complete {
-		return errors.New("incomplete board snapshot")
+		return 0, errors.New("incomplete board snapshot")
 	}
 	poll := snapshot.Poll
 	st := f.pollState[poll.ID]
 	if !leaseHeldBy(st, poll) {
-		return store.ErrBoardClaimUnavailable
+		return 0, store.ErrBoardClaimUnavailable
 	}
 	st.leaseOwner = ""
 	urls := make(map[string]bool, len(snapshot.Jobs))
@@ -932,7 +932,7 @@ func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot)
 	if !poll.Manual {
 		st.checkPublishedAt = time.Time{}
 	}
-	return nil
+	return 0, nil
 }
 
 func boardPollFor(id string, b dto.CompanyBoard) dto.BoardPoll {
@@ -1319,6 +1319,38 @@ func (f *FakeStore) MarkDetailPending(_ context.Context, candidateID string) err
 
 func (f *FakeStore) DeleteExpiredCandidates(context.Context) error {
 	return nil
+}
+
+func (f *FakeStore) ScrapeRunPageDone(context.Context, string) error { return nil }
+
+func (f *FakeStore) ScrapeRunDeferred(context.Context, string) error { return nil }
+
+func (f *FakeStore) ScrapeRunAttemptFailed(context.Context, string, int, int, string) error {
+	return nil
+}
+
+func (f *FakeStore) FinishScrapeRun(context.Context, string, dto.StopReason) error { return nil }
+
+func (f *FakeStore) BoardRunAttemptFailed(context.Context, dto.BoardRunStart, int, string) error {
+	return nil
+}
+
+func (f *FakeStore) FinishBoardRun(context.Context, dto.BoardRunStart, dto.StopReason, dto.BoardTally) error {
+	return nil
+}
+
+func (f *FakeStore) DeleteExpiredScrapeRuns(context.Context) error { return nil }
+
+func (f *FakeStore) ListScrapeRuns(context.Context, string, dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error) {
+	return nil, nil
+}
+
+func (f *FakeStore) ListSourceHealth(context.Context, string) ([]dto.SourceHealth, error) {
+	return nil, nil
+}
+
+func (f *FakeStore) ScrapeRunSummary(context.Context, string, dto.ScrapeRunSummaryOptions) (dto.ScrapeRunSummary, error) {
+	return dto.ScrapeRunSummary{}, nil
 }
 
 var _ Store = (*FakeStore)(nil)

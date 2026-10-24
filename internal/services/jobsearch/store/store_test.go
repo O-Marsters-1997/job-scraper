@@ -734,6 +734,7 @@ type boardEnv struct {
 	pool      *pgxpool.Pool
 	board     dto.CompanyBoard
 	companyID string
+	userID    string
 }
 
 func boardFixture(t *testing.T) boardEnv {
@@ -745,7 +746,7 @@ func boardFixture(t *testing.T) boardEnv {
 		t.Fatalf("UpsertCandidateBoard() err = %v", err)
 	}
 	trackCompany(t, st, userID, company.ID, 60)
-	return boardEnv{st: st, pool: pool, board: board, companyID: company.ID}
+	return boardEnv{st: st, pool: pool, board: board, companyID: company.ID, userID: userID}
 }
 
 func verifiedBoardFixture(t *testing.T) boardEnv {
@@ -773,11 +774,13 @@ func (e boardEnv) claim(t *testing.T, manual bool) dto.BoardPoll {
 	return poll
 }
 
-func (e boardEnv) complete(t *testing.T, poll dto.BoardPoll, jobs ...dto.Job) {
+func (e boardEnv) complete(t *testing.T, poll dto.BoardPoll, jobs ...dto.Job) int {
 	t.Helper()
-	if err := e.st.CompleteBoard(t.Context(), dto.BoardSnapshot{Poll: poll, Complete: true, Jobs: jobs}); err != nil {
+	removed, err := e.st.CompleteBoard(t.Context(), dto.BoardSnapshot{Poll: poll, Complete: true, Jobs: jobs})
+	if err != nil {
 		t.Fatalf("CompleteBoard() err = %v", err)
 	}
+	return removed
 }
 
 func (e boardEnv) markPublished(t *testing.T) {
@@ -826,7 +829,7 @@ func TestBoardPolling(t *testing.T) {
 		job := env.job(1)
 		saveJob(t, env.st, job)
 		env.complete(t, claim, job)
-		if err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: []dto.Job{job}}); !errors.Is(err, store.ErrBoardClaimUnavailable) {
+		if _, err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: []dto.Job{job}}); !errors.Is(err, store.ErrBoardClaimUnavailable) {
 			t.Errorf("replayed CompleteBoard() err = %v, want ErrBoardClaimUnavailable", err)
 		}
 		if due := env.due(t); len(due) != 0 {
@@ -876,7 +879,7 @@ func TestBoardPolling(t *testing.T) {
 		env := verifiedBoardFixture(t)
 		ctx := t.Context()
 		hint := 3 * 24 * time.Hour
-		err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: env.claim(t, false), Complete: true, NextPollIn: hint})
+		_, err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: env.claim(t, false), Complete: true, NextPollIn: hint})
 		if err != nil {
 			t.Fatalf("CompleteBoard() err = %v", err)
 		}
@@ -920,11 +923,11 @@ func TestBoardPolling(t *testing.T) {
 		}
 		claim := env.claim(t, false)
 
-		if err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: false, Jobs: jobs}); err == nil {
+		if _, err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: false, Jobs: jobs}); err == nil {
 			t.Error("partial snapshot accepted")
 		}
 		unsaved := dto.Job{URL: "https://boards.greenhouse.io/poll-co/jobs/missing"}
-		if err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: append(jobs, unsaved)}); err == nil {
+		if _, err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: append(jobs, unsaved)}); err == nil {
 			t.Error("snapshot with a job that was never ingested accepted")
 		}
 		var completed bool
@@ -935,8 +938,12 @@ func TestBoardPolling(t *testing.T) {
 			t.Error("rejected snapshots advanced freshness")
 		}
 
-		env.complete(t, claim, jobs...)
-		env.complete(t, env.claim(t, true), jobs[0])
+		if removed := env.complete(t, claim, jobs...); removed != 0 {
+			t.Errorf("first snapshot removed = %d, want 0", removed)
+		}
+		if removed := env.complete(t, env.claim(t, true), jobs[0]); removed != 1 {
+			t.Errorf("snapshot omitting one job removed = %d, want 1", removed)
+		}
 		if !jobClosed(t, env.pool, jobs[1].URL) {
 			t.Error("omitted job is still open")
 		}
@@ -958,7 +965,7 @@ func TestBoardPolling(t *testing.T) {
 		}
 		env.complete(t, env.claim(t, true))
 
-		err := env.st.CompleteBoard(t.Context(), dto.BoardSnapshot{Poll: old, Complete: true})
+		_, err := env.st.CompleteBoard(t.Context(), dto.BoardSnapshot{Poll: old, Complete: true})
 		if !errors.Is(err, store.ErrBoardClaimUnavailable) {
 			t.Errorf("stale CompleteBoard() err = %v, want ErrBoardClaimUnavailable", err)
 		}

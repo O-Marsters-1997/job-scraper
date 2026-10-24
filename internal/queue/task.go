@@ -44,6 +44,7 @@ type Task struct {
 	Urgent      bool     `json:"urgent,omitempty"`
 	Poll        bool     `json:"poll,omitempty"`
 	Redelivered bool     `json:"-"`
+	Attempt     int      `json:"-"`
 }
 
 func (t Task) Validate() error {
