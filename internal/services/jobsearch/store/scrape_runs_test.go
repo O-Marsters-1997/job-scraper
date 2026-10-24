@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
@@ -447,6 +449,26 @@ func TestStore_BoardRuns(t *testing.T) {
 	}
 	if runs, err := env.st.ListScrapeRuns(ctx, outsider, dto.ScrapeRunListOptions{Limit: 10}); err != nil || len(runs) != 0 {
 		t.Errorf("ListScrapeRuns(outsider) = %d runs, %v, want none", len(runs), err)
+	}
+	if _, err := env.pool.Exec(ctx, "UPDATE jobs SET title = 'Renamed' WHERE id = $1", jobs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	snaps, err := env.st.ListScrapeRunJobSnapshots(ctx, other, run.ID)
+	if err != nil || len(snaps) != 4 {
+		t.Fatalf("ListScrapeRunJobSnapshots() = %d snapshots, %v, want 4", len(snaps), err)
+	}
+	var first struct{ Title string }
+	if err := json.Unmarshal(snaps[0].Snapshot, &first); err != nil {
+		t.Fatal(err)
+	}
+	if snaps[0].JobID != jobs[0].ID || snaps[0].Kind != dto.JobChangeNew || first.Title != "Role 1" {
+		t.Errorf("first snapshot = %+v title %q, want job 1 as of the poll, not the renamed Job", snaps[0], first.Title)
+	}
+	if _, err := env.st.ListScrapeRunJobSnapshots(ctx, outsider, run.ID); !errors.Is(err, data.ErrNotFound) {
+		t.Errorf("ListScrapeRunJobSnapshots(outsider) err = %v, want ErrNotFound", err)
+	}
+	if _, err := env.st.ListScrapeRunJobSnapshots(ctx, other, "nope"); !errors.Is(err, store.ErrInvalidID) {
+		t.Errorf("ListScrapeRunJobSnapshots(bad id) err = %v, want ErrInvalidID", err)
 	}
 	byName := dto.ScrapeRunListOptions{ScrapeRunFilter: dto.ScrapeRunFilter{Q: "poll"}, Limit: 10}
 	if runs, err := env.st.ListScrapeRuns(ctx, env.userID, byName); err != nil || len(runs) != 1 {

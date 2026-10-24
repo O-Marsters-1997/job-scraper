@@ -1,6 +1,9 @@
 package dto
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type ScrapeRunKind string
 
@@ -91,6 +94,12 @@ type ScrapeRunJobChange struct {
 	JobID string
 	Kind  JobChangeKind
 	Title string
+}
+
+type ScrapeRunJobSnapshot struct {
+	JobID    string
+	Kind     JobChangeKind
+	Snapshot json.RawMessage
 }
 
 type ScrapeRunError struct {

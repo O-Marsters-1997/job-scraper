@@ -199,6 +199,33 @@ func (s *Store) DeleteExpiredScrapeRuns(ctx context.Context) error {
 	return nil
 }
 
+func (s *Store) ListScrapeRunJobSnapshots(ctx context.Context, userID, runID string) ([]dto.ScrapeRunJobSnapshot, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, ErrInvalidID
+	}
+	rid, err := data.UUID(runID)
+	if err != nil {
+		return nil, ErrInvalidID
+	}
+	tracked, err := s.queries.ScrapeRunTracked(ctx, sqlc.ScrapeRunTrackedParams{UserID: uid, RunID: rid})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListScrapeRunJobSnapshots: %w", err)
+	}
+	if !tracked {
+		return nil, data.ErrNotFound
+	}
+	rows, err := s.queries.ListScrapeRunJobSnapshots(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListScrapeRunJobSnapshots: %w", err)
+	}
+	out := make([]dto.ScrapeRunJobSnapshot, len(rows))
+	for i, r := range rows {
+		out[i] = dto.ScrapeRunJobSnapshot{JobID: r.JobID.String(), Kind: dto.JobChangeKind(r.Change), Snapshot: r.Snapshot}
+	}
+	return out, nil
+}
+
 func (s *Store) ListScrapeRuns(ctx context.Context, userID string, opts dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {

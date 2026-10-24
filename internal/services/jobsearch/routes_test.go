@@ -31,7 +31,7 @@ func TestRoutesRequireAuth(t *testing.T) {
 	jobsearch.Build(jobsearchtest.NewDeps(jobsearchtest.NewFakeStore())).Routes(r)
 	handlerstest.RequiresAuth(t, r,
 		"GET /jobs", "POST /jobs/seen", "POST /jobs/manual", "PUT /companies/{id}/favourite", "DELETE /companies/{id}/favourite", "GET /jobs/{id}",
-		"GET /sources", "GET /sources/resolve", "GET /scrape-runs", "GET /scrape-runs/health", "GET /scrape-runs/summary",
+		"GET /sources", "GET /sources/resolve", "GET /scrape-runs", "GET /scrape-runs/health", "GET /scrape-runs/summary", "GET /scrape-runs/{id}/job-changes",
 		"GET /source-targets", "POST /source-targets", "PATCH /source-targets/{id}",
 		"POST /source-targets/{id}/scrape", "DELETE /source-targets/{id}",
 		"GET /companies", "GET /companies/{id}", "GET /companies/new", "GET /companies/tracked", "POST /companies",

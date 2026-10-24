@@ -5,6 +5,7 @@ import {
 } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
+	fetchScrapeRunJobSnapshots,
 	fetchScrapeRunSummary,
 	fetchScrapeRuns,
 	fetchSourceHealth,
@@ -39,6 +40,18 @@ export function useScrapeRunPages(params: () => ScrapeRunFilters) {
 		queryFn: ({ pageParam }) =>
 			fetchScrapeRuns({ ...params(), before: pageParam }),
 		getNextPageParam: (last) => last.NextCursor ?? undefined,
+	}));
+}
+
+export function useScrapeRunJobSnapshots(
+	runId: () => string,
+	enabled: () => boolean,
+) {
+	return createQuery(() => ({
+		queryKey: keys.scrapeRunJobSnapshots(runId()),
+		queryFn: () => fetchScrapeRunJobSnapshots(runId()),
+		enabled: enabled(),
+		staleTime: Number.POSITIVE_INFINITY,
 	}));
 }
 

@@ -72,6 +72,8 @@ export const keys = {
 	sourceTargets: ["source-targets"] as const,
 	scrapeRuns: (params: object) => ["scrape-runs", params] as const,
 	sourceHealth: ["scrape-runs", "health"] as const,
+	scrapeRunJobSnapshots: (runId: string) =>
+		["scrape-runs", "job-changes", runId] as const,
 	scrapeRunSummary: (params: object) =>
 		["scrape-runs", "summary", params] as const,
 	sources: ["sources"] as const,

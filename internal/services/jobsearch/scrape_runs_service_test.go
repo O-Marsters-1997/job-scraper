@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 )
 
 type scrapeRunsStore struct {
@@ -193,6 +195,45 @@ func TestService_ScrapeRunSummary(t *testing.T) {
 			if _, err := svc(&scrapeRunsStore{FakeStore: jobsearchtest.NewFakeStore()}).ListScrapeRuns(t.Context(), userID, q); !apperr.IsKind(err, apperr.KindInvalid) {
 				t.Errorf("ListScrapeRuns(%+v) err = %v, want invalid", q, err)
 			}
+		}
+	})
+}
+
+type snapshotsStore struct {
+	*jobsearchtest.FakeStore
+	err error
+}
+
+func (s snapshotsStore) ListScrapeRunJobSnapshots(context.Context, string, string) ([]dto.ScrapeRunJobSnapshot, error) {
+	return nil, s.err
+}
+
+func TestService_ListScrapeRunJobSnapshots(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		err  error
+		kind apperr.Kind
+	}{
+		{"an untracked run is not found", data.ErrNotFound, apperr.KindNotFound},
+		{"a malformed id is invalid", store.ErrInvalidID, apperr.KindInvalid},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			svc := jobsearch.NewService(snapshotsStore{FakeStore: jobsearchtest.NewFakeStore(), err: tt.err}, nil, jobsearchtest.NewNoopScoring())
+			if _, err := svc.ListScrapeRunJobSnapshots(t.Context(), userID, "run"); !apperr.IsKind(err, tt.kind) {
+				t.Errorf("ListScrapeRunJobSnapshots() err = %v, want kind %v", err, tt.kind)
+			}
+		})
+	}
+
+	t.Run("no changes is an empty list, not null", func(t *testing.T) {
+		t.Parallel()
+		svc := jobsearch.NewService(snapshotsStore{FakeStore: jobsearchtest.NewFakeStore()}, nil, jobsearchtest.NewNoopScoring())
+		got, err := svc.ListScrapeRunJobSnapshots(t.Context(), userID, "run")
+		if err != nil || got == nil || len(got) != 0 {
+			t.Errorf("ListScrapeRunJobSnapshots() = %#v, %v, want an empty non-nil list", got, err)
 		}
 	})
 }

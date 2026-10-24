@@ -199,6 +199,10 @@ export function getScrapeRuns(params: ScrapeRunsParams): ScrapeRunPage {
 	return { Items: items, NextCursor: more && last ? last.ID : null };
 }
 
+export function getScrapeRunJobSnapshots(_runId: string) {
+	return [];
+}
+
 export function getSourceHealth(): SourceHealth[] {
 	return TARGETS.map((target, n): SourceHealth => {
 		const targetRuns = RUNS.filter(

@@ -354,6 +354,40 @@ func (q *Queries) ListScrapeRunJobChanges(ctx context.Context, runIds []pgtype.U
 	return items, nil
 }
 
+const listScrapeRunJobSnapshots = `-- name: ListScrapeRunJobSnapshots :many
+SELECT job_id, change, snapshot
+FROM scrape_run_job_changes
+WHERE run_id = $1
+ORDER BY change, snapshot->>'Title', job_id
+LIMIT 1000
+`
+
+type ListScrapeRunJobSnapshotsRow struct {
+	JobID    pgtype.UUID
+	Change   string
+	Snapshot []byte
+}
+
+func (q *Queries) ListScrapeRunJobSnapshots(ctx context.Context, runID pgtype.UUID) ([]ListScrapeRunJobSnapshotsRow, error) {
+	rows, err := q.db.Query(ctx, listScrapeRunJobSnapshots, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListScrapeRunJobSnapshotsRow
+	for rows.Next() {
+		var i ListScrapeRunJobSnapshotsRow
+		if err := rows.Scan(&i.JobID, &i.Change, &i.Snapshot); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScrapeRuns = `-- name: ListScrapeRuns :many
 SELECT r.id, r.kind, r.source, r.source_target_id, COALESCE(t.value, '')::text AS target_value, t.filters AS target_filters,
        r.board_id, b.company_id, COALESCE(c.name, '')::text AS company_name,
@@ -581,6 +615,27 @@ UPDATE scrape_runs SET pages = pages + 1 WHERE id = $1
 func (q *Queries) ScrapeRunPageDone(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, scrapeRunPageDone, id)
 	return err
+}
+
+const scrapeRunTracked = `-- name: ScrapeRunTracked :one
+SELECT EXISTS (
+  SELECT 1 FROM scrape_runs r
+  JOIN company_boards b ON b.id = r.board_id
+  JOIN tracked_companies tc ON tc.company_id = b.company_id AND tc.user_id = $1
+  WHERE r.id = $2
+)::bool
+`
+
+type ScrapeRunTrackedParams struct {
+	UserID pgtype.UUID
+	RunID  pgtype.UUID
+}
+
+func (q *Queries) ScrapeRunTracked(ctx context.Context, arg ScrapeRunTrackedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, scrapeRunTracked, arg.UserID, arg.RunID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const summariseScrapeRuns = `-- name: SummariseScrapeRuns :many
