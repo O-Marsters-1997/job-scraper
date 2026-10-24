@@ -475,6 +475,7 @@ CREATE TABLE scrape_runs (
     retries          INT         NOT NULL DEFAULT 0,
     board_id         UUID        REFERENCES company_boards(id) ON DELETE CASCADE,
     removed          INT         NOT NULL DEFAULT 0,
+    reopened         INT         NOT NULL DEFAULT 0,
     CONSTRAINT scrape_runs_finished_check CHECK ((finished_at IS NULL) = (stop_reason IS NULL)),
     CONSTRAINT scrape_runs_subject_check CHECK (
         (kind = 'search' AND source_target_id IS NOT NULL AND board_id IS NULL)
@@ -493,6 +494,16 @@ CREATE TABLE scrape_run_errors (
     at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX scrape_run_errors_run_idx ON scrape_run_errors (run_id);
+
+CREATE TABLE scrape_run_job_changes (
+    run_id   UUID  NOT NULL REFERENCES scrape_runs(id) ON DELETE CASCADE,
+    job_id   UUID  NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    change   TEXT  NOT NULL CONSTRAINT scrape_run_job_changes_change_check
+        CHECK (change IN ('new', 'removed', 'reopened')),
+    snapshot JSONB NOT NULL,
+    PRIMARY KEY (run_id, job_id)
+);
+CREATE INDEX scrape_run_job_changes_job_idx ON scrape_run_job_changes (job_id);
 
 CREATE TABLE harvest_runs (
     harvester TEXT PRIMARY KEY,

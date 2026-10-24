@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
@@ -22,7 +24,7 @@ type boardStoreStub struct {
 	board    dto.BoardPoll
 	state    string
 	snapshot dto.BoardSnapshot
-	removed  int
+	changes  []dto.JobChange
 }
 
 func (s *boardStoreStub) ClaimBoard(context.Context, string, bool) (dto.BoardPoll, error) {
@@ -31,10 +33,10 @@ func (s *boardStoreStub) ClaimBoard(context.Context, string, bool) (dto.BoardPol
 func (s *boardStoreStub) ClearBoardCheckPublished(context.Context, string) error {
 	return nil
 }
-func (s *boardStoreStub) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot) (int, error) {
+func (s *boardStoreStub) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot) ([]dto.JobChange, error) {
 	s.snapshot = snapshot
 	s.state = "completed"
-	return s.removed, nil
+	return s.changes, nil
 }
 func (s *boardStoreStub) FailBoard(context.Context, dto.BoardPoll) error {
 	s.state = "failed"
@@ -133,8 +135,8 @@ func TestBoardPollUnclaimableCheck(t *testing.T) {
 			if !errors.Is(err, tc.wantErr) {
 				t.Errorf("PollBoard() = %v, want %v", err, tc.wantErr)
 			}
-			if tally != (dto.BoardTally{}) {
-				t.Errorf("PollBoard() tally = %+v, want zero and unclaimed", tally)
+			if diff := cmp.Diff(dto.BoardTally{}, tally); diff != "" {
+				t.Errorf("PollBoard() tally (-want +got) = %s, want zero and unclaimed", diff)
 			}
 			if _, err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: held, Complete: true}); err != nil {
 				t.Fatal(err)
@@ -148,16 +150,20 @@ func TestBoardPollUnclaimableCheck(t *testing.T) {
 
 func TestBoardPollTalliesWhatIngestAndCompletionDid(t *testing.T) {
 	t.Parallel()
-	store := &boardStoreStub{board: dto.BoardPoll{ID: "board"}, removed: 2}
-	ingester := &boardIngesterStub{tally: dto.IngestTally{New: 2, Merged: 1, Upgraded: 1}}
+	store := &boardStoreStub{board: dto.BoardPoll{ID: "board"}, changes: []dto.JobChange{{JobID: "gone", Kind: dto.JobChangeRemoved}, {JobID: "back", Kind: dto.JobChangeReopened}}}
+	ingester := &boardIngesterStub{tally: dto.IngestTally{NewJobIDs: []string{"n1", "n2"}, Merged: 1, Upgraded: 1}}
 	jobs := []dto.Job{{URL: "https://example.com/1"}, {URL: "https://example.com/2"}, {URL: "https://example.com/3"}, {URL: "https://example.com/4"}}
 	poller := scraper.NewBoardPoller(store, boardFetcherStub{jobs: jobs}, ingester)
 	got, err := poller.PollBoard(t.Context(), "board", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (dto.BoardTally{Claimed: true, Listed: 4, New: 2, Elsewhere: 2, Removed: 2}); got != want {
-		t.Errorf("PollBoard() tally = %+v, want %+v", got, want)
+	want := dto.BoardTally{Claimed: true, Listed: 4, Elsewhere: 2, Changes: []dto.JobChange{
+		{JobID: "n1", Kind: dto.JobChangeNew}, {JobID: "n2", Kind: dto.JobChangeNew},
+		{JobID: "gone", Kind: dto.JobChangeRemoved}, {JobID: "back", Kind: dto.JobChangeReopened},
+	}}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("PollBoard() tally (-want +got):\n%s", diff)
 	}
 }
 
@@ -202,7 +208,7 @@ func TestPollPrefetchedCompletesTheFullListWithHint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (dto.BoardTally{Claimed: true, Listed: 2}); tally != want {
+	if want := (dto.BoardTally{Claimed: true, Listed: 2}); !cmp.Equal(tally, want) {
 		t.Errorf("PollPrefetched() tally = %+v, want %+v", tally, want)
 	}
 	if len(ingester.jobs) != 2 || ingester.jobs[0].CompanyID != "company" || ingester.jobs[0].BoardID != "board" {

@@ -56,7 +56,7 @@ func (q *Queries) ClearBoardCheckPublished(ctx context.Context, boardID pgtype.U
 	return err
 }
 
-const closeMissingBoardJobs = `-- name: CloseMissingBoardJobs :one
+const closeMissingBoardJobs = `-- name: CloseMissingBoardJobs :many
 WITH closed AS (
     UPDATE jobs SET closed_at = NOW()
     WHERE primary_board_id = $1 AND closed_at IS NULL
@@ -65,7 +65,7 @@ WITH closed AS (
 ), cleared AS (
     DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed)
 )
-SELECT count(*) FROM closed
+SELECT id FROM closed
 `
 
 type CloseMissingBoardJobsParams struct {
@@ -75,11 +75,24 @@ type CloseMissingBoardJobsParams struct {
 
 // Writes scoring's option_answers table directly; documented exception
 // (ADR 0011, issue #264) pending #267.
-func (q *Queries) CloseMissingBoardJobs(ctx context.Context, arg CloseMissingBoardJobsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, closeMissingBoardJobs, arg.PrimaryBoardID, arg.LastSnapshotVersion)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+func (q *Queries) CloseMissingBoardJobs(ctx context.Context, arg CloseMissingBoardJobsParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, closeMissingBoardJobs, arg.PrimaryBoardID, arg.LastSnapshotVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const completePollState = `-- name: CompletePollState :execrows
@@ -371,10 +384,11 @@ func (q *Queries) ObserveBoardJob(ctx context.Context, arg ObserveBoardJobParams
 	return err
 }
 
-const reopenObservedBoardJobs = `-- name: ReopenObservedBoardJobs :exec
+const reopenObservedBoardJobs = `-- name: ReopenObservedBoardJobs :many
 UPDATE jobs SET closed_at = NULL
 WHERE id IN (SELECT job_id FROM board_job_observations WHERE board_id = $1 AND last_snapshot_version = $2)
   AND closed_at IS NOT NULL
+RETURNING id
 `
 
 type ReopenObservedBoardJobsParams struct {
@@ -382,9 +396,24 @@ type ReopenObservedBoardJobsParams struct {
 	LastSnapshotVersion int64
 }
 
-func (q *Queries) ReopenObservedBoardJobs(ctx context.Context, arg ReopenObservedBoardJobsParams) error {
-	_, err := q.db.Exec(ctx, reopenObservedBoardJobs, arg.BoardID, arg.LastSnapshotVersion)
-	return err
+func (q *Queries) ReopenObservedBoardJobs(ctx context.Context, arg ReopenObservedBoardJobsParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, reopenObservedBoardJobs, arg.BoardID, arg.LastSnapshotVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const retireSupersededBoard = `-- name: RetireSupersededBoard :exec

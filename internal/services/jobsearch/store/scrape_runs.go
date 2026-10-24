@@ -110,17 +110,72 @@ func (s *Store) FinishBoardRun(ctx context.Context, run dto.BoardRunStart, stop 
 		StartedAt:  pgtype.Timestamptz{Time: run.StartedAt, Valid: true},
 		StopReason: pgtype.Text{String: string(stop), Valid: true},
 	}
+	counts := map[dto.JobChangeKind]int{}
+	for _, c := range tally.Changes {
+		counts[c.Kind]++
+	}
 	for _, c := range []struct {
 		n   int
 		dst *int32
-	}{{tally.Listed, &params.Listings}, {tally.New, &params.NewListings}, {tally.Elsewhere, &params.Elsewhere}, {tally.Removed, &params.Removed}} {
+	}{{tally.Listed, &params.Listings}, {counts[dto.JobChangeNew], &params.NewListings}, {tally.Elsewhere, &params.Elsewhere}, {counts[dto.JobChangeRemoved], &params.Removed}, {counts[dto.JobChangeReopened], &params.Reopened}} {
 		if c.n < 0 || c.n > math.MaxInt32 {
 			return fmt.Errorf("store.FinishBoardRun: count %d out of range", c.n)
 		}
 		*c.dst = int32(c.n)
 	}
-	if err = s.queries.FinishBoardRun(ctx, params); err != nil {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("store.FinishBoardRun: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.queries.WithTx(tx)
+	inserted, err := q.FinishBoardRun(ctx, params)
+	if err != nil {
 		return fmt.Errorf("store.FinishBoardRun: %w", err)
+	}
+	if inserted == 1 && len(tally.Changes) > 0 {
+		if err := insertJobChanges(ctx, q, id, tally.Changes); err != nil {
+			return fmt.Errorf("store.FinishBoardRun: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("store.FinishBoardRun: commit: %w", err)
+	}
+	return nil
+}
+
+func insertJobChanges(ctx context.Context, q *sqlc.Queries, runID pgtype.UUID, changes []dto.JobChange) error {
+	type row struct {
+		JobID    string            `json:"job_id"`
+		Change   dto.JobChangeKind `json:"change"`
+		Snapshot json.RawMessage   `json:"snapshot"`
+	}
+	rows := make([]row, len(changes))
+	for i, c := range changes {
+		jobID, err := data.UUID(c.JobID)
+		if err != nil {
+			return err
+		}
+		got, err := q.GetJob(ctx, sqlc.GetJobParams{ID: jobID})
+		if err != nil {
+			return data.QueryErr("GetJob", err)
+		}
+		job, err := toGetJobDTO(got)
+		if err != nil {
+			return fmt.Errorf("snapshot job: %w", err)
+		}
+		snapshot, err := json.Marshal(job)
+		if err != nil {
+			return fmt.Errorf("marshal snapshot: %w", err)
+		}
+		rows[i] = row{JobID: c.JobID, Change: c.Kind, Snapshot: snapshot}
+	}
+	payload, err := json.Marshal(rows)
+	if err != nil {
+		return fmt.Errorf("marshal job changes: %w", err)
+	}
+	if err := q.InsertScrapeRunJobChanges(ctx, sqlc.InsertScrapeRunJobChangesParams{RunID: runID, Changes: payload}); err != nil {
+		return fmt.Errorf("insert job changes: %w", err)
 	}
 	return nil
 }
@@ -213,6 +268,7 @@ func toScrapeRunDTO(row sqlc.ListScrapeRunsRow) dto.ScrapeRun {
 		Elsewhere:     int(row.Elsewhere),
 		Repeat:        int(row.RepeatListings),
 		Removed:       int(row.Removed),
+		Reopened:      int(row.Reopened),
 		Deferred:      int(row.Deferred),
 		Retries:       int(row.Retries),
 		Errors:        []dto.ScrapeRunError{},

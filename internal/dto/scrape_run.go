@@ -32,13 +32,28 @@ const (
 	StopFailed   StopReason = "failed"
 )
 
+type JobChangeKind string
+
+const (
+	JobChangeNew      JobChangeKind = "new"
+	JobChangeRemoved  JobChangeKind = "removed"
+	JobChangeReopened JobChangeKind = "reopened"
+)
+
+type JobChange struct {
+	JobID string
+	Kind  JobChangeKind
+}
+
 type BoardTally struct {
-	Claimed                         bool
-	Listed, New, Elsewhere, Removed int
+	Claimed           bool
+	Listed, Elsewhere int
+	Changes           []JobChange
 }
 
 type IngestTally struct {
-	New, Merged, Upgraded int
+	Merged, Upgraded int
+	NewJobIDs        []string
 }
 
 type ScrapeRunOutcome string
@@ -67,6 +82,7 @@ type ScrapeRun struct {
 	FinishedAt    *time.Time
 
 	Pages, Listings, New, Elsewhere, Repeat, Removed, Deferred, Retries int
+	Reopened                                                            int
 
 	Errors []ScrapeRunError
 }

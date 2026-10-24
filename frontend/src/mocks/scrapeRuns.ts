@@ -57,6 +57,7 @@ function mockRun(i: number): ScrapeRun {
 		BoardID: "",
 		CompanyName: "",
 		Removed: 0,
+		Reopened: 0,
 		Trigger: i % 11 === 5 ? "manual" : "scheduled",
 		...shape,
 		...(running && { Outcome: "running", StopReason: "" }),
