@@ -17,7 +17,7 @@ import (
 
 type BoardPollStore interface {
 	ClaimBoard(context.Context, string, bool) (dto.BoardPoll, error)
-	CompleteBoard(context.Context, dto.BoardSnapshot) (removed int, err error)
+	CompleteBoard(context.Context, dto.BoardSnapshot) ([]dto.JobChange, error)
 	FailBoard(context.Context, dto.BoardPoll) error
 	ClearBoardCheckPublished(context.Context, string) error
 }
@@ -99,16 +99,23 @@ func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, res sou
 		}
 		var ingested dto.IngestTally
 		ingested, err = p.ingester.BulkExport(ctx, jobs)
-		tally.New, tally.Elsewhere = ingested.New, ingested.Merged+ingested.Upgraded
+		tally.Elsewhere = ingested.Merged + ingested.Upgraded
+		for _, id := range ingested.NewJobIDs {
+			if id != "" {
+				tally.Changes = append(tally.Changes, dto.JobChange{JobID: id, Kind: dto.JobChangeNew})
+			}
+		}
 	}
 	if err != nil {
+		tally.Changes = nil
 		return tally, errors.Join(err, p.store.FailBoard(ctx, claim))
 	}
-	removed, err := p.store.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Jobs: jobs, Complete: true, NextPollIn: res.NextPollIn, Reported: res.Reported})
+	changes, err := p.store.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Jobs: jobs, Complete: true, NextPollIn: res.NextPollIn, Reported: res.Reported})
 	if err != nil {
+		tally.Changes = nil
 		return tally, err
 	}
-	tally.Removed = removed
+	tally.Changes = append(tally.Changes, changes...)
 	if res.Reported > 0 && float64(len(jobs)) < underparsedRatio*float64(res.Reported) {
 		slog.WarnContext(ctx, "board parsed fewer jobs than reported",
 			slog.String(logger.KeyEvent, telemetry.EventBoardUnderparsed),

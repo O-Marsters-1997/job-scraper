@@ -111,17 +111,18 @@ func (q *Queries) DeleteExpiredScrapeRuns(ctx context.Context) error {
 	return err
 }
 
-const finishBoardRun = `-- name: FinishBoardRun :exec
-INSERT INTO scrape_runs (id, kind, source, board_id, trigger, started_at, finished_at, stop_reason, listings, new_listings, elsewhere, removed)
+const finishBoardRun = `-- name: FinishBoardRun :execrows
+INSERT INTO scrape_runs (id, kind, source, board_id, trigger, started_at, finished_at, stop_reason, listings, new_listings, elsewhere, removed, reopened)
 VALUES ($1, 'board', $2, $3, $4, $5, NOW(), $6,
-        $7, $8, $9, $10)
+        $7, $8, $9, $10, $11)
 ON CONFLICT (id) DO UPDATE SET
     finished_at  = NOW(),
     stop_reason  = EXCLUDED.stop_reason,
     listings     = EXCLUDED.listings,
     new_listings = EXCLUDED.new_listings,
     elsewhere    = EXCLUDED.elsewhere,
-    removed      = EXCLUDED.removed
+    removed      = EXCLUDED.removed,
+    reopened     = EXCLUDED.reopened
 WHERE scrape_runs.finished_at IS NULL
 `
 
@@ -136,10 +137,11 @@ type FinishBoardRunParams struct {
 	NewListings int32
 	Elsewhere   int32
 	Removed     int32
+	Reopened    int32
 }
 
-func (q *Queries) FinishBoardRun(ctx context.Context, arg FinishBoardRunParams) error {
-	_, err := q.db.Exec(ctx, finishBoardRun,
+func (q *Queries) FinishBoardRun(ctx context.Context, arg FinishBoardRunParams) (int64, error) {
+	result, err := q.db.Exec(ctx, finishBoardRun,
 		arg.ID,
 		arg.Source,
 		arg.BoardID,
@@ -150,8 +152,12 @@ func (q *Queries) FinishBoardRun(ctx context.Context, arg FinishBoardRunParams) 
 		arg.NewListings,
 		arg.Elsewhere,
 		arg.Removed,
+		arg.Reopened,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const finishScrapeRun = `-- name: FinishScrapeRun :exec
@@ -188,6 +194,22 @@ func (q *Queries) InsertScrapeRun(ctx context.Context, arg InsertScrapeRunParams
 		arg.SourceTargetID,
 		arg.Trigger,
 	)
+	return err
+}
+
+const insertScrapeRunJobChanges = `-- name: InsertScrapeRunJobChanges :exec
+INSERT INTO scrape_run_job_changes (run_id, job_id, change, snapshot)
+SELECT $1::uuid, t.job_id, t.change, t.snapshot
+FROM jsonb_to_recordset($2::jsonb) AS t(job_id uuid, change text, snapshot jsonb)
+`
+
+type InsertScrapeRunJobChangesParams struct {
+	RunID   pgtype.UUID
+	Changes []byte
+}
+
+func (q *Queries) InsertScrapeRunJobChanges(ctx context.Context, arg InsertScrapeRunJobChangesParams) error {
+	_, err := q.db.Exec(ctx, insertScrapeRunJobChanges, arg.RunID, arg.Changes)
 	return err
 }
 
@@ -297,7 +319,7 @@ const listScrapeRuns = `-- name: ListScrapeRuns :many
 SELECT r.id, r.kind, r.source, r.source_target_id, COALESCE(t.value, '')::text AS target_value, t.filters AS target_filters,
        r.board_id, b.company_id, COALESCE(c.name, '')::text AS company_name,
        r.trigger, r.started_at, r.finished_at, r.stop_reason,
-       r.pages, r.listings, r.new_listings, r.elsewhere, r.repeat_listings, r.removed, r.deferred, r.retries
+       r.pages, r.listings, r.new_listings, r.elsewhere, r.repeat_listings, r.removed, r.reopened, r.deferred, r.retries
 FROM scrape_runs r
 LEFT JOIN source_targets t ON t.id = r.source_target_id
 LEFT JOIN company_boards b ON b.id = r.board_id
@@ -356,6 +378,7 @@ type ListScrapeRunsRow struct {
 	Elsewhere      int32
 	RepeatListings int32
 	Removed        int32
+	Reopened       int32
 	Deferred       int32
 	Retries        int32
 }
@@ -402,6 +425,7 @@ func (q *Queries) ListScrapeRuns(ctx context.Context, arg ListScrapeRunsParams) 
 			&i.Elsewhere,
 			&i.RepeatListings,
 			&i.Removed,
+			&i.Reopened,
 			&i.Deferred,
 			&i.Retries,
 		); err != nil {
