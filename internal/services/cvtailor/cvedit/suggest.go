@@ -5,7 +5,9 @@ import (
 	_ "embed"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/openrouter"
 )
 
@@ -28,6 +30,7 @@ type SuggestInput struct {
 	Text         string
 	MaxChars     int
 	Achievements []string
+	Feedback     string
 }
 
 type SuggestResult struct {
@@ -37,6 +40,31 @@ type SuggestResult struct {
 
 // Suggest streams a rewrite of in.Text to onDelta and returns it whole.
 func (c *Client) Suggest(ctx context.Context, apiKey string, in SuggestInput, onDelta func(string)) (SuggestResult, error) {
+	if in.Action != dto.SuggestActionTailor {
+		return c.suggestOnce(ctx, apiKey, in, onDelta)
+	}
+	limit := utf8.RuneCountInString(in.Text)
+	if in.MaxChars > 0 {
+		limit = min(limit, in.MaxChars)
+	}
+	var cost float64
+	for attempt := 0; ; attempt++ {
+		res, err := c.suggestOnce(ctx, apiKey, in, func(string) {})
+		cost += res.Cost
+		res.Cost = cost
+		if err != nil {
+			return res, err
+		}
+		why := TailorViolation(in.Text, res.Text, limit, dto.TailorMaxChangedShare)
+		if why == "" || attempt == 1 {
+			return res, nil
+		}
+		in.Feedback = fmt.Sprintf("%s. Yours had %d words and %d characters; use at most %d words and %d characters",
+			why, len(words(res.Text)), utf8.RuneCountInString(res.Text), len(words(in.Text)), limit)
+	}
+}
+
+func (c *Client) suggestOnce(ctx context.Context, apiKey string, in SuggestInput, onDelta func(string)) (SuggestResult, error) {
 	task, err := renderSuggest(in)
 	if err != nil {
 		return SuggestResult{}, err
@@ -67,6 +95,9 @@ func renderSuggest(in SuggestInput) (string, error) {
 		b.WriteString("Start the line with a stronger, more specific verb. Change nothing else.\n")
 	case "tailor":
 		fmt.Fprintf(&b, "Swap only the nouns and terms in the line that differ from the wording of this quote from the job description, keeping the same sentence shape, verb and voice. Never add a claim the Achievements lack, and never add words.\n\nQuote:\n%s\n", in.Quote)
+		if in.Feedback != "" {
+			fmt.Fprintf(&b, "\nYour previous reply was rejected: %s. If no swap fits that budget, return the line unchanged. Reply with only the line.\n", in.Feedback)
+		}
 	case "ask":
 		fmt.Fprintf(&b, "Rewrite the line as the person asks, within the rules: %s\n", in.Prompt)
 	default:
