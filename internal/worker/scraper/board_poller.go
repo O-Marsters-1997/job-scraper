@@ -99,7 +99,7 @@ func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, res sou
 		}
 		var ingested dto.IngestTally
 		ingested, err = p.ingester.BulkExport(ctx, jobs)
-		tally.New, tally.Elsewhere = ingested.New, ingested.Merged
+		tally.New, tally.Elsewhere = ingested.New, ingested.Merged+ingested.Upgraded
 	}
 	if err != nil {
 		return tally, errors.Join(err, p.store.FailBoard(ctx, claim))

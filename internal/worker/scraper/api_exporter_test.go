@@ -70,16 +70,16 @@ func TestBulkExport(t *testing.T) {
 		}
 	})
 
-	t.Run("counts new and merged outcomes", func(t *testing.T) {
+	t.Run("counts new, merged and upgraded outcomes", func(t *testing.T) {
 		t.Parallel()
-		body := `{"results":[{"status":"new"},{"status":"merged"},{"status":"changed"},{"status":"new"},{"status":"unchanged"}]}`
+		body := `{"results":[{"status":"new"},{"status":"merged"},{"status":"changed"},{"status":"new"},{"status":"unchanged"},{"status":"upgraded"}]}`
 		exporter := newExporter(t, respondWith(http.StatusOK, body))
-		jobs := make([]dto.Job, 5)
+		jobs := make([]dto.Job, 6)
 		got, err := exporter.BulkExport(t.Context(), jobs)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := (dto.IngestTally{New: 2, Merged: 1}); got != want {
+		if want := (dto.IngestTally{New: 2, Merged: 1, Upgraded: 1}); got != want {
 			t.Errorf("BulkExport() tally = %+v, want %+v", got, want)
 		}
 	})
