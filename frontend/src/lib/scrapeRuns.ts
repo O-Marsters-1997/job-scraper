@@ -226,7 +226,7 @@ export function parseHistorySearch(
 	};
 }
 
-export type PollEntry =
+type PollEntry =
 	| { kind: "poll"; run: ScrapeRun }
 	| { kind: "quiet"; runs: ScrapeRun[] };
 
