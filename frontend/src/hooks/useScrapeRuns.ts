@@ -1,4 +1,8 @@
-import { createQuery, keepPreviousData } from "@tanstack/solid-query";
+import {
+	createInfiniteQuery,
+	createQuery,
+	keepPreviousData,
+} from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
 	fetchScrapeRunSummary,
@@ -25,6 +29,16 @@ export function useScrapeRuns(params: () => ScrapeRunsParams) {
 		...scrapeRunsQuery(params()),
 		placeholderData: keepPreviousData,
 		refetchInterval: params().before ? false : LIVE_POLL_MS,
+	}));
+}
+
+export function useScrapeRunPages(params: () => ScrapeRunFilters) {
+	return createInfiniteQuery(() => ({
+		queryKey: [...keys.scrapeRuns(params()), "pages"],
+		initialPageParam: undefined as string | undefined,
+		queryFn: ({ pageParam }) =>
+			fetchScrapeRuns({ ...params(), before: pageParam }),
+		getNextPageParam: (last) => last.NextCursor ?? undefined,
 	}));
 }
 

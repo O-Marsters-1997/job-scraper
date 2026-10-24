@@ -14,6 +14,7 @@ import (
 
 type runFilter struct {
 	target   pgtype.UUID
+	company  pgtype.UUID
 	from, to pgtype.Timestamptz
 	q        pgtype.Text
 }
@@ -26,6 +27,13 @@ func toRunFilter(f dto.ScrapeRunFilter) (runFilter, error) {
 			return out, ErrInvalidID
 		}
 		out.target = id
+	}
+	if f.CompanyID != "" {
+		id, err := data.UUID(f.CompanyID)
+		if err != nil {
+			return out, ErrInvalidID
+		}
+		out.company = id
 	}
 	if !f.From.IsZero() {
 		out.from = pgtype.Timestamptz{Time: f.From, Valid: true}
@@ -52,7 +60,7 @@ func (s *Store) ScrapeRunSummary(ctx context.Context, userID string, opts dto.Sc
 		return dto.ScrapeRunSummary{}, err
 	}
 	rows, err := s.queries.SummariseScrapeRuns(ctx, sqlc.SummariseScrapeRunsParams{
-		BucketSecs: opts.Bucket.Seconds(), UserID: uid, TargetID: f.target, FromAt: f.from, ToAt: f.to, Q: f.q,
+		BucketSecs: opts.Bucket.Seconds(), UserID: uid, TargetID: f.target, CompanyID: f.company, FromAt: f.from, ToAt: f.to, Q: f.q,
 	})
 	if err != nil {
 		return dto.ScrapeRunSummary{}, fmt.Errorf("store.ScrapeRunSummary: %w", err)
@@ -91,6 +99,11 @@ func summariseRuns(rows []sqlc.SummariseScrapeRunsRow, opts dto.ScrapeRunSummary
 		switch len(failing) {
 		case 0:
 			summary.Total += n
+			summary.New += int(row.NewListings)
+			summary.Removed += int(row.Removed)
+			if t := row.LastStartedAt.Time; row.LastStartedAt.Valid && (summary.LastStartedAt == nil || t.After(*summary.LastStartedAt)) {
+				summary.LastStartedAt = &t
+			}
 			for facet, value := range values {
 				summary.Facets[facet][value] += n
 			}

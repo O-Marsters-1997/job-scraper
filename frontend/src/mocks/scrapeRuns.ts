@@ -114,6 +114,7 @@ function inFilters(
 	const needle = params.q?.toLowerCase();
 	return (
 		(!params.target || run.TargetID === params.target) &&
+		!params.company &&
 		started >= rangeStart(params) &&
 		started <= to &&
 		(!needle ||
@@ -128,6 +129,14 @@ function inFilters(
 			);
 		})
 	);
+}
+
+function rollup(runs: ScrapeRun[]) {
+	return {
+		New: runs.reduce((n, r) => n + r.New, 0),
+		Removed: runs.reduce((n, r) => n + r.Removed, 0),
+		LastStartedAt: runs[0]?.StartedAt ?? null,
+	};
 }
 
 export function getScrapeRunSummary(
@@ -171,6 +180,7 @@ export function getScrapeRunSummary(
 	}
 	return {
 		Total: matching.length,
+		...rollup(matching),
 		Facets: facets,
 		BucketMs: bucket,
 		Histogram: histogram,
