@@ -163,15 +163,31 @@ FROM scrape_runs r
 JOIN source_targets t ON t.id = r.source_target_id
 WHERE t.user_id = $1
   AND ($2::uuid IS NULL OR r.source_target_id = $2)
-  AND ($3::timestamptz IS NULL
-       OR (r.started_at, r.id) < ($3::timestamptz, $4::uuid))
+  AND ($3::timestamptz IS NULL OR r.started_at >= $3)
+  AND ($4::timestamptz IS NULL OR r.started_at <= $4)
+  AND ($5::text IS NULL
+       OR t.value ILIKE '%' || $5 || '%'
+       OR EXISTS (SELECT 1 FROM scrape_run_errors e WHERE e.run_id = r.id AND e.message ILIKE '%' || $5 || '%'))
+  AND (COALESCE(cardinality($6::text[]), 0) = 0 OR (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'failed' THEN 'failed' WHEN r.retries > 0 THEN 'retried' ELSE 'succeeded' END) = ANY($6::text[]))
+  AND (COALESCE(cardinality($7::text[]), 0) = 0 OR r.kind = ANY($7::text[]))
+  AND (COALESCE(cardinality($8::text[]), 0) = 0 OR r.source = ANY($8::text[]))
+  AND (COALESCE(cardinality($9::text[]), 0) = 0 OR r.trigger = ANY($9::text[]))
+  AND ($10::timestamptz IS NULL
+       OR (r.started_at, r.id) < ($10::timestamptz, $11::uuid))
 ORDER BY r.started_at DESC, r.id DESC
-LIMIT $5
+LIMIT $12
 `
 
 type ListScrapeRunsParams struct {
 	UserID          pgtype.UUID
 	TargetID        pgtype.UUID
+	FromAt          pgtype.Timestamptz
+	ToAt            pgtype.Timestamptz
+	Q               pgtype.Text
+	Outcomes        []string
+	Kinds           []string
+	Sources         []string
+	Triggers        []string
 	BeforeStartedAt pgtype.Timestamptz
 	BeforeID        pgtype.UUID
 	RowLimit        int32
@@ -201,6 +217,13 @@ func (q *Queries) ListScrapeRuns(ctx context.Context, arg ListScrapeRunsParams) 
 	rows, err := q.db.Query(ctx, listScrapeRuns,
 		arg.UserID,
 		arg.TargetID,
+		arg.FromAt,
+		arg.ToAt,
+		arg.Q,
+		arg.Outcomes,
+		arg.Kinds,
+		arg.Sources,
+		arg.Triggers,
 		arg.BeforeStartedAt,
 		arg.BeforeID,
 		arg.RowLimit,
@@ -282,4 +305,72 @@ UPDATE scrape_runs SET pages = pages + 1 WHERE id = $1
 func (q *Queries) ScrapeRunPageDone(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, scrapeRunPageDone, id)
 	return err
+}
+
+const summariseScrapeRuns = `-- name: SummariseScrapeRuns :many
+SELECT (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'failed' THEN 'failed' WHEN r.retries > 0 THEN 'retried' ELSE 'succeeded' END)::text AS outcome, r.kind, r.source, r.trigger,
+       date_bin(make_interval(secs => $1::float8), r.started_at, TIMESTAMPTZ '1970-01-01')::timestamptz AS bucket,
+       COUNT(*)::int AS runs
+FROM scrape_runs r
+JOIN source_targets t ON t.id = r.source_target_id
+WHERE t.user_id = $2
+  AND ($3::uuid IS NULL OR r.source_target_id = $3)
+  AND ($4::timestamptz IS NULL OR r.started_at >= $4)
+  AND ($5::timestamptz IS NULL OR r.started_at <= $5)
+  AND ($6::text IS NULL
+       OR t.value ILIKE '%' || $6 || '%'
+       OR EXISTS (SELECT 1 FROM scrape_run_errors e WHERE e.run_id = r.id AND e.message ILIKE '%' || $6 || '%'))
+GROUP BY 1, 2, 3, 4, 5
+`
+
+type SummariseScrapeRunsParams struct {
+	BucketSecs float64
+	UserID     pgtype.UUID
+	TargetID   pgtype.UUID
+	FromAt     pgtype.Timestamptz
+	ToAt       pgtype.Timestamptz
+	Q          pgtype.Text
+}
+
+type SummariseScrapeRunsRow struct {
+	Outcome string
+	Kind    string
+	Source  string
+	Trigger string
+	Bucket  pgtype.Timestamptz
+	Runs    int32
+}
+
+func (q *Queries) SummariseScrapeRuns(ctx context.Context, arg SummariseScrapeRunsParams) ([]SummariseScrapeRunsRow, error) {
+	rows, err := q.db.Query(ctx, summariseScrapeRuns,
+		arg.BucketSecs,
+		arg.UserID,
+		arg.TargetID,
+		arg.FromAt,
+		arg.ToAt,
+		arg.Q,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SummariseScrapeRunsRow
+	for rows.Next() {
+		var i SummariseScrapeRunsRow
+		if err := rows.Scan(
+			&i.Outcome,
+			&i.Kind,
+			&i.Source,
+			&i.Trigger,
+			&i.Bucket,
+			&i.Runs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

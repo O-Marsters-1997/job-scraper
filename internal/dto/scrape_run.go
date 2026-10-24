@@ -65,9 +65,54 @@ type ScrapeRunError struct {
 }
 
 type ScrapeRunsQuery struct {
-	Target string `json:"target"`
-	Before string `json:"before"`
-	Limit  string `json:"limit"`
+	Q       string `json:"q"`
+	Outcome string `json:"outcome"`
+	Kind    string `json:"kind"`
+	Source  string `json:"source"`
+	Trigger string `json:"trigger"`
+	Target  string `json:"target"`
+	Range   string `json:"range"`
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Before  string `json:"before"`
+	Limit   string `json:"limit"`
+}
+
+type ScrapeRunFilter struct {
+	TargetID string
+	Q        string
+	Outcome  []string
+	Kind     []string
+	Source   []string
+	Trigger  []string
+	From, To time.Time
+}
+
+type ScrapeRunSummaryOptions struct {
+	ScrapeRunFilter
+	Bucket time.Duration
+	End    time.Time
+}
+
+type ScrapeRunFacet string
+
+const (
+	FacetOutcome ScrapeRunFacet = "outcome"
+	FacetKind    ScrapeRunFacet = "kind"
+	FacetSource  ScrapeRunFacet = "source"
+	FacetTrigger ScrapeRunFacet = "trigger"
+)
+
+type ScrapeRunSummary struct {
+	Total     int
+	Facets    map[ScrapeRunFacet]map[string]int
+	BucketMs  int64
+	Histogram []HistogramBucket
+}
+
+type HistogramBucket struct {
+	Start               time.Time
+	OK, Retried, Failed int
 }
 
 type ScrapeRunPage struct {
@@ -76,7 +121,7 @@ type ScrapeRunPage struct {
 }
 
 type ScrapeRunListOptions struct {
-	TargetID        string
+	ScrapeRunFilter
 	BeforeStartedAt time.Time
 	BeforeID        string
 	Limit           int

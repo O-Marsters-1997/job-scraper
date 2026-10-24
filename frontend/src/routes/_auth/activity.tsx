@@ -1,31 +1,48 @@
 import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { format } from "date-fns";
-import { createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, on, Show } from "solid-js";
+import { RangeMenu } from "@/components/activity/RangeMenu";
+import { FilterPills, FilterSidebar } from "@/components/activity/RunFilters";
+import { RunHistogram } from "@/components/activity/RunHistogram";
 import { Icon } from "@/components/Icon";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { SearchField } from "@/components/SearchField";
 import { SourceBadge } from "@/components/SourceBadge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useDebouncedTerm } from "@/hooks/useDebouncedTerm";
 import {
 	type ActivitySearch,
+	activeFilterCount,
 	formatDuration,
 	newerPage,
 	olderPage,
+	pageSummary,
 	parseActivitySearch,
+	runFilters,
+	setQuery,
 } from "@/lib/scrapeRuns";
 import { searchTitle } from "@/lib/searchTargets";
 import { cn } from "@/lib/utils";
 import type { ScrapeRun, ScrapeRunOutcome } from "@/types/scrapeRun";
-import { scrapeRunsQuery, useScrapeRuns } from "../../hooks/useScrapeRuns";
+import {
+	scrapeRunSummaryQuery,
+	scrapeRunsQuery,
+	useScrapeRunSummary,
+	useScrapeRuns,
+} from "../../hooks/useScrapeRuns";
 import { useSources } from "../../hooks/useSources";
 import { queryClient } from "../../lib/queryClient";
 
 export const Route = createFileRoute("/_auth/activity")({
 	validateSearch: parseActivitySearch,
 	loader: ({ location }) => {
-		const { target, before } = parseActivitySearch(location.search);
-		return queryClient.prefetchQuery(scrapeRunsQuery({ target, before }));
+		const { trail: _trail, ...params } = parseActivitySearch(location.search);
+		return Promise.all([
+			queryClient.prefetchQuery(scrapeRunsQuery(params)),
+			queryClient.prefetchQuery(scrapeRunSummaryQuery(runFilters(params))),
+		]);
 	},
 	component: ActivityPage,
 });
@@ -181,11 +198,33 @@ function ActivityPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: "/activity" });
 	const sources = useSources();
-	const runs = useScrapeRuns(() => ({
-		target: search().target,
-		before: search().before,
-	}));
+	const runs = useScrapeRuns(() => {
+		const { trail: _trail, ...params } = search();
+		return params;
+	});
+	const summary = useScrapeRunSummary(
+		() => runFilters(search()),
+		() => !search().before,
+	);
 	const go = (next: ActivitySearch) => navigate({ search: next });
+	const [filtersOpen, setFiltersOpen] = createSignal(false);
+	const [term, typeTerm] = useDebouncedTerm();
+	const [text, setText] = createSignal(search().q ?? "");
+	createEffect(
+		on(
+			term,
+			(t) => {
+				if (t !== (search().q ?? "")) go(setQuery(search(), t));
+			},
+			{ defer: true },
+		),
+	);
+	const firstPage = (next: Partial<ActivitySearch>): ActivitySearch => ({
+		...search(),
+		...next,
+		before: undefined,
+		trail: undefined,
+	});
 	const sourceLabel = (name: string) =>
 		sources.data?.find((s) => s.name === name)?.label ?? name;
 
@@ -206,90 +245,168 @@ function ActivityPage() {
 				</span>
 			</PageHeading>
 
-			<Show when={search().target}>
-				<div class="mb-3">
+			<div class="mb-3 flex flex-wrap items-center gap-2">
+				<Button
+					variant="outline"
+					size="sm"
+					aria-expanded={filtersOpen()}
+					onClick={() => setFiltersOpen((o) => !o)}
+				>
+					<Icon name="filter" class="size-3.5" />
+					Filters
+					<Show when={activeFilterCount(search()) > 0}>
+						<span class="rounded-full bg-primary px-1.5 text-xs text-primary-foreground">
+							{activeFilterCount(search())}
+						</span>
+					</Show>
+				</Button>
+				<SearchField
+					id="run-search"
+					label="Search runs"
+					placeholder="Search names and error messages"
+					value={text()}
+					onInput={(value) => {
+						setText(value);
+						typeTerm(value);
+					}}
+					class="sm:max-w-80"
+				/>
+				<Show when={search().target}>
 					<Button
 						variant="outline"
 						size="sm"
-						onClick={() => go({ target: undefined })}
+						onClick={() => go(firstPage({ target: undefined }))}
 					>
 						One search only
 						<Icon name="x" class="size-3.5" />
 					</Button>
+				</Show>
+				<div class="ml-auto flex items-center gap-3">
+					<Show when={summary.data}>
+						{(data) => (
+							<span class="text-xs text-muted">
+								<span class="font-mono tabular-nums text-foreground">
+									{data().Total.toLocaleString()}
+								</span>{" "}
+								{data().Total === 1 ? "run" : "runs"}
+							</span>
+						)}
+					</Show>
+					<RangeMenu search={search()} onChange={go} />
 				</div>
+			</div>
+
+			<Show when={activeFilterCount(search()) > 0}>
+				<FilterPills
+					search={search()}
+					sourceLabel={sourceLabel}
+					onChange={go}
+				/>
+			</Show>
+			<Show when={summary.data}>
+				{(data) => <RunHistogram summary={data()} />}
 			</Show>
 
-			<QueryBoundary query={runs} fallbackRows={8}>
-				{(page) => (
-					<Show
-						when={page().Items.length > 0}
-						fallback={
-							<Card class="p-10 text-center">
-								<p class="text-sm text-muted">No runs yet.</p>
-							</Card>
-						}
-					>
-						<div class="overflow-hidden rounded-xl border border-border bg-surface">
-							<div
-								class={cn(
-									ROW_GRID,
-									"border-b border-border bg-surface-muted px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-faint",
-								)}
+			<div class="flex items-start gap-6">
+				<Show when={filtersOpen()}>
+					<FilterSidebar
+						search={search()}
+						summary={summary.data}
+						sourceLabel={sourceLabel}
+						onChange={go}
+					/>
+				</Show>
+				<div class="min-w-0 flex-1">
+					<QueryBoundary query={runs} fallbackRows={8}>
+						{(page) => (
+							<Show
+								when={page().Items.length > 0}
+								fallback={
+									<Card class="p-10 text-center">
+										<p class="text-sm text-muted">
+											{activeFilterCount(search()) > 0 || search().q
+												? "No runs match these filters."
+												: "No runs yet."}
+										</p>
+									</Card>
+								}
 							>
-								<span />
-								<span>Started</span>
-								<span>Outcome</span>
-								<span>Search or board</span>
-								<span class="text-right">New</span>
-								<span class="text-right">Elsewhere</span>
-								<span class="text-right">Retries</span>
-								<span class="hidden text-right 2xl:block">Pages</span>
-								<span class="hidden text-right 2xl:block">Repeat</span>
-							</div>
-							<ul>
-								<For each={page().Items}>
-									{(run) => (
-										<RunRow
-											run={run}
-											sourceLabel={sourceLabel(run.Source)}
-											onlyThisSearch={() => go({ target: run.TargetID })}
-										/>
-									)}
-								</For>
-							</ul>
-							<div class="flex items-center justify-end gap-2 border-t border-border px-4 py-2.5">
-								<Button
-									variant="outline"
-									size="sm"
-									disabled={!search().before}
-									onClick={() => go({ target: search().target })}
-								>
-									Newest
-								</Button>
-								<Button
-									variant="outline"
-									size="sm"
-									disabled={!search().before}
-									onClick={() => go(newerPage(search()))}
-								>
-									Newer
-								</Button>
-								<Button
-									variant="outline"
-									size="sm"
-									disabled={!page().NextCursor}
-									onClick={() => {
-										const next = page().NextCursor;
-										if (next) go(olderPage(search(), next));
-									}}
-								>
-									Older
-								</Button>
-							</div>
-						</div>
-					</Show>
-				)}
-			</QueryBoundary>
+								<div class="overflow-hidden rounded-xl border border-border bg-surface">
+									<div
+										class={cn(
+											ROW_GRID,
+											"border-b border-border bg-surface-muted px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-faint",
+										)}
+									>
+										<span />
+										<span>Started</span>
+										<span>Outcome</span>
+										<span>Search or board</span>
+										<span class="text-right">New</span>
+										<span class="text-right">Elsewhere</span>
+										<span class="text-right">Retries</span>
+										<span class="hidden text-right 2xl:block">Pages</span>
+										<span class="hidden text-right 2xl:block">Repeat</span>
+									</div>
+									<ul>
+										<For each={page().Items}>
+											{(run) => (
+												<RunRow
+													run={run}
+													sourceLabel={sourceLabel(run.Source)}
+													onlyThisSearch={() =>
+														go(firstPage({ target: run.TargetID }))
+													}
+												/>
+											)}
+										</For>
+									</ul>
+									<div class="flex items-center justify-end gap-2 border-t border-border px-4 py-2.5">
+										<Show when={summary.data}>
+											{(data) => (
+												<span class="mr-auto font-mono text-xs tabular-nums text-muted">
+													{pageSummary(
+														search(),
+														page().Items.length,
+														data().Total,
+													)}
+												</span>
+											)}
+										</Show>
+										<Button
+											variant="outline"
+											size="sm"
+											disabled={!search().before}
+											onClick={() => go(firstPage({}))}
+										>
+											Newest
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
+											disabled={!search().before}
+											onClick={() => go(newerPage(search()))}
+										>
+											Newer
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
+											disabled={!page().NextCursor}
+											onClick={() => {
+												const next = page().NextCursor;
+												if (next) go(olderPage(search(), next));
+											}}
+										>
+											Older
+										</Button>
+									</div>
+								</div>
+							</Show>
+						)}
+					</QueryBoundary>
+				</div>
+			</div>
 		</div>
 	);
 }

@@ -202,6 +202,10 @@ func TestStore_ListScrapeRuns(t *testing.T) {
 		}
 	}
 
+	if _, err := pool.Exec(ctx, "UPDATE scrape_runs SET trigger = 'scheduled', source = 'greenhouse' WHERE id = $1::uuid", ids[2]); err != nil {
+		t.Fatal(err)
+	}
+
 	t.Run("lists only the caller's runs newest first with outcome and errors", func(t *testing.T) {
 		t.Parallel()
 		runs, err := st.ListScrapeRuns(ctx, userID, dto.ScrapeRunListOptions{Limit: 10})
@@ -233,7 +237,7 @@ func TestStore_ListScrapeRuns(t *testing.T) {
 
 	t.Run("target narrows to one search", func(t *testing.T) {
 		t.Parallel()
-		runs, err := st.ListScrapeRuns(ctx, userID, dto.ScrapeRunListOptions{TargetID: failing.ID, Limit: 10})
+		runs, err := st.ListScrapeRuns(ctx, userID, dto.ScrapeRunListOptions{ScrapeRunFilter: dto.ScrapeRunFilter{TargetID: failing.ID}, Limit: 10})
 		if err != nil || len(runs) != 1 || runs[0].ID != ids[3] {
 			t.Errorf("ListScrapeRuns(target) = %v, %v, want only %s", runs, err, ids[3])
 		}
@@ -257,6 +261,72 @@ func TestStore_ListScrapeRuns(t *testing.T) {
 		want := []string{ids[3], ids[2], ids[1], ids[0]}
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("paged ids (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("summary agrees with the list for any filter", func(t *testing.T) {
+		t.Parallel()
+		now := time.Now()
+		cases := map[string]dto.ScrapeRunFilter{
+			"none":                {},
+			"outcomes widen":      {Outcome: []string{"failed", "retried"}},
+			"facets narrow":       {Source: []string{"linkedin"}, Trigger: []string{"manual"}},
+			"error message text":  {Q: "boom"},
+			"search value text":   {Q: "FAIL", Outcome: []string{"running", "failed"}},
+			"wildcard is literal": {Q: "%"},
+			"one target":          {TargetID: failing.ID},
+			"date range":          {From: now.Add(-time.Hour), To: now.Add(150 * time.Second)},
+		}
+		for name, filter := range cases {
+			if filter.From.IsZero() {
+				filter.From = now.Add(-time.Hour)
+			}
+			summary, err := st.ScrapeRunSummary(ctx, userID, dto.ScrapeRunSummaryOptions{
+				ScrapeRunFilter: filter, Bucket: 5 * time.Minute, End: now.Add(time.Hour),
+			})
+			if err != nil {
+				t.Fatalf("%s: ScrapeRunSummary() err = %v", name, err)
+			}
+			list := func(f dto.ScrapeRunFilter) []dto.ScrapeRun {
+				runs, err := st.ListScrapeRuns(ctx, userID, dto.ScrapeRunListOptions{ScrapeRunFilter: f, Limit: 100})
+				if err != nil {
+					t.Fatalf("%s: ListScrapeRuns() err = %v", name, err)
+				}
+				return runs
+			}
+			if got := len(list(filter)); summary.Total != got {
+				t.Errorf("%s: Total = %d, list has %d", name, summary.Total, got)
+			}
+			var bucketed int
+			for _, b := range summary.Histogram {
+				bucketed += b.OK + b.Retried + b.Failed
+			}
+			if bucketed != summary.Total {
+				t.Errorf("%s: histogram counts %d runs, Total = %d", name, bucketed, summary.Total)
+			}
+			ignoring := map[dto.ScrapeRunFacet]func(*dto.ScrapeRunFilter){
+				dto.FacetOutcome: func(f *dto.ScrapeRunFilter) { f.Outcome = nil },
+				dto.FacetKind:    func(f *dto.ScrapeRunFilter) { f.Kind = nil },
+				dto.FacetSource:  func(f *dto.ScrapeRunFilter) { f.Source = nil },
+				dto.FacetTrigger: func(f *dto.ScrapeRunFilter) { f.Trigger = nil },
+			}
+			value := map[dto.ScrapeRunFacet]func(dto.ScrapeRun) string{
+				dto.FacetOutcome: func(r dto.ScrapeRun) string { return string(r.Outcome) },
+				dto.FacetKind:    func(r dto.ScrapeRun) string { return string(r.Kind) },
+				dto.FacetSource:  func(r dto.ScrapeRun) string { return r.Source },
+				dto.FacetTrigger: func(r dto.ScrapeRun) string { return string(r.Trigger) },
+			}
+			for facet, clear := range ignoring {
+				widened := filter
+				clear(&widened)
+				want := map[string]int{}
+				for _, r := range list(widened) {
+					want[value[facet](r)]++
+				}
+				if diff := cmp.Diff(want, summary.Facets[facet]); diff != "" {
+					t.Errorf("%s: %s facet (-want +got):\n%s", name, facet, diff)
+				}
+			}
 		}
 	})
 }
