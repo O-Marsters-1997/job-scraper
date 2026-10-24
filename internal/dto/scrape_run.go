@@ -83,7 +83,14 @@ type ScrapeRun struct {
 
 	Pages, Listings, New, Elsewhere, Repeat, Removed, Reopened, Deferred, Retries int
 
-	Errors []ScrapeRunError
+	Errors  []ScrapeRunError
+	Changes []ScrapeRunJobChange
+}
+
+type ScrapeRunJobChange struct {
+	JobID string
+	Kind  JobChangeKind
+	Title string
 }
 
 type ScrapeRunError struct {

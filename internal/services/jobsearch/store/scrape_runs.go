@@ -244,6 +244,16 @@ func (s *Store) ListScrapeRuns(ctx context.Context, userID string, opts dto.Scra
 			Page: int(e.Page), Attempt: int(e.Attempt), Message: e.Message, At: e.At.Time,
 		})
 	}
+	changeRows, err := s.queries.ListScrapeRunJobChanges(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListScrapeRuns changes: %w", err)
+	}
+	for _, c := range changeRows {
+		i := index[c.RunID.String()]
+		runs[i].Changes = append(runs[i].Changes, dto.ScrapeRunJobChange{
+			JobID: c.JobID.String(), Kind: dto.JobChangeKind(c.Change), Title: c.Title,
+		})
+	}
 	return runs, nil
 }
 
@@ -272,6 +282,7 @@ func toScrapeRunDTO(row sqlc.ListScrapeRunsRow) dto.ScrapeRun {
 		Deferred:      int(row.Deferred),
 		Retries:       int(row.Retries),
 		Errors:        []dto.ScrapeRunError{},
+		Changes:       []dto.ScrapeRunJobChange{},
 	}
 	if len(row.TargetFilters) > 0 {
 		_ = json.Unmarshal(row.TargetFilters, &run.TargetFilters)

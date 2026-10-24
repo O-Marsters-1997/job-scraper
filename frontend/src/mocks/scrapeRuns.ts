@@ -58,6 +58,7 @@ function mockRun(i: number): ScrapeRun {
 		CompanyName: "",
 		Removed: 0,
 		Reopened: 0,
+		Changes: [],
 		Trigger: i % 11 === 5 ? "manual" : "scheduled",
 		...shape,
 		...(running && { Outcome: "running", StopReason: "" }),

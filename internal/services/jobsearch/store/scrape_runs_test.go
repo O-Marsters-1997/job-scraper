@@ -435,6 +435,15 @@ func TestStore_BoardRuns(t *testing.T) {
 		if got.Listings != 5 || got.New != 2 || got.Elsewhere != 1 || got.Removed != 1 || got.Reopened != 1 || got.Outcome != dto.OutcomeRetried || len(got.Errors) != 1 {
 			t.Errorf("run = %+v, want the finished tally, retried, one error", got)
 		}
+		wantChanges := []dto.ScrapeRunJobChange{
+			{JobID: jobs[0].ID, Kind: dto.JobChangeNew, Title: "Role 1"},
+			{JobID: jobs[1].ID, Kind: dto.JobChangeNew, Title: "Role 2"},
+			{JobID: jobs[2].ID, Kind: dto.JobChangeRemoved, Title: "Role 3"},
+			{JobID: jobs[3].ID, Kind: dto.JobChangeReopened, Title: "Role 4"},
+		}
+		if diff := cmp.Diff(wantChanges, got.Changes); diff != "" {
+			t.Errorf("Changes (-want +got):\n%s", diff)
+		}
 	}
 	if runs, err := env.st.ListScrapeRuns(ctx, outsider, dto.ScrapeRunListOptions{Limit: 10}); err != nil || len(runs) != 0 {
 		t.Errorf("ListScrapeRuns(outsider) = %d runs, %v, want none", len(runs), err)

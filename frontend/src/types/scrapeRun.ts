@@ -7,6 +7,8 @@ const scrapeRunOutcomeSchema = z.enum([
 	"failed",
 ]);
 
+const jobChangeKindSchema = z.enum(["new", "removed", "reopened"]);
+
 const scrapeRunSchema = z.object({
 	ID: z.string(),
 	Kind: z.enum(["search", "board"]),
@@ -36,6 +38,13 @@ const scrapeRunSchema = z.object({
 			Attempt: z.number(),
 			Message: z.string(),
 			At: z.string(),
+		}),
+	),
+	Changes: z.array(
+		z.object({
+			JobID: z.string(),
+			Kind: jobChangeKindSchema,
+			Title: z.string(),
 		}),
 	),
 });

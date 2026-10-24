@@ -147,6 +147,12 @@ INSERT INTO scrape_run_job_changes (run_id, job_id, change, snapshot)
 SELECT sqlc.arg('run_id')::uuid, t.job_id, t.change, t.snapshot
 FROM jsonb_to_recordset(sqlc.arg('changes')::jsonb) AS t(job_id uuid, change text, snapshot jsonb);
 
+-- name: ListScrapeRunJobChanges :many
+SELECT run_id, job_id, change, (snapshot->>'Title')::text AS title
+FROM scrape_run_job_changes
+WHERE run_id = ANY(sqlc.arg('run_ids')::uuid[])
+ORDER BY run_id, change, title, job_id;
+
 -- name: ListBoardHealthRuns :many
 SELECT b.id AS board_id, c.name AS company_name, b.source,
        r.started_at, r.stop_reason,
