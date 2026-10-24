@@ -39,6 +39,40 @@ func (q *Queries) AddScrapeRunCards(ctx context.Context, arg AddScrapeRunCardsPa
 	return err
 }
 
+const boardRunAttemptFailed = `-- name: BoardRunAttemptFailed :exec
+WITH run AS (
+    INSERT INTO scrape_runs (id, kind, source, board_id, trigger, started_at, retries)
+    VALUES ($3, 'board', $4, $5, $6, $7, 1)
+    ON CONFLICT (id) DO UPDATE SET retries = scrape_runs.retries + 1
+    RETURNING id
+)
+INSERT INTO scrape_run_errors (run_id, page, attempt, message)
+SELECT run.id, 0, $1, $2 FROM run
+`
+
+type BoardRunAttemptFailedParams struct {
+	Attempt   int32
+	Message   string
+	ID        pgtype.UUID
+	Source    string
+	BoardID   pgtype.UUID
+	Trigger   string
+	StartedAt pgtype.Timestamptz
+}
+
+func (q *Queries) BoardRunAttemptFailed(ctx context.Context, arg BoardRunAttemptFailedParams) error {
+	_, err := q.db.Exec(ctx, boardRunAttemptFailed,
+		arg.Attempt,
+		arg.Message,
+		arg.ID,
+		arg.Source,
+		arg.BoardID,
+		arg.Trigger,
+		arg.StartedAt,
+	)
+	return err
+}
+
 const classifyScrapeCard = `-- name: ClassifyScrapeCard :one
 SELECT CASE
     WHEN EXISTS (
@@ -77,6 +111,49 @@ func (q *Queries) DeleteExpiredScrapeRuns(ctx context.Context) error {
 	return err
 }
 
+const finishBoardRun = `-- name: FinishBoardRun :exec
+INSERT INTO scrape_runs (id, kind, source, board_id, trigger, started_at, finished_at, stop_reason, listings, new_listings, elsewhere, removed)
+VALUES ($1, 'board', $2, $3, $4, $5, NOW(), $6,
+        $7, $8, $9, $10)
+ON CONFLICT (id) DO UPDATE SET
+    finished_at  = NOW(),
+    stop_reason  = EXCLUDED.stop_reason,
+    listings     = EXCLUDED.listings,
+    new_listings = EXCLUDED.new_listings,
+    elsewhere    = EXCLUDED.elsewhere,
+    removed      = EXCLUDED.removed
+WHERE scrape_runs.finished_at IS NULL
+`
+
+type FinishBoardRunParams struct {
+	ID          pgtype.UUID
+	Source      string
+	BoardID     pgtype.UUID
+	Trigger     string
+	StartedAt   pgtype.Timestamptz
+	StopReason  pgtype.Text
+	Listings    int32
+	NewListings int32
+	Elsewhere   int32
+	Removed     int32
+}
+
+func (q *Queries) FinishBoardRun(ctx context.Context, arg FinishBoardRunParams) error {
+	_, err := q.db.Exec(ctx, finishBoardRun,
+		arg.ID,
+		arg.Source,
+		arg.BoardID,
+		arg.Trigger,
+		arg.StartedAt,
+		arg.StopReason,
+		arg.Listings,
+		arg.NewListings,
+		arg.Elsewhere,
+		arg.Removed,
+	)
+	return err
+}
+
 const finishScrapeRun = `-- name: FinishScrapeRun :exec
 UPDATE scrape_runs SET finished_at = NOW(), stop_reason = $2
 WHERE id = $1 AND finished_at IS NULL
@@ -112,6 +189,67 @@ func (q *Queries) InsertScrapeRun(ctx context.Context, arg InsertScrapeRunParams
 		arg.Trigger,
 	)
 	return err
+}
+
+const listBoardHealthRuns = `-- name: ListBoardHealthRuns :many
+SELECT b.id AS board_id, c.name AS company_name, b.source,
+       r.started_at, r.stop_reason,
+       COALESCE(r.new_listings, 0)::int AS new_listings, COALESCE(r.elsewhere, 0)::int AS elsewhere,
+       COALESCE(r.removed, 0)::int AS removed, COALESCE(r.retries, 0)::int AS retries
+FROM company_boards b
+JOIN companies c ON c.id = b.company_id
+LEFT JOIN LATERAL (
+    SELECT id, started_at, stop_reason, new_listings, elsewhere, removed, retries
+    FROM scrape_runs
+    WHERE board_id = b.id AND finished_at IS NOT NULL
+    ORDER BY started_at DESC, id DESC
+    LIMIT 5
+) r ON TRUE
+WHERE b.status = 'verified'
+  AND EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = $1 AND tc.company_id = b.company_id)
+ORDER BY b.id, r.started_at, r.id
+`
+
+type ListBoardHealthRunsRow struct {
+	BoardID     pgtype.UUID
+	CompanyName string
+	Source      string
+	StartedAt   pgtype.Timestamptz
+	StopReason  pgtype.Text
+	NewListings int32
+	Elsewhere   int32
+	Removed     int32
+	Retries     int32
+}
+
+func (q *Queries) ListBoardHealthRuns(ctx context.Context, userID pgtype.UUID) ([]ListBoardHealthRunsRow, error) {
+	rows, err := q.db.Query(ctx, listBoardHealthRuns, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBoardHealthRunsRow
+	for rows.Next() {
+		var i ListBoardHealthRunsRow
+		if err := rows.Scan(
+			&i.BoardID,
+			&i.CompanyName,
+			&i.Source,
+			&i.StartedAt,
+			&i.StopReason,
+			&i.NewListings,
+			&i.Elsewhere,
+			&i.Removed,
+			&i.Retries,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listScrapeRunErrors = `-- name: ListScrapeRunErrors :many
@@ -156,17 +294,22 @@ func (q *Queries) ListScrapeRunErrors(ctx context.Context, runIds []pgtype.UUID)
 }
 
 const listScrapeRuns = `-- name: ListScrapeRuns :many
-SELECT r.id, r.kind, r.source, r.source_target_id, t.value AS target_value, t.filters AS target_filters,
+SELECT r.id, r.kind, r.source, r.source_target_id, COALESCE(t.value, '')::text AS target_value, t.filters AS target_filters,
+       r.board_id, b.company_id, COALESCE(c.name, '')::text AS company_name,
        r.trigger, r.started_at, r.finished_at, r.stop_reason,
-       r.pages, r.listings, r.new_listings, r.elsewhere, r.repeat_listings, r.deferred, r.retries
+       r.pages, r.listings, r.new_listings, r.elsewhere, r.repeat_listings, r.removed, r.deferred, r.retries
 FROM scrape_runs r
-JOIN source_targets t ON t.id = r.source_target_id
-WHERE t.user_id = $1
+LEFT JOIN source_targets t ON t.id = r.source_target_id
+LEFT JOIN company_boards b ON b.id = r.board_id
+LEFT JOIN companies c ON c.id = b.company_id
+WHERE (t.user_id = $1
+       OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = $1 AND tc.company_id = b.company_id))
   AND ($2::uuid IS NULL OR r.source_target_id = $2)
   AND ($3::timestamptz IS NULL OR r.started_at >= $3)
   AND ($4::timestamptz IS NULL OR r.started_at <= $4)
   AND ($5::text IS NULL
        OR t.value ILIKE '%' || $5 || '%'
+       OR c.name ILIKE '%' || $5 || '%'
        OR EXISTS (SELECT 1 FROM scrape_run_errors e WHERE e.run_id = r.id AND e.message ILIKE '%' || $5 || '%'))
   AND (COALESCE(cardinality($6::text[]), 0) = 0 OR (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'failed' THEN 'failed' WHEN r.retries > 0 THEN 'retried' ELSE 'succeeded' END) = ANY($6::text[]))
   AND (COALESCE(cardinality($7::text[]), 0) = 0 OR r.kind = ANY($7::text[]))
@@ -200,6 +343,9 @@ type ListScrapeRunsRow struct {
 	SourceTargetID pgtype.UUID
 	TargetValue    string
 	TargetFilters  []byte
+	BoardID        pgtype.UUID
+	CompanyID      pgtype.UUID
+	CompanyName    string
 	Trigger        string
 	StartedAt      pgtype.Timestamptz
 	FinishedAt     pgtype.Timestamptz
@@ -209,6 +355,7 @@ type ListScrapeRunsRow struct {
 	NewListings    int32
 	Elsewhere      int32
 	RepeatListings int32
+	Removed        int32
 	Deferred       int32
 	Retries        int32
 }
@@ -242,6 +389,9 @@ func (q *Queries) ListScrapeRuns(ctx context.Context, arg ListScrapeRunsParams) 
 			&i.SourceTargetID,
 			&i.TargetValue,
 			&i.TargetFilters,
+			&i.BoardID,
+			&i.CompanyID,
+			&i.CompanyName,
 			&i.Trigger,
 			&i.StartedAt,
 			&i.FinishedAt,
@@ -251,6 +401,7 @@ func (q *Queries) ListScrapeRuns(ctx context.Context, arg ListScrapeRunsParams) 
 			&i.NewListings,
 			&i.Elsewhere,
 			&i.RepeatListings,
+			&i.Removed,
 			&i.Deferred,
 			&i.Retries,
 		); err != nil {
@@ -371,13 +522,17 @@ SELECT (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'fai
        date_bin(make_interval(secs => $1::float8), r.started_at, TIMESTAMPTZ '1970-01-01')::timestamptz AS bucket,
        COUNT(*)::int AS runs
 FROM scrape_runs r
-JOIN source_targets t ON t.id = r.source_target_id
-WHERE t.user_id = $2
+LEFT JOIN source_targets t ON t.id = r.source_target_id
+LEFT JOIN company_boards b ON b.id = r.board_id
+LEFT JOIN companies c ON c.id = b.company_id
+WHERE (t.user_id = $2
+       OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = $2 AND tc.company_id = b.company_id))
   AND ($3::uuid IS NULL OR r.source_target_id = $3)
   AND ($4::timestamptz IS NULL OR r.started_at >= $4)
   AND ($5::timestamptz IS NULL OR r.started_at <= $5)
   AND ($6::text IS NULL
        OR t.value ILIKE '%' || $6 || '%'
+       OR c.name ILIKE '%' || $6 || '%'
        OR EXISTS (SELECT 1 FROM scrape_run_errors e WHERE e.run_id = r.id AND e.message ILIKE '%' || $6 || '%'))
 GROUP BY 1, 2, 3, 4, 5
 `

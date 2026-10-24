@@ -95,7 +95,12 @@ function RunRow(props: {
 	const [open, setOpen] = createSignal(false);
 	const outcome = () => OUTCOMES[props.run.Outcome];
 	const title = () =>
-		searchTitle({ Source: props.run.Source, Value: props.run.TargetValue });
+		props.run.Kind === "board"
+			? props.run.CompanyName
+			: searchTitle({
+					Source: props.run.Source,
+					Value: props.run.TargetValue,
+				});
 	return (
 		<li class="border-b border-border last:border-b-0">
 			<button
@@ -149,9 +154,20 @@ function RunRow(props: {
 						<dd>{STOP_REASONS[props.run.StopReason]}</dd>
 						<dt class="text-faint">Listings</dt>
 						<dd>
-							{props.run.Listings} across {props.run.Pages}{" "}
-							{props.run.Pages === 1 ? "page" : "pages"}, {props.run.Repeat}{" "}
-							{props.run.Repeat === 1 ? "repeat" : "repeats"}
+							<Show
+								when={props.run.Kind === "board"}
+								fallback={
+									<>
+										{props.run.Listings} across {props.run.Pages}{" "}
+										{props.run.Pages === 1 ? "page" : "pages"},{" "}
+										{props.run.Repeat}{" "}
+										{props.run.Repeat === 1 ? "repeat" : "repeats"}
+									</>
+								}
+							>
+								{props.run.Listings} listed, {props.run.New} new,{" "}
+								{props.run.Elsewhere} elsewhere, {props.run.Removed} removed
+							</Show>
 						</dd>
 						<dt class="text-faint">Trigger</dt>
 						<dd class="capitalize">{props.run.Trigger}</dd>

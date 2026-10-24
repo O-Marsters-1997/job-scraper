@@ -4,7 +4,18 @@ import "time"
 
 type ScrapeRunKind string
 
-const ScrapeRunSearch ScrapeRunKind = "search"
+const (
+	ScrapeRunSearch ScrapeRunKind = "search"
+	ScrapeRunBoard  ScrapeRunKind = "board"
+)
+
+type BoardRunStart struct {
+	ID        string
+	BoardID   string
+	Source    string
+	Trigger   ScrapeRunTrigger
+	StartedAt time.Time
+}
 
 type ScrapeRunTrigger string
 
@@ -46,13 +57,16 @@ type ScrapeRun struct {
 	TargetID      string
 	TargetValue   string
 	TargetFilters map[string]string
+	BoardID       string
+	CompanyID     string
+	CompanyName   string
 	Trigger       ScrapeRunTrigger
 	Outcome       ScrapeRunOutcome
 	StopReason    StopReason
 	StartedAt     time.Time
 	FinishedAt    *time.Time
 
-	Pages, Listings, New, Elsewhere, Repeat, Deferred, Retries int
+	Pages, Listings, New, Elsewhere, Repeat, Removed, Deferred, Retries int
 
 	Errors []ScrapeRunError
 }
@@ -152,10 +166,12 @@ type SourceHealth struct {
 	Source        string
 	TargetValue   string
 	TargetFilters map[string]string
+	BoardID       string
+	CompanyName   string
 	Status        HealthStatus
 	Reason        HealthReason
 	Recent        []ScrapeRunOutcome
 	LastRunAt     *time.Time
 
-	New, Elsewhere, Retries int
+	New, Elsewhere, Removed, Retries int
 }

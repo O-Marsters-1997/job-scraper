@@ -71,7 +71,12 @@ function HealthRow(props: {
 	onSelect: () => void;
 }) {
 	const title = () =>
-		searchTitle({ Source: props.row.Source, Value: props.row.TargetValue });
+		props.row.Kind === "board"
+			? props.row.CompanyName
+			: searchTitle({
+					Source: props.row.Source,
+					Value: props.row.TargetValue,
+				});
 	return (
 		<li class="border-b border-border last:border-b-0">
 			<button
@@ -125,8 +130,8 @@ export function SourcesHealth(props: {
 		<HealthRow
 			row={row}
 			sourceLabel={props.sourceLabel(row.Source)}
-			selected={props.selected === row.TargetID}
-			onSelect={() => props.onSelect(row.TargetID)}
+			selected={row.Kind === "search" && props.selected === row.TargetID}
+			onSelect={() => row.Kind === "search" && props.onSelect(row.TargetID)}
 		/>
 	);
 	return (
