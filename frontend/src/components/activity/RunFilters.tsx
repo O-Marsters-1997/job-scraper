@@ -38,7 +38,10 @@ const STATIC_OPTIONS: Record<Exclude<ScrapeRunFacet, "source">, Option[]> = {
 		{ value: "succeeded", label: "Succeeded" },
 		{ value: "running", label: "Running" },
 	],
-	kind: [{ value: "search", label: "Searches" }],
+	kind: [
+		{ value: "search", label: "Searches" },
+		{ value: "board", label: "Board" },
+	],
 	trigger: [
 		{ value: "scheduled", label: "Scheduled" },
 		{ value: "manual", label: "Manual" },

@@ -9,11 +9,13 @@ const scrapeRunOutcomeSchema = z.enum([
 
 const scrapeRunSchema = z.object({
 	ID: z.string(),
-	Kind: z.enum(["search"]),
+	Kind: z.enum(["search", "board"]),
 	Source: z.string(),
 	TargetID: z.string(),
 	TargetValue: z.string(),
 	TargetFilters: z.record(z.string(), z.string()),
+	BoardID: z.string(),
+	CompanyName: z.string(),
 	Trigger: z.enum(["scheduled", "manual"]),
 	Outcome: scrapeRunOutcomeSchema,
 	StopReason: z.enum(["", "last_page", "page_cap", "failed"]),
@@ -24,6 +26,7 @@ const scrapeRunSchema = z.object({
 	New: z.number(),
 	Elsewhere: z.number(),
 	Repeat: z.number(),
+	Removed: z.number(),
 	Deferred: z.number(),
 	Retries: z.number(),
 	Errors: z.array(
@@ -46,11 +49,13 @@ export type ScrapeRunOutcome = z.infer<typeof scrapeRunOutcomeSchema>;
 export type ScrapeRunPage = z.infer<typeof scrapeRunPageSchema>;
 
 const sourceHealthSchema = z.object({
-	Kind: z.enum(["search"]),
+	Kind: z.enum(["search", "board"]),
 	TargetID: z.string(),
 	Source: z.string(),
 	TargetValue: z.string(),
 	TargetFilters: z.record(z.string(), z.string()),
+	BoardID: z.string(),
+	CompanyName: z.string(),
 	Status: z.enum(["red", "amber", "green"]),
 	Reason: z.enum([
 		"last_failed",
@@ -64,6 +69,7 @@ const sourceHealthSchema = z.object({
 	LastRunAt: z.string().nullable(),
 	New: z.number(),
 	Elsewhere: z.number(),
+	Removed: z.number(),
 	Retries: z.number(),
 });
 

@@ -585,6 +585,8 @@ type ScrapeRun struct {
 	RepeatListings int32
 	Deferred       int32
 	Retries        int32
+	BoardID        pgtype.UUID
+	Removed        int32
 }
 
 type ScrapeRunError struct {

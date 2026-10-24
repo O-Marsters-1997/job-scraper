@@ -33,14 +33,26 @@ func (p *Processor) FailRun(ctx context.Context, task queue.Task) error {
 			return err
 		}
 	}
+	var boardErr error
+	if task.Kind == queue.BoardCheckTask {
+		boardErr = p.js.FinishBoardRun(ctx, boardRunStart(task), dto.StopFailed, dto.BoardTally{})
+	}
 	if task.Kind == queue.DetailTask || task.TargetID == "" || task.RunID == "" {
-		return nil
+		return boardErr
 	}
 	_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "Work failed after retries. Try running it again.")
 	if errors.Is(err, data.ErrNotFound) {
 		err = nil
 	}
-	return errors.Join(err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
+	return errors.Join(boardErr, err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
+}
+
+func boardRunStart(task queue.Task) dto.BoardRunStart {
+	trigger := dto.TriggerScheduled
+	if task.Manual {
+		trigger = dto.TriggerManual
+	}
+	return dto.BoardRunStart{ID: task.ID, BoardID: task.BoardID, Source: task.Source, Trigger: trigger, StartedAt: time.Now()}
 }
 
 type Publisher interface {
@@ -449,6 +461,13 @@ func (p *Processor) disableSource(ctx context.Context, source string, cause erro
 	return nil
 }
 
+func (p *Processor) finishBoardRun(ctx context.Context, run dto.BoardRunStart, stop dto.StopReason, tally dto.BoardTally) error {
+	if !tally.Claimed {
+		return nil
+	}
+	return p.js.FinishBoardRun(ctx, run, stop, tally)
+}
+
 func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 	if task.TargetID != "" {
 		target, active, err := p.currentTarget(ctx, task)
@@ -459,19 +478,30 @@ func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 			return err
 		}
 	}
-	if _, err := p.boards.PollBoard(ctx, task.BoardID, task.Manual, taskListing(task)); err != nil {
+	run := boardRunStart(task)
+	tally, err := p.boards.PollBoard(ctx, task.BoardID, task.Manual, taskListing(task))
+	if err != nil {
 		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
 			return &queue.DeferError{Until: until, Err: err}
 		}
 		if !errors.Is(err, sources.ErrUnparseable) {
+			if tally.Claimed {
+				if recordErr := p.js.BoardRunAttemptFailed(ctx, run, task.Attempt, err.Error()); recordErr != nil {
+					p.log.WarnContext(ctx, "record board run attempt failed", slog.Any(logger.KeyErr, recordErr))
+				}
+			}
 			return err
 		}
 		p.log.WarnContext(ctx, "board page unparseable", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyBoardID, task.BoardID), slog.Any(logger.KeyErr, err))
+		boardErr := p.finishBoardRun(ctx, run, dto.StopFailed, tally)
 		if task.TargetID == "" {
-			return nil
+			return boardErr
 		}
 		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "The board's page could not be read.")
-		return errors.Join(err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
+		return errors.Join(boardErr, err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
+	}
+	if err := p.finishBoardRun(ctx, run, dto.StopLastPage, tally); err != nil {
+		return err
 	}
 	if task.TargetID != "" {
 		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "succeeded", "")

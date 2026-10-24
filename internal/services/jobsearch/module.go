@@ -104,6 +104,8 @@ type Store interface {
 	ScrapeRunDeferred(ctx context.Context, runID string) error
 	ScrapeRunAttemptFailed(ctx context.Context, runID string, page, attempt int, message string) error
 	FinishScrapeRun(ctx context.Context, runID string, stop dto.StopReason) error
+	BoardRunAttemptFailed(ctx context.Context, run dto.BoardRunStart, attempt int, message string) error
+	FinishBoardRun(ctx context.Context, run dto.BoardRunStart, stop dto.StopReason, tally dto.BoardTally) error
 	DeleteExpiredScrapeRuns(ctx context.Context) error
 	ListScrapeRuns(ctx context.Context, userID string, opts dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error)
 	ListSourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error)

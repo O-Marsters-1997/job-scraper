@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -380,5 +381,58 @@ func TestStore_ListSourceHealth(t *testing.T) {
 	}
 	if h.New != 10 || h.Retries != 1 || h.LastRunAt == nil {
 		t.Errorf("busy = %+v, want New 10 over the last 5 finished runs, Retries 1 and a last run", h)
+	}
+}
+
+func TestStore_BoardRuns(t *testing.T) {
+	t.Parallel()
+	env := verifiedBoardFixture(t)
+	ctx := t.Context()
+	other := pgtest.InsertUser(t, env.pool)
+	trackCompany(t, env.st, other, env.companyID, 60)
+	outsider := pgtest.InsertUser(t, env.pool)
+
+	run := dto.BoardRunStart{ID: uuid.NewString(), BoardID: env.board.ID, Source: "greenhouse", Trigger: dto.TriggerManual, StartedAt: time.Now()}
+	if err := env.st.BoardRunAttemptFailed(ctx, run, 1, "boom"); err != nil {
+		t.Fatal(err)
+	}
+	tally := dto.BoardTally{Claimed: true, Listed: 5, New: 2, Elsewhere: 1, Removed: 3}
+	if err := env.st.FinishBoardRun(ctx, run, dto.StopLastPage, tally); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.st.FinishBoardRun(ctx, run, dto.StopFailed, dto.BoardTally{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_runs WHERE kind = 'board'"); n != 1 {
+		t.Fatalf("board runs = %d, want 1 shared by every tracking user", n)
+	}
+	for _, user := range []string{env.userID, other} {
+		runs, err := env.st.ListScrapeRuns(ctx, user, dto.ScrapeRunListOptions{Limit: 10})
+		if err != nil || len(runs) != 1 {
+			t.Fatalf("ListScrapeRuns(%s) = %d runs, %v, want 1", user, len(runs), err)
+		}
+		got := runs[0]
+		if got.Kind != dto.ScrapeRunBoard || got.CompanyName != "Poll Co" || got.CompanyID != env.companyID || got.BoardID != env.board.ID {
+			t.Errorf("run = %+v, want the Poll Co board run", got)
+		}
+		if got.Listings != 5 || got.New != 2 || got.Elsewhere != 1 || got.Removed != 3 || got.Outcome != dto.OutcomeRetried || len(got.Errors) != 1 {
+			t.Errorf("run = %+v, want the finished tally, retried, one error", got)
+		}
+	}
+	if runs, err := env.st.ListScrapeRuns(ctx, outsider, dto.ScrapeRunListOptions{Limit: 10}); err != nil || len(runs) != 0 {
+		t.Errorf("ListScrapeRuns(outsider) = %d runs, %v, want none", len(runs), err)
+	}
+	byName := dto.ScrapeRunListOptions{ScrapeRunFilter: dto.ScrapeRunFilter{Q: "poll"}, Limit: 10}
+	if runs, err := env.st.ListScrapeRuns(ctx, env.userID, byName); err != nil || len(runs) != 1 {
+		t.Errorf("ListScrapeRuns(q=poll) = %d runs, %v, want the Company name to match", len(runs), err)
+	}
+
+	health, err := env.st.ListSourceHealth(ctx, env.userID)
+	if err != nil || len(health) != 1 {
+		t.Fatalf("ListSourceHealth() = %+v, %v, want the one tracked board", health, err)
+	}
+	if h := health[0]; h.Kind != dto.ScrapeRunBoard || h.CompanyName != "Poll Co" || h.Removed != 3 || len(h.Recent) != 1 {
+		t.Errorf("health = %+v, want the board named by Company with its removed count", h)
 	}
 }

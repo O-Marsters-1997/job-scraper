@@ -734,6 +734,7 @@ type boardEnv struct {
 	pool      *pgxpool.Pool
 	board     dto.CompanyBoard
 	companyID string
+	userID    string
 }
 
 func boardFixture(t *testing.T) boardEnv {
@@ -745,7 +746,7 @@ func boardFixture(t *testing.T) boardEnv {
 		t.Fatalf("UpsertCandidateBoard() err = %v", err)
 	}
 	trackCompany(t, st, userID, company.ID, 60)
-	return boardEnv{st: st, pool: pool, board: board, companyID: company.ID}
+	return boardEnv{st: st, pool: pool, board: board, companyID: company.ID, userID: userID}
 }
 
 func verifiedBoardFixture(t *testing.T) boardEnv {
