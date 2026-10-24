@@ -396,12 +396,27 @@ func TestStore_BoardRuns(t *testing.T) {
 	if err := env.st.BoardRunAttemptFailed(ctx, run, 1, "boom"); err != nil {
 		t.Fatal(err)
 	}
-	tally := dto.BoardTally{Claimed: true, Listed: 5, New: 2, Elsewhere: 1, Removed: 3}
+	jobs := make([]dto.Job, 4)
+	for i := range jobs {
+		jobs[i], _ = saveJob(t, env.st, env.job(i+1))
+	}
+	tally := dto.BoardTally{Claimed: true, Listed: 5, Elsewhere: 1, Changes: []dto.JobChange{
+		{JobID: jobs[0].ID, Kind: dto.JobChangeNew},
+		{JobID: jobs[1].ID, Kind: dto.JobChangeNew},
+		{JobID: jobs[2].ID, Kind: dto.JobChangeRemoved},
+		{JobID: jobs[3].ID, Kind: dto.JobChangeReopened},
+	}}
 	if err := env.st.FinishBoardRun(ctx, run, dto.StopLastPage, tally); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.st.FinishBoardRun(ctx, run, dto.StopFailed, dto.BoardTally{}); err != nil {
+	if err := env.st.FinishBoardRun(ctx, run, dto.StopFailed, dto.BoardTally{Changes: tally.Changes[:1]}); err != nil {
 		t.Fatal(err)
+	}
+	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_run_job_changes WHERE run_id = $1 AND snapshot->>'Title' = 'Role 1' AND change = 'new'", run.ID); n != 1 {
+		t.Errorf("new change rows with a snapshot = %d, want 1", n)
+	}
+	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_run_job_changes WHERE run_id = $1", run.ID); n != 4 {
+		t.Errorf("change rows = %d, want 4 from the first finish only", n)
 	}
 
 	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_runs WHERE kind = 'board'"); n != 1 {
@@ -416,7 +431,7 @@ func TestStore_BoardRuns(t *testing.T) {
 		if got.Kind != dto.ScrapeRunBoard || got.CompanyName != "Poll Co" || got.CompanyID != env.companyID || got.BoardID != env.board.ID {
 			t.Errorf("run = %+v, want the Poll Co board run", got)
 		}
-		if got.Listings != 5 || got.New != 2 || got.Elsewhere != 1 || got.Removed != 3 || got.Outcome != dto.OutcomeRetried || len(got.Errors) != 1 {
+		if got.Listings != 5 || got.New != 2 || got.Elsewhere != 1 || got.Removed != 1 || got.Reopened != 1 || got.Outcome != dto.OutcomeRetried || len(got.Errors) != 1 {
 			t.Errorf("run = %+v, want the finished tally, retried, one error", got)
 		}
 	}
@@ -432,7 +447,17 @@ func TestStore_BoardRuns(t *testing.T) {
 	if err != nil || len(health) != 1 {
 		t.Fatalf("ListSourceHealth() = %+v, %v, want the one tracked board", health, err)
 	}
-	if h := health[0]; h.Kind != dto.ScrapeRunBoard || h.CompanyName != "Poll Co" || h.Removed != 3 || len(h.Recent) != 1 {
+	if h := health[0]; h.Kind != dto.ScrapeRunBoard || h.CompanyName != "Poll Co" || h.Removed != 1 || len(h.Recent) != 1 {
 		t.Errorf("health = %+v, want the board named by Company with its removed count", h)
+	}
+
+	if _, err := env.pool.Exec(ctx, "UPDATE scrape_runs SET started_at = NOW() - INTERVAL '31 days' WHERE id = $1::uuid", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.st.DeleteExpiredScrapeRuns(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_run_job_changes"); n != 0 {
+		t.Errorf("change rows after the run expired = %d, want 0", n)
 	}
 }

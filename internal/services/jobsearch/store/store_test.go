@@ -774,13 +774,13 @@ func (e boardEnv) claim(t *testing.T, manual bool) dto.BoardPoll {
 	return poll
 }
 
-func (e boardEnv) complete(t *testing.T, poll dto.BoardPoll, jobs ...dto.Job) int {
+func (e boardEnv) complete(t *testing.T, poll dto.BoardPoll, jobs ...dto.Job) []dto.JobChange {
 	t.Helper()
-	removed, err := e.st.CompleteBoard(t.Context(), dto.BoardSnapshot{Poll: poll, Complete: true, Jobs: jobs})
+	changes, err := e.st.CompleteBoard(t.Context(), dto.BoardSnapshot{Poll: poll, Complete: true, Jobs: jobs})
 	if err != nil {
 		t.Fatalf("CompleteBoard() err = %v", err)
 	}
-	return removed
+	return changes
 }
 
 func (e boardEnv) markPublished(t *testing.T) {
@@ -938,16 +938,20 @@ func TestBoardPolling(t *testing.T) {
 			t.Error("rejected snapshots advanced freshness")
 		}
 
-		if removed := env.complete(t, claim, jobs...); removed != 0 {
-			t.Errorf("first snapshot removed = %d, want 0", removed)
+		if changes := env.complete(t, claim, jobs...); len(changes) != 0 {
+			t.Errorf("first snapshot changes = %v, want none", changes)
 		}
-		if removed := env.complete(t, env.claim(t, true), jobs[0]); removed != 1 {
-			t.Errorf("snapshot omitting one job removed = %d, want 1", removed)
+		removed := env.complete(t, env.claim(t, true), jobs[0])
+		if len(removed) != 1 || removed[0].Kind != dto.JobChangeRemoved {
+			t.Errorf("snapshot omitting one job changes = %v, want one removed", removed)
 		}
 		if !jobClosed(t, env.pool, jobs[1].URL) {
 			t.Error("omitted job is still open")
 		}
-		env.complete(t, env.claim(t, true), jobs...)
+		reopened := env.complete(t, env.claim(t, true), jobs...)
+		if len(reopened) != 1 || reopened[0].Kind != dto.JobChangeReopened || reopened[0].JobID != removed[0].JobID {
+			t.Errorf("relisting changes = %v, want the removed job reopened", reopened)
+		}
 		if jobClosed(t, env.pool, jobs[1].URL) {
 			t.Error("reappeared job is still closed")
 		}

@@ -911,16 +911,16 @@ func (f *FakeStore) FailBoard(_ context.Context, poll dto.BoardPoll) error {
 	return nil
 }
 
-func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot) (int, error) {
+func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot) ([]dto.JobChange, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !snapshot.Complete {
-		return 0, errors.New("incomplete board snapshot")
+		return nil, errors.New("incomplete board snapshot")
 	}
 	poll := snapshot.Poll
 	st := f.pollState[poll.ID]
 	if !leaseHeldBy(st, poll) {
-		return 0, store.ErrBoardClaimUnavailable
+		return nil, store.ErrBoardClaimUnavailable
 	}
 	st.leaseOwner = ""
 	urls := make(map[string]bool, len(snapshot.Jobs))
@@ -932,7 +932,7 @@ func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot)
 	if !poll.Manual {
 		st.checkPublishedAt = time.Time{}
 	}
-	return 0, nil
+	return nil, nil
 }
 
 func boardPollFor(id string, b dto.CompanyBoard) dto.BoardPoll {

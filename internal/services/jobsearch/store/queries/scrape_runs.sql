@@ -50,7 +50,7 @@ DELETE FROM scrape_runs WHERE started_at < NOW() - INTERVAL '30 days';
 SELECT r.id, r.kind, r.source, r.source_target_id, COALESCE(t.value, '')::text AS target_value, t.filters AS target_filters,
        r.board_id, b.company_id, COALESCE(c.name, '')::text AS company_name,
        r.trigger, r.started_at, r.finished_at, r.stop_reason,
-       r.pages, r.listings, r.new_listings, r.elsewhere, r.repeat_listings, r.removed, r.deferred, r.retries
+       r.pages, r.listings, r.new_listings, r.elsewhere, r.repeat_listings, r.removed, r.reopened, r.deferred, r.retries
 FROM scrape_runs r
 LEFT JOIN source_targets t ON t.id = r.source_target_id
 LEFT JOIN company_boards b ON b.id = r.board_id
@@ -124,18 +124,24 @@ WITH run AS (
 INSERT INTO scrape_run_errors (run_id, page, attempt, message)
 SELECT run.id, 0, sqlc.arg('attempt'), sqlc.arg('message') FROM run;
 
--- name: FinishBoardRun :exec
-INSERT INTO scrape_runs (id, kind, source, board_id, trigger, started_at, finished_at, stop_reason, listings, new_listings, elsewhere, removed)
+-- name: FinishBoardRun :execrows
+INSERT INTO scrape_runs (id, kind, source, board_id, trigger, started_at, finished_at, stop_reason, listings, new_listings, elsewhere, removed, reopened)
 VALUES (sqlc.arg('id'), 'board', sqlc.arg('source'), sqlc.arg('board_id'), sqlc.arg('trigger'), sqlc.arg('started_at'), NOW(), sqlc.arg('stop_reason'),
-        sqlc.arg('listings'), sqlc.arg('new_listings'), sqlc.arg('elsewhere'), sqlc.arg('removed'))
+        sqlc.arg('listings'), sqlc.arg('new_listings'), sqlc.arg('elsewhere'), sqlc.arg('removed'), sqlc.arg('reopened'))
 ON CONFLICT (id) DO UPDATE SET
     finished_at  = NOW(),
     stop_reason  = EXCLUDED.stop_reason,
     listings     = EXCLUDED.listings,
     new_listings = EXCLUDED.new_listings,
     elsewhere    = EXCLUDED.elsewhere,
-    removed      = EXCLUDED.removed
+    removed      = EXCLUDED.removed,
+    reopened     = EXCLUDED.reopened
 WHERE scrape_runs.finished_at IS NULL;
+
+-- name: InsertScrapeRunJobChanges :exec
+INSERT INTO scrape_run_job_changes (run_id, job_id, change, snapshot)
+SELECT sqlc.arg('run_id')::uuid, t.job_id, t.change, t.snapshot
+FROM jsonb_to_recordset(sqlc.arg('changes')::jsonb) AS t(job_id uuid, change text, snapshot jsonb);
 
 -- name: ListBoardHealthRuns :many
 SELECT b.id AS board_id, c.name AS company_name, b.source,

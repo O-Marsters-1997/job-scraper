@@ -27,6 +27,7 @@ const scrapeRunSchema = z.object({
 	Elsewhere: z.number(),
 	Repeat: z.number(),
 	Removed: z.number(),
+	Reopened: z.number(),
 	Deferred: z.number(),
 	Retries: z.number(),
 	Errors: z.array(

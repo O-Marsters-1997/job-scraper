@@ -72,15 +72,16 @@ func TestBulkExport(t *testing.T) {
 
 	t.Run("counts new, merged and upgraded outcomes", func(t *testing.T) {
 		t.Parallel()
-		body := `{"results":[{"status":"new"},{"status":"merged"},{"status":"changed"},{"status":"new"},{"status":"unchanged"},{"status":"upgraded"}]}`
+		body := `{"results":[{"status":"new","job_id":"a"},{"status":"merged"},{"status":"changed"},{"status":"new","job_id":"b"},{"status":"unchanged"},{"status":"upgraded"}]}`
 		exporter := newExporter(t, respondWith(http.StatusOK, body))
 		jobs := make([]dto.Job, 6)
 		got, err := exporter.BulkExport(t.Context(), jobs)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := (dto.IngestTally{New: 2, Merged: 1, Upgraded: 1}); got != want {
-			t.Errorf("BulkExport() tally = %+v, want %+v", got, want)
+		want := dto.IngestTally{NewJobIDs: []string{"a", "b"}, Merged: 1, Upgraded: 1}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("BulkExport() tally (-want +got):\n%s", diff)
 		}
 	})
 
