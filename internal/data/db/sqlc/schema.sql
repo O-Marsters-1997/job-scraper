@@ -459,7 +459,7 @@ CREATE INDEX IF NOT EXISTS candidate_discoveries_target_idx ON candidate_discove
 
 CREATE TABLE scrape_runs (
     id               UUID        PRIMARY KEY,
-    kind             TEXT        NOT NULL CONSTRAINT scrape_runs_kind_check CHECK (kind IN ('search')),
+    kind             TEXT        NOT NULL CONSTRAINT scrape_runs_kind_check CHECK (kind IN ('search', 'board')),
     source           TEXT        NOT NULL,
     source_target_id UUID        REFERENCES source_targets(id) ON DELETE CASCADE,
     trigger          TEXT        NOT NULL CONSTRAINT scrape_runs_trigger_check CHECK (trigger IN ('scheduled', 'manual')),
@@ -473,11 +473,16 @@ CREATE TABLE scrape_runs (
     repeat_listings  INT         NOT NULL DEFAULT 0,
     deferred         INT         NOT NULL DEFAULT 0,
     retries          INT         NOT NULL DEFAULT 0,
+    board_id         UUID        REFERENCES company_boards(id) ON DELETE CASCADE,
+    removed          INT         NOT NULL DEFAULT 0,
     CONSTRAINT scrape_runs_finished_check CHECK ((finished_at IS NULL) = (stop_reason IS NULL)),
-    CONSTRAINT scrape_runs_subject_check CHECK (kind <> 'search' OR source_target_id IS NOT NULL)
+    CONSTRAINT scrape_runs_subject_check CHECK (
+        (kind = 'search' AND source_target_id IS NOT NULL AND board_id IS NULL)
+        OR (kind = 'board' AND board_id IS NOT NULL))
 );
 CREATE INDEX scrape_runs_started_idx ON scrape_runs (started_at DESC, id DESC);
 CREATE INDEX scrape_runs_target_idx ON scrape_runs (source_target_id, started_at DESC) WHERE source_target_id IS NOT NULL;
+CREATE INDEX scrape_runs_board_idx ON scrape_runs (board_id, started_at DESC) WHERE board_id IS NOT NULL;
 
 CREATE TABLE scrape_run_errors (
     id      BIGINT      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

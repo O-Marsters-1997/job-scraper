@@ -44,12 +44,15 @@ const health = (
 	Source: "indeed",
 	TargetValue: "go",
 	TargetFilters: {},
+	BoardID: "",
+	CompanyName: "",
 	Status,
 	Reason: "ok",
 	Recent: [],
 	LastRunAt,
 	New: 0,
 	Elsewhere: 0,
+	Removed: 0,
 	Retries: 2,
 });
 const split = splitHealth([

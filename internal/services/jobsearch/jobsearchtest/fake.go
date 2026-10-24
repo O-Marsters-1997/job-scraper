@@ -1331,6 +1331,14 @@ func (f *FakeStore) ScrapeRunAttemptFailed(context.Context, string, int, int, st
 
 func (f *FakeStore) FinishScrapeRun(context.Context, string, dto.StopReason) error { return nil }
 
+func (f *FakeStore) BoardRunAttemptFailed(context.Context, dto.BoardRunStart, int, string) error {
+	return nil
+}
+
+func (f *FakeStore) FinishBoardRun(context.Context, dto.BoardRunStart, dto.StopReason, dto.BoardTally) error {
+	return nil
+}
+
 func (f *FakeStore) DeleteExpiredScrapeRuns(context.Context) error { return nil }
 
 func (f *FakeStore) ListScrapeRuns(context.Context, string, dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error) {

@@ -107,7 +107,7 @@ func parseScrapeRunFilter(q dto.ScrapeRunsQuery, now time.Time) (dto.ScrapeRunFi
 		dst       *[]string
 	}{
 		{"outcome", q.Outcome, inSet(scrapeRunOutcomes()), &filter.Outcome},
-		{"kind", q.Kind, inSet([]string{string(dto.ScrapeRunSearch)}), &filter.Kind},
+		{"kind", q.Kind, inSet([]string{string(dto.ScrapeRunSearch), string(dto.ScrapeRunBoard)}), &filter.Kind},
 		{"source", q.Source, func(v string) bool { _, ok := sourcespec.SourceRole(v); return ok }, &filter.Source},
 		{"trigger", q.Trigger, inSet(scrapeRunTriggers()), &filter.Trigger},
 	} {
@@ -183,6 +183,14 @@ func (m *Module) ScrapeRunAttemptFailed(ctx context.Context, runID string, page,
 
 func (m *Module) FinishScrapeRun(ctx context.Context, runID string, stop dto.StopReason) error {
 	return m.store.FinishScrapeRun(ctx, runID, stop)
+}
+
+func (m *Module) BoardRunAttemptFailed(ctx context.Context, run dto.BoardRunStart, attempt int, message string) error {
+	return m.store.BoardRunAttemptFailed(ctx, run, attempt, message)
+}
+
+func (m *Module) FinishBoardRun(ctx context.Context, run dto.BoardRunStart, stop dto.StopReason, tally dto.BoardTally) error {
+	return m.store.FinishBoardRun(ctx, run, stop, tally)
 }
 
 func (m *Module) DeleteExpiredScrapeRuns(ctx context.Context) error {

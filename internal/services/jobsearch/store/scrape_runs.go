@@ -73,6 +73,58 @@ func (s *Store) ScrapeRunAttemptFailed(ctx context.Context, runID string, page, 
 	return nil
 }
 
+func boardRunParams(run dto.BoardRunStart) (id, boardID pgtype.UUID, err error) {
+	if id, err = data.UUID(run.ID); err != nil {
+		return id, boardID, err
+	}
+	boardID, err = data.UUID(run.BoardID)
+	return id, boardID, err
+}
+
+func (s *Store) BoardRunAttemptFailed(ctx context.Context, run dto.BoardRunStart, attempt int, message string) error {
+	id, boardID, err := boardRunParams(run)
+	if err != nil {
+		return err
+	}
+	if attempt < 0 || attempt > math.MaxInt32 {
+		return fmt.Errorf("store.BoardRunAttemptFailed: attempt %d out of range", attempt)
+	}
+	err = s.queries.BoardRunAttemptFailed(ctx, sqlc.BoardRunAttemptFailedParams{
+		ID: id, Source: run.Source, BoardID: boardID, Trigger: string(run.Trigger),
+		StartedAt: pgtype.Timestamptz{Time: run.StartedAt, Valid: true},
+		Attempt:   int32(attempt), Message: message,
+	})
+	if err != nil {
+		return fmt.Errorf("store.BoardRunAttemptFailed: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) FinishBoardRun(ctx context.Context, run dto.BoardRunStart, stop dto.StopReason, tally dto.BoardTally) error {
+	id, boardID, err := boardRunParams(run)
+	if err != nil {
+		return err
+	}
+	params := sqlc.FinishBoardRunParams{
+		ID: id, Source: run.Source, BoardID: boardID, Trigger: string(run.Trigger),
+		StartedAt:  pgtype.Timestamptz{Time: run.StartedAt, Valid: true},
+		StopReason: pgtype.Text{String: string(stop), Valid: true},
+	}
+	for _, c := range []struct {
+		n   int
+		dst *int32
+	}{{tally.Listed, &params.Listings}, {tally.New, &params.NewListings}, {tally.Elsewhere, &params.Elsewhere}, {tally.Removed, &params.Removed}} {
+		if c.n < 0 || c.n > math.MaxInt32 {
+			return fmt.Errorf("store.FinishBoardRun: count %d out of range", c.n)
+		}
+		*c.dst = int32(c.n)
+	}
+	if err = s.queries.FinishBoardRun(ctx, params); err != nil {
+		return fmt.Errorf("store.FinishBoardRun: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) FinishScrapeRun(ctx context.Context, runID string, stop dto.StopReason) error {
 	id, err := data.UUID(runID)
 	if err != nil {
@@ -148,6 +200,9 @@ func toScrapeRunDTO(row sqlc.ListScrapeRunsRow) dto.ScrapeRun {
 		TargetID:      row.SourceTargetID.String(),
 		TargetValue:   row.TargetValue,
 		TargetFilters: map[string]string{},
+		BoardID:       row.BoardID.String(),
+		CompanyID:     row.CompanyID.String(),
+		CompanyName:   row.CompanyName,
 		Trigger:       dto.ScrapeRunTrigger(row.Trigger),
 		StopReason:    dto.StopReason(row.StopReason.String),
 		StartedAt:     row.StartedAt.Time,
@@ -157,6 +212,7 @@ func toScrapeRunDTO(row sqlc.ListScrapeRunsRow) dto.ScrapeRun {
 		New:           int(row.NewListings),
 		Elsewhere:     int(row.Elsewhere),
 		Repeat:        int(row.RepeatListings),
+		Removed:       int(row.Removed),
 		Deferred:      int(row.Deferred),
 		Retries:       int(row.Retries),
 		Errors:        []dto.ScrapeRunError{},
@@ -211,6 +267,30 @@ func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.Sour
 		h.LastRunAt = &row.StartedAt.Time
 		h.New += int(row.NewListings)
 		h.Elsewhere += int(row.Elsewhere)
+		h.Retries += int(row.Retries)
+	}
+	boardRows, err := s.queries.ListBoardHealthRuns(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListSourceHealth boards: %w", err)
+	}
+	searches := len(out)
+	for _, row := range boardRows {
+		id := row.BoardID.String()
+		if len(out) == searches || out[len(out)-1].BoardID != id {
+			out = append(out, dto.SourceHealth{
+				Kind: dto.ScrapeRunBoard, BoardID: id, Source: row.Source, CompanyName: row.CompanyName,
+				TargetFilters: map[string]string{}, Recent: []dto.ScrapeRunOutcome{},
+			})
+		}
+		if !row.StartedAt.Valid {
+			continue
+		}
+		h := &out[len(out)-1]
+		h.Recent = append(h.Recent, scrapeRunOutcome(true, dto.StopReason(row.StopReason.String), int(row.Retries)))
+		h.LastRunAt = &row.StartedAt.Time
+		h.New += int(row.NewListings)
+		h.Elsewhere += int(row.Elsewhere)
+		h.Removed += int(row.Removed)
 		h.Retries += int(row.Retries)
 	}
 	return out, nil

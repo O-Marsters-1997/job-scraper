@@ -1171,3 +1171,90 @@ func TestProcessRateLimit(t *testing.T) {
 		})
 	}
 }
+
+type boardRunLog struct {
+	*jobsearchtest.FakeStore
+	attempts []string
+	finished []dto.BoardRunStart
+	tallies  []dto.BoardTally
+	stops    []dto.StopReason
+}
+
+func (l *boardRunLog) BoardRunAttemptFailed(_ context.Context, _ dto.BoardRunStart, _ int, message string) error {
+	l.attempts = append(l.attempts, message)
+	return nil
+}
+
+func (l *boardRunLog) FinishBoardRun(_ context.Context, run dto.BoardRunStart, stop dto.StopReason, tally dto.BoardTally) error {
+	l.finished, l.stops, l.tallies = append(l.finished, run), append(l.stops, stop), append(l.tallies, tally)
+	return nil
+}
+
+func TestProcess_BoardRuns(t *testing.T) {
+	t.Parallel()
+	const taskID = "6b1f0a52-3d1b-4c77-9a5e-0f0e7b1d2c11"
+	newProcessor := func(f fixture, fetcher scraper.BoardFetcher) (*worker.Processor, *boardRunLog) {
+		log := &boardRunLog{FakeStore: f.store}
+		exporter := scraper.NewAPIExporter(f.ingest.server.URL, "token").WithInitialBackoff(0)
+		return worker.NewProcessor(worker.Deps{
+			JS:     jobsearch.Build(jobsearchtest.NewDeps(log)),
+			Boards: scraper.NewBoardPoller(f.store, fetcher, exporter),
+		}), log
+	}
+
+	t.Run("a completed poll finishes one run keyed by the task", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		p, log := newProcessor(f, oneBoardJob{})
+		task := queue.Task{Version: 1, ID: taskID, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: f.board(t), Manual: true}
+		if err := p.Process(t.Context(), task); err != nil {
+			t.Fatal(err)
+		}
+		if len(log.finished) != 1 {
+			t.Fatalf("finished runs = %d, want 1", len(log.finished))
+		}
+		got := log.finished[0]
+		if got.ID != taskID || got.BoardID != task.BoardID || got.Trigger != dto.TriggerManual || log.stops[0] != dto.StopLastPage || !log.tallies[0].Claimed || log.tallies[0].Listed != 1 {
+			t.Errorf("run = %+v stop = %q tally = %+v, want task-keyed manual last_page run listing 1", got, log.stops[0], log.tallies[0])
+		}
+	})
+
+	t.Run("a check that claims nothing writes no run", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		p, log := newProcessor(f, oneBoardJob{})
+		task := queue.Task{Version: 1, ID: taskID, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: "gone"}
+		if err := p.Process(t.Context(), task); err != nil {
+			t.Fatal(err)
+		}
+		if len(log.finished) != 0 || len(log.attempts) != 0 {
+			t.Errorf("finished = %d, attempts = %d, want no run", len(log.finished), len(log.attempts))
+		}
+	})
+
+	t.Run("a failed delivery records the attempt and leaves the run open", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		p, log := newProcessor(f, failingBoard{err: errors.New("boom")})
+		task := queue.Task{Version: 1, ID: taskID, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: f.board(t)}
+		if err := p.Process(t.Context(), task); err == nil {
+			t.Fatal("Process() = nil, want the fetch error")
+		}
+		if len(log.attempts) != 1 || len(log.finished) != 0 {
+			t.Errorf("attempts = %v, finished = %d, want one attempt and no finish", log.attempts, len(log.finished))
+		}
+	})
+
+	t.Run("FailRun finishes a board check as failed", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		p, log := newProcessor(f, oneBoardJob{})
+		task := queue.Task{Version: 1, ID: taskID, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: f.board(t), Manual: true}
+		if err := p.FailRun(t.Context(), task); err != nil {
+			t.Fatal(err)
+		}
+		if len(log.finished) != 1 || log.stops[0] != dto.StopFailed {
+			t.Errorf("finished = %d stops = %v, want one failed run", len(log.finished), log.stops)
+		}
+	})
+}
