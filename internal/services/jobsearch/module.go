@@ -108,6 +108,7 @@ type Store interface {
 	FinishBoardRun(ctx context.Context, run dto.BoardRunStart, stop dto.StopReason, tally dto.BoardTally) error
 	DeleteExpiredScrapeRuns(ctx context.Context) error
 	ListScrapeRuns(ctx context.Context, userID string, opts dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error)
+	ListScrapeRunJobSnapshots(ctx context.Context, userID, runID string) ([]dto.ScrapeRunJobSnapshot, error)
 	ListSourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error)
 	ScrapeRunSummary(ctx context.Context, userID string, opts dto.ScrapeRunSummaryOptions) (dto.ScrapeRunSummary, error)
 	MarkBoardUKJobsSeen(ctx context.Context, source, token string) error

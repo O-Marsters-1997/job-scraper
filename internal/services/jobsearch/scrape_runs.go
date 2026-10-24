@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
@@ -48,6 +49,22 @@ func (s *Service) ListScrapeRuns(ctx context.Context, userID string, q dto.Scrap
 		page.Items = []dto.ScrapeRun{}
 	}
 	return page, nil
+}
+
+func (s *Service) ListScrapeRunJobSnapshots(ctx context.Context, userID, runID string) ([]dto.ScrapeRunJobSnapshot, error) {
+	snapshots, err := s.store.ListScrapeRunJobSnapshots(ctx, userID, runID)
+	switch {
+	case errors.Is(err, data.ErrNotFound):
+		return nil, apperr.NotFound("scrape run not found")
+	case errors.Is(err, store.ErrInvalidID):
+		return nil, apperr.Invalid("invalid scrape run ID")
+	case err != nil:
+		return nil, err
+	}
+	if snapshots == nil {
+		snapshots = []dto.ScrapeRunJobSnapshot{}
+	}
+	return snapshots, nil
 }
 
 func (s *Service) ScrapeRunSummary(ctx context.Context, userID string, q dto.ScrapeRunsQuery) (dto.ScrapeRunSummary, error) {

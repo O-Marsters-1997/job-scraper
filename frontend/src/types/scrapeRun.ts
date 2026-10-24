@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { jobSchema } from "./job";
 
 const scrapeRunOutcomeSchema = z.enum([
 	"running",
@@ -48,6 +49,18 @@ const scrapeRunSchema = z.object({
 		}),
 	),
 });
+
+export const scrapeRunJobSnapshotsSchema = z.array(
+	z.object({
+		JobID: z.string(),
+		Kind: jobChangeKindSchema,
+		Snapshot: jobSchema,
+	}),
+);
+
+export type ScrapeRunJobSnapshot = z.infer<
+	typeof scrapeRunJobSnapshotsSchema
+>[number];
 
 export const scrapeRunPageSchema = z.object({
 	Items: z.array(scrapeRunSchema),

@@ -20,10 +20,11 @@ import {
 	RANGE_PRESETS,
 } from "@/lib/scrapeRuns";
 import { cn } from "@/lib/utils";
-import type { ScrapeRun } from "@/types/scrapeRun";
+import type { ScrapeRun, ScrapeRunJobSnapshot } from "@/types/scrapeRun";
 import type { ScrapeRunFilters } from "../../../api/scrapeRuns";
 import { useCompanyBoards } from "../../../hooks/useCompanies";
 import {
+	useScrapeRunJobSnapshots,
 	useScrapeRunPages,
 	useScrapeRunSummary,
 } from "../../../hooks/useScrapeRuns";
@@ -236,11 +237,61 @@ function QuietEntry(props: { runs: ScrapeRun[] }) {
 	);
 }
 
+function ChangeItem(props: {
+	change: ScrapeRun["Changes"][number];
+	snapshot: ScrapeRunJobSnapshot | undefined;
+}) {
+	const [showJson, setShowJson] = createSignal(false);
+	return (
+		<li>
+			<div class="flex items-center gap-2">
+				<span
+					class={cn(
+						"w-16 shrink-0 text-xs font-medium",
+						CHANGE_STYLE[props.change.Kind].class,
+					)}
+				>
+					{CHANGE_STYLE[props.change.Kind].label}
+				</span>
+				<span class="truncate text-foreground">{props.change.Title}</span>
+				<Show when={props.snapshot}>
+					<button
+						type="button"
+						aria-expanded={showJson()}
+						onClick={() => setShowJson((v) => !v)}
+						class="ml-auto shrink-0 font-mono text-xs text-muted hover:text-foreground"
+					>
+						JSON
+					</button>
+				</Show>
+				<Link
+					to="/jobs/$id"
+					params={{ id: props.change.JobID }}
+					class="shrink-0 text-xs text-foreground hover:underline"
+				>
+					Open job →
+				</Link>
+			</div>
+			<Show when={showJson() && props.snapshot}>
+				{(snapshot) => (
+					<pre class="mt-1 max-h-80 overflow-auto rounded-md border border-border bg-surface-muted p-3 font-mono text-xs">
+						{JSON.stringify(snapshot().Snapshot, null, 2)}
+					</pre>
+				)}
+			</Show>
+		</li>
+	);
+}
+
 function PollEntry(props: {
 	run: ScrapeRun;
 	token: (boardId: string) => string;
 }) {
 	const [open, setOpen] = createSignal(false);
+	const snapshots = useScrapeRunJobSnapshots(
+		() => props.run.ID,
+		() => open() && props.run.Changes.length > 0,
+	);
 	const failed = () => props.run.Outcome === "failed";
 	const headline = () => {
 		switch (props.run.Outcome) {
@@ -335,23 +386,12 @@ function PollEntry(props: {
 							<ul class="flex min-w-0 flex-1 flex-col gap-1">
 								<For each={props.run.Changes}>
 									{(change) => (
-										<li class="flex items-center gap-2">
-											<span
-												class={cn(
-													"w-16 shrink-0 text-xs font-medium",
-													CHANGE_STYLE[change.Kind].class,
-												)}
-											>
-												{CHANGE_STYLE[change.Kind].label}
-											</span>
-											<Link
-												to="/jobs/$id"
-												params={{ id: change.JobID }}
-												class="truncate text-foreground hover:underline"
-											>
-												{change.Title}
-											</Link>
-										</li>
+										<ChangeItem
+											change={change}
+											snapshot={snapshots.data?.find(
+												(s) => s.JobID === change.JobID,
+											)}
+										/>
 									)}
 								</For>
 							</ul>

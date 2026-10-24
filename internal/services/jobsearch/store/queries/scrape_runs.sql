@@ -153,6 +153,21 @@ FROM scrape_run_job_changes
 WHERE run_id = ANY(sqlc.arg('run_ids')::uuid[])
 ORDER BY run_id, change, title, job_id;
 
+-- name: ListScrapeRunJobSnapshots :many
+SELECT job_id, change, snapshot
+FROM scrape_run_job_changes
+WHERE run_id = sqlc.arg('run_id')
+ORDER BY change, snapshot->>'Title', job_id
+LIMIT 1000;
+
+-- name: ScrapeRunTracked :one
+SELECT EXISTS (
+  SELECT 1 FROM scrape_runs r
+  JOIN company_boards b ON b.id = r.board_id
+  JOIN tracked_companies tc ON tc.company_id = b.company_id AND tc.user_id = sqlc.arg('user_id')
+  WHERE r.id = sqlc.arg('run_id')
+)::bool;
+
 -- name: ListBoardHealthRuns :many
 SELECT b.id AS board_id, c.name AS company_name, b.source,
        r.started_at, r.stop_reason,
