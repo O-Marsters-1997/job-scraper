@@ -101,14 +101,18 @@ func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, res sou
 		ingested, err = p.ingester.BulkExport(ctx, jobs)
 		tally.Elsewhere = ingested.Merged + ingested.Upgraded
 		for _, id := range ingested.NewJobIDs {
-			tally.Changes = append(tally.Changes, dto.JobChange{JobID: id, Kind: dto.JobChangeNew})
+			if id != "" {
+				tally.Changes = append(tally.Changes, dto.JobChange{JobID: id, Kind: dto.JobChangeNew})
+			}
 		}
 	}
 	if err != nil {
+		tally.Changes = nil
 		return tally, errors.Join(err, p.store.FailBoard(ctx, claim))
 	}
 	changes, err := p.store.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Jobs: jobs, Complete: true, NextPollIn: res.NextPollIn, Reported: res.Reported})
 	if err != nil {
+		tally.Changes = nil
 		return tally, err
 	}
 	tally.Changes = append(tally.Changes, changes...)

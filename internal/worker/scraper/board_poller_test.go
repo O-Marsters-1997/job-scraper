@@ -167,6 +167,20 @@ func TestBoardPollTalliesWhatIngestAndCompletionDid(t *testing.T) {
 	}
 }
 
+func TestBoardPollFailedIngestReportsNoChanges(t *testing.T) {
+	t.Parallel()
+	store := &boardStoreStub{board: dto.BoardPoll{ID: "board"}}
+	ingester := &boardIngesterStub{tally: dto.IngestTally{NewJobIDs: []string{"n1"}}, err: errPersist}
+	poller := scraper.NewBoardPoller(store, boardFetcherStub{jobs: []dto.Job{{URL: "https://example.com/1"}}}, ingester)
+	got, err := poller.PollBoard(t.Context(), "board", false)
+	if !errors.Is(err, errPersist) {
+		t.Fatalf("PollBoard() err = %v, want %v", err, errPersist)
+	}
+	if len(got.Changes) != 0 {
+		t.Errorf("PollBoard() changes = %v, want none for a failed poll", got.Changes)
+	}
+}
+
 func TestBoardPollCarriesVerifiedCompanyIdentity(t *testing.T) {
 	store := &boardStoreStub{board: dto.BoardPoll{ID: "board", CompanyID: "company", CompanySlug: "company-slug", Source: "greenhouse", Token: "regional-token"}}
 	ingester := &boardIngesterStub{}

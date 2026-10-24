@@ -81,8 +81,7 @@ type ScrapeRun struct {
 	StartedAt     time.Time
 	FinishedAt    *time.Time
 
-	Pages, Listings, New, Elsewhere, Repeat, Removed, Deferred, Retries int
-	Reopened                                                            int
+	Pages, Listings, New, Elsewhere, Repeat, Removed, Reopened, Deferred, Retries int
 
 	Errors []ScrapeRunError
 }
