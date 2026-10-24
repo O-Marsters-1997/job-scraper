@@ -54,6 +54,15 @@ FROM scrape_runs r
 JOIN source_targets t ON t.id = r.source_target_id
 WHERE t.user_id = sqlc.arg('user_id')
   AND (sqlc.narg('target_id')::uuid IS NULL OR r.source_target_id = sqlc.narg('target_id'))
+  AND (sqlc.narg('from_at')::timestamptz IS NULL OR r.started_at >= sqlc.narg('from_at'))
+  AND (sqlc.narg('to_at')::timestamptz IS NULL OR r.started_at <= sqlc.narg('to_at'))
+  AND (sqlc.narg('q')::text IS NULL
+       OR t.value ILIKE '%' || sqlc.narg('q') || '%'
+       OR EXISTS (SELECT 1 FROM scrape_run_errors e WHERE e.run_id = r.id AND e.message ILIKE '%' || sqlc.narg('q') || '%'))
+  AND (COALESCE(cardinality(sqlc.arg('outcomes')::text[]), 0) = 0 OR (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'failed' THEN 'failed' WHEN r.retries > 0 THEN 'retried' ELSE 'succeeded' END) = ANY(sqlc.arg('outcomes')::text[]))
+  AND (COALESCE(cardinality(sqlc.arg('kinds')::text[]), 0) = 0 OR r.kind = ANY(sqlc.arg('kinds')::text[]))
+  AND (COALESCE(cardinality(sqlc.arg('sources')::text[]), 0) = 0 OR r.source = ANY(sqlc.arg('sources')::text[]))
+  AND (COALESCE(cardinality(sqlc.arg('triggers')::text[]), 0) = 0 OR r.trigger = ANY(sqlc.arg('triggers')::text[]))
   AND (sqlc.narg('before_started_at')::timestamptz IS NULL
        OR (r.started_at, r.id) < (sqlc.narg('before_started_at')::timestamptz, sqlc.narg('before_id')::uuid))
 ORDER BY r.started_at DESC, r.id DESC
@@ -80,3 +89,18 @@ LEFT JOIN LATERAL (
 ) r ON TRUE
 WHERE t.user_id = sqlc.arg('user_id')
 ORDER BY t.id, r.started_at, r.id;
+
+-- name: SummariseScrapeRuns :many
+SELECT (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'failed' THEN 'failed' WHEN r.retries > 0 THEN 'retried' ELSE 'succeeded' END)::text AS outcome, r.kind, r.source, r.trigger,
+       date_bin(make_interval(secs => sqlc.arg('bucket_secs')::float8), r.started_at, TIMESTAMPTZ '1970-01-01')::timestamptz AS bucket,
+       COUNT(*)::int AS runs
+FROM scrape_runs r
+JOIN source_targets t ON t.id = r.source_target_id
+WHERE t.user_id = sqlc.arg('user_id')
+  AND (sqlc.narg('target_id')::uuid IS NULL OR r.source_target_id = sqlc.narg('target_id'))
+  AND (sqlc.narg('from_at')::timestamptz IS NULL OR r.started_at >= sqlc.narg('from_at'))
+  AND (sqlc.narg('to_at')::timestamptz IS NULL OR r.started_at <= sqlc.narg('to_at'))
+  AND (sqlc.narg('q')::text IS NULL
+       OR t.value ILIKE '%' || sqlc.narg('q') || '%'
+       OR EXISTS (SELECT 1 FROM scrape_run_errors e WHERE e.run_id = r.id AND e.message ILIKE '%' || sqlc.narg('q') || '%'))
+GROUP BY 1, 2, 3, 4, 5;

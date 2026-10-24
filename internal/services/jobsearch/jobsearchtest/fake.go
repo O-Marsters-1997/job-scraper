@@ -1341,6 +1341,10 @@ func (f *FakeStore) ListSourceHealth(context.Context, string) ([]dto.SourceHealt
 	return nil, nil
 }
 
+func (f *FakeStore) ScrapeRunSummary(context.Context, string, dto.ScrapeRunSummaryOptions) (dto.ScrapeRunSummary, error) {
+	return dto.ScrapeRunSummary{}, nil
+}
+
 var _ Store = (*FakeStore)(nil)
 
 func (f *FakeStore) LookupFetch(_ context.Context, url string) (dto.CachedResponse, bool, error) {

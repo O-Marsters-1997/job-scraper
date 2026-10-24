@@ -70,3 +70,23 @@ const sourceHealthSchema = z.object({
 export const sourceHealthListSchema = z.array(sourceHealthSchema);
 
 export type SourceHealth = z.infer<typeof sourceHealthSchema>;
+
+export const scrapeRunSummarySchema = z.object({
+	Total: z.number(),
+	Facets: z.record(
+		z.enum(["outcome", "kind", "source", "trigger"]),
+		z.record(z.string(), z.number()),
+	),
+	BucketMs: z.number(),
+	Histogram: z.array(
+		z.object({
+			Start: z.string(),
+			OK: z.number(),
+			Retried: z.number(),
+			Failed: z.number(),
+		}),
+	),
+});
+
+export type ScrapeRunSummary = z.infer<typeof scrapeRunSummarySchema>;
+export type ScrapeRunFacet = keyof ScrapeRunSummary["Facets"];

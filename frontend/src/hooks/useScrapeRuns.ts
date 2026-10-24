@@ -1,8 +1,10 @@
 import { createQuery, keepPreviousData } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
+	fetchScrapeRunSummary,
 	fetchScrapeRuns,
 	fetchSourceHealth,
+	type ScrapeRunFilters,
 	type ScrapeRunsParams,
 } from "../api/scrapeRuns";
 
@@ -11,6 +13,11 @@ const LIVE_POLL_MS = 5000;
 export const scrapeRunsQuery = (params: ScrapeRunsParams) => ({
 	queryKey: keys.scrapeRuns(params),
 	queryFn: () => fetchScrapeRuns(params),
+});
+
+export const scrapeRunSummaryQuery = (params: ScrapeRunFilters) => ({
+	queryKey: keys.scrapeRunSummary(params),
+	queryFn: () => fetchScrapeRunSummary(params),
 });
 
 export function useScrapeRuns(params: () => ScrapeRunsParams) {
@@ -26,5 +33,16 @@ export function useSourceHealth() {
 		queryKey: keys.sourceHealth,
 		queryFn: fetchSourceHealth,
 		refetchInterval: LIVE_POLL_MS,
+	}));
+}
+
+export function useScrapeRunSummary(
+	params: () => ScrapeRunFilters,
+	live: () => boolean,
+) {
+	return createQuery(() => ({
+		...scrapeRunSummaryQuery(params()),
+		placeholderData: keepPreviousData,
+		refetchInterval: live() ? LIVE_POLL_MS : false,
 	}));
 }

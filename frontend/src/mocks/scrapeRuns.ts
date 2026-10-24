@@ -1,4 +1,11 @@
-import type { ScrapeRun, ScrapeRunPage, SourceHealth } from "@/types/scrapeRun";
+import type { ScrapeRunFilters, ScrapeRunsParams } from "@/api/scrapeRuns";
+import type {
+	ScrapeRun,
+	ScrapeRunFacet,
+	ScrapeRunPage,
+	ScrapeRunSummary,
+	SourceHealth,
+} from "@/types/scrapeRun";
 
 const PAGE_SIZE = 50;
 const TOTAL = 120;
@@ -72,13 +79,102 @@ function mockRun(i: number): ScrapeRun {
 
 const RUNS = Array.from({ length: TOTAL }, (_, i) => mockRun(i));
 
-export function getScrapeRuns(params: {
-	target?: string | undefined;
-	before?: string | undefined;
-}): ScrapeRunPage {
-	const matching = RUNS.filter(
-		(r) => !params.target || r.TargetID === params.target,
+const RANGE_MS: Record<string, number> = {
+	"1h": 3_600_000,
+	"6h": 6 * 3_600_000,
+	"24h": 24 * 3_600_000,
+	"7d": 7 * 24 * 3_600_000,
+	"30d": 30 * 24 * 3_600_000,
+};
+const BUCKET_MS = [5, 15, 60, 180, 360, 720, 1440].map((m) => m * 60_000);
+
+const FACET_VALUE: Record<ScrapeRunFacet, (r: ScrapeRun) => string> = {
+	outcome: (r) => r.Outcome,
+	kind: (r) => r.Kind,
+	source: (r) => r.Source,
+	trigger: (r) => r.Trigger,
+};
+
+function rangeStart(params: ScrapeRunFilters): number {
+	if (params.from) return Date.parse(params.from);
+	return NEWEST - (RANGE_MS[params.range ?? "7d"] ?? RANGE_MS["7d"] ?? 0);
+}
+
+function inFilters(
+	run: ScrapeRun,
+	params: ScrapeRunFilters,
+	skip?: ScrapeRunFacet,
+): boolean {
+	const started = Date.parse(run.StartedAt);
+	const to = params.to ? Date.parse(params.to) : Number.POSITIVE_INFINITY;
+	const needle = params.q?.toLowerCase();
+	return (
+		(!params.target || run.TargetID === params.target) &&
+		started >= rangeStart(params) &&
+		started <= to &&
+		(!needle ||
+			run.TargetValue.toLowerCase().includes(needle) ||
+			run.Errors.some((e) => e.Message.toLowerCase().includes(needle))) &&
+		(Object.keys(FACET_VALUE) as ScrapeRunFacet[]).every((facet) => {
+			const selected = params[facet]?.split(",") ?? [];
+			return (
+				facet === skip ||
+				selected.length === 0 ||
+				selected.includes(FACET_VALUE[facet](run))
+			);
+		})
 	);
+}
+
+export function getScrapeRunSummary(
+	params: ScrapeRunFilters,
+): ScrapeRunSummary {
+	const end = params.to ? Date.parse(params.to) : NEWEST;
+	const from = rangeStart(params);
+	const bucket =
+		BUCKET_MS.find((b) => end - from <= 48 * b) ?? BUCKET_MS[6] ?? 86_400_000;
+	const facets: ScrapeRunSummary["Facets"] = {
+		outcome: {},
+		kind: {},
+		source: {},
+		trigger: {},
+	};
+	for (const facet of Object.keys(FACET_VALUE) as ScrapeRunFacet[]) {
+		const counts = facets[facet] ?? {};
+		for (const run of RUNS.filter((r) => inFilters(r, params, facet))) {
+			const value = FACET_VALUE[facet](run);
+			counts[value] = (counts[value] ?? 0) + 1;
+		}
+	}
+	const first = Math.floor(from / bucket) * bucket;
+	const histogram = Array.from(
+		{ length: Math.floor((end - first) / bucket) + 1 },
+		(_, i) => ({
+			Start: new Date(first + i * bucket).toISOString(),
+			OK: 0,
+			Retried: 0,
+			Failed: 0,
+		}),
+	);
+	const matching = RUNS.filter((r) => inFilters(r, params));
+	for (const run of matching) {
+		const slot =
+			histogram[Math.floor((Date.parse(run.StartedAt) - first) / bucket)];
+		if (!slot) continue;
+		if (run.Outcome === "failed") slot.Failed++;
+		else if (run.Outcome === "retried") slot.Retried++;
+		else slot.OK++;
+	}
+	return {
+		Total: matching.length,
+		Facets: facets,
+		BucketMs: bucket,
+		Histogram: histogram,
+	};
+}
+
+export function getScrapeRuns(params: ScrapeRunsParams): ScrapeRunPage {
+	const matching = RUNS.filter((r) => inFilters(r, params));
 	const start = params.before
 		? matching.findIndex((r) => r.ID === params.before) + 1
 		: 0;

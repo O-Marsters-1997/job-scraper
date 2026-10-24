@@ -1,15 +1,36 @@
 import {
 	type ScrapeRunPage,
+	type ScrapeRunSummary,
 	type SourceHealth,
 	scrapeRunPageSchema,
+	scrapeRunSummarySchema,
 	sourceHealthListSchema,
 } from "../types/scrapeRun";
 import { apiFetch } from "./client";
 import { mocked } from "./config";
 
-export interface ScrapeRunsParams {
+export interface ScrapeRunFilters {
 	target?: string | undefined;
+	q?: string | undefined;
+	outcome?: string | undefined;
+	kind?: string | undefined;
+	source?: string | undefined;
+	trigger?: string | undefined;
+	range?: string | undefined;
+	from?: string | undefined;
+	to?: string | undefined;
+}
+
+export interface ScrapeRunsParams extends ScrapeRunFilters {
 	before?: string | undefined;
+}
+
+function queryString(params: ScrapeRunsParams): string {
+	const query = new URLSearchParams();
+	for (const [key, value] of Object.entries(params)) {
+		if (value) query.set(key, value);
+	}
+	return query.toString();
 }
 
 export async function fetchScrapeRuns(
@@ -17,12 +38,20 @@ export async function fetchScrapeRuns(
 ): Promise<ScrapeRunPage> {
 	return mocked(
 		(db) => db.getScrapeRuns(params),
-		() => {
-			const query = new URLSearchParams();
-			if (params.target) query.set("target", params.target);
-			if (params.before) query.set("before", params.before);
-			return apiFetch(`/scrape-runs?${query}`, scrapeRunPageSchema);
-		},
+		() => apiFetch(`/scrape-runs?${queryString(params)}`, scrapeRunPageSchema),
+	);
+}
+
+export async function fetchScrapeRunSummary(
+	params: ScrapeRunFilters,
+): Promise<ScrapeRunSummary> {
+	return mocked(
+		(db) => db.getScrapeRunSummary(params),
+		() =>
+			apiFetch(
+				`/scrape-runs/summary?${queryString(params)}`,
+				scrapeRunSummarySchema,
+			),
 	);
 }
 
