@@ -143,6 +143,7 @@ const poll = (
 	Elsewhere: 0,
 	Repeat: 0,
 	Removed: 0,
+	Reopened: 0,
 	Deferred: 0,
 	Retries: 0,
 	Errors: [],

@@ -456,8 +456,8 @@ func TestStore_BoardRuns(t *testing.T) {
 		}
 		return summary
 	}
-	if got := summaryFor(env.userID, env.companyID); got.Total != 1 || got.New != 2 || got.Removed != 3 || got.LastStartedAt == nil {
-		t.Errorf("summary(company) = %+v, want 1 run with New 2, Removed 3 and a last start", got)
+	if got := summaryFor(env.userID, env.companyID); got.Total != 1 || got.New != 2 || got.Removed != 1 || got.LastStartedAt == nil {
+		t.Errorf("summary(company) = %+v, want 1 run with New 2, Removed 1 and a last start", got)
 	}
 	if got := summaryFor(outsider, env.companyID); got.Total != 0 || got.LastStartedAt != nil {
 		t.Errorf("summary(outsider) = %+v, want nothing for an untracked Company", got)
