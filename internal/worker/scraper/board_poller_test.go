@@ -149,14 +149,14 @@ func TestBoardPollUnclaimableCheck(t *testing.T) {
 func TestBoardPollTalliesWhatIngestAndCompletionDid(t *testing.T) {
 	t.Parallel()
 	store := &boardStoreStub{board: dto.BoardPoll{ID: "board"}, removed: 2}
-	ingester := &boardIngesterStub{tally: dto.IngestTally{New: 3, Merged: 1}}
+	ingester := &boardIngesterStub{tally: dto.IngestTally{New: 2, Merged: 1, Upgraded: 1}}
 	jobs := []dto.Job{{URL: "https://example.com/1"}, {URL: "https://example.com/2"}, {URL: "https://example.com/3"}, {URL: "https://example.com/4"}}
 	poller := scraper.NewBoardPoller(store, boardFetcherStub{jobs: jobs}, ingester)
 	got, err := poller.PollBoard(t.Context(), "board", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (dto.BoardTally{Claimed: true, Listed: 4, New: 3, Elsewhere: 1, Removed: 2}); got != want {
+	if want := (dto.BoardTally{Claimed: true, Listed: 4, New: 2, Elsewhere: 2, Removed: 2}); got != want {
 		t.Errorf("PollBoard() tally = %+v, want %+v", got, want)
 	}
 }

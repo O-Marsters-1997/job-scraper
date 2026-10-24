@@ -71,7 +71,9 @@ func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) (dto.Inges
 				tally.New++
 			case "merged":
 				tally.Merged++
-			case "changed", "unchanged", "upgraded":
+			case "upgraded":
+				tally.Upgraded++
+			case "changed", "unchanged":
 			case "rejected":
 				return tally, fmt.Errorf("api_exporter: job %s rejected: %s", batch[idx].URL, item.Reason)
 			default:

@@ -27,7 +27,7 @@ type BoardTally struct {
 }
 
 type IngestTally struct {
-	New, Merged int
+	New, Merged, Upgraded int
 }
 
 type ScrapeRunOutcome string
