@@ -22,6 +22,7 @@ import { Route as AuthExperienceRouteImport } from './routes/_auth/experience'
 import { Route as AuthCvTemplatesRouteImport } from './routes/_auth/cv-templates'
 import { Route as AuthCompaniesRouteImport } from './routes/_auth/companies'
 import { Route as AuthApplicationsRouteImport } from './routes/_auth/applications'
+import { Route as AuthActivityPrototypeRouteImport } from './routes/_auth/activity-prototype'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
 import { Route as AuthSettingsUsageRouteImport } from './routes/_auth/settings/usage'
 import { Route as AuthSettingsTaskTypesRouteImport } from './routes/_auth/settings/task-types'
@@ -102,6 +103,11 @@ const AuthCompaniesRoute = AuthCompaniesRouteImport.update({
 const AuthApplicationsRoute = AuthApplicationsRouteImport.update({
   id: '/applications',
   path: '/applications',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthActivityPrototypeRoute = AuthActivityPrototypeRouteImport.update({
+  id: '/activity-prototype',
+  path: '/activity-prototype',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthSettingsIndexRoute = AuthSettingsIndexRouteImport.update({
@@ -198,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/activity-prototype': typeof AuthActivityPrototypeRoute
   '/applications': typeof AuthApplicationsRoute
   '/companies': typeof AuthCompaniesRoute
   '/cv-templates': typeof AuthCvTemplatesRoute
@@ -229,6 +236,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/activity-prototype': typeof AuthActivityPrototypeRoute
   '/applications': typeof AuthApplicationsRoute
   '/companies': typeof AuthCompaniesRoute
   '/cv-templates': typeof AuthCvTemplatesRoute
@@ -260,6 +268,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteWithChildren
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/_auth/activity-prototype': typeof AuthActivityPrototypeRoute
   '/_auth/applications': typeof AuthApplicationsRoute
   '/_auth/companies': typeof AuthCompaniesRoute
   '/_auth/cv-templates': typeof AuthCvTemplatesRoute
@@ -293,6 +302,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/signup'
+    | '/activity-prototype'
     | '/applications'
     | '/companies'
     | '/cv-templates'
@@ -324,6 +334,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/signup'
+    | '/activity-prototype'
     | '/applications'
     | '/companies'
     | '/cv-templates'
@@ -354,6 +365,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/login'
     | '/signup'
+    | '/_auth/activity-prototype'
     | '/_auth/applications'
     | '/_auth/companies'
     | '/_auth/cv-templates'
@@ -480,6 +492,13 @@ declare module '@tanstack/solid-router' {
       path: '/applications'
       fullPath: '/applications'
       preLoaderRoute: typeof AuthApplicationsRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/activity-prototype': {
+      id: '/_auth/activity-prototype'
+      path: '/activity-prototype'
+      fullPath: '/activity-prototype'
+      preLoaderRoute: typeof AuthActivityPrototypeRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/settings/': {
@@ -646,6 +665,7 @@ const AuthSettingsRouteWithChildren = AuthSettingsRoute._addFileChildren(
 )
 
 interface AuthRouteChildren {
+  AuthActivityPrototypeRoute: typeof AuthActivityPrototypeRoute
   AuthApplicationsRoute: typeof AuthApplicationsRoute
   AuthCompaniesRoute: typeof AuthCompaniesRoute
   AuthCvTemplatesRoute: typeof AuthCvTemplatesRoute
@@ -664,6 +684,7 @@ interface AuthRouteChildren {
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthActivityPrototypeRoute: AuthActivityPrototypeRoute,
   AuthApplicationsRoute: AuthApplicationsRoute,
   AuthCompaniesRoute: AuthCompaniesRoute,
   AuthCvTemplatesRoute: AuthCvTemplatesRoute,
