@@ -10,7 +10,7 @@ export const RANGE_PRESETS = {
 } as const;
 
 export const DEFAULT_RANGE = "7d";
-export const PAGE_SIZE = 50;
+const PAGE_SIZE = 50;
 
 export interface ActivitySearch extends ScrapeRunFilters {
 	before?: string | undefined;
@@ -122,7 +122,7 @@ export function clearFilters(search: ActivitySearch): ActivitySearch {
 	});
 }
 
-export const MAX_CUSTOM_RANGE_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_CUSTOM_RANGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export function customRangeError(from: string, to: string): string | null {
 	const start = Date.parse(from);

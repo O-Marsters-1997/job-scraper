@@ -56,8 +56,9 @@ func (s *Service) ScrapeRunSummary(ctx context.Context, userID string, q dto.Scr
 		return dto.ScrapeRunSummary{}, err
 	}
 	span := end.Sub(filter.From)
-	bucket := scrapeRunBuckets[len(scrapeRunBuckets)-1]
-	for _, b := range scrapeRunBuckets {
+	buckets := scrapeRunBuckets()
+	bucket := buckets[len(buckets)-1]
+	for _, b := range buckets {
 		if span <= maxHistogramBuckets*b {
 			bucket = b
 			break
@@ -75,19 +76,27 @@ const (
 	maxCustomRange      = 30 * 24 * time.Hour
 )
 
-var scrapeRunBuckets = []time.Duration{
-	5 * time.Minute, 15 * time.Minute, time.Hour, 3 * time.Hour, 6 * time.Hour, 12 * time.Hour, 24 * time.Hour,
+func scrapeRunBuckets() []time.Duration {
+	return []time.Duration{
+		5 * time.Minute, 15 * time.Minute, time.Hour, 3 * time.Hour, 6 * time.Hour, 12 * time.Hour, 24 * time.Hour,
+	}
 }
 
-var scrapeRunRanges = map[string]time.Duration{
-	"1h": time.Hour, "6h": 6 * time.Hour, "24h": 24 * time.Hour, "7d": 7 * 24 * time.Hour, "30d": maxCustomRange,
+func scrapeRunRanges() map[string]time.Duration {
+	return map[string]time.Duration{
+		"1h": time.Hour, "6h": 6 * time.Hour, "24h": 24 * time.Hour, "7d": 7 * 24 * time.Hour, "30d": maxCustomRange,
+	}
 }
 
-var scrapeRunOutcomes = []string{
-	string(dto.OutcomeRunning), string(dto.OutcomeSucceeded), string(dto.OutcomeRetried), string(dto.OutcomeFailed),
+func scrapeRunOutcomes() []string {
+	return []string{
+		string(dto.OutcomeRunning), string(dto.OutcomeSucceeded), string(dto.OutcomeRetried), string(dto.OutcomeFailed),
+	}
 }
 
-var scrapeRunTriggers = []string{string(dto.TriggerScheduled), string(dto.TriggerManual)}
+func scrapeRunTriggers() []string {
+	return []string{string(dto.TriggerScheduled), string(dto.TriggerManual)}
+}
 
 func parseScrapeRunFilter(q dto.ScrapeRunsQuery, now time.Time) (dto.ScrapeRunFilter, time.Time, error) {
 	filter := dto.ScrapeRunFilter{TargetID: q.Target, Q: strings.TrimSpace(q.Q)}
@@ -97,10 +106,10 @@ func parseScrapeRunFilter(q dto.ScrapeRunsQuery, now time.Time) (dto.ScrapeRunFi
 		valid     func(string) bool
 		dst       *[]string
 	}{
-		{"outcome", q.Outcome, inSet(scrapeRunOutcomes), &filter.Outcome},
+		{"outcome", q.Outcome, inSet(scrapeRunOutcomes()), &filter.Outcome},
 		{"kind", q.Kind, inSet([]string{string(dto.ScrapeRunSearch)}), &filter.Kind},
 		{"source", q.Source, func(v string) bool { _, ok := sourcespec.SourceRole(v); return ok }, &filter.Source},
-		{"trigger", q.Trigger, inSet(scrapeRunTriggers), &filter.Trigger},
+		{"trigger", q.Trigger, inSet(scrapeRunTriggers()), &filter.Trigger},
 	} {
 		if *facet.dst, err = parseFacet(facet.name, facet.raw, facet.valid); err != nil {
 			return dto.ScrapeRunFilter{}, time.Time{}, err
@@ -118,7 +127,7 @@ func parseScrapeRunFilter(q dto.ScrapeRunsQuery, now time.Time) (dto.ScrapeRunFi
 	if q.Range == "" {
 		q.Range = "7d"
 	}
-	d, ok := scrapeRunRanges[q.Range]
+	d, ok := scrapeRunRanges()[q.Range]
 	if !ok {
 		return dto.ScrapeRunFilter{}, time.Time{}, apperr.Invalid("range must be 1h, 6h, 24h, 7d or 30d")
 	}

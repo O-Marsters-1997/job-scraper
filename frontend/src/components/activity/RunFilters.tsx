@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { ScrapeRunFacet, ScrapeRunSummary } from "@/types/scrapeRun";
 
-export const OUTCOME_DOTS: Record<string, string> = {
+const OUTCOME_DOTS: Record<string, string> = {
 	running: "bg-primary",
 	succeeded: "bg-status-offer",
 	retried: "bg-status-interview",
