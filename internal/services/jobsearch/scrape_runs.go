@@ -188,3 +188,45 @@ func (m *Module) FinishScrapeRun(ctx context.Context, runID string, stop dto.Sto
 func (m *Module) DeleteExpiredScrapeRuns(ctx context.Context) error {
 	return m.store.DeleteExpiredScrapeRuns(ctx)
 }
+
+const healthWindow = 5
+
+func (s *Service) SourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error) {
+	rows, err := s.store.ListSourceHealth(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		rows[i].Status, rows[i].Reason = classifyHealth(rows[i])
+	}
+	if rows == nil {
+		rows = []dto.SourceHealth{}
+	}
+	return rows, nil
+}
+
+func classifyHealth(h dto.SourceHealth) (dto.HealthStatus, dto.HealthReason) {
+	n := len(h.Recent)
+	switch {
+	case n == 0:
+		return dto.HealthGreen, dto.ReasonNoRuns
+	case h.Recent[n-1] == dto.OutcomeFailed:
+		return dto.HealthRed, dto.ReasonLastFailed
+	case hasFailedPair(h.Recent):
+		return dto.HealthRed, dto.ReasonFailingStreak
+	case h.Retries > 0:
+		return dto.HealthAmber, dto.ReasonRetried
+	case n == healthWindow && h.New == 0:
+		return dto.HealthAmber, dto.ReasonNoNew
+	}
+	return dto.HealthGreen, dto.ReasonOK
+}
+
+func hasFailedPair(recent []dto.ScrapeRunOutcome) bool {
+	for i := 1; i < len(recent); i++ {
+		if recent[i-1] == dto.OutcomeFailed && recent[i] == dto.OutcomeFailed {
+			return true
+		}
+	}
+	return false
+}

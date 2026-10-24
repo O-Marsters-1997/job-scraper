@@ -9,6 +9,7 @@ import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { SearchField } from "@/components/SearchField";
 import { SourceBadge } from "@/components/SourceBadge";
+import { SourcesHealth } from "@/components/SourcesHealth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useDebouncedTerm } from "@/hooks/useDebouncedTerm";
@@ -31,6 +32,7 @@ import {
 	scrapeRunsQuery,
 	useScrapeRunSummary,
 	useScrapeRuns,
+	useSourceHealth,
 } from "../../hooks/useScrapeRuns";
 import { useSources } from "../../hooks/useSources";
 import { queryClient } from "../../lib/queryClient";
@@ -227,9 +229,26 @@ function ActivityPage() {
 	});
 	const sourceLabel = (name: string) =>
 		sources.data?.find((s) => s.name === name)?.label ?? name;
+	const health = useSourceHealth();
+	let logTop: HTMLDivElement | undefined;
+	const selectSource = (target: string) => {
+		go({ target });
+		logTop?.scrollIntoView({ behavior: "smooth" });
+	};
 
 	return (
 		<div class="px-7 py-6">
+			<QueryBoundary query={health} fallbackRows={4}>
+				{(rows) => (
+					<SourcesHealth
+						rows={rows()}
+						selected={search().target}
+						sourceLabel={sourceLabel}
+						onSelect={selectSource}
+					/>
+				)}
+			</QueryBoundary>
+			<div ref={logTop} class="scroll-mt-6" />
 			<PageHeading
 				title="Run log"
 				subtitle="Every Search run with its counters and errors"

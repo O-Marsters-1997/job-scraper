@@ -264,6 +264,65 @@ func (q *Queries) ListScrapeRuns(ctx context.Context, arg ListScrapeRunsParams) 
 	return items, nil
 }
 
+const listSourceHealthRuns = `-- name: ListSourceHealthRuns :many
+SELECT t.id AS source_target_id, t.source, t.value AS target_value, t.filters AS target_filters,
+       r.started_at, r.stop_reason,
+       COALESCE(r.new_listings, 0)::int AS new_listings, COALESCE(r.elsewhere, 0)::int AS elsewhere,
+       COALESCE(r.retries, 0)::int AS retries
+FROM source_targets t
+LEFT JOIN LATERAL (
+    SELECT id, started_at, stop_reason, new_listings, elsewhere, retries
+    FROM scrape_runs
+    WHERE source_target_id = t.id AND finished_at IS NOT NULL
+    ORDER BY started_at DESC, id DESC
+    LIMIT 5
+) r ON TRUE
+WHERE t.user_id = $1
+ORDER BY t.id, r.started_at, r.id
+`
+
+type ListSourceHealthRunsRow struct {
+	SourceTargetID pgtype.UUID
+	Source         string
+	TargetValue    string
+	TargetFilters  []byte
+	StartedAt      pgtype.Timestamptz
+	StopReason     pgtype.Text
+	NewListings    int32
+	Elsewhere      int32
+	Retries        int32
+}
+
+func (q *Queries) ListSourceHealthRuns(ctx context.Context, userID pgtype.UUID) ([]ListSourceHealthRunsRow, error) {
+	rows, err := q.db.Query(ctx, listSourceHealthRuns, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSourceHealthRunsRow
+	for rows.Next() {
+		var i ListSourceHealthRunsRow
+		if err := rows.Scan(
+			&i.SourceTargetID,
+			&i.Source,
+			&i.TargetValue,
+			&i.TargetFilters,
+			&i.StartedAt,
+			&i.StopReason,
+			&i.NewListings,
+			&i.Elsewhere,
+			&i.Retries,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const scrapeRunAttemptFailed = `-- name: ScrapeRunAttemptFailed :exec
 WITH bumped AS (
     UPDATE scrape_runs SET retries = retries + 1 WHERE scrape_runs.id = $4 RETURNING scrape_runs.id

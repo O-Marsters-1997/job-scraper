@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
+import type { SourceHealth } from "@/types/scrapeRun";
 import {
 	activeFilterCount,
 	clearFilters,
 	customRangeError,
 	formatDuration,
+	healthLabel,
 	newerPage,
 	olderPage,
 	onlyFacetValue,
 	pageSummary,
 	parseActivitySearch,
 	setRange,
+	splitHealth,
 	toggleFacetValue,
 } from "./scrapeRuns";
 
@@ -30,6 +33,43 @@ assert.equal(
 assert.equal(
 	formatDuration("2026-10-23T10:00:00Z", "2026-10-23T10:02:05Z"),
 	"2m 5s",
+);
+
+const health = (
+	Status: SourceHealth["Status"],
+	LastRunAt: string | null,
+): SourceHealth => ({
+	Kind: "search",
+	TargetID: "t",
+	Source: "indeed",
+	TargetValue: "go",
+	TargetFilters: {},
+	Status,
+	Reason: "ok",
+	Recent: [],
+	LastRunAt,
+	New: 0,
+	Elsewhere: 0,
+	Retries: 2,
+});
+const split = splitHealth([
+	health("green", "2026-10-23T10:00:00Z"),
+	health("amber", "2026-10-23T10:00:00Z"),
+	health("red", "2026-10-23T09:00:00Z"),
+	health("red", "2026-10-23T11:00:00Z"),
+]);
+assert.deepEqual(
+	split.attention.map((r) => `${r.Status}@${r.LastRunAt}`),
+	[
+		"red@2026-10-23T11:00:00Z",
+		"red@2026-10-23T09:00:00Z",
+		"amber@2026-10-23T10:00:00Z",
+	],
+);
+assert.equal(split.healthy.length, 1);
+assert.equal(
+	healthLabel({ ...health("amber", null), Reason: "retried", Retries: 1 }),
+	"1 retried attempt",
 );
 
 const paged = { before: "c2", trail: "c1" };

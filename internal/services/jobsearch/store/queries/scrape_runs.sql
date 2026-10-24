@@ -74,6 +74,22 @@ FROM scrape_run_errors
 WHERE run_id = ANY(sqlc.arg('run_ids')::uuid[])
 ORDER BY run_id, id;
 
+-- name: ListSourceHealthRuns :many
+SELECT t.id AS source_target_id, t.source, t.value AS target_value, t.filters AS target_filters,
+       r.started_at, r.stop_reason,
+       COALESCE(r.new_listings, 0)::int AS new_listings, COALESCE(r.elsewhere, 0)::int AS elsewhere,
+       COALESCE(r.retries, 0)::int AS retries
+FROM source_targets t
+LEFT JOIN LATERAL (
+    SELECT id, started_at, stop_reason, new_listings, elsewhere, retries
+    FROM scrape_runs
+    WHERE source_target_id = t.id AND finished_at IS NOT NULL
+    ORDER BY started_at DESC, id DESC
+    LIMIT 5
+) r ON TRUE
+WHERE t.user_id = sqlc.arg('user_id')
+ORDER BY t.id, r.started_at, r.id;
+
 -- name: SummariseScrapeRuns :many
 SELECT (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'failed' THEN 'failed' WHEN r.retries > 0 THEN 'retried' ELSE 'succeeded' END)::text AS outcome, r.kind, r.source, r.trigger,
        date_bin(make_interval(secs => sqlc.arg('bucket_secs')::float8), r.started_at, TIMESTAMPTZ '1970-01-01')::timestamptz AS bucket,

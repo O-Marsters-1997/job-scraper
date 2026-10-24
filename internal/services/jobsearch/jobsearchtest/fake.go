@@ -1337,6 +1337,10 @@ func (f *FakeStore) ListScrapeRuns(context.Context, string, dto.ScrapeRunListOpt
 	return nil, nil
 }
 
+func (f *FakeStore) ListSourceHealth(context.Context, string) ([]dto.SourceHealth, error) {
+	return nil, nil
+}
+
 func (f *FakeStore) ScrapeRunSummary(context.Context, string, dto.ScrapeRunSummaryOptions) (dto.ScrapeRunSummary, error) {
 	return dto.ScrapeRunSummary{}, nil
 }

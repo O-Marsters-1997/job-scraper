@@ -126,3 +126,36 @@ type ScrapeRunListOptions struct {
 	BeforeID        string
 	Limit           int
 }
+
+type HealthStatus string
+
+const (
+	HealthRed   HealthStatus = "red"
+	HealthAmber HealthStatus = "amber"
+	HealthGreen HealthStatus = "green"
+)
+
+type HealthReason string
+
+const (
+	ReasonLastFailed    HealthReason = "last_failed"
+	ReasonFailingStreak HealthReason = "failing_streak"
+	ReasonRetried       HealthReason = "retried"
+	ReasonNoNew         HealthReason = "no_new"
+	ReasonNoRuns        HealthReason = "no_runs"
+	ReasonOK            HealthReason = "ok"
+)
+
+type SourceHealth struct {
+	Kind          ScrapeRunKind
+	TargetID      string
+	Source        string
+	TargetValue   string
+	TargetFilters map[string]string
+	Status        HealthStatus
+	Reason        HealthReason
+	Recent        []ScrapeRunOutcome
+	LastRunAt     *time.Time
+
+	New, Elsewhere, Retries int
+}

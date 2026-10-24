@@ -3,6 +3,7 @@ import { keys } from "../api/keys";
 import {
 	fetchScrapeRunSummary,
 	fetchScrapeRuns,
+	fetchSourceHealth,
 	type ScrapeRunFilters,
 	type ScrapeRunsParams,
 } from "../api/scrapeRuns";
@@ -24,6 +25,14 @@ export function useScrapeRuns(params: () => ScrapeRunsParams) {
 		...scrapeRunsQuery(params()),
 		placeholderData: keepPreviousData,
 		refetchInterval: params().before ? false : LIVE_POLL_MS,
+	}));
+}
+
+export function useSourceHealth() {
+	return createQuery(() => ({
+		queryKey: keys.sourceHealth,
+		queryFn: fetchSourceHealth,
+		refetchInterval: LIVE_POLL_MS,
 	}));
 }
 
