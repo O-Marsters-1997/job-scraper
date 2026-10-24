@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
-import type { SourceHealth } from "@/types/scrapeRun";
+import type { ScrapeRun, SourceHealth } from "@/types/scrapeRun";
 import {
 	activeFilterCount,
 	clearFilters,
 	customRangeError,
 	formatDuration,
+	groupPollsByDay,
 	healthLabel,
 	newerPage,
 	olderPage,
 	onlyFacetValue,
 	pageSummary,
 	parseActivitySearch,
+	parseHistorySearch,
 	setRange,
 	splitHealth,
 	toggleFacetValue,
@@ -116,3 +118,50 @@ assert.equal(
 assert.ok(customRangeError("2026-10-02T00:00:00Z", "2026-10-01T00:00:00Z"));
 assert.ok(customRangeError("2026-09-01T00:00:00Z", "2026-10-02T00:00:00Z"));
 assert.ok(customRangeError("", "2026-10-02T00:00:00Z"));
+
+const poll = (
+	ID: string,
+	StartedAt: string,
+	over: Partial<ScrapeRun> = {},
+): ScrapeRun => ({
+	ID,
+	Kind: "board",
+	Source: "greenhouse",
+	TargetID: "",
+	TargetValue: "",
+	TargetFilters: {},
+	BoardID: "b",
+	CompanyName: "Co",
+	Trigger: "scheduled",
+	Outcome: "succeeded",
+	StopReason: "last_page",
+	StartedAt,
+	FinishedAt: StartedAt,
+	Pages: 0,
+	Listings: 8,
+	New: 0,
+	Elsewhere: 0,
+	Repeat: 0,
+	Removed: 0,
+	Deferred: 0,
+	Retries: 0,
+	Errors: [],
+	...over,
+});
+
+const days = groupPollsByDay([
+	poll("a", "2026-10-23T12:00:00", { New: 1 }),
+	poll("b", "2026-10-23T11:00:00"),
+	poll("c", "2026-10-23T10:00:00"),
+	poll("d", "2026-10-23T09:00:00", { Outcome: "failed" }),
+	poll("e", "2026-10-22T09:00:00"),
+]);
+assert.deepEqual(
+	days.map((d) => d.entries.map((e) => e.kind)),
+	[["poll", "quiet", "poll"], ["quiet"]],
+);
+const quiet = days[0]?.entries[1];
+assert.equal(quiet?.kind === "quiet" && quiet.runs.length, 2);
+
+assert.equal(parseHistorySearch({ tab: "history" }).tab, "history");
+assert.equal(parseHistorySearch({ tab: "bogus" }).tab, undefined);

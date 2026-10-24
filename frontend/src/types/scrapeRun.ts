@@ -80,6 +80,9 @@ export type SourceHealth = z.infer<typeof sourceHealthSchema>;
 
 export const scrapeRunSummarySchema = z.object({
 	Total: z.number(),
+	New: z.number(),
+	Removed: z.number(),
+	LastStartedAt: z.string().nullable(),
 	Facets: z.record(
 		z.enum(["outcome", "kind", "source", "trigger"]),
 		z.record(z.string(), z.number()),

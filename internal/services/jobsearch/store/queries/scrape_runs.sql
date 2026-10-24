@@ -58,6 +58,7 @@ LEFT JOIN companies c ON c.id = b.company_id
 WHERE (t.user_id = sqlc.arg('user_id')
        OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = sqlc.arg('user_id') AND tc.company_id = b.company_id))
   AND (sqlc.narg('target_id')::uuid IS NULL OR r.source_target_id = sqlc.narg('target_id'))
+  AND (sqlc.narg('company_id')::uuid IS NULL OR b.company_id = sqlc.narg('company_id'))
   AND (sqlc.narg('from_at')::timestamptz IS NULL OR r.started_at >= sqlc.narg('from_at'))
   AND (sqlc.narg('to_at')::timestamptz IS NULL OR r.started_at <= sqlc.narg('to_at'))
   AND (sqlc.narg('q')::text IS NULL
@@ -98,7 +99,9 @@ ORDER BY t.id, r.started_at, r.id;
 -- name: SummariseScrapeRuns :many
 SELECT (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'failed' THEN 'failed' WHEN r.retries > 0 THEN 'retried' ELSE 'succeeded' END)::text AS outcome, r.kind, r.source, r.trigger,
        date_bin(make_interval(secs => sqlc.arg('bucket_secs')::float8), r.started_at, TIMESTAMPTZ '1970-01-01')::timestamptz AS bucket,
-       COUNT(*)::int AS runs
+       COUNT(*)::int AS runs,
+       COALESCE(SUM(r.new_listings), 0)::int AS new_listings, COALESCE(SUM(r.removed), 0)::int AS removed,
+       MAX(r.started_at)::timestamptz AS last_started_at
 FROM scrape_runs r
 LEFT JOIN source_targets t ON t.id = r.source_target_id
 LEFT JOIN company_boards b ON b.id = r.board_id
@@ -106,6 +109,7 @@ LEFT JOIN companies c ON c.id = b.company_id
 WHERE (t.user_id = sqlc.arg('user_id')
        OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = sqlc.arg('user_id') AND tc.company_id = b.company_id))
   AND (sqlc.narg('target_id')::uuid IS NULL OR r.source_target_id = sqlc.narg('target_id'))
+  AND (sqlc.narg('company_id')::uuid IS NULL OR b.company_id = sqlc.narg('company_id'))
   AND (sqlc.narg('from_at')::timestamptz IS NULL OR r.started_at >= sqlc.narg('from_at'))
   AND (sqlc.narg('to_at')::timestamptz IS NULL OR r.started_at <= sqlc.narg('to_at'))
   AND (sqlc.narg('q')::text IS NULL

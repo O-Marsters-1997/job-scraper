@@ -32,7 +32,7 @@ func (s *Service) ListScrapeRuns(ctx context.Context, userID string, q dto.Scrap
 	}
 	runs, err := s.store.ListScrapeRuns(ctx, userID, opts)
 	if errors.Is(err, store.ErrInvalidID) {
-		return dto.ScrapeRunPage{}, apperr.Invalid("invalid target or cursor")
+		return dto.ScrapeRunPage{}, apperr.Invalid("invalid target, company or cursor")
 	}
 	if err != nil {
 		return dto.ScrapeRunPage{}, err
@@ -66,7 +66,7 @@ func (s *Service) ScrapeRunSummary(ctx context.Context, userID string, q dto.Scr
 	}
 	summary, err := s.store.ScrapeRunSummary(ctx, userID, dto.ScrapeRunSummaryOptions{ScrapeRunFilter: filter, Bucket: bucket, End: end})
 	if errors.Is(err, store.ErrInvalidID) {
-		return dto.ScrapeRunSummary{}, apperr.Invalid("invalid target")
+		return dto.ScrapeRunSummary{}, apperr.Invalid("invalid target or company")
 	}
 	return summary, err
 }
@@ -99,7 +99,7 @@ func scrapeRunTriggers() []string {
 }
 
 func parseScrapeRunFilter(q dto.ScrapeRunsQuery, now time.Time) (dto.ScrapeRunFilter, time.Time, error) {
-	filter := dto.ScrapeRunFilter{TargetID: q.Target, Q: strings.TrimSpace(q.Q)}
+	filter := dto.ScrapeRunFilter{TargetID: q.Target, CompanyID: q.Company, Q: strings.TrimSpace(q.Q)}
 	var err error
 	for _, facet := range []struct {
 		name, raw string

@@ -100,6 +100,7 @@ type ScrapeRunsQuery struct {
 	Source  string `json:"source"`
 	Trigger string `json:"trigger"`
 	Target  string `json:"target"`
+	Company string `json:"company"`
 	Range   string `json:"range"`
 	From    string `json:"from"`
 	To      string `json:"to"`
@@ -108,13 +109,14 @@ type ScrapeRunsQuery struct {
 }
 
 type ScrapeRunFilter struct {
-	TargetID string
-	Q        string
-	Outcome  []string
-	Kind     []string
-	Source   []string
-	Trigger  []string
-	From, To time.Time
+	TargetID  string
+	CompanyID string
+	Q         string
+	Outcome   []string
+	Kind      []string
+	Source    []string
+	Trigger   []string
+	From, To  time.Time
 }
 
 type ScrapeRunSummaryOptions struct {
@@ -133,10 +135,12 @@ const (
 )
 
 type ScrapeRunSummary struct {
-	Total     int
-	Facets    map[ScrapeRunFacet]map[string]int
-	BucketMs  int64
-	Histogram []HistogramBucket
+	Total         int
+	New, Removed  int
+	LastStartedAt *time.Time
+	Facets        map[ScrapeRunFacet]map[string]int
+	BucketMs      int64
+	Histogram     []HistogramBucket
 }
 
 type HistogramBucket struct {

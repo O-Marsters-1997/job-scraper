@@ -1,5 +1,10 @@
+import { format } from "date-fns";
 import type { ScrapeRunFilters } from "@/api/scrapeRuns";
-import type { ScrapeRunFacet, SourceHealth } from "@/types/scrapeRun";
+import type {
+	ScrapeRun,
+	ScrapeRunFacet,
+	SourceHealth,
+} from "@/types/scrapeRun";
 
 export const RANGE_PRESETS = {
 	"1h": "Last hour",
@@ -200,4 +205,54 @@ export function healthLabel(row: SourceHealth): string {
 		case "ok":
 			return "Healthy";
 	}
+}
+
+export interface HistorySearch {
+	tab?: "jobs" | "history" | undefined;
+	range?: string | undefined;
+	from?: string | undefined;
+	to?: string | undefined;
+}
+
+export function parseHistorySearch(
+	raw: Record<string, unknown>,
+): HistorySearch {
+	const { range, from, to } = parseActivitySearch(raw);
+	return {
+		tab: raw.tab === "history" ? "history" : undefined,
+		range,
+		from,
+		to,
+	};
+}
+
+export type PollEntry =
+	| { kind: "poll"; run: ScrapeRun }
+	| { kind: "quiet"; runs: ScrapeRun[] };
+
+export interface PollDay {
+	day: string;
+	entries: PollEntry[];
+}
+
+const isQuiet = (run: ScrapeRun) =>
+	run.Outcome === "succeeded" && run.New === 0 && run.Removed === 0;
+
+export function groupPollsByDay(runs: ScrapeRun[]): PollDay[] {
+	const days: PollDay[] = [];
+	for (const run of runs) {
+		const key = format(new Date(run.StartedAt), "yyyy-MM-dd");
+		let day = days.at(-1);
+		if (!day || format(new Date(day.day), "yyyy-MM-dd") !== key) {
+			day = { day: run.StartedAt, entries: [] };
+			days.push(day);
+		}
+		const last = day.entries.at(-1);
+		if (isQuiet(run) && last?.kind === "quiet") last.runs.push(run);
+		else
+			day.entries.push(
+				isQuiet(run) ? { kind: "quiet", runs: [run] } : { kind: "poll", run },
+			);
+	}
+	return days;
 }
