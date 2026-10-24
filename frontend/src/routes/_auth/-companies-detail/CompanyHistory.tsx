@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/solid-router";
 import { format, formatDistanceToNow } from "date-fns";
 import {
 	createEffect,
@@ -29,6 +30,12 @@ import {
 
 const ROW_GRID =
 	"grid grid-cols-[1rem_3.5rem_minmax(0,1fr)_3rem_4rem_4rem] items-center gap-x-3";
+
+const CHANGE_STYLE = {
+	new: { label: "New", class: "text-status-offer" },
+	removed: { label: "Removed", class: "text-destructive-strong" },
+	reopened: { label: "Reopened", class: "text-muted" },
+} as const;
 
 function Count(props: { value: number; sign?: string; class?: string }) {
 	return (
@@ -286,6 +293,12 @@ function PollEntry(props: {
 						)}
 					>
 						{headline()}
+						<Show when={props.run.Changes.length > 0}>
+							<span class="text-muted">
+								{" "}
+								· {props.run.Changes.map((c) => c.Title).join(", ")}
+							</span>
+						</Show>
 					</span>
 					<Count value={props.run.New} sign="+" class="text-status-offer" />
 					<Count
@@ -318,6 +331,31 @@ function PollEntry(props: {
 								)}
 							</Show>
 						</dl>
+						<Show when={props.run.Changes.length > 0}>
+							<ul class="flex min-w-0 flex-1 flex-col gap-1">
+								<For each={props.run.Changes}>
+									{(change) => (
+										<li class="flex items-center gap-2">
+											<span
+												class={cn(
+													"w-16 shrink-0 text-xs font-medium",
+													CHANGE_STYLE[change.Kind].class,
+												)}
+											>
+												{CHANGE_STYLE[change.Kind].label}
+											</span>
+											<Link
+												to="/jobs/$id"
+												params={{ id: change.JobID }}
+												class="truncate text-foreground hover:underline"
+											>
+												{change.Title}
+											</Link>
+										</li>
+									)}
+								</For>
+							</ul>
+						</Show>
 						<Show when={props.run.Errors.length > 0}>
 							<div class="flex min-w-0 flex-1 flex-col gap-2">
 								<For each={props.run.Errors}>

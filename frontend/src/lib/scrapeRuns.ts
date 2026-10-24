@@ -236,7 +236,10 @@ export interface PollDay {
 }
 
 const isQuiet = (run: ScrapeRun) =>
-	run.Outcome === "succeeded" && run.New === 0 && run.Removed === 0;
+	run.Outcome === "succeeded" &&
+	run.New === 0 &&
+	run.Removed === 0 &&
+	run.Reopened === 0;
 
 export function groupPollsByDay(runs: ScrapeRun[]): PollDay[] {
 	const days: PollDay[] = [];

@@ -147,6 +147,7 @@ const poll = (
 	Deferred: 0,
 	Retries: 0,
 	Errors: [],
+	Changes: [],
 	...over,
 });
 
@@ -156,10 +157,14 @@ const days = groupPollsByDay([
 	poll("c", "2026-10-23T10:00:00"),
 	poll("d", "2026-10-23T09:00:00", { Outcome: "failed" }),
 	poll("e", "2026-10-22T09:00:00"),
+	poll("f", "2026-10-22T08:00:00", { Reopened: 1 }),
 ]);
 assert.deepEqual(
 	days.map((d) => d.entries.map((e) => e.kind)),
-	[["poll", "quiet", "poll"], ["quiet"]],
+	[
+		["poll", "quiet", "poll"],
+		["quiet", "poll"],
+	],
 );
 const quiet = days[0]?.entries[1];
 assert.equal(quiet?.kind === "quiet" && quiet.runs.length, 2);
