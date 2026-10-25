@@ -1,6 +1,9 @@
 package dto
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type ScrapeRunKind string
 
@@ -32,13 +35,28 @@ const (
 	StopFailed   StopReason = "failed"
 )
 
+type JobChangeKind string
+
+const (
+	JobChangeNew      JobChangeKind = "new"
+	JobChangeRemoved  JobChangeKind = "removed"
+	JobChangeReopened JobChangeKind = "reopened"
+)
+
+type JobChange struct {
+	JobID string
+	Kind  JobChangeKind
+}
+
 type BoardTally struct {
-	Claimed                         bool
-	Listed, New, Elsewhere, Removed int
+	Claimed           bool
+	Listed, Elsewhere int
+	Changes           []JobChange
 }
 
 type IngestTally struct {
-	New, Merged, Upgraded int
+	Merged, Upgraded int
+	NewJobIDs        []string
 }
 
 type ScrapeRunOutcome string
@@ -66,9 +84,22 @@ type ScrapeRun struct {
 	StartedAt     time.Time
 	FinishedAt    *time.Time
 
-	Pages, Listings, New, Elsewhere, Repeat, Removed, Deferred, Retries int
+	Pages, Listings, New, Elsewhere, Repeat, Removed, Reopened, Deferred, Retries int
 
-	Errors []ScrapeRunError
+	Errors  []ScrapeRunError
+	Changes []ScrapeRunJobChange
+}
+
+type ScrapeRunJobChange struct {
+	JobID string
+	Kind  JobChangeKind
+	Title string
+}
+
+type ScrapeRunJobSnapshot struct {
+	JobID    string
+	Kind     JobChangeKind
+	Snapshot json.RawMessage
 }
 
 type ScrapeRunError struct {
@@ -85,6 +116,7 @@ type ScrapeRunsQuery struct {
 	Source  string `json:"source"`
 	Trigger string `json:"trigger"`
 	Target  string `json:"target"`
+	Company string `json:"company"`
 	Range   string `json:"range"`
 	From    string `json:"from"`
 	To      string `json:"to"`
@@ -93,13 +125,14 @@ type ScrapeRunsQuery struct {
 }
 
 type ScrapeRunFilter struct {
-	TargetID string
-	Q        string
-	Outcome  []string
-	Kind     []string
-	Source   []string
-	Trigger  []string
-	From, To time.Time
+	TargetID  string
+	CompanyID string
+	Q         string
+	Outcome   []string
+	Kind      []string
+	Source    []string
+	Trigger   []string
+	From, To  time.Time
 }
 
 type ScrapeRunSummaryOptions struct {
@@ -118,10 +151,12 @@ const (
 )
 
 type ScrapeRunSummary struct {
-	Total     int
-	Facets    map[ScrapeRunFacet]map[string]int
-	BucketMs  int64
-	Histogram []HistogramBucket
+	Total         int
+	New, Removed  int
+	LastStartedAt *time.Time
+	Facets        map[ScrapeRunFacet]map[string]int
+	BucketMs      int64
+	Histogram     []HistogramBucket
 }
 
 type HistogramBucket struct {

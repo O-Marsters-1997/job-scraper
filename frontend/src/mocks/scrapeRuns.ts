@@ -2,6 +2,7 @@ import type { ScrapeRunFilters, ScrapeRunsParams } from "@/api/scrapeRuns";
 import type {
 	ScrapeRun,
 	ScrapeRunFacet,
+	ScrapeRunJobSnapshot,
 	ScrapeRunPage,
 	ScrapeRunSummary,
 	SourceHealth,
@@ -57,6 +58,8 @@ function mockRun(i: number): ScrapeRun {
 		BoardID: "",
 		CompanyName: "",
 		Removed: 0,
+		Reopened: 0,
+		Changes: [],
 		Trigger: i % 11 === 5 ? "manual" : "scheduled",
 		...shape,
 		...(running && { Outcome: "running", StopReason: "" }),
@@ -113,6 +116,7 @@ function inFilters(
 	const needle = params.q?.toLowerCase();
 	return (
 		(!params.target || run.TargetID === params.target) &&
+		!params.company &&
 		started >= rangeStart(params) &&
 		started <= to &&
 		(!needle ||
@@ -127,6 +131,14 @@ function inFilters(
 			);
 		})
 	);
+}
+
+function rollup(runs: ScrapeRun[]) {
+	return {
+		New: runs.reduce((n, r) => n + r.New, 0),
+		Removed: runs.reduce((n, r) => n + r.Removed, 0),
+		LastStartedAt: runs[0]?.StartedAt ?? null,
+	};
 }
 
 export function getScrapeRunSummary(
@@ -170,6 +182,7 @@ export function getScrapeRunSummary(
 	}
 	return {
 		Total: matching.length,
+		...rollup(matching),
 		Facets: facets,
 		BucketMs: bucket,
 		Histogram: histogram,
@@ -185,6 +198,12 @@ export function getScrapeRuns(params: ScrapeRunsParams): ScrapeRunPage {
 	const last = items[items.length - 1];
 	const more = start + PAGE_SIZE < matching.length;
 	return { Items: items, NextCursor: more && last ? last.ID : null };
+}
+
+export function getScrapeRunJobSnapshots(
+	_runId: string,
+): ScrapeRunJobSnapshot[] {
+	return [];
 }
 
 export function getSourceHealth(): SourceHealth[] {

@@ -60,6 +60,7 @@ func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) (dto.Inges
 			Results []struct {
 				Status string `json:"status"`
 				Reason string `json:"reason"`
+				JobID  string `json:"job_id"`
 			} `json:"results"`
 		}
 		if err := json.Unmarshal(response, &result); err != nil || len(result.Results) != len(batch) {
@@ -68,7 +69,7 @@ func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) (dto.Inges
 		for idx, item := range result.Results {
 			switch item.Status {
 			case "new":
-				tally.New++
+				tally.NewJobIDs = append(tally.NewJobIDs, item.JobID)
 			case "merged":
 				tally.Merged++
 			case "upgraded":

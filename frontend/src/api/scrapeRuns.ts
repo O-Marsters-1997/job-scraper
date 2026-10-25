@@ -1,7 +1,9 @@
 import {
+	type ScrapeRunJobSnapshot,
 	type ScrapeRunPage,
 	type ScrapeRunSummary,
 	type SourceHealth,
+	scrapeRunJobSnapshotsSchema,
 	scrapeRunPageSchema,
 	scrapeRunSummarySchema,
 	sourceHealthListSchema,
@@ -11,6 +13,7 @@ import { mocked } from "./config";
 
 export interface ScrapeRunFilters {
 	target?: string | undefined;
+	company?: string | undefined;
 	q?: string | undefined;
 	outcome?: string | undefined;
 	kind?: string | undefined;
@@ -51,6 +54,19 @@ export async function fetchScrapeRunSummary(
 			apiFetch(
 				`/scrape-runs/summary?${queryString(params)}`,
 				scrapeRunSummarySchema,
+			),
+	);
+}
+
+export async function fetchScrapeRunJobSnapshots(
+	runId: string,
+): Promise<ScrapeRunJobSnapshot[]> {
+	return mocked(
+		(db) => db.getScrapeRunJobSnapshots(runId),
+		() =>
+			apiFetch(
+				`/scrape-runs/${encodeURIComponent(runId)}/job-changes`,
+				scrapeRunJobSnapshotsSchema,
 			),
 	);
 }

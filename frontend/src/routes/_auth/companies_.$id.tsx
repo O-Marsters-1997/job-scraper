@@ -14,6 +14,7 @@ import {
 	SwitchLabel,
 	SwitchThumb,
 } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { agencyRollup, isAgencyKind } from "@/lib/agencyRollup";
 import { formatDate } from "@/lib/datetime";
 import {
@@ -21,6 +22,7 @@ import {
 	DEFAULT_FILTERS,
 	type JobFilters,
 } from "@/lib/jobFilters";
+import { parseHistorySearch } from "@/lib/scrapeRuns";
 import { outcomeLabels } from "@/types/recruiterContact";
 import {
 	companyQueryOptions,
@@ -37,17 +39,21 @@ import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 import { CompanyBoardsCard } from "./-companies-detail/CompanyBoardsCard";
 import { CompanyDetailsCard } from "./-companies-detail/CompanyDetailsCard";
+import { CompanyHistory } from "./-companies-detail/CompanyHistory";
 
 const COMPANY_FILTERS: JobFilters = { ...DEFAULT_FILTERS, poster: "all" };
 
 export const Route = createFileRoute("/_auth/companies_/$id")({
 	loader: ({ params }) =>
 		queryClient.prefetchQuery(companyQueryOptions(params.id)),
+	validateSearch: parseHistorySearch,
 	component: CompanyDetailPage,
 });
 
 function CompanyDetailPage() {
 	const params = Route.useParams();
+	const search = Route.useSearch();
+	const navigate = Route.useNavigate();
 	const companyQuery = useCompany(() => params().id);
 	const trackMutation = useSetCompanyTracking();
 	const reviewMutation = useSetCompanyReview();
@@ -200,71 +206,106 @@ function CompanyDetailPage() {
 						</CardContent>
 					</Card>
 
-					<div class="grid grid-cols-1 items-start lg:grid-cols-[minmax(0,1fr)_284px] gap-4">
-						<Card class="min-w-0">
-							<CardHeader>
-								<div class="flex items-center gap-2">
-									<FavouriteStar
-										favourite={c().Favourite ?? false}
-										hourly={c().Tracked && c().CheckIntervalMinutes === 60}
-										companyName={c().Name}
-										disabled={favouriteMutation.isPending}
-										onToggle={() =>
-											favouriteMutation.mutate({
-												id: c().ID,
-												favourite: !c().Favourite,
-											})
-										}
-									/>
-									<CardTitle>Jobs at {c().Name}</CardTitle>
-								</div>
-							</CardHeader>
-							<CardContent class="gap-0">
-								<QueryBoundary query={table.query} fallbackRows={3}>
-									{() => (
-										<Show
-											when={table.total() > 0 || hasFilters()}
-											fallback={
-												<p class="text-sm text-faint">
-													No jobs from this company yet.
-												</p>
-											}
-										>
-											<JobsDataTable
-												columns={
-													isAgency() ? track.contactColumns : track.columns
+					<Tabs
+						value={search().tab ?? "jobs"}
+						onChange={(tab) =>
+							navigate({
+								search: (prev) => ({
+									...prev,
+									tab: tab === "history" ? "history" : undefined,
+								}),
+							})
+						}
+					>
+						<TabsList variant="line" class="mb-3">
+							<TabsTrigger value="jobs">Jobs</TabsTrigger>
+							<TabsTrigger value="history">History</TabsTrigger>
+						</TabsList>
+						<TabsContent value="history">
+							<CompanyHistory
+								companyId={c().ID}
+								intervalMinutes={c().CheckIntervalMinutes}
+								range={search()}
+								onRangeChange={(next) =>
+									navigate({
+										search: (prev) => ({
+											tab: prev.tab,
+											range: next.range,
+											from: next.from,
+											to: next.to,
+										}),
+									})
+								}
+							/>
+						</TabsContent>
+						<TabsContent value="jobs">
+							<div class="grid grid-cols-1 items-start lg:grid-cols-[minmax(0,1fr)_284px] gap-4">
+								<Card class="min-w-0">
+									<CardHeader>
+										<div class="flex items-center gap-2">
+											<FavouriteStar
+												favourite={c().Favourite ?? false}
+												hourly={c().Tracked && c().CheckIntervalMinutes === 60}
+												companyName={c().Name}
+												disabled={favouriteMutation.isPending}
+												onToggle={() =>
+													favouriteMutation.mutate({
+														id: c().ID,
+														favourite: !c().Favourite,
+													})
 												}
-												data={table.items()}
-												total={table.total()}
-												page={table.page()}
-												pageSize={table.pageSize}
-												onPage={table.setPage}
-												filters={filters()}
-												onChange={table.setFilters}
-												hidePosterFilter
-												sourceOptions={sourceOptions()}
-												selection={table.rowSelection()}
-												onSelectionChange={table.select}
-												selectedJobs={table.selectedItems()}
-												bulkActions={[
-													{
-														label: "Grade",
-														icon: "check",
-														onSelect: track.openGrade,
-													},
-												]}
 											/>
-										</Show>
-									)}
-								</QueryBoundary>
-							</CardContent>
-						</Card>
+											<CardTitle>Jobs at {c().Name}</CardTitle>
+										</div>
+									</CardHeader>
+									<CardContent class="gap-0">
+										<QueryBoundary query={table.query} fallbackRows={3}>
+											{() => (
+												<Show
+													when={table.total() > 0 || hasFilters()}
+													fallback={
+														<p class="text-sm text-faint">
+															No jobs from this company yet.
+														</p>
+													}
+												>
+													<JobsDataTable
+														columns={
+															isAgency() ? track.contactColumns : track.columns
+														}
+														data={table.items()}
+														total={table.total()}
+														page={table.page()}
+														pageSize={table.pageSize}
+														onPage={table.setPage}
+														filters={filters()}
+														onChange={table.setFilters}
+														hidePosterFilter
+														sourceOptions={sourceOptions()}
+														selection={table.rowSelection()}
+														onSelectionChange={table.select}
+														selectedJobs={table.selectedItems()}
+														bulkActions={[
+															{
+																label: "Grade",
+																icon: "check",
+																onSelect: track.openGrade,
+															},
+														]}
+													/>
+												</Show>
+											)}
+										</QueryBoundary>
+									</CardContent>
+								</Card>
 
-						<div class="sticky top-0 flex flex-col gap-3">
-							<CompanyBoardsCard companyId={params().id} />
-							<CompanyDetailsCard company={c()} />
-						</div>
-					</div>
+								<div class="sticky top-0 flex flex-col gap-3">
+									<CompanyBoardsCard companyId={params().id} />
+									<CompanyDetailsCard company={c()} />
+								</div>
+							</div>
+						</TabsContent>
+					</Tabs>
 					<DismissToast />
 					<GradeDialog
 						open={track.gradeOpen()}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
@@ -32,7 +33,7 @@ func (s *Service) ListScrapeRuns(ctx context.Context, userID string, q dto.Scrap
 	}
 	runs, err := s.store.ListScrapeRuns(ctx, userID, opts)
 	if errors.Is(err, store.ErrInvalidID) {
-		return dto.ScrapeRunPage{}, apperr.Invalid("invalid target or cursor")
+		return dto.ScrapeRunPage{}, apperr.Invalid("invalid target, company or cursor")
 	}
 	if err != nil {
 		return dto.ScrapeRunPage{}, err
@@ -48,6 +49,22 @@ func (s *Service) ListScrapeRuns(ctx context.Context, userID string, q dto.Scrap
 		page.Items = []dto.ScrapeRun{}
 	}
 	return page, nil
+}
+
+func (s *Service) ListScrapeRunJobSnapshots(ctx context.Context, userID, runID string) ([]dto.ScrapeRunJobSnapshot, error) {
+	snapshots, err := s.store.ListScrapeRunJobSnapshots(ctx, userID, runID)
+	switch {
+	case errors.Is(err, data.ErrNotFound):
+		return nil, apperr.NotFound("scrape run not found")
+	case errors.Is(err, store.ErrInvalidID):
+		return nil, apperr.Invalid("invalid scrape run ID")
+	case err != nil:
+		return nil, err
+	}
+	if snapshots == nil {
+		snapshots = []dto.ScrapeRunJobSnapshot{}
+	}
+	return snapshots, nil
 }
 
 func (s *Service) ScrapeRunSummary(ctx context.Context, userID string, q dto.ScrapeRunsQuery) (dto.ScrapeRunSummary, error) {
@@ -66,7 +83,7 @@ func (s *Service) ScrapeRunSummary(ctx context.Context, userID string, q dto.Scr
 	}
 	summary, err := s.store.ScrapeRunSummary(ctx, userID, dto.ScrapeRunSummaryOptions{ScrapeRunFilter: filter, Bucket: bucket, End: end})
 	if errors.Is(err, store.ErrInvalidID) {
-		return dto.ScrapeRunSummary{}, apperr.Invalid("invalid target")
+		return dto.ScrapeRunSummary{}, apperr.Invalid("invalid target or company")
 	}
 	return summary, err
 }
@@ -99,7 +116,7 @@ func scrapeRunTriggers() []string {
 }
 
 func parseScrapeRunFilter(q dto.ScrapeRunsQuery, now time.Time) (dto.ScrapeRunFilter, time.Time, error) {
-	filter := dto.ScrapeRunFilter{TargetID: q.Target, Q: strings.TrimSpace(q.Q)}
+	filter := dto.ScrapeRunFilter{TargetID: q.Target, CompanyID: q.Company, Q: strings.TrimSpace(q.Q)}
 	var err error
 	for _, facet := range []struct {
 		name, raw string

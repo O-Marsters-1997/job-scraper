@@ -110,17 +110,72 @@ func (s *Store) FinishBoardRun(ctx context.Context, run dto.BoardRunStart, stop 
 		StartedAt:  pgtype.Timestamptz{Time: run.StartedAt, Valid: true},
 		StopReason: pgtype.Text{String: string(stop), Valid: true},
 	}
+	counts := map[dto.JobChangeKind]int{}
+	for _, c := range tally.Changes {
+		counts[c.Kind]++
+	}
 	for _, c := range []struct {
 		n   int
 		dst *int32
-	}{{tally.Listed, &params.Listings}, {tally.New, &params.NewListings}, {tally.Elsewhere, &params.Elsewhere}, {tally.Removed, &params.Removed}} {
+	}{{tally.Listed, &params.Listings}, {counts[dto.JobChangeNew], &params.NewListings}, {tally.Elsewhere, &params.Elsewhere}, {counts[dto.JobChangeRemoved], &params.Removed}, {counts[dto.JobChangeReopened], &params.Reopened}} {
 		if c.n < 0 || c.n > math.MaxInt32 {
 			return fmt.Errorf("store.FinishBoardRun: count %d out of range", c.n)
 		}
 		*c.dst = int32(c.n)
 	}
-	if err = s.queries.FinishBoardRun(ctx, params); err != nil {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("store.FinishBoardRun: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.queries.WithTx(tx)
+	inserted, err := q.FinishBoardRun(ctx, params)
+	if err != nil {
 		return fmt.Errorf("store.FinishBoardRun: %w", err)
+	}
+	if inserted == 1 && len(tally.Changes) > 0 {
+		if err := insertJobChanges(ctx, q, id, tally.Changes); err != nil {
+			return fmt.Errorf("store.FinishBoardRun: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("store.FinishBoardRun: commit: %w", err)
+	}
+	return nil
+}
+
+func insertJobChanges(ctx context.Context, q *sqlc.Queries, runID pgtype.UUID, changes []dto.JobChange) error {
+	type row struct {
+		JobID    string            `json:"job_id"`
+		Change   dto.JobChangeKind `json:"change"`
+		Snapshot json.RawMessage   `json:"snapshot"`
+	}
+	rows := make([]row, len(changes))
+	for i, c := range changes {
+		jobID, err := data.UUID(c.JobID)
+		if err != nil {
+			return err
+		}
+		got, err := q.GetJob(ctx, sqlc.GetJobParams{ID: jobID})
+		if err != nil {
+			return data.QueryErr("GetJob", err)
+		}
+		job, err := toGetJobDTO(got)
+		if err != nil {
+			return fmt.Errorf("snapshot job: %w", err)
+		}
+		snapshot, err := json.Marshal(job)
+		if err != nil {
+			return fmt.Errorf("marshal snapshot: %w", err)
+		}
+		rows[i] = row{JobID: c.JobID, Change: c.Kind, Snapshot: snapshot}
+	}
+	payload, err := json.Marshal(rows)
+	if err != nil {
+		return fmt.Errorf("marshal job changes: %w", err)
+	}
+	if err := q.InsertScrapeRunJobChanges(ctx, sqlc.InsertScrapeRunJobChangesParams{RunID: runID, Changes: payload}); err != nil {
+		return fmt.Errorf("insert job changes: %w", err)
 	}
 	return nil
 }
@@ -144,6 +199,33 @@ func (s *Store) DeleteExpiredScrapeRuns(ctx context.Context) error {
 	return nil
 }
 
+func (s *Store) ListScrapeRunJobSnapshots(ctx context.Context, userID, runID string) ([]dto.ScrapeRunJobSnapshot, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, ErrInvalidID
+	}
+	rid, err := data.UUID(runID)
+	if err != nil {
+		return nil, ErrInvalidID
+	}
+	tracked, err := s.queries.ScrapeRunTracked(ctx, sqlc.ScrapeRunTrackedParams{UserID: uid, RunID: rid})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListScrapeRunJobSnapshots: %w", err)
+	}
+	if !tracked {
+		return nil, data.ErrNotFound
+	}
+	rows, err := s.queries.ListScrapeRunJobSnapshots(ctx, rid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListScrapeRunJobSnapshots: %w", err)
+	}
+	out := make([]dto.ScrapeRunJobSnapshot, len(rows))
+	for i, r := range rows {
+		out[i] = dto.ScrapeRunJobSnapshot{JobID: r.JobID.String(), Kind: dto.JobChangeKind(r.Change), Snapshot: r.Snapshot}
+	}
+	return out, nil
+}
+
 func (s *Store) ListScrapeRuns(ctx context.Context, userID string, opts dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
@@ -157,7 +239,7 @@ func (s *Store) ListScrapeRuns(ctx context.Context, userID string, opts dto.Scra
 		return nil, err
 	}
 	params := sqlc.ListScrapeRunsParams{
-		UserID: uid, TargetID: f.target, FromAt: f.from, ToAt: f.to, Q: f.q,
+		UserID: uid, TargetID: f.target, CompanyID: f.company, FromAt: f.from, ToAt: f.to, Q: f.q,
 		Outcomes: opts.Outcome, Kinds: opts.Kind, Sources: opts.Source, Triggers: opts.Trigger,
 		RowLimit: int32(opts.Limit),
 	}
@@ -189,6 +271,16 @@ func (s *Store) ListScrapeRuns(ctx context.Context, userID string, opts dto.Scra
 			Page: int(e.Page), Attempt: int(e.Attempt), Message: e.Message, At: e.At.Time,
 		})
 	}
+	changeRows, err := s.queries.ListScrapeRunJobChanges(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListScrapeRuns changes: %w", err)
+	}
+	for _, c := range changeRows {
+		i := index[c.RunID.String()]
+		runs[i].Changes = append(runs[i].Changes, dto.ScrapeRunJobChange{
+			JobID: c.JobID.String(), Kind: dto.JobChangeKind(c.Change), Title: c.Title,
+		})
+	}
 	return runs, nil
 }
 
@@ -213,9 +305,11 @@ func toScrapeRunDTO(row sqlc.ListScrapeRunsRow) dto.ScrapeRun {
 		Elsewhere:     int(row.Elsewhere),
 		Repeat:        int(row.RepeatListings),
 		Removed:       int(row.Removed),
+		Reopened:      int(row.Reopened),
 		Deferred:      int(row.Deferred),
 		Retries:       int(row.Retries),
 		Errors:        []dto.ScrapeRunError{},
+		Changes:       []dto.ScrapeRunJobChange{},
 	}
 	if len(row.TargetFilters) > 0 {
 		_ = json.Unmarshal(row.TargetFilters, &run.TargetFilters)

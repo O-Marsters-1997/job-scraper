@@ -50,7 +50,7 @@ DELETE FROM scrape_runs WHERE started_at < NOW() - INTERVAL '30 days';
 SELECT r.id, r.kind, r.source, r.source_target_id, COALESCE(t.value, '')::text AS target_value, t.filters AS target_filters,
        r.board_id, b.company_id, COALESCE(c.name, '')::text AS company_name,
        r.trigger, r.started_at, r.finished_at, r.stop_reason,
-       r.pages, r.listings, r.new_listings, r.elsewhere, r.repeat_listings, r.removed, r.deferred, r.retries
+       r.pages, r.listings, r.new_listings, r.elsewhere, r.repeat_listings, r.removed, r.reopened, r.deferred, r.retries
 FROM scrape_runs r
 LEFT JOIN source_targets t ON t.id = r.source_target_id
 LEFT JOIN company_boards b ON b.id = r.board_id
@@ -58,6 +58,7 @@ LEFT JOIN companies c ON c.id = b.company_id
 WHERE (t.user_id = sqlc.arg('user_id')
        OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = sqlc.arg('user_id') AND tc.company_id = b.company_id))
   AND (sqlc.narg('target_id')::uuid IS NULL OR r.source_target_id = sqlc.narg('target_id'))
+  AND (sqlc.narg('company_id')::uuid IS NULL OR b.company_id = sqlc.narg('company_id'))
   AND (sqlc.narg('from_at')::timestamptz IS NULL OR r.started_at >= sqlc.narg('from_at'))
   AND (sqlc.narg('to_at')::timestamptz IS NULL OR r.started_at <= sqlc.narg('to_at'))
   AND (sqlc.narg('q')::text IS NULL
@@ -98,7 +99,9 @@ ORDER BY t.id, r.started_at, r.id;
 -- name: SummariseScrapeRuns :many
 SELECT (CASE WHEN r.finished_at IS NULL THEN 'running' WHEN r.stop_reason = 'failed' THEN 'failed' WHEN r.retries > 0 THEN 'retried' ELSE 'succeeded' END)::text AS outcome, r.kind, r.source, r.trigger,
        date_bin(make_interval(secs => sqlc.arg('bucket_secs')::float8), r.started_at, TIMESTAMPTZ '1970-01-01')::timestamptz AS bucket,
-       COUNT(*)::int AS runs
+       COUNT(*)::int AS runs,
+       COALESCE(SUM(r.new_listings), 0)::int AS new_listings, COALESCE(SUM(r.removed), 0)::int AS removed,
+       MAX(r.started_at)::timestamptz AS last_started_at
 FROM scrape_runs r
 LEFT JOIN source_targets t ON t.id = r.source_target_id
 LEFT JOIN company_boards b ON b.id = r.board_id
@@ -106,6 +109,7 @@ LEFT JOIN companies c ON c.id = b.company_id
 WHERE (t.user_id = sqlc.arg('user_id')
        OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = sqlc.arg('user_id') AND tc.company_id = b.company_id))
   AND (sqlc.narg('target_id')::uuid IS NULL OR r.source_target_id = sqlc.narg('target_id'))
+  AND (sqlc.narg('company_id')::uuid IS NULL OR b.company_id = sqlc.narg('company_id'))
   AND (sqlc.narg('from_at')::timestamptz IS NULL OR r.started_at >= sqlc.narg('from_at'))
   AND (sqlc.narg('to_at')::timestamptz IS NULL OR r.started_at <= sqlc.narg('to_at'))
   AND (sqlc.narg('q')::text IS NULL
@@ -124,18 +128,45 @@ WITH run AS (
 INSERT INTO scrape_run_errors (run_id, page, attempt, message)
 SELECT run.id, 0, sqlc.arg('attempt'), sqlc.arg('message') FROM run;
 
--- name: FinishBoardRun :exec
-INSERT INTO scrape_runs (id, kind, source, board_id, trigger, started_at, finished_at, stop_reason, listings, new_listings, elsewhere, removed)
+-- name: FinishBoardRun :execrows
+INSERT INTO scrape_runs (id, kind, source, board_id, trigger, started_at, finished_at, stop_reason, listings, new_listings, elsewhere, removed, reopened)
 VALUES (sqlc.arg('id'), 'board', sqlc.arg('source'), sqlc.arg('board_id'), sqlc.arg('trigger'), sqlc.arg('started_at'), NOW(), sqlc.arg('stop_reason'),
-        sqlc.arg('listings'), sqlc.arg('new_listings'), sqlc.arg('elsewhere'), sqlc.arg('removed'))
+        sqlc.arg('listings'), sqlc.arg('new_listings'), sqlc.arg('elsewhere'), sqlc.arg('removed'), sqlc.arg('reopened'))
 ON CONFLICT (id) DO UPDATE SET
     finished_at  = NOW(),
     stop_reason  = EXCLUDED.stop_reason,
     listings     = EXCLUDED.listings,
     new_listings = EXCLUDED.new_listings,
     elsewhere    = EXCLUDED.elsewhere,
-    removed      = EXCLUDED.removed
+    removed      = EXCLUDED.removed,
+    reopened     = EXCLUDED.reopened
 WHERE scrape_runs.finished_at IS NULL;
+
+-- name: InsertScrapeRunJobChanges :exec
+INSERT INTO scrape_run_job_changes (run_id, job_id, change, snapshot)
+SELECT sqlc.arg('run_id')::uuid, t.job_id, t.change, t.snapshot
+FROM jsonb_to_recordset(sqlc.arg('changes')::jsonb) AS t(job_id uuid, change text, snapshot jsonb);
+
+-- name: ListScrapeRunJobChanges :many
+SELECT run_id, job_id, change, (snapshot->>'Title')::text AS title
+FROM scrape_run_job_changes
+WHERE run_id = ANY(sqlc.arg('run_ids')::uuid[])
+ORDER BY run_id, change, title, job_id;
+
+-- name: ListScrapeRunJobSnapshots :many
+SELECT job_id, change, snapshot
+FROM scrape_run_job_changes
+WHERE run_id = sqlc.arg('run_id')
+ORDER BY change, snapshot->>'Title', job_id
+LIMIT 1000;
+
+-- name: ScrapeRunTracked :one
+SELECT EXISTS (
+  SELECT 1 FROM scrape_runs r
+  JOIN company_boards b ON b.id = r.board_id
+  JOIN tracked_companies tc ON tc.company_id = b.company_id AND tc.user_id = sqlc.arg('user_id')
+  WHERE r.id = sqlc.arg('run_id')
+)::bool;
 
 -- name: ListBoardHealthRuns :many
 SELECT b.id AS board_id, c.name AS company_name, b.source,

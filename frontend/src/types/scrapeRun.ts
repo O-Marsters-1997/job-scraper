@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { jobSchema } from "./job";
 
 const scrapeRunOutcomeSchema = z.enum([
 	"running",
@@ -6,6 +7,8 @@ const scrapeRunOutcomeSchema = z.enum([
 	"retried",
 	"failed",
 ]);
+
+const jobChangeKindSchema = z.enum(["new", "removed", "reopened"]);
 
 const scrapeRunSchema = z.object({
 	ID: z.string(),
@@ -27,6 +30,7 @@ const scrapeRunSchema = z.object({
 	Elsewhere: z.number(),
 	Repeat: z.number(),
 	Removed: z.number(),
+	Reopened: z.number(),
 	Deferred: z.number(),
 	Retries: z.number(),
 	Errors: z.array(
@@ -37,7 +41,26 @@ const scrapeRunSchema = z.object({
 			At: z.string(),
 		}),
 	),
+	Changes: z.array(
+		z.object({
+			JobID: z.string(),
+			Kind: jobChangeKindSchema,
+			Title: z.string(),
+		}),
+	),
 });
+
+export const scrapeRunJobSnapshotsSchema = z.array(
+	z.object({
+		JobID: z.string(),
+		Kind: jobChangeKindSchema,
+		Snapshot: jobSchema,
+	}),
+);
+
+export type ScrapeRunJobSnapshot = z.infer<
+	typeof scrapeRunJobSnapshotsSchema
+>[number];
 
 export const scrapeRunPageSchema = z.object({
 	Items: z.array(scrapeRunSchema),
@@ -79,6 +102,9 @@ export type SourceHealth = z.infer<typeof sourceHealthSchema>;
 
 export const scrapeRunSummarySchema = z.object({
 	Total: z.number(),
+	New: z.number(),
+	Removed: z.number(),
+	LastStartedAt: z.string().nullable(),
 	Facets: z.record(
 		z.enum(["outcome", "kind", "source", "trigger"]),
 		z.record(z.string(), z.number()),

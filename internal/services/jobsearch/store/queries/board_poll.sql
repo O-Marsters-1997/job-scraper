@@ -79,12 +79,13 @@ VALUES ($1, $2, NOW(), $3)
 ON CONFLICT (board_id, job_id) DO UPDATE
 SET last_seen_at = EXCLUDED.last_seen_at, last_snapshot_version = EXCLUDED.last_snapshot_version;
 
--- name: ReopenObservedBoardJobs :exec
+-- name: ReopenObservedBoardJobs :many
 UPDATE jobs SET closed_at = NULL
 WHERE id IN (SELECT job_id FROM board_job_observations WHERE board_id = $1 AND last_snapshot_version = $2)
-  AND closed_at IS NOT NULL;
+  AND closed_at IS NOT NULL
+RETURNING id;
 
--- name: CloseMissingBoardJobs :one
+-- name: CloseMissingBoardJobs :many
 -- Writes scoring's option_answers table directly; documented exception
 -- (ADR 0011, issue #264) pending #267.
 WITH closed AS (
@@ -95,7 +96,7 @@ WITH closed AS (
 ), cleared AS (
     DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed)
 )
-SELECT count(*) FROM closed;
+SELECT id FROM closed;
 
 -- name: CompletePollState :execrows
 UPDATE board_poll_state

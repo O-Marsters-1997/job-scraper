@@ -587,6 +587,7 @@ type ScrapeRun struct {
 	Retries        int32
 	BoardID        pgtype.UUID
 	Removed        int32
+	Reopened       int32
 }
 
 type ScrapeRunError struct {
@@ -596,6 +597,13 @@ type ScrapeRunError struct {
 	Attempt int32
 	Message string
 	At      pgtype.Timestamptz
+}
+
+type ScrapeRunJobChange struct {
+	RunID    pgtype.UUID
+	JobID    pgtype.UUID
+	Change   string
+	Snapshot []byte
 }
 
 type SearchConfig struct {

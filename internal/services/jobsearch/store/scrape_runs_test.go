@@ -1,6 +1,8 @@
 package store_test
 
 import (
+	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -8,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
@@ -396,12 +399,27 @@ func TestStore_BoardRuns(t *testing.T) {
 	if err := env.st.BoardRunAttemptFailed(ctx, run, 1, "boom"); err != nil {
 		t.Fatal(err)
 	}
-	tally := dto.BoardTally{Claimed: true, Listed: 5, New: 2, Elsewhere: 1, Removed: 3}
+	jobs := make([]dto.Job, 4)
+	for i := range jobs {
+		jobs[i], _ = saveJob(t, env.st, env.job(i+1))
+	}
+	tally := dto.BoardTally{Claimed: true, Listed: 5, Elsewhere: 1, Changes: []dto.JobChange{
+		{JobID: jobs[0].ID, Kind: dto.JobChangeNew},
+		{JobID: jobs[1].ID, Kind: dto.JobChangeNew},
+		{JobID: jobs[2].ID, Kind: dto.JobChangeRemoved},
+		{JobID: jobs[3].ID, Kind: dto.JobChangeReopened},
+	}}
 	if err := env.st.FinishBoardRun(ctx, run, dto.StopLastPage, tally); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.st.FinishBoardRun(ctx, run, dto.StopFailed, dto.BoardTally{}); err != nil {
+	if err := env.st.FinishBoardRun(ctx, run, dto.StopFailed, dto.BoardTally{Changes: tally.Changes[:1]}); err != nil {
 		t.Fatal(err)
+	}
+	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_run_job_changes WHERE run_id = $1 AND snapshot->>'Title' = 'Role 1' AND change = 'new'", run.ID); n != 1 {
+		t.Errorf("new change rows with a snapshot = %d, want 1", n)
+	}
+	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_run_job_changes WHERE run_id = $1", run.ID); n != 4 {
+		t.Errorf("change rows = %d, want 4 from the first finish only", n)
 	}
 
 	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_runs WHERE kind = 'board'"); n != 1 {
@@ -416,23 +434,95 @@ func TestStore_BoardRuns(t *testing.T) {
 		if got.Kind != dto.ScrapeRunBoard || got.CompanyName != "Poll Co" || got.CompanyID != env.companyID || got.BoardID != env.board.ID {
 			t.Errorf("run = %+v, want the Poll Co board run", got)
 		}
-		if got.Listings != 5 || got.New != 2 || got.Elsewhere != 1 || got.Removed != 3 || got.Outcome != dto.OutcomeRetried || len(got.Errors) != 1 {
+		if got.Listings != 5 || got.New != 2 || got.Elsewhere != 1 || got.Removed != 1 || got.Reopened != 1 || got.Outcome != dto.OutcomeRetried || len(got.Errors) != 1 {
 			t.Errorf("run = %+v, want the finished tally, retried, one error", got)
+		}
+		wantChanges := []dto.ScrapeRunJobChange{
+			{JobID: jobs[0].ID, Kind: dto.JobChangeNew, Title: "Role 1"},
+			{JobID: jobs[1].ID, Kind: dto.JobChangeNew, Title: "Role 2"},
+			{JobID: jobs[2].ID, Kind: dto.JobChangeRemoved, Title: "Role 3"},
+			{JobID: jobs[3].ID, Kind: dto.JobChangeReopened, Title: "Role 4"},
+		}
+		if diff := cmp.Diff(wantChanges, got.Changes); diff != "" {
+			t.Errorf("Changes (-want +got):\n%s", diff)
 		}
 	}
 	if runs, err := env.st.ListScrapeRuns(ctx, outsider, dto.ScrapeRunListOptions{Limit: 10}); err != nil || len(runs) != 0 {
 		t.Errorf("ListScrapeRuns(outsider) = %d runs, %v, want none", len(runs), err)
+	}
+	if _, err := env.pool.Exec(ctx, "UPDATE jobs SET title = 'Renamed' WHERE id = $1", jobs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	snaps, err := env.st.ListScrapeRunJobSnapshots(ctx, other, run.ID)
+	if err != nil || len(snaps) != 4 {
+		t.Fatalf("ListScrapeRunJobSnapshots() = %d snapshots, %v, want 4", len(snaps), err)
+	}
+	var first struct{ Title string }
+	if err := json.Unmarshal(snaps[0].Snapshot, &first); err != nil {
+		t.Fatal(err)
+	}
+	if snaps[0].JobID != jobs[0].ID || snaps[0].Kind != dto.JobChangeNew || first.Title != "Role 1" {
+		t.Errorf("first snapshot = %+v title %q, want job 1 as of the poll, not the renamed Job", snaps[0], first.Title)
+	}
+	if _, err := env.st.ListScrapeRunJobSnapshots(ctx, outsider, run.ID); !errors.Is(err, data.ErrNotFound) {
+		t.Errorf("ListScrapeRunJobSnapshots(outsider) err = %v, want ErrNotFound", err)
+	}
+	if _, err := env.st.ListScrapeRunJobSnapshots(ctx, other, "nope"); !errors.Is(err, store.ErrInvalidID) {
+		t.Errorf("ListScrapeRunJobSnapshots(bad id) err = %v, want ErrInvalidID", err)
 	}
 	byName := dto.ScrapeRunListOptions{ScrapeRunFilter: dto.ScrapeRunFilter{Q: "poll"}, Limit: 10}
 	if runs, err := env.st.ListScrapeRuns(ctx, env.userID, byName); err != nil || len(runs) != 1 {
 		t.Errorf("ListScrapeRuns(q=poll) = %d runs, %v, want the Company name to match", len(runs), err)
 	}
 
+	summaryFor := func(user, company string) dto.ScrapeRunSummary {
+		t.Helper()
+		from := time.Now().Add(-time.Hour)
+		summary, err := env.st.ScrapeRunSummary(ctx, user, dto.ScrapeRunSummaryOptions{
+			ScrapeRunFilter: dto.ScrapeRunFilter{CompanyID: company, From: from},
+			Bucket:          time.Hour, End: time.Now(),
+		})
+		if err != nil {
+			t.Fatalf("ScrapeRunSummary(company=%s) err = %v", company, err)
+		}
+		return summary
+	}
+	if got := summaryFor(env.userID, env.companyID); got.Total != 1 || got.New != 2 || got.Removed != 1 || got.LastStartedAt == nil {
+		t.Errorf("summary(company) = %+v, want 1 run with New 2, Removed 1 and a last start", got)
+	}
+	if got := summaryFor(outsider, env.companyID); got.Total != 0 || got.LastStartedAt != nil {
+		t.Errorf("summary(outsider) = %+v, want nothing for an untracked Company", got)
+	}
+	if got := summaryFor(env.userID, uuid.NewString()); got.Total != 0 {
+		t.Errorf("summary(other company) = %+v, want nothing", got)
+	}
+	byCompany := dto.ScrapeRunListOptions{ScrapeRunFilter: dto.ScrapeRunFilter{CompanyID: env.companyID}, Limit: 10}
+	if runs, err := env.st.ListScrapeRuns(ctx, env.userID, byCompany); err != nil || len(runs) != 1 {
+		t.Errorf("ListScrapeRuns(company) = %d runs, %v, want 1", len(runs), err)
+	}
+	if runs, err := env.st.ListScrapeRuns(ctx, outsider, byCompany); err != nil || len(runs) != 0 {
+		t.Errorf("ListScrapeRuns(outsider, company) = %d runs, %v, want none", len(runs), err)
+	}
+	invalid := dto.ScrapeRunListOptions{ScrapeRunFilter: dto.ScrapeRunFilter{CompanyID: "nope"}, Limit: 10}
+	if _, err := env.st.ListScrapeRuns(ctx, env.userID, invalid); !errors.Is(err, store.ErrInvalidID) {
+		t.Errorf("ListScrapeRuns(bad company) err = %v, want ErrInvalidID", err)
+	}
+
 	health, err := env.st.ListSourceHealth(ctx, env.userID)
 	if err != nil || len(health) != 1 {
 		t.Fatalf("ListSourceHealth() = %+v, %v, want the one tracked board", health, err)
 	}
-	if h := health[0]; h.Kind != dto.ScrapeRunBoard || h.CompanyName != "Poll Co" || h.Removed != 3 || len(h.Recent) != 1 {
+	if h := health[0]; h.Kind != dto.ScrapeRunBoard || h.CompanyName != "Poll Co" || h.Removed != 1 || len(h.Recent) != 1 {
 		t.Errorf("health = %+v, want the board named by Company with its removed count", h)
+	}
+
+	if _, err := env.pool.Exec(ctx, "UPDATE scrape_runs SET started_at = NOW() - INTERVAL '31 days' WHERE id = $1::uuid", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.st.DeleteExpiredScrapeRuns(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_run_job_changes"); n != 0 {
+		t.Errorf("change rows after the run expired = %d, want 0", n)
 	}
 }
