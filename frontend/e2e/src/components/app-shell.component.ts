@@ -4,6 +4,8 @@ export class AppShellComponent {
 	readonly overviewLink: Locator;
 	readonly jobsLink: Locator;
 	readonly applicationsLink: Locator;
+	readonly cvsLink: Locator;
+	readonly coverLettersLink: Locator;
 	readonly settingsLink: Locator;
 	readonly signOutButton: Locator;
 
@@ -14,6 +16,8 @@ export class AppShellComponent {
 		this.overviewLink = root.getByTitle("Overview");
 		this.jobsLink = root.getByTitle("Jobs");
 		this.applicationsLink = root.getByTitle("Applications");
+		this.cvsLink = root.getByTitle("CVs");
+		this.coverLettersLink = root.getByTitle("Cover letters");
 		this.settingsLink = root.getByTitle("Settings");
 		this.signOutButton = root.getByTitle("Sign out");
 	}

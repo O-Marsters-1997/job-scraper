@@ -12,6 +12,7 @@ const ROUTES = [
 	"/applications",
 	"/tasks",
 	"/cv-templates",
+	"/cover-letters",
 	"/settings/profile",
 	"/settings/scoring/role",
 	"/settings/scoring/stack",
