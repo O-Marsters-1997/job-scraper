@@ -20,6 +20,7 @@ import { Route as AuthJobsRouteImport } from './routes/_auth/jobs'
 import { Route as AuthInsightsRouteImport } from './routes/_auth/insights'
 import { Route as AuthExperienceRouteImport } from './routes/_auth/experience'
 import { Route as AuthCvTemplatesRouteImport } from './routes/_auth/cv-templates'
+import { Route as AuthCoverLettersRouteImport } from './routes/_auth/cover-letters'
 import { Route as AuthCompaniesRouteImport } from './routes/_auth/companies'
 import { Route as AuthApplicationsRouteImport } from './routes/_auth/applications'
 import { Route as AuthActivityRouteImport } from './routes/_auth/activity'
@@ -93,6 +94,11 @@ const AuthExperienceRoute = AuthExperienceRouteImport.update({
 const AuthCvTemplatesRoute = AuthCvTemplatesRouteImport.update({
   id: '/cv-templates',
   path: '/cv-templates',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthCoverLettersRoute = AuthCoverLettersRouteImport.update({
+  id: '/cover-letters',
+  path: '/cover-letters',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthCompaniesRoute = AuthCompaniesRouteImport.update({
@@ -207,6 +213,7 @@ export interface FileRoutesByFullPath {
   '/activity': typeof AuthActivityRoute
   '/applications': typeof AuthApplicationsRoute
   '/companies': typeof AuthCompaniesRoute
+  '/cover-letters': typeof AuthCoverLettersRoute
   '/cv-templates': typeof AuthCvTemplatesRoute
   '/experience': typeof AuthExperienceRoute
   '/insights': typeof AuthInsightsRoute
@@ -239,6 +246,7 @@ export interface FileRoutesByTo {
   '/activity': typeof AuthActivityRoute
   '/applications': typeof AuthApplicationsRoute
   '/companies': typeof AuthCompaniesRoute
+  '/cover-letters': typeof AuthCoverLettersRoute
   '/cv-templates': typeof AuthCvTemplatesRoute
   '/experience': typeof AuthExperienceRoute
   '/insights': typeof AuthInsightsRoute
@@ -271,6 +279,7 @@ export interface FileRoutesById {
   '/_auth/activity': typeof AuthActivityRoute
   '/_auth/applications': typeof AuthApplicationsRoute
   '/_auth/companies': typeof AuthCompaniesRoute
+  '/_auth/cover-letters': typeof AuthCoverLettersRoute
   '/_auth/cv-templates': typeof AuthCvTemplatesRoute
   '/_auth/experience': typeof AuthExperienceRoute
   '/_auth/insights': typeof AuthInsightsRoute
@@ -305,6 +314,7 @@ export interface FileRouteTypes {
     | '/activity'
     | '/applications'
     | '/companies'
+    | '/cover-letters'
     | '/cv-templates'
     | '/experience'
     | '/insights'
@@ -337,6 +347,7 @@ export interface FileRouteTypes {
     | '/activity'
     | '/applications'
     | '/companies'
+    | '/cover-letters'
     | '/cv-templates'
     | '/experience'
     | '/insights'
@@ -368,6 +379,7 @@ export interface FileRouteTypes {
     | '/_auth/activity'
     | '/_auth/applications'
     | '/_auth/companies'
+    | '/_auth/cover-letters'
     | '/_auth/cv-templates'
     | '/_auth/experience'
     | '/_auth/insights'
@@ -478,6 +490,13 @@ declare module '@tanstack/solid-router' {
       path: '/cv-templates'
       fullPath: '/cv-templates'
       preLoaderRoute: typeof AuthCvTemplatesRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/cover-letters': {
+      id: '/_auth/cover-letters'
+      path: '/cover-letters'
+      fullPath: '/cover-letters'
+      preLoaderRoute: typeof AuthCoverLettersRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/companies': {
@@ -668,6 +687,7 @@ interface AuthRouteChildren {
   AuthActivityRoute: typeof AuthActivityRoute
   AuthApplicationsRoute: typeof AuthApplicationsRoute
   AuthCompaniesRoute: typeof AuthCompaniesRoute
+  AuthCoverLettersRoute: typeof AuthCoverLettersRoute
   AuthCvTemplatesRoute: typeof AuthCvTemplatesRoute
   AuthExperienceRoute: typeof AuthExperienceRoute
   AuthInsightsRoute: typeof AuthInsightsRoute
@@ -687,6 +707,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthActivityRoute: AuthActivityRoute,
   AuthApplicationsRoute: AuthApplicationsRoute,
   AuthCompaniesRoute: AuthCompaniesRoute,
+  AuthCoverLettersRoute: AuthCoverLettersRoute,
   AuthCvTemplatesRoute: AuthCvTemplatesRoute,
   AuthExperienceRoute: AuthExperienceRoute,
   AuthInsightsRoute: AuthInsightsRoute,

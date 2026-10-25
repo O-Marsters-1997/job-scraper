@@ -24,6 +24,7 @@ test.describe("Mobile navigation", () => {
 		for (const name of [
 			"Overview",
 			"Companies",
+			"Activity",
 			"Experience",
 			"Insights",
 			"Settings",
