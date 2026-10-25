@@ -53,6 +53,7 @@ type QueuePublisher interface {
 
 type Store interface {
 	JobStats(ctx context.Context, userID string, options dto.JobStatsOptions) (dto.JobStats, error)
+	JobInsightGroups(ctx context.Context, userID string, options dto.JobInsightsOptions) ([]dto.JobInsightGroup, error)
 	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
 	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
 	ListJobListings(ctx context.Context, jobID string) ([]dto.JobListing, error)

@@ -8,25 +8,16 @@ import {
 	sourceHex,
 	useChartCanvasRef,
 } from "@/lib/charts";
-import { firstFoundBy } from "@/lib/insights";
-import type { Job } from "@/types/job";
+import type { JobInsights } from "@/types/job";
 
-export function FirstFoundByChart(props: { jobs: Job[] }) {
+export function FirstFoundByChart(props: { insights: JobInsights }) {
 	const data = createThemedMemo(() => {
-		const counts: Record<string, number> = {};
-		for (const job of props.jobs) {
-			if (job.Band !== "good" && job.Band !== "great") continue;
-			const who = firstFoundBy(job);
-			counts[who] = (counts[who] ?? 0) + 1;
-		}
-		const finders = Object.keys(counts).sort(
-			(a, b) => (counts[b] ?? 0) - (counts[a] ?? 0),
-		);
+		const finders = props.insights.foundBy.map((f) => f.name);
 		return {
 			labels: finders,
 			datasets: [
 				{
-					data: finders.map((f) => counts[f] ?? 0),
+					data: props.insights.foundBy.map((f) => f.count),
 					backgroundColor: finders.map((f) => hexAlpha(sourceHex(f), "26")),
 					borderColor: finders.map((f) => sourceHex(f)),
 					borderWidth: 1.5,

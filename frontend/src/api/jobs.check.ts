@@ -5,6 +5,7 @@ import { API_BASE } from "./config";
 import {
 	fetchAllJobs,
 	fetchJob,
+	fetchJobInsights,
 	fetchJobOverview,
 	fetchJobPage,
 	jobPageQuery,
@@ -161,6 +162,29 @@ try {
 	assert.equal(url.searchParams.get("ranked"), "0");
 	assert.ok(url.searchParams.get("day_start"), "client sends its day start");
 	assert.equal(overview.total, 4);
+} finally {
+	globalThis.fetch = originalFetch;
+}
+
+globalThis.fetch = async (input) => {
+	requested.push(String(input));
+	return Response.json({
+		total: 1,
+		scored: 1,
+		daily: [{ day: "2026-10-01", count: 1 }],
+		sources: [{ source: "lever", count: 1, scored: 1, avgScore: 70 }],
+		scoreBands: [0, 0, 0, 1, 0],
+		foundBy: [],
+	});
+};
+try {
+	requested.length = 0;
+	const insights = await fetchJobInsights();
+	const url = new URL(requested[0] ?? "");
+	assert.equal(requested.length, 1, "insights is one request, not a page walk");
+	assert.equal(url.pathname, "/jobs/insights");
+	assert.ok(url.searchParams.get("tz"), "client sends its time zone");
+	assert.equal(insights.total, 1);
 } finally {
 	globalThis.fetch = originalFetch;
 }

@@ -1,7 +1,7 @@
 import { createQuery, queryOptions } from "@tanstack/solid-query";
 import {
-	fetchAllJobs,
 	fetchJob,
+	fetchJobInsights,
 	fetchJobOverview,
 	fetchJobPage,
 	markJobsSeen,
@@ -15,9 +15,9 @@ import { useServerTable } from "./useServerTable";
 
 const JOBS_PAGE_SIZE = 25;
 
-export const allJobsQueryOptions = queryOptions({
-	queryKey: keys.jobs.full(),
-	queryFn: fetchAllJobs,
+export const jobInsightsQueryOptions = queryOptions({
+	queryKey: keys.jobs.insights(),
+	queryFn: fetchJobInsights,
 });
 
 export const jobOverviewQueryOptions = (ranked: boolean) =>
@@ -30,8 +30,8 @@ export function useJobOverview(ranked: () => boolean) {
 	return createQuery(() => jobOverviewQueryOptions(ranked()));
 }
 
-export function useAllJobs() {
-	return createQuery(() => allJobsQueryOptions);
+export function useJobInsights() {
+	return createQuery(() => jobInsightsQueryOptions);
 }
 
 export function useJobPages(
@@ -62,22 +62,18 @@ export function useJob(id: () => string) {
 }
 
 export function useMarkJobsSeen() {
-	return useInvalidatingMutation(
-		markJobsSeen,
-		[keys.jobs.page(), keys.jobs.full()],
-		{
-			patch: (queryClient, _result, { jobIds, seen }) => {
-				const ids = new Set(jobIds);
-				patchJobPages(queryClient, (job) => ids.has(job.ID), { Seen: seen });
-				for (const id of jobIds) {
-					queryClient.setQueryData<Job>(
-						keys.jobs.detail(id),
-						(job) => job && { ...job, Seen: seen },
-					);
-				}
-			},
+	return useInvalidatingMutation(markJobsSeen, [keys.jobs.page()], {
+		patch: (queryClient, _result, { jobIds, seen }) => {
+			const ids = new Set(jobIds);
+			patchJobPages(queryClient, (job) => ids.has(job.ID), { Seen: seen });
+			for (const id of jobIds) {
+				queryClient.setQueryData<Job>(
+					keys.jobs.detail(id),
+					(job) => job && { ...job, Seen: seen },
+				);
+			}
 		},
-	);
+	});
 }
 
 export function useMarkSeenAfterGrade() {

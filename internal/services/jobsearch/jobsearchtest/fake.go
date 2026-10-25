@@ -65,6 +65,20 @@ type FakeStore struct {
 	discoveries    map[string]map[string]discovery
 	detailPending  map[string]bool
 	datedCards     map[string]dto.Job
+
+	insightGroups []dto.JobInsightGroup
+}
+
+func (f *FakeStore) SeedInsightGroups(groups ...dto.JobInsightGroup) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.insightGroups = groups
+}
+
+func (f *FakeStore) JobInsightGroups(context.Context, string, dto.JobInsightsOptions) ([]dto.JobInsightGroup, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.insightGroups), nil
 }
 
 func NewFakeStore() *FakeStore {

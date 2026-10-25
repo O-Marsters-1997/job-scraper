@@ -10,7 +10,7 @@ export const keys = {
 		all: jobsAll,
 		page: () => [...jobsAll, "page"] as const,
 		list: (params: object) => [...jobsAll, "page", params] as const,
-		full: () => [...jobsAll, "full"] as const,
+		insights: () => [...jobsAll, "insights"] as const,
 		overview: (ranked: boolean) => [...jobsAll, "overview", ranked] as const,
 		detail: (id: string) => [...jobsAll, "detail", id] as const,
 	},

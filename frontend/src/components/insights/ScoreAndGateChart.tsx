@@ -1,5 +1,5 @@
 import { Bar } from "solid-chartjs";
-import { createMemo, Show } from "solid-js";
+import { Show } from "solid-js";
 import { Card } from "@/components/ui/card";
 import {
 	createThemedMemo,
@@ -8,37 +8,25 @@ import {
 	useChartCanvasRef,
 	verticalBarOptions,
 } from "@/lib/charts";
-import type { Job } from "@/types/job";
+import type { JobInsights } from "@/types/job";
 
 const SCORE_BANDS = ["0–19", "20–39", "40–59", "60–79", "80–100"];
 
-export function ScoreAndGateChart(props: { jobs: Job[] }) {
-	const gateStats = createMemo(() => {
-		let scored = 0;
-		let unscored = 0;
-		for (const job of props.jobs) {
-			if (job.SuitabilityScore != null) scored++;
-			else unscored++;
-		}
-		return { scored, unscored };
+export function ScoreAndGateChart(props: { insights: JobInsights }) {
+	const gateStats = () => ({
+		scored: props.insights.scored,
+		unscored: props.insights.total - props.insights.scored,
 	});
 
 	const hasScores = () => gateStats().scored > 0;
 
 	const scoreDistData = createThemedMemo(() => {
-		const bands = [0, 0, 0, 0, 0];
-		for (const job of props.jobs) {
-			if (job.SuitabilityScore != null) {
-				const idx = Math.min(Math.floor(job.SuitabilityScore / 20), 4);
-				bands[idx] = (bands[idx] ?? 0) + 1;
-			}
-		}
 		const primary = primaryHex();
 		return {
 			labels: SCORE_BANDS,
 			datasets: [
 				{
-					data: bands,
+					data: props.insights.scoreBands,
 					backgroundColor: hexAlpha(primary, "26"),
 					borderColor: primary,
 					borderWidth: 1.5,

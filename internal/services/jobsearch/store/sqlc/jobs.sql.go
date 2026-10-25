@@ -188,6 +188,78 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 	return i, err
 }
 
+const jobInsightGroups = `-- name: JobInsightGroups :many
+SELECT to_char(j.scraped_at AT TIME ZONE $1::text, 'YYYY-MM-DD')::text AS day,
+       j.source,
+       COALESCE(LEAST(js.suitability_score / 20, 4), -1)::int AS score_band,
+       CASE WHEN js.band IN ('good', 'great') THEN COALESCE(
+         NULLIF(COALESCE(j.discovered_via, (SELECT cb.discovered_via FROM company_boards cb WHERE cb.id = j.primary_board_id), ''), ''),
+         (SELECT ju.source FROM job_urls ju WHERE ju.job_id = j.id ORDER BY ju.first_seen_at, ju.normalized_url LIMIT 1),
+         j.source) ELSE '' END::text AS found_by,
+       count(*)::int AS jobs,
+       count(js.suitability_score)::int AS scored,
+       COALESCE(sum(js.suitability_score), 0)::int AS score_sum
+FROM jobs j
+JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $2::uuid
+WHERE j.closed_at IS NULL
+  AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > $3::timestamptz - interval '90 days'
+  AND COALESCE(j.company_slug, '') <> ALL($4::text[])
+  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND jg.grade IS DISTINCT FROM 'no'
+GROUP BY 1, 2, 3, 4
+`
+
+type JobInsightGroupsParams struct {
+	Tz                   string
+	UserID               pgtype.UUID
+	Now                  pgtype.Timestamptz
+	ExcludedCompanySlugs []string
+}
+
+type JobInsightGroupsRow struct {
+	Day       string
+	Source    string
+	ScoreBand int32
+	FoundBy   string
+	Jobs      int32
+	Scored    int32
+	ScoreSum  int32
+}
+
+func (q *Queries) JobInsightGroups(ctx context.Context, arg JobInsightGroupsParams) ([]JobInsightGroupsRow, error) {
+	rows, err := q.db.Query(ctx, jobInsightGroups,
+		arg.Tz,
+		arg.UserID,
+		arg.Now,
+		arg.ExcludedCompanySlugs,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []JobInsightGroupsRow
+	for rows.Next() {
+		var i JobInsightGroupsRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Source,
+			&i.ScoreBand,
+			&i.FoundBy,
+			&i.Jobs,
+			&i.Scored,
+			&i.ScoreSum,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const jobStats = `-- name: JobStats :one
 SELECT count(*)::int AS total,
        count(DISTINCT j.source)::int AS sources,

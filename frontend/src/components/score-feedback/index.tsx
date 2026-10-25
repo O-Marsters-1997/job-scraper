@@ -99,12 +99,7 @@ export default function ScoreFeedbackPanel() {
 	};
 
 	function cachedJob(id: string): Job | undefined {
-		return (
-			queryClient.getQueryData<Job>(keys.jobs.detail(id)) ??
-			queryClient
-				.getQueryData<Job[]>(keys.jobs.full())
-				?.find((j) => j.ID === id)
-		);
+		return queryClient.getQueryData<Job>(keys.jobs.detail(id));
 	}
 
 	function startJob(id: string) {
