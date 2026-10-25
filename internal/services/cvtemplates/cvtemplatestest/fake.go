@@ -105,10 +105,38 @@ func (f *FakeStore) SetTabVisible(_ context.Context, userID, docID, tabID string
 	for i := range tabs {
 		if tabs[i].TabID == tabID {
 			tabs[i].Visible = visible
+			tabs[i].IsDefault = tabs[i].IsDefault && visible
 			return nil
 		}
 	}
 	return apperr.NotFound("tab not found")
+}
+
+func (f *FakeStore) SetTabDefault(_ context.Context, userID, docID, tabID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.docFor(userID, docID)
+	if !ok {
+		return apperr.NotFound("tab not found")
+	}
+	target := -1
+	for i, tab := range f.tabs[d.ID] {
+		if tab.TabID == tabID && tab.Visible {
+			target = i
+		}
+	}
+	if target < 0 {
+		return apperr.NotFound("tab not found")
+	}
+	for id, tabs := range f.tabs {
+		if f.docs[id].UserID != userID {
+			continue
+		}
+		for i := range tabs {
+			tabs[i].IsDefault = id == d.ID && i == target
+		}
+	}
+	return nil
 }
 
 var _ cvtemplates.Store = (*FakeStore)(nil)

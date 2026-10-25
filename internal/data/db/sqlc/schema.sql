@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS tracked_doc_tabs (
     tab_id         TEXT        NOT NULL,
     title          TEXT        NOT NULL DEFAULT '',
     visible        BOOLEAN     NOT NULL DEFAULT TRUE,
+    is_default     BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (tracked_doc_id, tab_id)
 );

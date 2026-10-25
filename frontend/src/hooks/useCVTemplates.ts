@@ -3,6 +3,7 @@ import {
 	addTrackedDoc,
 	fetchCVTemplates,
 	hideTab,
+	setDefaultTab,
 	showTab,
 } from "../api/cvTemplates";
 import { keys } from "../api/keys";
@@ -30,6 +31,14 @@ export function useHideTab() {
 	return useInvalidatingMutation(
 		({ docId, tabId }: { docId: string; tabId: string }) =>
 			hideTab(docId, tabId),
+		[keys.cvTemplates],
+	);
+}
+
+export function useSetDefaultTab() {
+	return useInvalidatingMutation(
+		({ docId, tabId }: { docId: string; tabId: string }) =>
+			setDefaultTab(docId, tabId),
 		[keys.cvTemplates],
 	);
 }

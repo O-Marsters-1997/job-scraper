@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "@tanstack/solid-router";
 import { Show } from "solid-js";
+import { FavouriteStar } from "@/components/FavouriteStar";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
@@ -12,6 +13,7 @@ export function CVRow(props: {
 	showPending: boolean;
 	onHide: () => void;
 	onRestore: () => void;
+	onSetDefault?: (() => void) | undefined;
 }) {
 	const navigate = useNavigate();
 	return (
@@ -47,6 +49,14 @@ export function CVRow(props: {
 							Open {props.cv.Title || "document"} in Google Docs
 						</span>
 					</a>
+					<Show when={props.onSetDefault && props.cv.Visible}>
+						<FavouriteStar
+							favourite={props.cv.Default}
+							companyName={props.cv.Title}
+							label={`Default ${props.cv.Title}`}
+							onToggle={() => props.onSetDefault?.()}
+						/>
+					</Show>
 					<Show when={!props.cv.Visible}>
 						<Badge variant="secondary">Hidden</Badge>
 					</Show>

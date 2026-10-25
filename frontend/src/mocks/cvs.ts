@@ -21,6 +21,7 @@ export function addTrackedDoc(url: string, kind: TrackedDocKind): void {
 		ModifiedAt: new Date().toISOString(),
 		DocURL: url,
 		Visible: true,
+		Default: false,
 	};
 	if (kind === "letter") {
 		letters = [...letters, added];
@@ -35,9 +36,18 @@ export function setTabVisibility(
 	visible: boolean,
 ): void {
 	const update = (cv: CV) =>
-		cv.DocID === docId && cv.TabID === tabId ? { ...cv, Visible: visible } : cv;
+		cv.DocID === docId && cv.TabID === tabId
+			? { ...cv, Visible: visible, Default: cv.Default && visible }
+			: cv;
 	cvs = cvs.map(update);
 	letters = letters.map(update);
+}
+
+export function setTabDefault(docId: string, tabId: string): void {
+	cvs = cvs.map((cv) => ({
+		...cv,
+		Default: cv.DocID === docId && cv.TabID === tabId && cv.Visible,
+	}));
 }
 
 const MOCK_PDF = `%PDF-1.4

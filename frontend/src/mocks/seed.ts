@@ -243,6 +243,7 @@ const cvs: CV[] = [
 		ModifiedAt: faker.date.recent({ days: 5 }).toISOString(),
 		DocURL: "https://docs.google.com/document/d/doc-1/edit",
 		Visible: true,
+		Default: false,
 	},
 	{
 		DocID: "doc-1",
@@ -252,6 +253,7 @@ const cvs: CV[] = [
 		ModifiedAt: faker.date.recent({ days: 10 }).toISOString(),
 		DocURL: "https://docs.google.com/document/d/doc-1/edit",
 		Visible: true,
+		Default: false,
 	},
 	{
 		DocID: "doc-2",
@@ -261,6 +263,7 @@ const cvs: CV[] = [
 		ModifiedAt: faker.date.recent({ days: 20 }).toISOString(),
 		DocURL: "https://docs.google.com/document/d/doc-2/edit",
 		Visible: false,
+		Default: false,
 	},
 ];
 

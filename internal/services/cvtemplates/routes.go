@@ -24,6 +24,7 @@ func (m *Module) Routes(r chi.Router) {
 		r.Delete("/{id}", handlers.Delete(m.store.RemoveTrackedDoc))
 		r.Post("/{docId}/tabs/{tabId}/hide", handlers.Update(m.svc.HideTab))
 		r.Post("/{docId}/tabs/{tabId}/show", handlers.Update(m.svc.ShowTab))
+		r.Post("/{docId}/tabs/{tabId}/default", handlers.Update(m.svc.SetDefaultTab))
 	})
 }
 

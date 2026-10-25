@@ -12,6 +12,7 @@ export const cvSchema = z.object({
 	ModifiedAt: z.string(),
 	DocURL: z.string(),
 	Visible: z.boolean(),
+	Default: z.boolean(),
 });
 
 export type CV = z.infer<typeof cvSchema>;

@@ -729,6 +729,7 @@ type TrackedDocTab struct {
 	TabID        string
 	Title        string
 	Visible      bool
+	IsDefault    bool
 	CreatedAt    pgtype.Timestamptz
 }
 

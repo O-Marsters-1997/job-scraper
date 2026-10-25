@@ -50,6 +50,19 @@ export async function hideTab(docId: string, tabId: string): Promise<void> {
 	);
 }
 
+export async function setDefaultTab(
+	docId: string,
+	tabId: string,
+): Promise<void> {
+	return mocked(
+		(db) => db.setTabDefault(docId, tabId),
+		() =>
+			apiFetchVoid(`/tracked-docs/${docId}/tabs/${tabId}/default`, {
+				method: "POST",
+			}),
+	);
+}
+
 export async function showTab(docId: string, tabId: string): Promise<void> {
 	return mocked(
 		(db) => db.setTabVisibility(docId, tabId, true),
