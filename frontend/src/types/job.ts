@@ -81,3 +81,21 @@ export const jobOverviewSchema = z.object({
 });
 
 export type JobOverview = z.infer<typeof jobOverviewSchema>;
+
+export const jobInsightsSchema = z.object({
+	total: z.number(),
+	scored: z.number(),
+	daily: z.object({ day: z.string(), count: z.number() }).array(),
+	sources: z
+		.object({
+			source: z.string(),
+			count: z.number(),
+			scored: z.number(),
+			avgScore: z.number(),
+		})
+		.array(),
+	scoreBands: z.number().array(),
+	foundBy: z.object({ name: z.string(), count: z.number() }).array(),
+});
+
+export type JobInsights = z.infer<typeof jobInsightsSchema>;

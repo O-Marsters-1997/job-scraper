@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -452,5 +453,34 @@ func TestStore_JobStats(t *testing.T) {
 	want := dto.JobStats{Total: 3, Sources: 2, NewToday: 2, TodaySources: 1}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("JobStats() (-want +got):\n%s", diff)
+	}
+}
+
+func TestStore_JobInsightGroups(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newUserStore(t)
+	ctx := t.Context()
+	insertListing(t, pool, userID, 1, listing{score: new(85), band: "great", source: "lever", discovered: daysAgo(0.1)})
+	insertListing(t, pool, userID, 2, listing{score: new(95), band: "great", source: "lever", discovered: daysAgo(0.2)})
+	insertListing(t, pool, userID, 3, listing{score: new(30), band: "poor", source: "greenhouse", discovered: daysAgo(3)})
+	viaListing := insertListing(t, pool, userID, 4, listing{score: new(70), band: "good", source: "ashby", discovered: daysAgo(3)})
+	insertListing(t, pool, userID, 5, listing{score: new(50), source: "ashby", closed: true})
+	insertListing(t, pool, userID, 6, listing{score: new(50), source: "ashby", slug: "globex"})
+	if _, err := pool.Exec(ctx, `INSERT INTO job_urls (job_id, source, normalized_url, first_seen_at) VALUES ($1::uuid, 'linkedin', 'https://linkedin.example/4', $2)`, viaListing, daysAgo(3)); err != nil {
+		t.Fatalf("insert job url: %v", err)
+	}
+
+	got, err := st.JobInsightGroups(ctx, userID, dto.JobInsightsOptions{Now: pageNow, TZ: "UTC", ExcludedCompanySlugs: []string{"globex"}})
+	if err != nil {
+		t.Fatalf("JobInsightGroups() err = %v", err)
+	}
+	want := []dto.JobInsightGroup{
+		{Day: "2026-02-26", Source: "ashby", ScoreBand: 3, FoundBy: "linkedin", Jobs: 1, Scored: 1, ScoreSum: 70},
+		{Day: "2026-02-26", Source: "greenhouse", ScoreBand: 1, Jobs: 1, Scored: 1, ScoreSum: 30},
+		{Day: "2026-03-01", Source: "lever", ScoreBand: 4, FoundBy: "lever", Jobs: 2, Scored: 2, ScoreSum: 180},
+	}
+	sortGroups := cmpopts.SortSlices(func(a, b dto.JobInsightGroup) bool { return a.Day+a.Source < b.Day+b.Source })
+	if diff := cmp.Diff(want, got, sortGroups); diff != "" {
+		t.Errorf("JobInsightGroups() (-want +got):\n%s", diff)
 	}
 }
