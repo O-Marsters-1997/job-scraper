@@ -6,20 +6,33 @@ export type ChecklistStepKey = "cv" | "coverLetter" | "apply" | "followUp";
 export interface ChecklistInput {
 	statusSystemKey: ApplicationStatus["SystemKey"];
 	hasKeptDraft: boolean;
+	hasOpenDraft: boolean;
+	hasLetter: boolean;
 	hasDoneLetter: boolean;
 	applyTaskOpen: boolean;
 	chaseBy: string | null;
 }
 
-export function checklistDone(
+export type ChecklistState = "todo" | "inProgress" | "done";
+
+export function checklistState(
 	input: ChecklistInput,
-): Record<ChecklistStepKey, boolean> {
+): Record<ChecklistStepKey, ChecklistState> {
 	const pastDraft = input.statusSystemKey !== "draft";
 	return {
-		cv: input.hasKeptDraft || pastDraft,
-		coverLetter: input.hasDoneLetter,
-		apply: pastDraft && !input.applyTaskOpen,
-		followUp: false,
+		cv:
+			input.hasKeptDraft || pastDraft
+				? "done"
+				: input.hasOpenDraft
+					? "inProgress"
+					: "todo",
+		coverLetter: input.hasDoneLetter
+			? "done"
+			: input.hasLetter
+				? "inProgress"
+				: "todo",
+		apply: pastDraft && !input.applyTaskOpen ? "done" : "todo",
+		followUp: "todo",
 	};
 }
 
