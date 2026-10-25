@@ -22,6 +22,7 @@ func toTabDTO(t sqlc.TrackedDocTab) dto.Tab {
 		TabID:        t.TabID,
 		Title:        t.Title,
 		Visible:      t.Visible,
+		IsDefault:    t.IsDefault,
 		CreatedAt:    t.CreatedAt.Time,
 	}
 }

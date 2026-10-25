@@ -53,7 +53,10 @@ export function CvSheet(props: CvSheetProps) {
 		await navigate({ to: "/tailoring/drafts/$id", params: { id: draft.id } });
 	});
 
-	const baseCvs = () => loadedData(cvs)?.filter((c) => c.Visible) ?? [];
+	const baseCvs = () =>
+		(loadedData(cvs)?.filter((c) => c.Visible) ?? []).sort(
+			(a, b) => Number(b.Default) - Number(a.Default),
+		);
 	const keptDrafts = () =>
 		loadedData(drafts)?.filter((d) => d.outcome === "kept") ?? [];
 

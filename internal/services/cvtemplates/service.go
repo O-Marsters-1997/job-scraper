@@ -34,6 +34,7 @@ type Store interface {
 	EnsureTabs(ctx context.Context, trackedDocID string, tabIDs, titles []string) error
 	ListTabs(ctx context.Context, trackedDocID string) ([]dto.Tab, error)
 	SetTabVisible(ctx context.Context, userID, docID, tabID string, visible bool) error
+	SetTabDefault(ctx context.Context, userID, docID, tabID string) error
 }
 
 type CV struct {
@@ -44,6 +45,7 @@ type CV struct {
 	ModifiedAt time.Time
 	DocURL     string
 	Visible    bool
+	Default    bool
 }
 
 type Service struct {
@@ -102,9 +104,9 @@ func (s *Service) List(ctx context.Context, userID string, kind dto.TrackedDocKi
 		if err != nil {
 			return nil, fmt.Errorf("cvtemplates.List list tabs: %w", err)
 		}
-		visibilityOf := make(map[string]bool, len(persisted))
+		stateOf := make(map[string]dto.Tab, len(persisted))
 		for _, p := range persisted {
-			visibilityOf[p.TabID] = p.Visible
+			stateOf[p.TabID] = p
 		}
 		for _, tab := range tabs {
 			cvs = append(cvs, CV{
@@ -114,7 +116,8 @@ func (s *Service) List(ctx context.Context, userID string, kind dto.TrackedDocKi
 				SourceDoc:  meta.Title,
 				ModifiedAt: meta.ModifiedAt,
 				DocURL:     docTabURL(doc.DocID, tab.ID),
-				Visible:    visibilityOf[tab.ID],
+				Visible:    stateOf[tab.ID].Visible,
+				Default:    stateOf[tab.ID].IsDefault,
 			})
 		}
 	}

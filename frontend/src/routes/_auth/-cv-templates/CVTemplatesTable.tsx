@@ -25,6 +25,7 @@ export function CVTemplatesTable(props: {
 	showPending: boolean;
 	onHide: (cv: CV) => void;
 	onRestore: (cv: CV) => void;
+	onSetDefault?: ((cv: CV) => void) | undefined;
 }) {
 	return (
 		<Card class="overflow-hidden">
@@ -56,6 +57,9 @@ export function CVTemplatesTable(props: {
 								showPending={props.showPending}
 								onHide={() => props.onHide(cv)}
 								onRestore={() => props.onRestore(cv)}
+								onSetDefault={
+									props.onSetDefault && (() => props.onSetDefault?.(cv))
+								}
 							/>
 						)}
 					</For>

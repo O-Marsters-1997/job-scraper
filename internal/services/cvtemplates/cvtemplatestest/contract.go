@@ -185,6 +185,86 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	defaults := func(t *testing.T, st cvtemplates.Store, trackedDocID string) []string {
+		t.Helper()
+		tabs, err := st.ListTabs(t.Context(), trackedDocID)
+		if err != nil {
+			t.Fatalf("ListTabs(%q) err = %v", trackedDocID, err)
+		}
+		var got []string
+		for _, tab := range tabs {
+			if tab.IsDefault {
+				got = append(got, tab.TabID)
+			}
+		}
+		return got
+	}
+	setDefault := func(t *testing.T, st cvtemplates.Store, userID, docID, tabID string) {
+		t.Helper()
+		if err := st.SetTabDefault(t.Context(), userID, docID, tabID); err != nil {
+			t.Fatalf("SetTabDefault(%q, %q, %q) err = %v", userID, docID, tabID, err)
+		}
+	}
+
+	t.Run("setting a default moves it across docs", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		idA := Track(t, f.Store, f.UserID, "docA")
+		idB := Track(t, f.Store, f.UserID, "docB")
+		ensure(t, f.Store, idA, "t1", "t2")
+		ensure(t, f.Store, idB, "t1")
+
+		setDefault(t, f.Store, f.UserID, "docA", "t1")
+		if got := defaults(t, f.Store, idA); len(got) != 1 || got[0] != "t1" {
+			t.Fatalf("defaults(docA) = %v, want [t1]", got)
+		}
+		setDefault(t, f.Store, f.UserID, "docA", "t2")
+		if got := defaults(t, f.Store, idA); len(got) != 1 || got[0] != "t2" {
+			t.Errorf("defaults(docA) = %v, want [t2]", got)
+		}
+		setDefault(t, f.Store, f.UserID, "docB", "t1")
+		if got := defaults(t, f.Store, idA); len(got) != 0 {
+			t.Errorf("defaults(docA) = %v, want none after docB default", got)
+		}
+		if got := defaults(t, f.Store, idB); len(got) != 1 {
+			t.Errorf("defaults(docB) = %v, want [t1]", got)
+		}
+	})
+
+	t.Run("hiding the default clears it", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		id := Track(t, f.Store, f.UserID, "docA")
+		ensure(t, f.Store, id, "t1")
+		setDefault(t, f.Store, f.UserID, "docA", "t1")
+		setVisible(t, f.Store, f.UserID, "docA", "t1", false)
+		if got := defaults(t, f.Store, id); len(got) != 0 {
+			t.Errorf("defaults = %v, want none after hide", got)
+		}
+	})
+
+	t.Run("default is per user and rejects missing, hidden or foreign tabs", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		id := Track(t, f.Store, f.UserID, "docA")
+		otherID := Track(t, f.Store, f.Other, "docB")
+		ensure(t, f.Store, id, "t1", "t2")
+		ensure(t, f.Store, otherID, "t1")
+		setDefault(t, f.Store, f.UserID, "docA", "t1")
+		setDefault(t, f.Store, f.Other, "docB", "t1")
+		setVisible(t, f.Store, f.UserID, "docA", "t2", false)
+
+		wantNotFound(t, "SetTabDefault(missing)", f.Store.SetTabDefault(t.Context(), f.UserID, "docA", "nope"))
+		wantNotFound(t, "SetTabDefault(hidden)", f.Store.SetTabDefault(t.Context(), f.UserID, "docA", "t2"))
+		wantNotFound(t, "SetTabDefault(foreign)", f.Store.SetTabDefault(t.Context(), f.UserID, "docB", "t1"))
+		if got := defaults(t, f.Store, id); len(got) != 1 || got[0] != "t1" {
+			t.Errorf("defaults(user) = %v, want [t1] kept after failed sets", got)
+		}
+		if got := defaults(t, f.Store, otherID); len(got) != 1 {
+			t.Errorf("defaults(other) = %v, want [t1] untouched", got)
+		}
+	})
+
 	t.Run("ensure tabs inserts default-visible rows", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)

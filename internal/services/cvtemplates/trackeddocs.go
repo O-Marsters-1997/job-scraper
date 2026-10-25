@@ -46,6 +46,10 @@ func (s *Service) HideTab(ctx context.Context, userID string, in dto.TabVisibili
 	return struct{}{}, s.store.SetTabVisible(ctx, userID, in.DocID, in.TabID, false)
 }
 
+func (s *Service) SetDefaultTab(ctx context.Context, userID string, in dto.TabVisibilityInput) (struct{}, error) {
+	return struct{}{}, s.store.SetTabDefault(ctx, userID, in.DocID, in.TabID)
+}
+
 func (s *Service) ShowTab(ctx context.Context, userID string, in dto.TabVisibilityInput) (struct{}, error) {
 	return struct{}{}, s.store.SetTabVisible(ctx, userID, in.DocID, in.TabID, true)
 }

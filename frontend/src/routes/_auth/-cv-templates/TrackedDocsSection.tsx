@@ -8,6 +8,7 @@ import { SkeletonList } from "@/components/ui/skeleton";
 import {
 	useCVTemplates,
 	useHideTab,
+	useSetDefaultTab,
 	useShowTab,
 } from "../../../hooks/useCVTemplates";
 import { useTableSort } from "../../../hooks/useTableSort";
@@ -29,6 +30,7 @@ export function TrackedDocsSection(props: {
 	const query = useCVTemplates(() => props.kind);
 	const hideMutation = useHideTab();
 	const showMutation = useShowTab();
+	const defaultMutation = useSetDefaultTab();
 
 	const handleHide = (cv: CV) => {
 		hideMutation.mutate({ docId: cv.DocID, tabId: cv.TabID });
@@ -132,6 +134,15 @@ export function TrackedDocsSection(props: {
 							showPending={showMutation.isPending}
 							onHide={handleHide}
 							onRestore={handleRestore}
+							onSetDefault={
+								props.kind === "cv"
+									? (cv) =>
+											defaultMutation.mutate({
+												docId: cv.DocID,
+												tabId: cv.TabID,
+											})
+									: undefined
+							}
 						/>
 					</Show>
 				</Show>

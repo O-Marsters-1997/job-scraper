@@ -311,7 +311,8 @@ function CvRowBody(props: {
 	const discard = useDiscardDraft();
 	const [picked, setPicked] = createSignal<CV>();
 	const options = () => loadedData(cvs)?.filter((c) => c.Visible) ?? [];
-	const chosen = () => picked() ?? options()[0];
+	const chosen = () =>
+		picked() ?? options().find((c) => c.Default) ?? options()[0];
 
 	const openAsIs = useFormSubmit(async () => {
 		const cv = chosen();

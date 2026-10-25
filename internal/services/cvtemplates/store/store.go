@@ -118,3 +118,18 @@ func (s *Store) SetTabVisible(ctx context.Context, userID, docID, tabID string, 
 	}
 	return nil
 }
+
+func (s *Store) SetTabDefault(ctx context.Context, userID, docID, tabID string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.SetTabDefault(ctx, sqlc.SetTabDefaultParams{UserID: uid, DocID: docID, TabID: tabID})
+	if err != nil {
+		return fmt.Errorf("store.SetTabDefault: %w", err)
+	}
+	if n == 0 {
+		return ErrTabNotFound
+	}
+	return nil
+}

@@ -8,5 +8,6 @@ type Tab struct {
 	TabID        string
 	Title        string
 	Visible      bool
+	IsDefault    bool
 	CreatedAt    time.Time
 }
