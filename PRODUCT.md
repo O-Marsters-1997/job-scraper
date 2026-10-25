@@ -8,6 +8,8 @@ product
 
 Job hunters (initially just the owner and a small circle of peers) running active startup job searches. They use this during focused job-search sessions: scanning fresh listings, marking ones to apply to, logging application state, and checking pipeline health. The primary interaction is the jobs data table: read-heavy, occasional writes.
 
+On iOS the same users triage in 1–3 minute bursts away from the desk (commute, a queue, between calls): one card at a time, Shortlist or Dismiss, plus a Due list of chases, Tasks and ready CV drafts. Anything needing real reading or writing waits for the desktop. Scope is fixed by [ADR 0035](docs/adr/0035-ios-companion-is-a-triage-app.md); the design deltas live in [`ios/DESIGN.md`](ios/DESIGN.md).
+
 ## Product Purpose
 
 An automated personal job-hunting command centre. The backend crawls startup job boards on a schedule; the frontend surfaces the results and lets users manage their application pipeline from a single view. Success looks like: every live listing visible at a glance, application state always current, and zero friction moving a job through the pipeline.
