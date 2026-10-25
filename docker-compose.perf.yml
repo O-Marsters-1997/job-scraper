@@ -1,0 +1,7 @@
+services:
+  api:
+    cpus: "1"
+    mem_limit: 768m
+  db:
+    cpus: "1"
+    mem_limit: 1536m
