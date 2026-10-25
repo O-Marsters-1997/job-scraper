@@ -1,0 +1,97 @@
+[
+  {
+    "name": "companies",
+    "method": "GET",
+    "path": "/companies?sort=relevance&limit=50"
+  },
+  {
+    "name": "companies-tracked-only",
+    "method": "GET",
+    "path": "/companies?sort=relevance&tracked=1&limit=50"
+  },
+  {
+    "name": "companies-tracked",
+    "method": "GET",
+    "path": "/companies/tracked"
+  },
+  {
+    "name": "jobs-best",
+    "method": "GET",
+    "path": "/jobs?sort=best&scored=1"
+  },
+  {
+    "name": "jobs-overview",
+    "method": "GET",
+    "path": "/jobs/overview"
+  },
+  {
+    "name": "applications",
+    "method": "GET",
+    "path": "/applications/"
+  },
+  {
+    "name": "applications-chase",
+    "method": "GET",
+    "path": "/applications/?chase=true"
+  },
+  {
+    "name": "tasks",
+    "method": "GET",
+    "path": "/tasks/"
+  },
+  {
+    "name": "scrape-runs",
+    "method": "GET",
+    "path": "/scrape-runs"
+  },
+  {
+    "name": "scrape-runs-summary",
+    "method": "GET",
+    "path": "/scrape-runs/summary"
+  },
+  {
+    "name": "scores-status",
+    "method": "GET",
+    "path": "/scores/status"
+  },
+  {
+    "name": "jobs-default",
+    "method": "GET",
+    "path": "/jobs"
+  },
+  {
+    "name": "jobs-insights",
+    "method": "GET",
+    "path": "/jobs/insights"
+  },
+  {
+    "name": "scrape-runs-health",
+    "method": "GET",
+    "path": "/scrape-runs/health"
+  },
+  {
+    "name": "companies-ats-counts",
+    "method": "GET",
+    "path": "/companies/ats-counts"
+  },
+  {
+    "name": "companies-new",
+    "method": "GET",
+    "path": "/companies/new"
+  },
+  {
+    "name": "recruiter-summaries",
+    "method": "GET",
+    "path": "/recruiter-contacts/summaries"
+  },
+  {
+    "name": "sources",
+    "method": "GET",
+    "path": "/sources"
+  },
+  {
+    "name": "scoring-feedback",
+    "method": "GET",
+    "path": "/scoring-feedback"
+  }
+]
