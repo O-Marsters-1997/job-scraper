@@ -1,0 +1,218 @@
+[
+  {
+    "name": "companies [typical]",
+    "method": "GET",
+    "path": "/companies?sort=relevance&limit=50",
+    "record": "typical"
+  },
+  {
+    "name": "companies [heavy]",
+    "method": "GET",
+    "path": "/companies?sort=relevance&limit=50",
+    "record": "heavy"
+  },
+  {
+    "name": "companies-tracked-only [typical]",
+    "method": "GET",
+    "path": "/companies?sort=relevance&tracked=1&limit=50",
+    "record": "typical"
+  },
+  {
+    "name": "companies-tracked-only [heavy]",
+    "method": "GET",
+    "path": "/companies?sort=relevance&tracked=1&limit=50",
+    "record": "heavy"
+  },
+  {
+    "name": "companies-tracked [typical]",
+    "method": "GET",
+    "path": "/companies/tracked",
+    "record": "typical"
+  },
+  {
+    "name": "companies-tracked [heavy]",
+    "method": "GET",
+    "path": "/companies/tracked",
+    "record": "heavy"
+  },
+  {
+    "name": "company [typical]",
+    "method": "GET",
+    "path": "/companies/{company.heavy}",
+    "record": "typical"
+  },
+  {
+    "name": "company [heavy]",
+    "method": "GET",
+    "path": "/companies/{company.heavy}",
+    "record": "heavy"
+  },
+  {
+    "name": "company-typical [typical]",
+    "method": "GET",
+    "path": "/companies/{company.typical}",
+    "record": "typical"
+  },
+  {
+    "name": "company-typical [heavy]",
+    "method": "GET",
+    "path": "/companies/{company.typical}",
+    "record": "heavy"
+  },
+  {
+    "name": "company-boards [typical]",
+    "method": "GET",
+    "path": "/companies/{company.heavy}/boards",
+    "record": "typical"
+  },
+  {
+    "name": "company-boards [heavy]",
+    "method": "GET",
+    "path": "/companies/{company.heavy}/boards",
+    "record": "heavy"
+  },
+  {
+    "name": "jobs-best [typical]",
+    "method": "GET",
+    "path": "/jobs?sort=best&scored=1",
+    "record": "typical"
+  },
+  {
+    "name": "jobs-best [heavy]",
+    "method": "GET",
+    "path": "/jobs?sort=best&scored=1",
+    "record": "heavy"
+  },
+  {
+    "name": "jobs-overview [typical]",
+    "method": "GET",
+    "path": "/jobs/overview",
+    "record": "typical"
+  },
+  {
+    "name": "jobs-overview [heavy]",
+    "method": "GET",
+    "path": "/jobs/overview",
+    "record": "heavy"
+  },
+  {
+    "name": "job [typical]",
+    "method": "GET",
+    "path": "/jobs/{job.heavy}",
+    "record": "typical"
+  },
+  {
+    "name": "job [heavy]",
+    "method": "GET",
+    "path": "/jobs/{job.heavy}",
+    "record": "heavy"
+  },
+  {
+    "name": "job-typical [typical]",
+    "method": "GET",
+    "path": "/jobs/{job.typical}",
+    "record": "typical"
+  },
+  {
+    "name": "job-typical [heavy]",
+    "method": "GET",
+    "path": "/jobs/{job.typical}",
+    "record": "heavy"
+  },
+  {
+    "name": "job-comments [typical]",
+    "method": "GET",
+    "path": "/jobs/{job.heavy}/comments",
+    "record": "typical"
+  },
+  {
+    "name": "job-comments [heavy]",
+    "method": "GET",
+    "path": "/jobs/{job.heavy}/comments",
+    "record": "heavy"
+  },
+  {
+    "name": "applications [typical]",
+    "method": "GET",
+    "path": "/applications/",
+    "record": "typical"
+  },
+  {
+    "name": "applications [heavy]",
+    "method": "GET",
+    "path": "/applications/",
+    "record": "heavy"
+  },
+  {
+    "name": "applications-chase [typical]",
+    "method": "GET",
+    "path": "/applications/?chase=true",
+    "record": "typical"
+  },
+  {
+    "name": "applications-chase [heavy]",
+    "method": "GET",
+    "path": "/applications/?chase=true",
+    "record": "heavy"
+  },
+  {
+    "name": "tasks [typical]",
+    "method": "GET",
+    "path": "/tasks/",
+    "record": "typical"
+  },
+  {
+    "name": "tasks [heavy]",
+    "method": "GET",
+    "path": "/tasks/",
+    "record": "heavy"
+  },
+  {
+    "name": "scrape-runs [typical]",
+    "method": "GET",
+    "path": "/scrape-runs",
+    "record": "typical"
+  },
+  {
+    "name": "scrape-runs [heavy]",
+    "method": "GET",
+    "path": "/scrape-runs",
+    "record": "heavy"
+  },
+  {
+    "name": "scrape-runs-summary [typical]",
+    "method": "GET",
+    "path": "/scrape-runs/summary",
+    "record": "typical"
+  },
+  {
+    "name": "scrape-runs-summary [heavy]",
+    "method": "GET",
+    "path": "/scrape-runs/summary",
+    "record": "heavy"
+  },
+  {
+    "name": "scrape-run-changes [typical]",
+    "method": "GET",
+    "path": "/scrape-runs/{scrape_run.heavy}/job-changes",
+    "record": "typical"
+  },
+  {
+    "name": "scrape-run-changes [heavy]",
+    "method": "GET",
+    "path": "/scrape-runs/{scrape_run.heavy}/job-changes",
+    "record": "heavy"
+  },
+  {
+    "name": "scores-status [typical]",
+    "method": "GET",
+    "path": "/scores/status",
+    "record": "typical"
+  },
+  {
+    "name": "scores-status [heavy]",
+    "method": "GET",
+    "path": "/scores/status",
+    "record": "heavy"
+  }
+]

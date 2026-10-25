@@ -189,6 +189,10 @@ linters:
         linters:
           - gosec
         text: G115|G304
+      - path: ^cmd/perfseed/
+        linters:
+          - gosec
+        text: G115|G404
       - path: _test\.go|^internal/pgtest/|^internal/worker/sources/sourcetest/|test/[a-z]+\.go$
         linters:
           - gochecknoglobals

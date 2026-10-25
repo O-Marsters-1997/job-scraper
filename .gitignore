@@ -11,6 +11,14 @@ bin/
 !.claude/skills/new-handler/
 !.claude/skills/schema-change/
 !.claude/skills/testing-policy/
+!.claude/skills/k6/
+!.claude/skills/loki/
+!.claude/skills/promql/
+!.claude/skills/tempo/
+!.claude/skills/GRAFANA-LICENSE
+!.claude/skills/THIRD_PARTY.md
+!.claude/perf/
+.perf-reports/
 .idea
 .vscode
 */**/node_modules

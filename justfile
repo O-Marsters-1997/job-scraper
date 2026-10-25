@@ -133,6 +133,10 @@ down:
 clean *args:
     scripts/clean.sh {{args}}
 
+[doc('wipe dev jobs, companies and scores and reseed fake data for perf testing (local dev only): just perf-seed --scale 10x')]
+perf-seed *args:
+    go run ./cmd/perfseed --yes-wipe-dev-data {{args}}
+
 # ── Migrations ────────────────────────────────────────────────────────────────
 
 # show migration status
