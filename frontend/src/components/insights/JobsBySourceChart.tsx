@@ -8,15 +8,13 @@ import {
 	sourceHex,
 	useChartCanvasRef,
 } from "@/lib/charts";
-import type { Job } from "@/types/job";
+import type { JobInsights } from "@/types/job";
 
-export function JobsBySourceChart(props: { jobs: Job[] }) {
+export function JobsBySourceChart(props: { insights: JobInsights }) {
 	const data = createThemedMemo(() => {
-		const counts: Record<string, number> = {};
-		for (const job of props.jobs) {
-			counts[job.Source] = (counts[job.Source] ?? 0) + 1;
-		}
-		const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+		const entries = props.insights.sources.map(
+			(s) => [s.source, s.count] as const,
+		);
 		return {
 			labels: entries.map(([s]) => s),
 			datasets: [
@@ -33,9 +31,9 @@ export function JobsBySourceChart(props: { jobs: Job[] }) {
 
 	const options = createThemedMemo(donutChartOptions);
 
-	const count = () => props.jobs.length;
+	const count = () => props.insights.total;
 	const hasJobs = () => count() > 0;
-	const sourceCount = () => new Set(props.jobs.map((j) => j.Source)).size;
+	const sourceCount = () => props.insights.sources.length;
 	const setCanvas = useChartCanvasRef(
 		() =>
 			`Doughnut chart of jobs by source, ${count()} job${count() === 1 ? "" : "s"} across ${sourceCount()} source${sourceCount() === 1 ? "" : "s"}`,

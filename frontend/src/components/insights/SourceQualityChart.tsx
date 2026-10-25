@@ -8,31 +8,19 @@ import {
 	sourceHex,
 	useChartCanvasRef,
 } from "@/lib/charts";
-import type { Job } from "@/types/job";
+import type { JobInsights } from "@/types/job";
 
-export function SourceQualityChart(props: { jobs: Job[] }) {
+export function SourceQualityChart(props: { insights: JobInsights }) {
 	const data = createThemedMemo(() => {
-		const scoreSum: Record<string, number> = {};
-		const scoreCount: Record<string, number> = {};
-		for (const job of props.jobs) {
-			if (job.SuitabilityScore != null) {
-				scoreSum[job.Source] =
-					(scoreSum[job.Source] ?? 0) + job.SuitabilityScore;
-				scoreCount[job.Source] = (scoreCount[job.Source] ?? 0) + 1;
-			}
-		}
-		const sources = Object.keys(scoreCount).sort(
-			(a, b) =>
-				(scoreSum[b] ?? 0) / (scoreCount[b] ?? 1) -
-				(scoreSum[a] ?? 0) / (scoreCount[a] ?? 1),
-		);
+		const scored = props.insights.sources
+			.filter((s) => s.scored > 0)
+			.sort((a, b) => b.avgScore - a.avgScore);
+		const sources = scored.map((s) => s.source);
 		return {
 			labels: sources,
 			datasets: [
 				{
-					data: sources.map((s) =>
-						Math.round((scoreSum[s] ?? 0) / (scoreCount[s] ?? 1)),
-					),
+					data: scored.map((s) => s.avgScore),
 					backgroundColor: sources.map((s) => hexAlpha(sourceHex(s), "26")),
 					borderColor: sources.map((s) => sourceHex(s)),
 					borderWidth: 1.5,

@@ -181,3 +181,56 @@ func TestOverview(t *testing.T) {
 		}
 	})
 }
+
+func TestInsights(t *testing.T) {
+	t.Parallel()
+
+	t.Run("rejects an unknown time zone", func(t *testing.T) {
+		t.Parallel()
+		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
+		_, err := svc.Insights(t.Context(), userID, dto.JobInsightsQuery{TZ: "Mars/Olympus"})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("Insights() err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+
+	t.Run("no jobs returns empty non-nil series", func(t *testing.T) {
+		t.Parallel()
+		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
+		got, err := svc.Insights(t.Context(), userID, dto.JobInsightsQuery{})
+		if err != nil {
+			t.Fatalf("Insights() err = %v", err)
+		}
+		want := dto.JobInsights{
+			Daily: []dto.JobInsightDay{}, Sources: []dto.JobInsightSource{},
+			ScoreBands: []int{0, 0, 0, 0, 0}, FoundBy: []dto.JobInsightFinder{},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Insights() (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("folds groups into the chart series", func(t *testing.T) {
+		t.Parallel()
+		st := jobsearchtest.NewFakeStore()
+		st.SeedInsightGroups(
+			dto.JobInsightGroup{Day: "2026-03-02", Source: "lever", ScoreBand: 4, FoundBy: "wellfound", Jobs: 2, Scored: 2, ScoreSum: 171},
+			dto.JobInsightGroup{Day: "2026-03-01", Source: "lever", ScoreBand: 1, Jobs: 1, Scored: 1, ScoreSum: 30},
+			dto.JobInsightGroup{Day: "2026-03-01", Source: "ashby", ScoreBand: -1, Jobs: 1},
+		)
+		got, err := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring()).Insights(t.Context(), userID, dto.JobInsightsQuery{TZ: "Europe/London"})
+		if err != nil {
+			t.Fatalf("Insights() err = %v", err)
+		}
+		want := dto.JobInsights{
+			Total: 4, Scored: 3,
+			Daily:      []dto.JobInsightDay{{Day: "2026-03-01", Count: 2}, {Day: "2026-03-02", Count: 2}},
+			Sources:    []dto.JobInsightSource{{Source: "lever", Count: 3, Scored: 3, AvgScore: 67}, {Source: "ashby", Count: 1}},
+			ScoreBands: []int{0, 1, 0, 0, 2},
+			FoundBy:    []dto.JobInsightFinder{{Name: "wellfound", Count: 2}},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Insights() (-want +got):\n%s", diff)
+		}
+	})
+}

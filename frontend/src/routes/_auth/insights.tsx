@@ -16,15 +16,25 @@ import {
 	applicationsQueryOptions,
 	useApplications,
 } from "../../hooks/useApplications";
-import { allJobsQueryOptions, useAllJobs } from "../../hooks/useJobs";
+import { jobInsightsQueryOptions, useJobInsights } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
+import type { JobInsights } from "../../types/job";
 
 registerCharts();
+
+const EMPTY_INSIGHTS: JobInsights = {
+	total: 0,
+	scored: 0,
+	daily: [],
+	sources: [],
+	scoreBands: [0, 0, 0, 0, 0],
+	foundBy: [],
+};
 
 export const Route = createFileRoute("/_auth/insights")({
 	loader: () =>
 		Promise.all([
-			queryClient.ensureQueryData(allJobsQueryOptions),
+			queryClient.ensureQueryData(jobInsightsQueryOptions),
 			queryClient.ensureQueryData(applicationsQueryOptions()),
 			queryClient.ensureQueryData(applicationStatusesQueryOptions),
 		]),
@@ -32,11 +42,11 @@ export const Route = createFileRoute("/_auth/insights")({
 });
 
 function InsightsPage() {
-	const jobsQuery = useAllJobs();
+	const insightsQuery = useJobInsights();
 	const appsQuery = useApplications();
 	const statusesQuery = useApplicationStatuses();
 
-	const jobs = () => jobsQuery.data ?? [];
+	const insights = () => insightsQuery.data ?? EMPTY_INSIGHTS;
 	const applications = () => appsQuery.data ?? [];
 	const statuses = () => statusesQuery.data ?? [];
 
@@ -56,8 +66,8 @@ function InsightsPage() {
 
 			<Show when={chartsReady()}>
 				<div class="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
-					<JobsOverTimeChart jobs={jobs()} />
-					<JobsBySourceChart jobs={jobs()} />
+					<JobsOverTimeChart insights={insights()} />
+					<JobsBySourceChart insights={insights()} />
 				</div>
 
 				<ApplicationPipelineChart
@@ -65,11 +75,11 @@ function InsightsPage() {
 					statuses={statuses()}
 				/>
 
-				<ScoreAndGateChart jobs={jobs()} />
+				<ScoreAndGateChart insights={insights()} />
 
 				<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-					<SourceQualityChart jobs={jobs()} />
-					<FirstFoundByChart jobs={jobs()} />
+					<SourceQualityChart insights={insights()} />
+					<FirstFoundByChart insights={insights()} />
 				</div>
 			</Show>
 		</div>

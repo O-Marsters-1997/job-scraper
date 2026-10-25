@@ -1,10 +1,11 @@
 import { startOfDay } from "date-fns";
 import { z } from "zod";
+import { buildInsights } from "../lib/insights";
 import type { JobFilters } from "../lib/jobFilters";
 import type { JobPage } from "../lib/jobPage";
 import { highValueJobs, jobStats } from "../lib/overview";
-import type { Job, JobOverview } from "../types/job";
-import { jobOverviewSchema, jobSchema } from "../types/job";
+import type { Job, JobInsights, JobOverview } from "../types/job";
+import { jobInsightsSchema, jobOverviewSchema, jobSchema } from "../types/job";
 import { apiFetch, apiFetchVoid, jsonInit } from "./client";
 import { mocked } from "./config";
 
@@ -98,6 +99,19 @@ export async function fetchJobOverview(ranked: boolean): Promise<JobOverview> {
 				ranked: ranked ? "1" : "0",
 			});
 			return apiFetch(`/jobs/overview?${query}`, jobOverviewSchema);
+		},
+	);
+}
+
+export async function fetchJobInsights(): Promise<JobInsights> {
+	return mocked(
+		async () => buildInsights(await fetchAllJobs()),
+		() => {
+			const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+			return apiFetch(
+				`/jobs/insights?${new URLSearchParams({ tz })}`,
+				jobInsightsSchema,
+			);
 		},
 	);
 }

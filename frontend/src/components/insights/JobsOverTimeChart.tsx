@@ -1,4 +1,5 @@
 import { Chart as ChartJS } from "chart.js";
+import { format } from "date-fns";
 import { Line } from "solid-chartjs";
 import { createSignal, For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
@@ -10,9 +11,8 @@ import {
 	primaryHex,
 	useChartCanvasRef,
 } from "@/lib/charts";
-import { dayKey } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
-import type { Job } from "@/types/job";
+import type { JobInsights } from "@/types/job";
 
 type Preset = "7D" | "30D" | "90D" | "All";
 const PRESETS: Preset[] = ["7D", "30D", "90D", "All"];
@@ -23,7 +23,7 @@ const PRESET_DAYS: Record<Preset, number | null> = {
 	All: null,
 };
 
-export function JobsOverTimeChart(props: { jobs: Job[] }) {
+export function JobsOverTimeChart(props: { insights: JobInsights }) {
 	const [activePreset, setActivePreset] = createSignal<Preset>("All");
 	let lineCanvas: HTMLCanvasElement | null = null;
 
@@ -48,31 +48,23 @@ export function JobsOverTimeChart(props: { jobs: Job[] }) {
 	}
 
 	const data = createThemedMemo(() => {
-		const allJobs = props.jobs;
-		if (allJobs.length === 0) return { datasets: [] };
+		const { daily } = props.insights;
+		const first = daily[0];
+		if (!first) return { datasets: [] };
 
-		const timestamps = allJobs.map((j) => new Date(j.ScrapedAt).getTime());
-		const earliest = new Date(Math.min(...timestamps));
-		earliest.setHours(0, 0, 0, 0);
+		const counts = new Map(daily.map((d) => [d.day, d.count]));
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
-
-		const spine = new Map<string, number>();
-		const cursor = new Date(earliest);
+		const chartData: { x: number; y: number }[] = [];
+		const cursor = new Date(`${first.day}T00:00:00`);
 		while (cursor <= today) {
-			spine.set(dayKey(cursor), 0);
+			const key = format(cursor, "yyyy-MM-dd");
+			chartData.push({
+				x: new Date(`${key}T12:00:00Z`).getTime(),
+				y: counts.get(key) ?? 0,
+			});
 			cursor.setDate(cursor.getDate() + 1);
 		}
-
-		for (const job of allJobs) {
-			const key = dayKey(job.ScrapedAt);
-			if (spine.has(key)) spine.set(key, (spine.get(key) ?? 0) + 1);
-		}
-
-		const chartData = [...spine.entries()].map(([k, count]) => ({
-			x: new Date(`${k}T12:00:00Z`).getTime(),
-			y: count,
-		}));
 
 		return {
 			datasets: [
@@ -91,10 +83,11 @@ export function JobsOverTimeChart(props: { jobs: Job[] }) {
 
 	const options = createThemedMemo(lineChartOptions);
 
-	const hasJobs = () => props.jobs.length > 0;
+	const total = () => props.insights.total;
+	const hasJobs = () => total() > 0;
 	const setCanvas = useChartCanvasRef(
 		() =>
-			`Line chart of jobs discovered per day, ${props.jobs.length} job${props.jobs.length === 1 ? "" : "s"} total`,
+			`Line chart of jobs discovered per day, ${total()} job${total() === 1 ? "" : "s"} total`,
 	);
 
 	return (
@@ -102,7 +95,7 @@ export function JobsOverTimeChart(props: { jobs: Job[] }) {
 			<div class="flex items-start justify-between border-b border-border px-5 py-4">
 				<div>
 					<h3 class="text-sm font-semibold text-foreground">Jobs discovered</h3>
-					<p class="mt-0.5 text-xs text-faint">All time</p>
+					<p class="mt-0.5 text-xs text-faint">Last 90 days</p>
 				</div>
 
 				<div class="flex items-center gap-1">

@@ -177,6 +177,35 @@ func (s *Store) JobStats(ctx context.Context, userID string, options dto.JobStat
 	}, nil
 }
 
+func (s *Store) JobInsightGroups(ctx context.Context, userID string, options dto.JobInsightsOptions) ([]dto.JobInsightGroup, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, ErrInvalidID
+	}
+	rows, err := s.queries.JobInsightGroups(ctx, sqlc.JobInsightGroupsParams{
+		UserID:               uid,
+		Now:                  pgtype.Timestamptz{Time: options.Now, Valid: true},
+		Tz:                   options.TZ,
+		ExcludedCompanySlugs: nonNil(options.ExcludedCompanySlugs),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("job insight groups: %w", err)
+	}
+	groups := make([]dto.JobInsightGroup, len(rows))
+	for i, row := range rows {
+		groups[i] = dto.JobInsightGroup{
+			Day:       row.Day,
+			Source:    row.Source,
+			ScoreBand: int(row.ScoreBand),
+			FoundBy:   row.FoundBy,
+			Jobs:      int(row.Jobs),
+			Scored:    int(row.Scored),
+			ScoreSum:  int(row.ScoreSum),
+		}
+	}
+	return groups, nil
+}
+
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 func likePattern(search string) string {
