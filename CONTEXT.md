@@ -133,6 +133,10 @@ _Avoid_: Todo, reminder, action
 A label for what kind of Task it is (Apply, Follow up, Reach out, Prep by default, plus custom). Each user has their own set, seeded at signup.
 _Avoid_: Category, kind
 
+**Due list**:
+The iOS tab of what needs acting on now: chases due, open Tasks and ready CV drafts (ADR 0035).
+_Avoid_: Agenda, today, inbox — Tasks have no due date, only chases do
+
 ### Scoring & criteria
 
 **Option**:
@@ -216,6 +220,14 @@ _Avoid_: Rating, vote — keep distinct from Score Feedback, which is a free-tex
 The one-tap "Not for me" that saves Grade `no` and hides the Job from that User's lists, like a
 blocked row. Undo clears the Grade.
 _Avoid_: Hide, archive, delete — nothing is removed and the Job page still opens
+
+**Triage queue**:
+The iOS app's stack of a User's unseen scored Jobs, drained by Shortlist, Dismiss or skip (ADR 0035).
+_Avoid_: Inbox, feed — and keep distinct from Review state, which is about Tracked Companies
+
+**Shortlist**:
+The iOS right swipe that tracks a Job, creating its Application in Draft and its Apply Task.
+_Avoid_: Save, like, favourite (favourites are Companies)
 
 **Replay**:
 A report of where a User's labelled Jobs rank under their current Picks, re-scored from cached Answers
