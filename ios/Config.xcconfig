@@ -1,0 +1,8 @@
+PRODUCT_BUNDLE_IDENTIFIER = com.ollymarsters.fasttrack
+DEVELOPMENT_TEAM =
+
+API_SCHEME = http
+API_HOST = localhost:8080
+API_PATH =
+
+#include? "Local.xcconfig"

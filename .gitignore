@@ -44,3 +44,8 @@ worker.log
 # Local schema diagram (regenerate with python3 docs/diagrams/build.py)
 docs/diagrams/
 .codegraph/
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+ios/Local.xcconfig

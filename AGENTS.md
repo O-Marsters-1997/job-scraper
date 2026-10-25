@@ -22,6 +22,8 @@ full layout, port and enforcement rules): `jobsearch`, `scoring`, `applications`
   generated `sqlc/`) is imported only by its own context (`<ctx>-store` depguard rule).
 - `internal/api/`: HTTP shell only, used by `cmd/api`. `internal/worker/`: used by `cmd/worker`; imports
   context roots, never `internal/api` (ADR 0009).
+- `ios/`: SwiftUI app, a plain client of the HTTP API (`ios/FastTrack.xcodeproj`). Its Swift models mirror
+  `internal/dto` JSON by hand, so a renamed or retyped dto field breaks it silently.
 - Everything else under `internal/` is the shared kernel and imports no context, `internal/api` or
   `internal/worker`. `internal/data/db` connects and migrates; `internal/data` holds only genuinely
   reusable pieces (e.g. `ErrNotFound`).

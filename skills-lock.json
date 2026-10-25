@@ -61,6 +61,18 @@
       "skillPath": "skills/code/postgres-best-practices/SKILL.md",
       "computedHash": "d27f618e7583e72b57f26bca0d8b572fb70158db80de3d455c2d78c099f04089"
     },
+    "swift-ios": {
+      "source": "O-Marsters-1997/my-claude-code",
+      "sourceType": "github",
+      "skillPath": "skills/code/swift-ios/SKILL.md",
+      "computedHash": "2e3fd62599fa690d3a5404084a048b40cb4cdf9a641a2cf5bc8ba25b0a1344cc"
+    },
+    "swift-testing": {
+      "source": "O-Marsters-1997/my-claude-code",
+      "sourceType": "github",
+      "skillPath": "skills/code/swift-testing/SKILL.md",
+      "computedHash": "0163a4163cb5282d5f7cc18abfdb6bb4fb35b5758c301d89984012f9d316447e"
+    },
     "tailwind-shadcn": {
       "source": "O-Marsters-1997/my-claude-code",
       "sourceType": "github",
