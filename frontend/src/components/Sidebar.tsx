@@ -113,7 +113,7 @@ const NAV: NavGroup[] = [
 			{
 				to: "/cover-letters",
 				label: "Cover letters",
-				icon: "fileLines",
+				icon: "pen",
 				exact: true,
 				when: googleConnectedOnly,
 			},
@@ -301,6 +301,7 @@ function SidebarBody(props: SidebarBodyProps) {
 			<Link
 				to="/overview"
 				title="Overview"
+				aria-label={props.showLabels() ? undefined : "Overview"}
 				class="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4"
 			>
 				<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sidebar-active text-sidebar-active-foreground">
