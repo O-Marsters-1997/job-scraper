@@ -214,5 +214,21 @@
     "method": "GET",
     "path": "/scores/status",
     "record": "heavy"
-  }
+  },
+  { "name": "jobs-default [typical]", "method": "GET", "path": "/jobs", "record": "typical" },
+  { "name": "jobs-default [heavy]", "method": "GET", "path": "/jobs", "record": "heavy" },
+  { "name": "jobs-insights [typical]", "method": "GET", "path": "/jobs/insights", "record": "typical" },
+  { "name": "jobs-insights [heavy]", "method": "GET", "path": "/jobs/insights", "record": "heavy" },
+  { "name": "scrape-runs-health [typical]", "method": "GET", "path": "/scrape-runs/health", "record": "typical" },
+  { "name": "scrape-runs-health [heavy]", "method": "GET", "path": "/scrape-runs/health", "record": "heavy" },
+  { "name": "companies-ats-counts [typical]", "method": "GET", "path": "/companies/ats-counts", "record": "typical" },
+  { "name": "companies-ats-counts [heavy]", "method": "GET", "path": "/companies/ats-counts", "record": "heavy" },
+  { "name": "companies-new [typical]", "method": "GET", "path": "/companies/new", "record": "typical" },
+  { "name": "companies-new [heavy]", "method": "GET", "path": "/companies/new", "record": "heavy" },
+  { "name": "recruiter-summaries [typical]", "method": "GET", "path": "/recruiter-contacts/summaries", "record": "typical" },
+  { "name": "recruiter-summaries [heavy]", "method": "GET", "path": "/recruiter-contacts/summaries", "record": "heavy" },
+  { "name": "sources [typical]", "method": "GET", "path": "/sources", "record": "typical" },
+  { "name": "sources [heavy]", "method": "GET", "path": "/sources", "record": "heavy" },
+  { "name": "scoring-feedback [typical]", "method": "GET", "path": "/scoring-feedback", "record": "typical" },
+  { "name": "scoring-feedback [heavy]", "method": "GET", "path": "/scoring-feedback", "record": "heavy" }
 ]

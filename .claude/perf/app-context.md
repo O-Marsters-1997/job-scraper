@@ -109,7 +109,43 @@ external calls (seeding can't reproduce them; investigate in production via Loki
   `/companies/tracked` 1371 ms, `/jobs/overview` 832 ms, `/jobs` 494 ms.
 - `PageCompaniesForUser` (`internal/services/jobsearch/store/queries/companies.sql`) counts jobs
   × scores per company in a `LATERAL` for every company before paging, plus per-row board
-  subqueries. Inferred from code, not yet measured.
+  subqueries. Measured 2026-10-25 (1×, seed 42): 341 of 361 ms; a grouped-join rewrite gives
+  120 → 33 ms with the same result set (md5-checked):
+  `LEFT JOIN (SELECT j.company_id, COUNT(*) AS n FROM job_scores js JOIN jobs j ON j.id = js.job_id
+  WHERE js.user_id = $user AND j.closed_at IS NULL AND NOT js.breakdown @> '[{"effect":"blocked"}]'
+  GROUP BY j.company_id) jc ON jc.company_id = c.id`, with `COALESCE(jc.n, 0)` in select and sort.
+  JIT (`jit=on`, default `jit_above_cost` 100000) adds ~200 ms more: the plan costs 1.5M, so 78
+  functions are compiled in 230 ms. JIT is *not* a factor for `/jobs`: on/off differs by ≤ 8 ms.
+- Local 1× baseline (2026-10-25): every other DB-bound GET has p50 < 80 ms. Slowest after
+  `/companies`: `/jobs` 63–77 ms (`PageJobs` 37 + `CountJobs` 25, run in sequence), `/jobs/overview`
+  45, `/jobs/insights` 29, `/companies/tracked` 28 (785 KB body). No N+1 anywhere (2–5 DB
+  spans per request).
+- `/scrape-runs` returns 500 for `perf-power-1`: `ListScrapeRuns changes` scans a NULL `title`
+  into `*string`. `/companies/new` and `/scrape-runs/{id}/job-changes` 404 on seeded data (not
+  investigated).
+- Prod measured 2026-10-25 21:51 UTC (browser over Tailscale, 3 warm-up + 5, server time from
+  Loki `duration_ms`). Network RTT ≈ 27 ms (`/auth/me` 0 ms server).
+
+  | Route | Server p50 | Browser total p50 | Body |
+  |---|---|---|---|
+  | `/companies?sort=relevance` | 1372 ms | 1531 ms | 20 KB |
+  | `/companies/new` | 780 ms | 1366 ms | **5.3 MB** |
+  | `/companies/tracked` | 674 ms | 873 ms | 573 KB |
+  | `/jobs` (default sort) | ~335 ms | 502 ms | 203 KB |
+  | `/jobs/overview` | 207 ms | 288 ms | 40 KB |
+  | `/jobs/insights` | 94 ms | 126 ms | 2 KB |
+  | 11 other routes | 0–4 ms | ≤ 35 ms | small |
+
+  Prod server time is 4–6× local 1× (real data size and a 1-CPU DB are likely; unconfirmed).
+  Caddy has no `encode` directive, so JSON is sent uncompressed.
+- Prod `/jobs` over 7 days (Loki, n=1957): p50 249, p95 406, p99 2028, max 8008 ms. Slow requests
+  cluster in bursts. The worst, 2026-10-21 18:56–19:04, reached 3–8 s during a worker source-task
+  and ingest surge and a 270 s checkpoint (4217 buffers = 25.7% → `shared_buffers` ≈ 128 MB
+  default, against a 1.5 GB DB container). API and worker CPU stayed ≤ 4% throughout, so the
+  wait is in the DB. After >10 min idle, p95 is 775 ms (cold cache, inferred).
+- Open questions for a VPS run: real plans and costs of `PageCompaniesForUser`, `PageJobs` and
+  `CountJobs` (plain EXPLAIN); `shared_buffers`, `jit` and table sizes in prod; what fills
+  `/companies/new`'s 5.3 MB (probably per-company profile JSON from `store.ListNewCompanies`).
 - 17 FK columns have no leading index (e.g. `applications.job_id`, `job_views.job_id`,
   `job_grades.job_id`, `tracked_companies.company_id`, `company_favourites.company_id`,
   `board_job_observations.job_id`). Measured: deleting 73k jobs took 4 min 25 s from FK cascade
