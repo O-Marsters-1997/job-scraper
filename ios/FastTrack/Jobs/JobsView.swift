@@ -10,7 +10,13 @@ struct JobsView: View {
                 JobRow(job: job)
             }
         }
-        .overlay { LoadStateOverlay(state: state, failureTitle: "Couldn't load jobs") }
+        .overlay {
+            if state.value?.isEmpty == true {
+                ContentUnavailableView("No scored jobs yet", systemImage: "tray", description: Text("Jobs appear here once they've been scored."))
+            } else {
+                LoadStateOverlay(state: state, failureTitle: "Couldn't load jobs")
+            }
+        }
         .navigationTitle("Jobs")
         .task { await load() }
         .refreshable { await load() }
