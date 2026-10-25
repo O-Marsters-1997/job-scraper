@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
 const (
@@ -146,25 +148,15 @@ func (s *seeder) text(n int) string {
 	return s.corpus[off : off+n]
 }
 
-type criterion struct {
-	Key        string `json:"key"`
-	Label      string `json:"label"`
-	Effect     string `json:"effect"`
-	Stance     string `json:"stance"`
-	Resolved   string `json:"resolved"`
-	Corrected  bool   `json:"corrected"`
-	Overridden bool   `json:"overridden"`
-}
-
 func (s *seeder) buildBreakdown(blocked bool) []byte {
-	out := make([]criterion, 0, len(criteria))
+	out := make([]dto.ScoreRow, 0, len(criteria))
 	for _, k := range criteria {
 		e := pick(s.rng, effects)
 		resolved := map[string]string{"meets": "yes", "misses": "no", "neutral": "no"}[e]
 		if resolved == "" {
 			resolved = "unknown"
 		}
-		out = append(out, criterion{Key: k, Label: k, Effect: e, Stance: pick(s.rng, []string{"nice", "nice", "avoid"}), Resolved: resolved})
+		out = append(out, dto.ScoreRow{Key: k, Label: k, Effect: e, Stance: pick(s.rng, []string{"nice", "nice", "avoid"}), Resolved: resolved})
 	}
 	if blocked {
 		out[s.rng.IntN(len(out))].Effect = "blocked"
