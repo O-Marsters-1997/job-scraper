@@ -2,50 +2,67 @@ import assert from "node:assert/strict";
 import type { Draft } from "@/types/tailoring";
 import {
 	type ChecklistInput,
-	checklistDone,
+	checklistState,
 	linkedDraft,
 } from "./applicationChecklist";
 
 const base: ChecklistInput = {
 	statusSystemKey: "draft",
 	hasKeptDraft: false,
+	hasOpenDraft: false,
+	hasLetter: false,
 	hasDoneLetter: false,
 	applyTaskOpen: true,
 	chaseBy: null,
 };
 
-assert.deepEqual(checklistDone(base), {
-	cv: false,
-	coverLetter: false,
-	apply: false,
-	followUp: false,
+assert.deepEqual(checklistState(base), {
+	cv: "todo",
+	coverLetter: "todo",
+	apply: "todo",
+	followUp: "todo",
 });
 
-assert.equal(checklistDone({ ...base, hasKeptDraft: true }).cv, true);
-assert.equal(checklistDone({ ...base, statusSystemKey: "applied" }).cv, true);
-assert.equal(checklistDone({ ...base, statusSystemKey: "" }).cv, true);
-
-assert.equal(checklistDone({ ...base, hasDoneLetter: true }).coverLetter, true);
-
+assert.equal(checklistState({ ...base, hasOpenDraft: true }).cv, "inProgress");
+assert.equal(checklistState({ ...base, hasKeptDraft: true }).cv, "done");
 assert.equal(
-	checklistDone({ ...base, statusSystemKey: "applied", applyTaskOpen: false })
-		.apply,
-	true,
+	checklistState({ ...base, hasOpenDraft: true, hasKeptDraft: true }).cv,
+	"done",
 );
 assert.equal(
-	checklistDone({ ...base, statusSystemKey: "applied", applyTaskOpen: true })
-		.apply,
-	false,
+	checklistState({ ...base, statusSystemKey: "applied" }).cv,
+	"done",
 );
-assert.equal(checklistDone({ ...base, applyTaskOpen: false }).apply, false);
+assert.equal(checklistState({ ...base, statusSystemKey: "" }).cv, "done");
 
 assert.equal(
-	checklistDone({
+	checklistState({ ...base, hasLetter: true }).coverLetter,
+	"inProgress",
+);
+assert.equal(
+	checklistState({ ...base, hasLetter: true, hasDoneLetter: true }).coverLetter,
+	"done",
+);
+
+assert.equal(
+	checklistState({ ...base, statusSystemKey: "applied", applyTaskOpen: false })
+		.apply,
+	"done",
+);
+assert.equal(
+	checklistState({ ...base, statusSystemKey: "applied", applyTaskOpen: true })
+		.apply,
+	"todo",
+);
+assert.equal(checklistState({ ...base, applyTaskOpen: false }).apply, "todo");
+
+assert.equal(
+	checklistState({
 		...base,
 		statusSystemKey: "applied",
 		chaseBy: "2026-10-20T00:00:00Z",
 	}).followUp,
-	false,
+	"todo",
 );
 
 const draft = (id: string, over: Partial<Draft> = {}): Draft =>

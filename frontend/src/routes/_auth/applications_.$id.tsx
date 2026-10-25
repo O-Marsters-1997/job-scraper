@@ -53,7 +53,7 @@ import {
 	useJobOpenTasks,
 	useSetTaskDone,
 } from "@/hooks/useTasks";
-import { checklistDone, linkedDraft } from "@/lib/applicationChecklist";
+import { checklistState, linkedDraft } from "@/lib/applicationChecklist";
 import { formatChaseDate } from "@/lib/chase";
 import { dayKey, formatDate } from "@/lib/datetime";
 import { queryClient } from "@/lib/queryClient";
@@ -138,6 +138,7 @@ function StatusSelect(props: { app: ApplicationWithDetails }) {
 function ChecklistRow(props: {
 	value: string;
 	done: boolean;
+	inProgress?: boolean;
 	title: string;
 	summary: string;
 	children: JSX.Element;
@@ -147,16 +148,23 @@ function ChecklistRow(props: {
 			<AccordionTrigger class="items-center gap-3 p-3 hover:no-underline">
 				<span
 					role="img"
-					aria-label={props.done ? "Done" : "To do"}
+					aria-label={
+						props.done ? "Done" : props.inProgress ? "In progress" : "To do"
+					}
 					class={cn(
 						"flex size-5 shrink-0 items-center justify-center rounded-full border",
 						props.done
 							? "border-primary bg-primary text-primary-foreground"
-							: "border-border",
+							: props.inProgress
+								? "border-status-interview"
+								: "border-border",
 					)}
 				>
 					<Show when={props.done}>
 						<Icon name="check" size={12} />
+					</Show>
+					<Show when={props.inProgress && !props.done}>
+						<span class="size-2 rounded-full bg-status-interview" />
 					</Show>
 				</span>
 				<span class={cn("min-w-0 flex-1 truncate", props.done && "text-muted")}>
@@ -425,13 +433,15 @@ function ChecklistTab(props: {
 
 	const openTasks = () => loadedData(tasks)?.items ?? [];
 	const draft = () => linkedDraft(loadedData(drafts) ?? []);
-	const done = () =>
-		checklistDone({
+	const state = () =>
+		checklistState({
 			statusSystemKey:
 				loadedData(statuses)?.find((s) => s.ID === props.app.StatusID)
 					?.SystemKey ?? "",
 			hasKeptDraft:
 				loadedData(drafts)?.some((d) => d.outcome === "kept") ?? false,
+			hasOpenDraft: draft() !== undefined,
+			hasLetter: (loadedData(letters)?.length ?? 0) > 0,
 			hasDoneLetter: loadedData(letters)?.some((l) => l.doneAt) ?? false,
 			applyTaskOpen: openTasks().some((t) => t.TypeSystemKey === "apply"),
 			chaseBy: props.app.ChaseBy,
@@ -448,16 +458,19 @@ function ChecklistTab(props: {
 				>
 					<ChecklistRow
 						value="cv"
-						done={done().cv}
+						done={state().cv === "done"}
+						inProgress={state().cv === "inProgress"}
 						title="CV"
 						summary={
 							draft()?.outcome === "kept"
 								? "Complete"
-								: draft()
-									? "Draft"
-									: done().cv
-										? "No CV linked"
-										: "Not started"
+								: state().cv === "inProgress"
+									? "Draft in progress"
+									: draft()
+										? "Draft"
+										: state().cv === "done"
+											? "No CV linked"
+											: "Not started"
 						}
 					>
 						<CvRowBody
@@ -466,14 +479,21 @@ function ChecklistTab(props: {
 							failed={loadedData(drafts)?.find(
 								(d) => !d.outcome && d.status === "failed",
 							)}
-							done={done().cv}
+							done={state().cv === "done"}
 						/>
 					</ChecklistRow>
 					<ChecklistRow
 						value="letter"
-						done={done().coverLetter}
+						done={state().coverLetter === "done"}
+						inProgress={state().coverLetter === "inProgress"}
 						title="Cover letter"
-						summary={done().coverLetter ? "Done" : "Optional"}
+						summary={
+							{
+								done: "Done",
+								inProgress: "Draft in progress",
+								todo: "Optional",
+							}[state().coverLetter]
+						}
 					>
 						<p class="text-xs text-muted">
 							Check whether the listing asks for a cover letter.
@@ -490,12 +510,12 @@ function ChecklistTab(props: {
 					<ApplyRow
 						app={props.app}
 						company={titleCase(props.app.JobCompanySlug)}
-						done={done().apply}
+						done={state().apply === "done"}
 						onAsk={() => setOpen(["apply"])}
 					/>
 					<ChecklistRow
 						value="chase"
-						done={done().followUp}
+						done={state().followUp === "done"}
 						title="Follow up"
 						summary={
 							props.app.ChaseBy
