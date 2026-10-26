@@ -68,6 +68,16 @@ struct OfflineQueueTests {
         #expect(outcome.remaining.isEmpty)
     }
 
+    @Test func serverFailureKeepsTheActionQueued() async {
+        calls.shortlistError = .status(500)
+        var receipts: [UUID: UndoReceipt] = [:]
+
+        let outcome = await replay([action(.shortlist(draftCV: false), job: "a", at: 1)], client: client(), receipts: &receipts)
+
+        #expect(outcome.result.isEmpty)
+        #expect(outcome.remaining.map(\.jobID) == ["a"])
+    }
+
     @Test func lostConnectionKeepsTheRestQueued() async {
         calls.offline = true
         var receipts: [UUID: UndoReceipt] = [:]
@@ -131,7 +141,7 @@ struct OfflineQueueTests {
         #expect(calls.log == ["shortlist a"])
         #expect(model.syncNote == "1 synced, 0 skipped")
         #expect(model.queued.isEmpty)
-        #expect(model.isOffline == false)
+        #expect(!model.isOffline)
     }
 
     @Test func fileStoreRoundTripsCardsAndQueue() throws {

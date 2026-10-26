@@ -152,7 +152,7 @@ final class TriageModel {
             decision.receipt = decision.receipt ?? receipts[decision.id]
             return decision
         }
-        if outcome.result != ReplayResult(synced: 0, skipped: 0) { syncNote = outcome.result.note }
+        if !outcome.result.isEmpty { syncNote = outcome.result.note }
         if outcome.stoppedBy is URLError { isOffline = true }
         if outcome.stoppedBy as? APIError == .unauthorized { sessionExpired = true }
     }

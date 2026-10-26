@@ -31,7 +31,7 @@ extension OfflineStore {
         )
     }
 
-    private final class Box: @unchecked Sendable {
+    private final class Box {
         var cards: [Job]
         var queue: [QueuedAction]
 

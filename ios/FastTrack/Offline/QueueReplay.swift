@@ -43,12 +43,6 @@ extension APIClient {
     }
 }
 
-struct ReplayOutcome {
-    var result: ReplayResult
-    var remaining: [QueuedAction]
-    var stoppedBy: (any Error)?
-}
-
 func replay(_ queue: [QueuedAction], client: APIClient, receipts: inout [UUID: UndoReceipt]) async -> ReplayOutcome {
     let ordered = queue.enumerated().sorted { ($0.element.queuedAt, $0.offset) < ($1.element.queuedAt, $1.offset) }.map(\.element)
     var synced = 0
@@ -70,7 +64,7 @@ func replay(_ queue: [QueuedAction], client: APIClient, receipts: inout [UUID: U
             synced += 1
         } catch APIError.status(404) {
             skipped += 1
-        } catch let error where error is URLError || error as? APIError == .unauthorized {
+        } catch let error where error is URLError || error as? APIError == .unauthorized || error.isServerFailure {
             let result = ReplayResult(synced: synced, skipped: skipped)
             return ReplayOutcome(result: result, remaining: Array(ordered[index...]), stoppedBy: error)
         } catch {
@@ -78,4 +72,10 @@ func replay(_ queue: [QueuedAction], client: APIClient, receipts: inout [UUID: U
         }
     }
     return ReplayOutcome(result: ReplayResult(synced: synced, skipped: skipped), remaining: [], stoppedBy: nil)
+}
+
+private extension Error {
+    var isServerFailure: Bool {
+        if case .status(let code)? = self as? APIError { code >= 500 } else { false }
+    }
 }
