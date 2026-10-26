@@ -9,4 +9,5 @@ type NewCompany struct {
 	BestSuitability *int                  `json:"best_suitability"`
 	Profile         *CompanyProfile       `json:"profile"`
 	Rollup          []CompanyProfileEntry `json:"rollup"`
+	RollupUnknown   int                   `json:"rollup_unknown"`
 }

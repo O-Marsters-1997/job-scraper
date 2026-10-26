@@ -137,7 +137,11 @@ function NewCompanyCard(props: {
 						</span>
 					</Show>
 				</div>
-				<Show when={props.company.rollup.length > 0}>
+				<Show
+					when={
+						props.company.rollup.length > 0 || props.company.rollup_unknown > 0
+					}
+				>
 					<ul class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
 						<For each={props.company.rollup}>
 							{(e) => (
@@ -147,6 +151,13 @@ function NewCompanyCard(props: {
 								</li>
 							)}
 						</For>
+						<Show when={props.company.rollup_unknown > 0}>
+							<li>
+								{props.company.rollup_unknown}{" "}
+								{props.company.rollup_unknown === 1 ? "option" : "options"} not
+								known
+							</li>
+						</Show>
 					</ul>
 				</Show>
 				<ProfileSummary profile={props.company.profile} />
@@ -173,6 +184,5 @@ function NewCompanyCard(props: {
 }
 
 function rollupSummary(e: CompanyProfileEntry) {
-	if (e.known === 0) return "not known";
 	return `${e.yes} of ${e.total} ${e.total === 1 ? "role" : "roles"}`;
 }

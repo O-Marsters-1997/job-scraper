@@ -23,7 +23,8 @@ func TestListNewCompanies(t *testing.T) {
 	if _, err := st.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "acme"); err != nil {
 		t.Fatal(err)
 	}
-	scoring.SeedProfile(company.ID, profile)
+	unknown := dto.CompanyProfileEntry{Dimension: dto.DimensionTech, Label: "Rust", Total: 3}
+	scoring.SeedProfile(company.ID, append([]dto.CompanyProfileEntry{unknown}, profile...))
 	if _, err := st.SetCompanyTracking(t.Context(), userID, company.ID, true, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -61,6 +62,9 @@ func TestListNewCompanies(t *testing.T) {
 	}
 	if diff := cmp.Diff(profile, c.Rollup); diff != "" {
 		t.Errorf("ListNewCompanies() profile mismatch (-want +got):\n%s", diff)
+	}
+	if c.RollupUnknown != 1 {
+		t.Errorf("ListNewCompanies() rollup_unknown = %d, want 1", c.RollupUnknown)
 	}
 	if len(c.Boards) != 1 || c.Boards[0].URL == "" {
 		t.Errorf("ListNewCompanies() boards = %+v, want one with a URL", c.Boards)
