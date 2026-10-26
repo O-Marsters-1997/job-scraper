@@ -47,7 +47,7 @@ func (m *Module) Routes(r chi.Router) {
 		r.Post("/exclusions/undo", handlers.Update(m.UnexcludeCompanies))
 		r.Get("/ats-counts", handlers.GetAll(m.jobs.CompanyATSCounts))
 		r.Get("/{id}", handlers.GetByID(m.jobs.GetCompany))
-		r.Get("/new", handlers.GetAll(m.ListNewCompanies))
+		r.Get("/new", handlers.Query(m.ListNewCompanies))
 		r.Get("/tracked", handlers.GetAll(m.jobs.ListTrackedCompanies))
 		r.Delete("/{id}/tracking", handlers.Delete(m.jobs.UntrackCompany))
 		r.Put("/{id}/tracking", handlers.Update(m.jobs.SetCompanyTracking))

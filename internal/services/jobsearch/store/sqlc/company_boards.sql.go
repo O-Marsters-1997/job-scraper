@@ -128,6 +128,47 @@ func (q *Queries) ListBoardChecks(ctx context.Context, companyID pgtype.UUID) ([
 	return items, nil
 }
 
+const listBoardsForCompanies = `-- name: ListBoardsForCompanies :many
+SELECT id, company_id, source, board_token, status
+FROM company_boards
+WHERE company_id = ANY($1::uuid[])
+ORDER BY created_at, id
+`
+
+type ListBoardsForCompaniesRow struct {
+	ID         pgtype.UUID
+	CompanyID  pgtype.UUID
+	Source     string
+	BoardToken string
+	Status     string
+}
+
+func (q *Queries) ListBoardsForCompanies(ctx context.Context, dollar_1 []pgtype.UUID) ([]ListBoardsForCompaniesRow, error) {
+	rows, err := q.db.Query(ctx, listBoardsForCompanies, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBoardsForCompaniesRow
+	for rows.Next() {
+		var i ListBoardsForCompaniesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CompanyID,
+			&i.Source,
+			&i.BoardToken,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCompanyBoards = `-- name: ListCompanyBoards :many
 SELECT id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, uk_jobs_seen_at, created_at FROM company_boards WHERE company_id = $1 ORDER BY created_at, id
 `

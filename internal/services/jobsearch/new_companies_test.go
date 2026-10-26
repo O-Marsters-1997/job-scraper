@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
@@ -49,11 +50,12 @@ func TestListNewCompanies(t *testing.T) {
 		}
 	}
 
-	got, err := m.ListNewCompanies(t.Context(), userID)
+	page, err := m.ListNewCompanies(t.Context(), userID, dto.NewCompaniesQuery{})
 	if err != nil {
 		t.Fatalf("ListNewCompanies() err = %v", err)
 	}
-	if len(got) != 1 || got[0].ID != company.ID {
+	got := page.Items
+	if page.Total != 1 || len(got) != 1 || got[0].ID != company.ID {
 		t.Fatalf("ListNewCompanies() = %+v, want only the new company", got)
 	}
 	c := got[0]
@@ -69,4 +71,37 @@ func TestListNewCompanies(t *testing.T) {
 	if len(c.Boards) != 1 || c.Boards[0].URL == "" {
 		t.Errorf("ListNewCompanies() boards = %+v, want one with a URL", c.Boards)
 	}
+
+	t.Run("pages with a total across pages", func(t *testing.T) {
+		t.Parallel()
+		for _, slug := range []string{"beta", "gamma"} {
+			extra := seedCompany(t, st, dto.CompanyUpsert{Slug: slug, Name: slug})
+			if _, err := st.SetCompanyTracking(t.Context(), userID, extra.ID, true, 0); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := st.SetCompanyReviewState(t.Context(), userID, extra.ID, "new"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		second, err := m.ListNewCompanies(t.Context(), userID, dto.NewCompaniesQuery{Page: "2", PageSize: "2"})
+		if err != nil {
+			t.Fatalf("ListNewCompanies(page 2) err = %v", err)
+		}
+		if second.Total != 3 || len(second.Items) != 1 {
+			t.Errorf("ListNewCompanies(page 2, size 2) = %d items, total %d, want 1 item, total 3", len(second.Items), second.Total)
+		}
+		past, err := m.ListNewCompanies(t.Context(), userID, dto.NewCompaniesQuery{Page: "9"})
+		if err != nil || past.Items == nil || len(past.Items) != 0 || past.Total != 3 {
+			t.Errorf("ListNewCompanies(page 9) = %+v, %v, want empty items, total 3", past, err)
+		}
+	})
+
+	t.Run("rejects invalid paging", func(t *testing.T) {
+		t.Parallel()
+		for _, q := range []dto.NewCompaniesQuery{{Page: "0"}, {Page: "x"}, {PageSize: "-1"}, {Page: "2147483647", PageSize: "100"}} {
+			if _, err := m.ListNewCompanies(t.Context(), userID, q); !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("ListNewCompanies(%+v) err = %v, want invalid", q, err)
+			}
+		}
+	})
 }

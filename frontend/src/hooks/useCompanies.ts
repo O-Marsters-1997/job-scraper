@@ -96,13 +96,19 @@ export function useTrackedCompanies(poll: () => boolean = () => false) {
 	}));
 }
 
-export const newCompaniesQueryOptions = queryOptions({
-	queryKey: keys.companies.new,
-	queryFn: fetchNewCompanies,
-});
+export const NEW_COMPANY_PAGE_SIZE = 25;
 
-export function useNewCompanies() {
-	return createQuery(() => newCompaniesQueryOptions);
+export const newCompaniesQueryOptions = (page: number) =>
+	queryOptions({
+		queryKey: keys.companies.newPage(page),
+		queryFn: () => fetchNewCompanies(page, NEW_COMPANY_PAGE_SIZE),
+	});
+
+export function useNewCompanies(page: () => number) {
+	return createQuery(() => ({
+		...newCompaniesQueryOptions(page()),
+		placeholderData: keepPreviousData,
+	}));
 }
 
 export function useCompanyBoards(

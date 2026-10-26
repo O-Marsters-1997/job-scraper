@@ -1269,8 +1269,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if _, err := st.SetCompanyReviewState(ctx, userID, c.ID, "new"); err != nil {
 			t.Fatalf("SetCompanyReviewState(...) = %v", err)
 		}
-		got, err := st.ListNewCompanies(ctx, userID)
-		if err != nil || len(got) != 1 || got[0].Profile != nil {
+		page, err := st.ListNewCompanies(ctx, userID, 25, 0)
+		if got := page.Items; err != nil || len(got) != 1 || got[0].Profile != nil {
 			t.Fatalf("ListNewCompanies(no profile) = %+v, %v, want nil profile", got, err)
 		}
 		for _, hq := range []string{"Paris", "London"} {
@@ -1278,8 +1278,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 				t.Fatalf("SaveCompanyProfile(%s) = %v", hq, err)
 			}
 		}
-		got, err = st.ListNewCompanies(ctx, userID)
-		if err != nil || len(got) != 1 || got[0].Profile == nil || got[0].Profile.HQ != "London" {
+		page, err = st.ListNewCompanies(ctx, userID, 25, 0)
+		if got := page.Items; err != nil || len(got) != 1 || got[0].Profile == nil || got[0].Profile.HQ != "London" {
 			t.Fatalf("ListNewCompanies(profiled) = %+v, %v, want the London profile", got, err)
 		}
 	})
@@ -1317,19 +1317,28 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			}
 		}
 
-		got, err := st.ListNewCompanies(ctx, userID)
-		if err != nil || len(got) != 2 || got[0].ID != ids[1] || got[1].ID != ids[0] {
-			t.Fatalf("ListNewCompanies(...) = %+v, %v, want newer-co then older-co", got, err)
+		page, err := st.ListNewCompanies(ctx, userID, 25, 0)
+		got := page.Items
+		if err != nil || len(got) != 2 || page.Total != 2 || got[0].ID != ids[1] || got[1].ID != ids[0] {
+			t.Fatalf("ListNewCompanies(...) = %+v, %v, want newer-co then older-co", page, err)
 		}
 		if len(got[0].Boards) != 0 || len(got[1].Boards) != 1 {
 			t.Fatalf("ListNewCompanies(...) boards = %+v, want one on older-co only", got)
 		}
-		jobs, err := st.ListNewCompanyJobs(ctx, userID)
+		jobs, err := st.ListNewCompanyJobs(ctx, userID, ids)
 		if err != nil || len(jobs) != 2 {
 			t.Fatalf("ListNewCompanyJobs(...) = %+v, %v, want the two new companies' jobs", jobs, err)
 		}
-		other, err := st.ListNewCompanies(ctx, missingID)
-		if err != nil || len(other) != 0 {
+		onePage, err := st.ListNewCompanyJobs(ctx, userID, ids[:1])
+		if err != nil || len(onePage) != 1 {
+			t.Fatalf("ListNewCompanyJobs(one id) = %+v, %v, want only that company's job", onePage, err)
+		}
+		second, err := st.ListNewCompanies(ctx, userID, 1, 1)
+		if err != nil || len(second.Items) != 1 || second.Items[0].ID != ids[0] || second.Total != 2 || len(second.Items[0].Boards) != 1 {
+			t.Fatalf("ListNewCompanies(limit 1, offset 1) = %+v, %v, want older-co with its board and total 2", second, err)
+		}
+		other, err := st.ListNewCompanies(ctx, missingID, 25, 0)
+		if err != nil || len(other.Items) != 0 || other.Total != 0 {
 			t.Fatalf("ListNewCompanies(other user) = %+v, %v, want none", other, err)
 		}
 	})

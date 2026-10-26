@@ -11,3 +11,13 @@ type NewCompany struct {
 	Rollup          []CompanyProfileEntry `json:"rollup"`
 	RollupUnknown   int                   `json:"rollup_unknown"`
 }
+
+type NewCompaniesQuery struct {
+	Page     string `json:"page"`
+	PageSize string `json:"page_size"`
+}
+
+type NewCompanyPage struct {
+	Items []NewCompany `json:"items"`
+	Total int          `json:"total"`
+}
