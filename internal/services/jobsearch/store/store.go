@@ -113,6 +113,7 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 		ScoredOnly:           options.ScoredOnly,
 		Graded:               cmp.Or(options.Graded, "all"),
 		Seen:                 cmp.Or(options.Seen, "all"),
+		NoApplication:        options.NoApplication,
 		Poster:               cmp.Or(string(options.Poster), "all"),
 		FavouriteOnly:        options.FavouriteOnly,
 		Sources:              nonNil(options.Sources),
@@ -140,7 +141,7 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 		rows, err := s.queries.PageJobs(gctx, sqlc.PageJobsParams{
 			UserID: filters.UserID, Now: filters.Now, ExcludedCompanySlugs: filters.ExcludedCompanySlugs,
 			CompanyID: filters.CompanyID, ScoredOnly: filters.ScoredOnly, MinSuitability: filters.MinSuitability,
-			Graded: filters.Graded, Seen: filters.Seen, Poster: filters.Poster, FavouriteOnly: filters.FavouriteOnly,
+			Graded: filters.Graded, Seen: filters.Seen, NoApplication: filters.NoApplication, Poster: filters.Poster, FavouriteOnly: filters.FavouriteOnly,
 			Sources: filters.Sources, Arrangements: filters.Arrangements, SalaryOnly: filters.SalaryOnly,
 			SalaryFloor: filters.SalaryFloor, SalaryCeiling: filters.SalaryCeiling, SearchPattern: filters.SearchPattern,
 			Bands: filters.Bands, ScrapedSince: filters.ScrapedSince,
