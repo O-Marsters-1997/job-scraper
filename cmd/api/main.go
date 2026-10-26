@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/ollymarsters/job-scraper/internal/api"
+	"github.com/ollymarsters/job-scraper/internal/client"
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -123,7 +124,7 @@ func run(ctx context.Context) error {
 	}
 	srv := &http.Server{
 		Addr:              port,
-		Handler:           router,
+		Handler:           client.Middleware(router),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,

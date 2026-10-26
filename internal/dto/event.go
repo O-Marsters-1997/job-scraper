@@ -19,6 +19,7 @@ type Event struct {
 	ID        string          `json:"id"`
 	Type      string          `json:"type"`
 	SubjectID string          `json:"subject_id,omitempty"`
+	Client    string          `json:"client"`
 	Props     json.RawMessage `json:"props"`
 	CreatedAt time.Time       `json:"created_at"`
 }

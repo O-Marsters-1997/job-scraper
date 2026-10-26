@@ -643,6 +643,7 @@ CREATE TABLE events (
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     type       event_type  NOT NULL,
     subject_id UUID,
+    client     TEXT        NOT NULL DEFAULT 'web' CONSTRAINT events_client_check CHECK (client IN ('web', 'ios')),
     props      JSONB       NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

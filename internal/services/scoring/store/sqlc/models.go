@@ -342,6 +342,7 @@ type Event struct {
 	UserID    pgtype.UUID
 	Type      EventType
 	SubjectID pgtype.UUID
+	Client    string
 	Props     []byte
 	CreatedAt pgtype.Timestamptz
 }
