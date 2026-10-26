@@ -13,7 +13,7 @@ struct DTODecodingTests {
     }
 
     @Test func jobPageDecodes() throws {
-        let page = try JSONDecoder().decode(Page.self, from: fixture("job_page"))
+        let page = try JSONDecoder.api.decode(Page.self, from: fixture("job_page"))
 
         let job = try #require(page.items.first)
         #expect(job.id == "job-1")
@@ -21,10 +21,10 @@ struct DTODecodingTests {
         #expect(job.companySlug == "monzo")
         #expect(job.location == "London")
         #expect(job.url == "https://example.com/jobs/1")
-        #expect(job.band == "Great")
+        #expect(job.band == .great)
         #expect(job.score == 92)
-        #expect(job.breakdown?.map(\.effect) == ["meets", "misses"])
-        #expect(job.breakdown?.map(\.label) == ["Go", "Fintech"])
+        #expect(job.breakdown.map(\.effect) == [.meets, .misses])
+        #expect(job.breakdown.map(\.label) == ["Go", "Fintech"])
     }
 }
 

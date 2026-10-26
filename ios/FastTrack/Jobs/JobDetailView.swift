@@ -9,7 +9,7 @@ struct JobDetailView: View {
         List {
             if let job = state.value {
                 JobHeader(job: job)
-                ScoreBreakdownSection(rows: job.breakdown ?? [])
+                ScoreBreakdownSection(rows: job.breakdown)
             }
         }
         .overlay { LoadStateOverlay(state: state, failureTitle: "Couldn't load job") }

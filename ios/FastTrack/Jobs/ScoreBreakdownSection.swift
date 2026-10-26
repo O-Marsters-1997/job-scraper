@@ -5,9 +5,8 @@ struct ScoreBreakdownSection: View {
 
     var body: some View {
         Section("Breakdown") {
-            ForEach(rows) { row in
-                Label(row.label, systemImage: row.meets ? "checkmark.circle" : "minus.circle")
-                    .foregroundStyle(row.meets ? .primary : .secondary)
+            ForEach(rows, id: \.key) { row in
+                BreakdownRowView(row: row)
             }
         }
     }

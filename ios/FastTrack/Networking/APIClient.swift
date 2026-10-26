@@ -4,8 +4,14 @@ import SwiftUI
 struct APIClient {
     var restoreSession: () async throws -> Void
     var logIn: (_ username: String, _ password: String) async throws -> Void
-    var jobs: () async throws -> [Job]
+    var triageQueue: () async throws -> [Job]
     var job: (_ id: String) async throws -> Job
+    var shortlist: (_ jobID: String) async throws -> Application
+    var deleteApplication: (_ id: String) async throws -> Void
+    var dismiss: (_ jobID: String, _ reasons: [GradeReason]) async throws -> Void
+    var clearGrade: (_ jobID: String) async throws -> Void
+    var setSeen: (_ jobIDs: [String], _ seen: Bool) async throws -> Void
+    var recordEvent: (_ event: EventInput) async throws -> Void
 }
 
 extension APIClient {
@@ -20,15 +26,34 @@ extension APIClient {
             logIn: { username, password in
                 let _: Me = try await http.post("auth/login", body: Credentials(username: username, password: password))
             },
-            jobs: {
+            triageQueue: {
                 let page: JobPage = try await http.get("jobs", query: [
-                    URLQueryItem(name: "sort", value: "best"),
+                    URLQueryItem(name: "seen", value: "unseen"),
                     URLQueryItem(name: "scored", value: "1"),
+                    URLQueryItem(name: "sort", value: "relevant"),
                 ])
                 return page.items
             },
             job: { id in
                 try await http.get("jobs/\(id)")
+            },
+            shortlist: { jobID in
+                try await http.post("applications", body: CreateApplicationInput(jobID: jobID))
+            },
+            deleteApplication: { id in
+                try await http.delete("applications/\(id)")
+            },
+            dismiss: { jobID, reasons in
+                try await http.put("jobs/\(jobID)/grade", body: GradeInput(grade: "no", reasons: reasons))
+            },
+            clearGrade: { jobID in
+                try await http.delete("jobs/\(jobID)/grade")
+            },
+            setSeen: { jobIDs, seen in
+                try await http.post("jobs/seen", body: SeenInput(jobIDs: jobIDs, seen: seen))
+            },
+            recordEvent: { event in
+                try await http.post("events", body: event)
             }
         )
     }
@@ -43,8 +68,14 @@ extension APIClient {
         return APIClient(
             restoreSession: { try respond(()) },
             logIn: { _, _ in try respond(()) },
-            jobs: { try respond(jobs) },
-            job: { id in try respond(jobs.first { $0.id == id } ?? .sample) }
+            triageQueue: { try respond(jobs) },
+            job: { id in try respond(jobs.first { $0.id == id } ?? .sample) },
+            shortlist: { jobID in try respond(Application(id: "application-\(jobID)", jobID: jobID)) },
+            deleteApplication: { _ in try respond(()) },
+            dismiss: { _, _ in try respond(()) },
+            clearGrade: { _ in try respond(()) },
+            setSeen: { _, _ in try respond(()) },
+            recordEvent: { _ in try respond(()) }
         )
     }
 }
@@ -60,8 +91,4 @@ private struct Me: Decodable {
 private struct Credentials: Encodable {
     let username: String
     let password: String
-}
-
-private struct JobPage: Decodable {
-    let items: [Job]
 }

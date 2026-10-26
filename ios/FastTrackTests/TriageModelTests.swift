@@ -1,0 +1,94 @@
+import Testing
+@testable import FastTrack
+
+struct TriageModelTests {
+    private final class Calls {
+        var log: [String] = []
+        var failShortlist = false
+    }
+
+    private let calls = Calls()
+
+    private func model() async -> TriageModel {
+        var client = APIClient.mock(jobs: [Job.sample.with(id: "a"), Job.sample.with(id: "b")])
+        let calls = calls
+        client.shortlist = { id in
+            if calls.failShortlist { throw APIError.status(500) }
+            calls.log.append("shortlist \(id)")
+            return Application(id: "app-\(id)", jobID: id)
+        }
+        client.deleteApplication = { calls.log.append("deleteApplication \($0)") }
+        client.dismiss = { id, reasons in calls.log.append("dismiss \(id) \(reasons.map(\.rawValue))") }
+        client.clearGrade = { calls.log.append("clearGrade \($0)") }
+        client.setSeen = { ids, seen in calls.log.append("setSeen \(ids) \(seen)") }
+        client.recordEvent = { calls.log.append("event \($0.type.rawValue) undone=\($0.undone)") }
+        let model = TriageModel(client: client)
+        await model.load()
+        return model
+    }
+
+    @Test func shortlistThenUndoDeletesTheApplication() async throws {
+        let model = await model()
+
+        await model.decide(.shortlist).value
+        #expect(model.current?.id == "b")
+        await model.undo().value
+
+        #expect(calls.log == ["shortlist a", "deleteApplication app-a"])
+        #expect(model.current?.id == "a")
+    }
+
+    @Test func dismissPostsEventAndUndoClearsGrade() async {
+        let model = await model()
+
+        await model.decide(.dismiss(reasons: [.tech, .companySize])).value
+        await model.undo().value
+
+        #expect(calls.log == [
+            "dismiss a [\"tech\", \"company_size\"]", "event job_dismissed undone=false",
+            "clearGrade a", "event job_dismissed undone=true",
+        ])
+    }
+
+    @Test func skipMarksSeenAndUndoUnmarksIt() async {
+        let model = await model()
+
+        await model.decide(.skip).value
+        #expect(model.banner == nil)
+        await model.undo().value
+
+        #expect(calls.log == ["setSeen [\"a\"] true", "setSeen [\"a\"] false"])
+    }
+
+    @Test func undoWalksBackNewestFirst() async {
+        let model = await model()
+
+        await model.decide(.shortlist).value
+        await model.decide(.skip).value
+        await model.undo().value
+
+        #expect(calls.log.last == "setSeen [\"b\"] false")
+        #expect(model.current?.id == "b")
+        #expect(model.undoStack.count == 1)
+    }
+
+    @Test func failedDecisionPutsTheCardBack() async {
+        let model = await model()
+        calls.failShortlist = true
+
+        await model.decide(.shortlist).value
+
+        #expect(model.current?.id == "a")
+        #expect(model.undoStack.isEmpty)
+        #expect(model.hasFailure)
+    }
+}
+
+private extension Job {
+    func with(id: String) -> Job {
+        Job(id: id, title: title, companyID: companyID, companySlug: companySlug, location: location,
+            workArrangement: workArrangement, salaryRaw: salaryRaw, url: url, postedAt: postedAt,
+            firstDiscoveredAt: firstDiscoveredAt, band: band, score: score, breakdown: breakdown,
+            description: description)
+    }
+}
