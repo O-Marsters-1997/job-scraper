@@ -39,7 +39,14 @@ func (m *Module) ListNewCompanies(ctx context.Context, userID string) ([]dto.New
 	byID := make(map[string]*dto.NewCompany, len(companies))
 	for i := range companies {
 		c := &companies[i]
-		c.Rollup = profiles[c.ID]
+		c.Rollup = []dto.CompanyProfileEntry{}
+		for _, e := range profiles[c.ID] {
+			if e.Known > 0 {
+				c.Rollup = append(c.Rollup, e)
+			} else {
+				c.RollupUnknown++
+			}
+		}
 		for j := range c.Boards {
 			b := &c.Boards[j]
 			b.URL = detect.BoardURL(b.Source, b.BoardToken)

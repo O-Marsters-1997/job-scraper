@@ -236,8 +236,8 @@ export function getNewCompanies(): NewCompany[] {
 				best_suitability: scores.length ? Math.max(...scores) : null,
 				rollup: [
 					{ dimension: "tech", label: "Go", yes: 2, known: 3, total: 4 },
-					{ dimension: "domain", label: "Fintech", yes: 0, known: 0, total: 4 },
 				],
+				rollup_unknown: 1,
 				profile: null,
 			};
 		});

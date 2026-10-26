@@ -147,6 +147,7 @@ export const newCompanySchema = z.object({
 	matching_roles: z.number(),
 	best_suitability: z.number().nullable(),
 	rollup: z.array(companyProfileEntrySchema),
+	rollup_unknown: z.number(),
 	profile: companyProfileSchema.nullable(),
 });
 
