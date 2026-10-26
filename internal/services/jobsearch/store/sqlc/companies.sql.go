@@ -330,15 +330,23 @@ func (q *Queries) ListNewCompanyJobs(ctx context.Context, userID pgtype.UUID) ([
 
 const listTrackedCompaniesForUser = `-- name: ListTrackedCompaniesForUser :many
 SELECT c.id, c.name, c.slug, tc.enabled, tc.review_state, tc.check_interval_minutes,
-    (SELECT COUNT(*) FROM jobs j WHERE j.company_id = c.id AND j.closed_at IS NULL) AS open_jobs,
-    (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = tc.user_id
-     WHERE j.company_id = c.id AND j.closed_at IS NULL
-       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS relevant_jobs,
+    COALESCE(jc.open_jobs, 0) AS open_jobs,
+    COALESCE(jc.relevant_jobs, 0) AS relevant_jobs,
     (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
      JOIN board_poll_state bps ON bps.board_id = cb.id
      WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
 FROM tracked_companies tc
 JOIN companies c ON c.id = tc.company_id
+LEFT JOIN (
+    SELECT j.company_id, COUNT(*) AS open_jobs,
+        COUNT(*) FILTER (WHERE js.job_id IS NOT NULL
+                           AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS relevant_jobs
+    FROM tracked_companies t
+    JOIN jobs j ON j.company_id = t.company_id AND j.closed_at IS NULL
+    LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = t.user_id
+    WHERE t.user_id = $1
+    GROUP BY j.company_id
+) jc ON jc.company_id = c.id
 WHERE tc.user_id = $1
 ORDER BY c.name, c.id
 `
