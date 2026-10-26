@@ -4,6 +4,7 @@ struct DueView: View {
     let model: DueModel
     @State private var contactFor: DueJob?
     @State private var openJobID: String?
+    @State private var openApplication: DueJob?
 
     var body: some View {
         NavigationStack {
@@ -17,6 +18,11 @@ struct DueView: View {
                     }
                 }
                 .navigationDestination(item: $openJobID) { JobDetailView(id: $0) }
+                .navigationDestination(item: $openApplication) { job in
+                    if let draft = job.draft {
+                        ApplicationScreen(job: job, draft: draft, onFinished: { await model.load() })
+                    }
+                }
                 .safeAreaInset(edge: .bottom, spacing: 8) {
                     DueUndoBanner(entry: model.banner, onUndo: undo, onExpire: model.dismissBanner)
                         .animation(.snappy, value: model.banner?.id)
@@ -56,7 +62,8 @@ struct DueView: View {
                     "Nothing due", systemImage: "checkmark.circle",
                     description: Text("Chases, open Tasks and ready CV drafts show up here."))
             } else {
-                DueNotebook(model: model, logContact: { contactFor = $0 }, openJob: { openJobID = $0.id })
+                DueNotebook(model: model, logContact: { contactFor = $0 }, openJob: { openJobID = $0.id },
+                            openApplication: { openApplication = $0 })
             }
         }
     }

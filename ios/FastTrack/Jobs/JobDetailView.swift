@@ -4,6 +4,7 @@ struct JobDetailView: View {
     let id: String
     @Environment(\.apiClient) private var client
     @State private var state: LoadState<Job> = .idle
+    @State private var application: DueJob?
 
     var body: some View {
         ScrollView {
@@ -12,6 +13,13 @@ struct JobDetailView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         BandRow(job: job)
                         MetaLines(job: job, limitsTitle: false)
+                    }
+                    if let application, let draft = application.draft {
+                        NavigationLink {
+                            ApplicationScreen(job: application, draft: draft)
+                        } label: {
+                            Label("Open application", systemImage: "doc.text").frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        }
                     }
                     JobDetailBody(job: job)
                     JobNoteSection(jobID: job.id)
@@ -34,6 +42,7 @@ struct JobDetailView: View {
         state = .loading
         do {
             state = .loaded(try await client.job(id))
+            application = try? await client.due().first { $0.id == id && $0.draft?.state == .ready && !$0.isAtDesk }
         } catch is CancellationError {
             return
         } catch {

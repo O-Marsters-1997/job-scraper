@@ -21,6 +21,7 @@ struct DueJobCard: View {
     let toggle: () -> Void
     let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
+    let openApplication: (DueJob) -> Void
 
     private var rows: [DueRow] {
         (model.hasChaseDue(job) ? [.chase(job)] : [])
@@ -37,7 +38,7 @@ struct DueJobCard: View {
                 VStack(spacing: 0) {
                     ForEach(rows) { row in
                         Divider()
-                        DueTaskRow(row: row, job: job, model: model, logContact: logContact, openJob: openJob)
+                        DueTaskRow(row: row, job: job, model: model, logContact: logContact, openJob: openJob, openApplication: openApplication)
                     }
                 }
                 .padding(.bottom, 4)
