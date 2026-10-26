@@ -85,6 +85,20 @@ func TestBulkExport(t *testing.T) {
 		}
 	})
 
+	t.Run("a rejected job is tallied and the rest of the batch kept", func(t *testing.T) {
+		t.Parallel()
+		body := `{"results":[{"status":"rejected","reason":"bad"},{"status":"new","job_id":"a"}]}`
+		exporter := newExporter(t, respondWith(http.StatusOK, body))
+		got, err := exporter.BulkExport(t.Context(), make([]dto.Job, 2))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := dto.IngestTally{NewJobIDs: []string{"a"}, Rejected: 1}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("BulkExport() tally (-want +got):\n%s", diff)
+		}
+	})
+
 	for _, tt := range []struct {
 		name      string
 		status    int
@@ -94,7 +108,6 @@ func TestBulkExport(t *testing.T) {
 		{"4xx is not retried", http.StatusBadRequest, "", 1},
 		{"5xx retries then fails", http.StatusServiceUnavailable, "", 3},
 		{"unknown outcome", http.StatusOK, `{"results":[{"status":"pending"}]}`, 1},
-		{"rejected job", http.StatusOK, `{"results":[{"status":"rejected","reason":"bad"}]}`, 1},
 		{"result count mismatch", http.StatusOK, `{"results":[]}`, 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -165,7 +178,7 @@ func TestExport(t *testing.T) {
 		wantErr bool
 	}{
 		{"new", okSingleBody, false},
-		{"rejected", `{"status":"rejected","reason":"bad"}`, true},
+		{"rejected", `{"status":"rejected","reason":"bad"}`, false},
 		{"unknown outcome", `{"status":"pending"}`, true},
 		{"undecodable", `nope`, true},
 	} {

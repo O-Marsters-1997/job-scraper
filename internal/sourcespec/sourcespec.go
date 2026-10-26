@@ -302,6 +302,14 @@ func IsFilterSource(name string) bool {
 	return ok && e.kind == kindFilter
 }
 
+func NormalizeBoardToken(source, token string) string {
+	switch source {
+	case "ashby", "smartrecruiters", "pinpoint", "recruitee", "personio", "teamtailor", "hibob":
+		return strings.ToLower(token)
+	}
+	return token
+}
+
 // ValidBoardToken reports whether a board token can be used as one URL path segment.
 func ValidBoardToken(token string) bool {
 	if token == "" || token == "." || token == ".." {

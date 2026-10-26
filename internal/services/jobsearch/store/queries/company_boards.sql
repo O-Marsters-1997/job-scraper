@@ -56,3 +56,13 @@ WHERE cb.status = 'verified' AND cb.verification_method = 'discovered'
   AND NOT EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = cb.company_id)
   AND (COALESCE(cb.uk_jobs_seen_at >= @uk_since::timestamptz, FALSE) = @uk::boolean)
 ORDER BY cb.created_at, cb.id;
+
+-- name: GetBoardIdentity :one
+SELECT source, board_token FROM company_boards WHERE id = $1;
+
+-- name: RetireDuplicateBoard :exec
+UPDATE company_boards SET status = 'retired', retired_at = NOW() WHERE id = $1 AND status <> 'retired';
+
+-- name: FindActiveBoardByToken :one
+SELECT * FROM company_boards
+WHERE source = $1 AND lower(board_token) = lower($2) AND status <> 'retired';

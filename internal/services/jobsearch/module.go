@@ -3,6 +3,7 @@ package jobsearch
 import (
 	"cmp"
 	"context"
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -149,8 +150,8 @@ func Build(deps Deps) *Module {
 	}
 }
 
-func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort, proxyQuota QuotaFetcher, maxAutomaticTargets int) *Module {
-	st := store.New(pool, scoring)
+func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort, proxyQuota QuotaFetcher, maxAutomaticTargets int, log *slog.Logger) *Module {
+	st := store.New(pool, scoring, store.WithLogger(log))
 	return Build(Deps{
 		Store:         st,
 		SourceTargets: st,

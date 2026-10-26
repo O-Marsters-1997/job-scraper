@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"slices"
 	"strings"
@@ -53,10 +54,21 @@ type Store struct {
 	pool    *pgxpool.Pool
 	queries *sqlc.Queries
 	scoring ScoringWriter
+	log     *slog.Logger
 }
 
-func New(pool *pgxpool.Pool, scoring ScoringWriter) *Store {
-	return &Store{pool: pool, queries: sqlc.New(pool), scoring: scoring}
+type Option func(*Store)
+
+func WithLogger(log *slog.Logger) Option {
+	return func(s *Store) { s.log = log }
+}
+
+func New(pool *pgxpool.Pool, scoring ScoringWriter, opts ...Option) *Store {
+	s := &Store{pool: pool, queries: sqlc.New(pool), scoring: scoring, log: slog.New(slog.DiscardHandler)}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 func optionalUUID(id string) (pgtype.UUID, error) {
@@ -407,17 +419,40 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return dto.Job{}, "", fmt.Errorf("find canonical job: %w", err)
 	}
+	ownedByOtherSource := false
 	if previous.PrimaryBoardID.Valid && boardID.Valid &&
 		(previous.PrimaryBoardID != boardID || previous.ProviderPostingID != postingID) {
-		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another trusted posting", ErrCanonicalConflict)
+		if previous.PrimaryBoardID == boardID {
+			reclaimed, reclaimErr := reclaimURLFromAlias(ctx, queries, previous, normalizedURL)
+			if reclaimErr != nil {
+				return dto.Job{}, "", reclaimErr
+			}
+			if !reclaimed {
+				return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another trusted posting", ErrCanonicalConflict)
+			}
+			previous, err = sqlc.FindCanonicalJobRow{}, pgx.ErrNoRows
+		} else {
+			retired, retireErr := s.retireAliasBoard(ctx, queries, previous.PrimaryBoardID, boardID)
+			if retireErr != nil {
+				return dto.Job{}, "", retireErr
+			}
+			if retired {
+				if err := tx.Commit(ctx); err != nil {
+					return dto.Job{}, "", fmt.Errorf("commit board retirement: %w", err)
+				}
+				job.ID, job.URL = previous.ID.String(), previous.Url
+				return job, "unchanged", nil
+			}
+			ownedByOtherSource = true
+		}
 	}
 
 	salaryMin, salaryMax := salaryBounds(job.SalaryRaw)
 	matchTitle := jobmatch.Title(job.Title)
 	matchLocation := jobmatch.Location(job.Location)
 	trusted := boardID.Valid && postingID.Valid
-	isSecondaryListing := err == nil && previous.Url != normalizedURL &&
-		(!trusted || previous.PrimaryBoardID != boardID || previous.ProviderPostingID != postingID)
+	isSecondaryListing := err == nil && (ownedByOtherSource || previous.Url != normalizedURL &&
+		(!trusted || previous.PrimaryBoardID != boardID || previous.ProviderPostingID != postingID))
 
 	status := "new"
 	var jobID pgtype.UUID
@@ -528,6 +563,63 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	}
 	job.ID = id
 	return job, status, nil
+}
+
+func reclaimURLFromAlias(ctx context.Context, queries *sqlc.Queries, owner sqlc.FindCanonicalJobRow, normalizedURL string) (bool, error) {
+	if owner.Url == normalizedURL {
+		return false, nil
+	}
+	alias, err := queries.GetJobURLAlias(ctx, normalizedURL)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("find job URL alias: %w", err)
+	}
+	if role, _ := sourcespec.SourceRole(alias.Source); alias.JobID != owner.ID || role == sourcespec.RoleATS {
+		return false, nil
+	}
+	if err := queries.DeleteJobURLAlias(ctx, sqlc.DeleteJobURLAliasParams{NormalizedUrl: normalizedURL, JobID: owner.ID}); err != nil {
+		return false, fmt.Errorf("delete job URL alias: %w", err)
+	}
+	return true, nil
+}
+
+func (s *Store) retireAliasBoard(ctx context.Context, queries *sqlc.Queries, ownerID, duplicateID pgtype.UUID) (bool, error) {
+	owner, err := queries.GetBoardIdentity(ctx, ownerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("get owner board: %w", err)
+	}
+	duplicate, err := queries.GetBoardIdentity(ctx, duplicateID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("get duplicate board: %w", err)
+	}
+	if owner.Source != duplicate.Source {
+		return false, nil
+	}
+	if err := queries.RehomeBoardJobs(ctx, sqlc.RehomeBoardJobsParams{OwnerID: ownerID, DuplicateID: duplicateID}); err != nil {
+		return false, fmt.Errorf("rehome board jobs: %w", err)
+	}
+	if err := queries.MoveBoardObservations(ctx, sqlc.MoveBoardObservationsParams{OwnerID: ownerID, DuplicateID: duplicateID}); err != nil {
+		return false, fmt.Errorf("move board observations: %w", err)
+	}
+	if err := queries.DeleteBoardObservations(ctx, duplicateID); err != nil {
+		return false, fmt.Errorf("delete board observations: %w", err)
+	}
+	if err := queries.RetireDuplicateBoard(ctx, duplicateID); err != nil {
+		return false, fmt.Errorf("retire duplicate board: %w", err)
+	}
+	s.log.WarnContext(ctx, "retired duplicate board",
+		slog.String("source", owner.Source),
+		slog.String("owner_board_id", ownerID.String()), slog.String("owner_token", owner.BoardToken),
+		slog.String("duplicate_board_id", duplicateID.String()), slog.String("duplicate_token", duplicate.BoardToken))
+	return true, nil
 }
 
 func saveDiscoveryAlias(ctx context.Context, queries *sqlc.Queries, jobID pgtype.UUID, job dto.Job) error {
@@ -1100,8 +1192,18 @@ func (s *Store) UpsertCandidateBoard(ctx context.Context, companyID, source, tok
 	if err != nil {
 		return dto.CompanyBoard{}, err
 	}
+	existing, err := s.queries.FindActiveBoardByToken(ctx, sqlc.FindActiveBoardByTokenParams{Source: source, Lower: token})
+	if err == nil {
+		if existing.CompanyID != id {
+			return dto.CompanyBoard{}, ErrBoardConflict
+		}
+		return toCompanyBoardDTO(existing), nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return dto.CompanyBoard{}, fmt.Errorf("store.UpsertCandidateBoard: %w", err)
+	}
 	row, err := s.queries.UpsertCandidateBoard(ctx, sqlc.UpsertCandidateBoardParams{
-		CompanyID: id, Source: source, BoardToken: token,
+		CompanyID: id, Source: source, BoardToken: sourcespec.NormalizeBoardToken(source, token),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.CompanyBoard{}, ErrBoardConflict
@@ -1113,7 +1215,7 @@ func (s *Store) UpsertCandidateBoard(ctx context.Context, companyID, source, tok
 }
 
 func (s *Store) GetVerifiedBoardID(ctx context.Context, source, token string) (string, error) {
-	id, err := s.queries.GetVerifiedBoardID(ctx, sqlc.GetVerifiedBoardIDParams{Source: source, BoardToken: token})
+	id, err := s.queries.GetVerifiedBoardID(ctx, sqlc.GetVerifiedBoardIDParams{Source: source, BoardToken: sourcespec.NormalizeBoardToken(source, token)})
 	if err != nil {
 		return "", data.QueryErr("GetVerifiedBoardID", err)
 	}
@@ -1121,7 +1223,7 @@ func (s *Store) GetVerifiedBoardID(ctx context.Context, source, token string) (s
 }
 
 func (s *Store) GetBoardCompanyID(ctx context.Context, source, token string) (string, error) {
-	id, err := s.queries.GetBoardCompanyID(ctx, sqlc.GetBoardCompanyIDParams{Source: source, BoardToken: token})
+	id, err := s.queries.GetBoardCompanyID(ctx, sqlc.GetBoardCompanyIDParams{Source: source, BoardToken: sourcespec.NormalizeBoardToken(source, token)})
 	if err != nil {
 		return "", data.QueryErr("GetBoardCompanyID", err)
 	}
@@ -1709,7 +1811,7 @@ func (s *Store) RenameCompany(ctx context.Context, id, name string) error {
 }
 
 func (s *Store) MarkBoardUKJobsSeen(ctx context.Context, source, token string) error {
-	if err := s.queries.MarkBoardUKJobsSeen(ctx, sqlc.MarkBoardUKJobsSeenParams{Source: source, BoardToken: token}); err != nil {
+	if err := s.queries.MarkBoardUKJobsSeen(ctx, sqlc.MarkBoardUKJobsSeenParams{Source: source, BoardToken: sourcespec.NormalizeBoardToken(source, token)}); err != nil {
 		return fmt.Errorf("store.MarkBoardUKJobsSeen: %w", err)
 	}
 	return nil
@@ -1721,7 +1823,7 @@ func (s *Store) VerifyCompanyBoard(ctx context.Context, companyID, source, token
 		return dto.CompanyBoard{}, err
 	}
 	row, err := s.queries.VerifyCompanyBoard(ctx, sqlc.VerifyCompanyBoardParams{
-		CompanyID: id, Source: source, BoardToken: token,
+		CompanyID: id, Source: source, BoardToken: sourcespec.NormalizeBoardToken(source, token),
 		VerificationMethod: pgtype.Text{String: method, Valid: true}, Via: via,
 	})
 	if err != nil {

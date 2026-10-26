@@ -11,6 +11,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const findActiveBoardByToken = `-- name: FindActiveBoardByToken :one
+SELECT id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, uk_jobs_seen_at, created_at FROM company_boards
+WHERE source = $1 AND lower(board_token) = lower($2) AND status <> 'retired'
+`
+
+type FindActiveBoardByTokenParams struct {
+	Source string
+	Lower  string
+}
+
+func (q *Queries) FindActiveBoardByToken(ctx context.Context, arg FindActiveBoardByTokenParams) (CompanyBoard, error) {
+	row := q.db.QueryRow(ctx, findActiveBoardByToken, arg.Source, arg.Lower)
+	var i CompanyBoard
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.Source,
+		&i.BoardToken,
+		&i.Status,
+		&i.VerificationMethod,
+		&i.VerifiedAt,
+		&i.LastLinkedAt,
+		&i.RetiredAt,
+		&i.SupersededAt,
+		&i.DiscoveredVia,
+		&i.UkJobsSeenAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getBoardCompanyID = `-- name: GetBoardCompanyID :one
 SELECT company_id FROM company_boards WHERE source = $1 AND board_token = $2
 `
@@ -25,6 +56,22 @@ func (q *Queries) GetBoardCompanyID(ctx context.Context, arg GetBoardCompanyIDPa
 	var company_id pgtype.UUID
 	err := row.Scan(&company_id)
 	return company_id, err
+}
+
+const getBoardIdentity = `-- name: GetBoardIdentity :one
+SELECT source, board_token FROM company_boards WHERE id = $1
+`
+
+type GetBoardIdentityRow struct {
+	Source     string
+	BoardToken string
+}
+
+func (q *Queries) GetBoardIdentity(ctx context.Context, id pgtype.UUID) (GetBoardIdentityRow, error) {
+	row := q.db.QueryRow(ctx, getBoardIdentity, id)
+	var i GetBoardIdentityRow
+	err := row.Scan(&i.Source, &i.BoardToken)
+	return i, err
 }
 
 const getVerifiedBoardID = `-- name: GetVerifiedBoardID :one
@@ -290,6 +337,15 @@ type MarkBoardUKJobsSeenParams struct {
 
 func (q *Queries) MarkBoardUKJobsSeen(ctx context.Context, arg MarkBoardUKJobsSeenParams) error {
 	_, err := q.db.Exec(ctx, markBoardUKJobsSeen, arg.Source, arg.BoardToken)
+	return err
+}
+
+const retireDuplicateBoard = `-- name: RetireDuplicateBoard :exec
+UPDATE company_boards SET status = 'retired', retired_at = NOW() WHERE id = $1 AND status <> 'retired'
+`
+
+func (q *Queries) RetireDuplicateBoard(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, retireDuplicateBoard, id)
 	return err
 }
 

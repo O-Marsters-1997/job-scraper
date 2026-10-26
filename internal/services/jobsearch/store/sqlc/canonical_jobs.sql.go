@@ -47,6 +47,29 @@ func (q *Queries) BackfillCompanyJobFingerprints(ctx context.Context, dollar_1 p
 	return err
 }
 
+const deleteBoardObservations = `-- name: DeleteBoardObservations :exec
+DELETE FROM board_job_observations WHERE board_id = $1
+`
+
+func (q *Queries) DeleteBoardObservations(ctx context.Context, boardID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteBoardObservations, boardID)
+	return err
+}
+
+const deleteJobURLAlias = `-- name: DeleteJobURLAlias :exec
+DELETE FROM job_urls WHERE normalized_url = $1 AND job_id = $2
+`
+
+type DeleteJobURLAliasParams struct {
+	NormalizedUrl string
+	JobID         pgtype.UUID
+}
+
+func (q *Queries) DeleteJobURLAlias(ctx context.Context, arg DeleteJobURLAliasParams) error {
+	_, err := q.db.Exec(ctx, deleteJobURLAlias, arg.NormalizedUrl, arg.JobID)
+	return err
+}
+
 const findCanonicalJob = `-- name: FindCanonicalJob :one
 SELECT j.id, j.url, COALESCE(j.content_fingerprint, '') AS content_fingerprint,
     j.title, j.description, j.location, j.salary_raw, j.work_arrangement,
@@ -233,6 +256,22 @@ func (q *Queries) FindMatchCandidates(ctx context.Context, arg FindMatchCandidat
 	return items, nil
 }
 
+const getJobURLAlias = `-- name: GetJobURLAlias :one
+SELECT job_id, source FROM job_urls WHERE normalized_url = $1
+`
+
+type GetJobURLAliasRow struct {
+	JobID  pgtype.UUID
+	Source string
+}
+
+func (q *Queries) GetJobURLAlias(ctx context.Context, normalizedUrl string) (GetJobURLAliasRow, error) {
+	row := q.db.QueryRow(ctx, getJobURLAlias, normalizedUrl)
+	var i GetJobURLAliasRow
+	err := row.Scan(&i.JobID, &i.Source)
+	return i, err
+}
+
 const insertCanonicalJob = `-- name: InsertCanonicalJob :one
 INSERT INTO jobs (title, location, url, company_slug, source, posted_at, posted_after, description,
     salary_raw, salary_min, salary_max, work_arrangement, company_id, primary_board_id, provider_posting_id,
@@ -302,6 +341,37 @@ SELECT pg_advisory_xact_lock(hashtextextended($1, 0))
 
 func (q *Queries) LockCanonicalJob(ctx context.Context, hashtextextended string) error {
 	_, err := q.db.Exec(ctx, lockCanonicalJob, hashtextextended)
+	return err
+}
+
+const moveBoardObservations = `-- name: MoveBoardObservations :exec
+INSERT INTO board_job_observations (board_id, job_id, last_seen_at, last_snapshot_version)
+SELECT $1, o.job_id, o.last_seen_at, o.last_snapshot_version
+FROM board_job_observations o WHERE o.board_id = $2
+ON CONFLICT ON CONSTRAINT board_job_observations_pkey DO NOTHING
+`
+
+type MoveBoardObservationsParams struct {
+	OwnerID     pgtype.UUID
+	DuplicateID pgtype.UUID
+}
+
+func (q *Queries) MoveBoardObservations(ctx context.Context, arg MoveBoardObservationsParams) error {
+	_, err := q.db.Exec(ctx, moveBoardObservations, arg.OwnerID, arg.DuplicateID)
+	return err
+}
+
+const rehomeBoardJobs = `-- name: RehomeBoardJobs :exec
+UPDATE jobs SET primary_board_id = $1 WHERE primary_board_id = $2
+`
+
+type RehomeBoardJobsParams struct {
+	OwnerID     pgtype.UUID
+	DuplicateID pgtype.UUID
+}
+
+func (q *Queries) RehomeBoardJobs(ctx context.Context, arg RehomeBoardJobsParams) error {
+	_, err := q.db.Exec(ctx, rehomeBoardJobs, arg.OwnerID, arg.DuplicateID)
 	return err
 }
 
