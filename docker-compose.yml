@@ -50,6 +50,7 @@ services:
 
   db:
     image: postgres:17-alpine
+    command: ["postgres", "-c", "jit=off"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
