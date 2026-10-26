@@ -21,6 +21,7 @@ type JobPageOptions struct {
 	MinSuitability *int32
 	Graded         string
 	Seen           string
+	NoApplication  bool
 	Poster         Poster // empty means all
 	FavouriteOnly  bool
 	Sources        []string

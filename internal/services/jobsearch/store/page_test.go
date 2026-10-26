@@ -193,6 +193,12 @@ func TestPage(t *testing.T) {
 		if err := st.MarkJobsSeen(ctx, userID, []string{low}, true); err != nil {
 			t.Fatalf("MarkJobsSeen() err = %v", err)
 		}
+		other := pgtest.InsertUser(t, pool)
+		for _, a := range []struct{ user, job string }{{userID, viaAgency}, {other, faved}} {
+			if _, err := pool.Exec(ctx, `INSERT INTO applications (user_id,job_id) VALUES ($1,$2)`, a.user, a.job); err != nil {
+				t.Fatalf("create application: %v", err)
+			}
+		}
 		all := []string{unscored, low, high, viaAgency, faved}
 
 		for _, tt := range []struct {
@@ -208,6 +214,7 @@ func TestPage(t *testing.T) {
 			{"ungraded", func(o *dto.JobPageOptions) { o.Graded = "ungraded" }, []string{unscored, low, viaAgency, faved}},
 			{"seen", func(o *dto.JobPageOptions) { o.Seen = "seen" }, []string{low}},
 			{"unseen", func(o *dto.JobPageOptions) { o.Seen = "unseen" }, []string{unscored, high, viaAgency, faved}},
+			{"no application ignores other users' applications", func(o *dto.JobPageOptions) { o.NoApplication = true }, []string{unscored, low, high, faved}},
 			{"agency", func(o *dto.JobPageOptions) { o.Poster = dto.PosterAgency }, []string{viaAgency}},
 			{"direct includes unclassified", func(o *dto.JobPageOptions) { o.Poster = dto.PosterDirect }, []string{unscored, low, high, faved}},
 			{"favourite company", func(o *dto.JobPageOptions) { o.FavouriteOnly = true }, []string{faved}},

@@ -14,7 +14,8 @@ phone.
 - **Purpose.** The phone runs a triage workflow in 1–3 minute daily bursts (commute, a queue, between
   calls). Anything needing real reading or writing waits for the desktop.
 - **Triage tab** (replaces the current Jobs list):
-  - **Triage queue:** `GET /jobs?seen=unseen&scored=1`, Relevant order. Once grading accuracy is trusted it
+  - **Triage queue:** `GET /jobs/triage`: scored jobs that are unseen, not dismissed and have no Application,
+    Relevant order. Once grading accuracy is trusted it
     narrows to `suit=<notify_threshold>`.
   - **Card:** title, company, location and work arrangement, salary, age, Band and score, and the three
     breakdown rows that moved the score most (gates included).

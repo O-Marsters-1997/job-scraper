@@ -24,11 +24,26 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 	if err != nil {
 		return dto.JobPage{}, err
 	}
-	options.Now = time.Now()
-	options.ExcludedCompanySlugs, err = s.excludedCompanySlugs(ctx, userID)
+	return s.page(ctx, userID, options)
+}
+
+func (s *Service) TriageQueue(ctx context.Context, userID string) (dto.JobPage, error) {
+	return s.page(ctx, userID, dto.JobPageOptions{
+		Limit:         defaultJobPageSize,
+		Sort:          dto.JobSortRelevant,
+		ScoredOnly:    true,
+		Seen:          "unseen",
+		NoApplication: true,
+	})
+}
+
+func (s *Service) page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error) {
+	excluded, err := s.excludedCompanySlugs(ctx, userID)
 	if err != nil {
 		return dto.JobPage{}, err
 	}
+	options.Now = time.Now()
+	options.ExcludedCompanySlugs = excluded
 
 	page, err := s.store.Page(ctx, userID, options)
 	if err != nil {

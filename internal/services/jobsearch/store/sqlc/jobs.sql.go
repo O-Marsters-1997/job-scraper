@@ -29,15 +29,16 @@ WHERE j.closed_at IS NULL
   AND ($8::timestamptz IS NULL OR j.scraped_at >= $8::timestamptz)
   AND ($9::text = 'all' OR ($9::text = 'graded') = (COALESCE(jg.grade, '') <> ''))
   AND ($10::text = 'all' OR ($10::text = 'seen') = (jv.job_id IS NOT NULL))
-  AND ($11::text = 'all' OR ($11::text = 'agency') = (COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified') IN ('agency', 'likely_agency')))
-  AND (NOT $12::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))))
-  AND (cardinality($13::text[]) = 0 OR j.source = ANY($13::text[]))
-  AND (cardinality($14::text[]) = 0 OR (CASE lower(btrim(j.work_arrangement)) WHEN 'remote' THEN 'remote' WHEN 'hybrid' THEN 'hybrid' WHEN 'onsite' THEN 'onsite' ELSE 'unknown' END) = ANY($14::text[]))
-  AND (NOT $15::bool OR (
+  AND (NOT $11::bool OR NOT EXISTS (SELECT 1 FROM applications a WHERE a.user_id = $1::uuid AND a.job_id = j.id))
+  AND ($12::text = 'all' OR ($12::text = 'agency') = (COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified') IN ('agency', 'likely_agency')))
+  AND (NOT $13::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))))
+  AND (cardinality($14::text[]) = 0 OR j.source = ANY($14::text[]))
+  AND (cardinality($15::text[]) = 0 OR (CASE lower(btrim(j.work_arrangement)) WHEN 'remote' THEN 'remote' WHEN 'hybrid' THEN 'hybrid' WHEN 'onsite' THEN 'onsite' ELSE 'unknown' END) = ANY($15::text[]))
+  AND (NOT $16::bool OR (
     j.salary_min IS NOT NULL
-    AND COALESCE(j.salary_max, j.salary_min) >= COALESCE($16::float8, '-Infinity'::float8)
-    AND j.salary_min <= COALESCE($17::float8, 'Infinity'::float8)))
-  AND ($18::text = '' OR concat_ws(' ', j.title, j.company_slug, j.location, j.source) ILIKE $18::text)
+    AND COALESCE(j.salary_max, j.salary_min) >= COALESCE($17::float8, '-Infinity'::float8)
+    AND j.salary_min <= COALESCE($18::float8, 'Infinity'::float8)))
+  AND ($19::text = '' OR concat_ws(' ', j.title, j.company_slug, j.location, j.source) ILIKE $19::text)
 `
 
 type CountJobsParams struct {
@@ -51,6 +52,7 @@ type CountJobsParams struct {
 	ScrapedSince         pgtype.Timestamptz
 	Graded               string
 	Seen                 string
+	NoApplication        bool
 	Poster               string
 	FavouriteOnly        bool
 	Sources              []string
@@ -73,6 +75,7 @@ func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, er
 		arg.ScrapedSince,
 		arg.Graded,
 		arg.Seen,
+		arg.NoApplication,
 		arg.Poster,
 		arg.FavouriteOnly,
 		arg.Sources,
@@ -429,24 +432,25 @@ WHERE j.closed_at IS NULL
   AND ($8::timestamptz IS NULL OR j.scraped_at >= $8::timestamptz)
   AND ($9::text = 'all' OR ($9::text = 'graded') = (COALESCE(jg.grade, '') <> ''))
   AND ($10::text = 'all' OR ($10::text = 'seen') = (jv.job_id IS NOT NULL))
-  AND ($11::text = 'all' OR ($11::text = 'agency') = (COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified') IN ('agency', 'likely_agency')))
-  AND (NOT $12::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))))
-  AND (cardinality($13::text[]) = 0 OR j.source = ANY($13::text[]))
-  AND (cardinality($14::text[]) = 0 OR (CASE lower(btrim(j.work_arrangement)) WHEN 'remote' THEN 'remote' WHEN 'hybrid' THEN 'hybrid' WHEN 'onsite' THEN 'onsite' ELSE 'unknown' END) = ANY($14::text[]))
-  AND (NOT $15::bool OR (
+  AND (NOT $11::bool OR NOT EXISTS (SELECT 1 FROM applications a WHERE a.user_id = $1::uuid AND a.job_id = j.id))
+  AND ($12::text = 'all' OR ($12::text = 'agency') = (COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified') IN ('agency', 'likely_agency')))
+  AND (NOT $13::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))))
+  AND (cardinality($14::text[]) = 0 OR j.source = ANY($14::text[]))
+  AND (cardinality($15::text[]) = 0 OR (CASE lower(btrim(j.work_arrangement)) WHEN 'remote' THEN 'remote' WHEN 'hybrid' THEN 'hybrid' WHEN 'onsite' THEN 'onsite' ELSE 'unknown' END) = ANY($15::text[]))
+  AND (NOT $16::bool OR (
     j.salary_min IS NOT NULL
-    AND COALESCE(j.salary_max, j.salary_min) >= COALESCE($16::float8, '-Infinity'::float8)
-    AND j.salary_min <= COALESCE($17::float8, 'Infinity'::float8)))
-  AND ($18::text = '' OR concat_ws(' ', j.title, j.company_slug, j.location, j.source) ILIKE $18::text)
+    AND COALESCE(j.salary_max, j.salary_min) >= COALESCE($17::float8, '-Infinity'::float8)
+    AND j.salary_min <= COALESCE($18::float8, 'Infinity'::float8)))
+  AND ($19::text = '' OR concat_ws(' ', j.title, j.company_slug, j.location, j.source) ILIKE $19::text)
 ORDER BY
-  CASE WHEN $19::text NOT IN ('newest', 'best') THEN
+  CASE WHEN $20::text NOT IN ('newest', 'best') THEN
     COALESCE(js.suitability_score, 50)::float8 * power(0.5::float8, GREATEST(0, extract(epoch FROM $2::timestamptz - COALESCE(j.posted_at, j.first_discovered_at))) / 86400 / 3)
   END DESC NULLS LAST,
-  CASE WHEN $19::text = 'best' THEN js.suitability_score END DESC NULLS LAST,
-  CASE WHEN $19::text NOT IN ('newest', 'best') THEN j.first_discovered_at END DESC,
-  CASE WHEN $19::text IN ('newest', 'best') THEN COALESCE(j.posted_at, j.first_discovered_at) END DESC,
+  CASE WHEN $20::text = 'best' THEN js.suitability_score END DESC NULLS LAST,
+  CASE WHEN $20::text NOT IN ('newest', 'best') THEN j.first_discovered_at END DESC,
+  CASE WHEN $20::text IN ('newest', 'best') THEN COALESCE(j.posted_at, j.first_discovered_at) END DESC,
   j.id
-LIMIT $21::int OFFSET $20::int
+LIMIT $22::int OFFSET $21::int
 `
 
 type PageJobsParams struct {
@@ -460,6 +464,7 @@ type PageJobsParams struct {
 	ScrapedSince         pgtype.Timestamptz
 	Graded               string
 	Seen                 string
+	NoApplication        bool
 	Poster               string
 	FavouriteOnly        bool
 	Sources              []string
@@ -513,6 +518,7 @@ func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsR
 		arg.ScrapedSince,
 		arg.Graded,
 		arg.Seen,
+		arg.NoApplication,
 		arg.Poster,
 		arg.FavouriteOnly,
 		arg.Sources,

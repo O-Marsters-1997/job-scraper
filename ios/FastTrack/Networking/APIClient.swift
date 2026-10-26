@@ -40,11 +40,7 @@ extension APIClient {
                 let _: Me = try await http.post("auth/login", body: Credentials(username: username, password: password))
             },
             triageQueue: {
-                let page: JobPage = try await http.get("jobs", query: [
-                    URLQueryItem(name: "seen", value: "unseen"),
-                    URLQueryItem(name: "scored", value: "1"),
-                    URLQueryItem(name: "sort", value: "relevant"),
-                ])
+                let page: JobPage = try await http.get("jobs/triage")
                 return page.items
             },
             job: { id in
