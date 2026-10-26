@@ -27,6 +27,9 @@ struct APIClient {
     var cvTemplates: () async throws -> [CVTemplate]
     var createDraft: (_ jobID: String, _ cv: CVTemplate) async throws -> DraftRef
     var draftPDF: (_ draftID: String) async throws -> URL
+    var draftRoles: (_ draftID: String) async throws -> DraftRoles
+    var keepDraft: (_ draftID: String) async throws -> Void
+    var discardDraft: (_ draftID: String) async throws -> Void
 }
 
 extension APIClient {
@@ -115,6 +118,15 @@ extension APIClient {
                 let url = FileManager.default.temporaryDirectory.appending(path: "cv-\(draftID).pdf")
                 try await http.data("tailoring/drafts/\(draftID)/pdf").write(to: url)
                 return url
+            },
+            draftRoles: { draftID in
+                try await http.get("tailoring/drafts/\(draftID)/roles")
+            },
+            keepDraft: { draftID in
+                try await http.post("tailoring/drafts/\(draftID)/keep", body: EmptyBody())
+            },
+            discardDraft: { draftID in
+                try await http.post("tailoring/drafts/\(draftID)/discard", body: EmptyBody())
             }
         )
     }
@@ -153,7 +165,10 @@ extension APIClient {
             recruiterContacts: { _ in try respond(contacts) },
             cvTemplates: { try respond([CVTemplate(docID: "doc", tabID: "tab", title: "Backend", isDefault: true)]) },
             createDraft: { _, _ in try respond(DraftRef(id: "draft-new")) },
-            draftPDF: { _ in try respond(FileManager.default.temporaryDirectory.appending(path: "cv-draft.pdf")) }
+            draftPDF: { _ in try respond(FileManager.default.temporaryDirectory.appending(path: "cv-draft.pdf")) },
+            draftRoles: { _ in try respond(.sample) },
+            keepDraft: { _ in try respond(()) },
+            discardDraft: { _ in try respond(()) }
         )
     }
 }

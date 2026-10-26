@@ -7,6 +7,7 @@ struct DueTaskRow: View {
     let model: DueModel
     let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
+    let openApplication: (DueJob) -> Void
     @State private var struck = false
     @State private var previewURL: URL?
 
@@ -28,12 +29,18 @@ struct DueTaskRow: View {
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .padding(.vertical, 8)
                 .contentShape(.rect)
+            } primaryAction: {
+                if opensApplication { openApplication(job) }
             }
             .buttonStyle(.plain)
         }
         .padding(.leading, 1)
         .padding(.trailing, 14)
         .quickLookPreview($previewURL)
+    }
+
+    private var opensApplication: Bool {
+        if case .draft(let draft) = row { draft.state == .ready } else { false }
     }
 
     private var title: String {
@@ -134,6 +141,7 @@ struct DueTaskRow: View {
         case .draft(let draft):
             switch draft.state {
             case .ready:
+                Button("Open application", systemImage: "doc.text") { openApplication(job) }
                 Button("View PDF", systemImage: "doc.richtext") { Task { previewURL = await model.pdf(draft) } }
                 if job.applyTaskID != nil { Button("Mark applied", systemImage: "checkmark", action: complete) }
             case .failed:
