@@ -1,27 +1,43 @@
 #if DEBUG
 import SwiftUI
 
+struct BandRow: View {
+    let job: PrototypeJob
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            DotLabel(text: job.band.rawValue, hue: job.band.colour)
+            Text(job.score, format: .number).font(.footnote.weight(.medium).monospacedDigit())
+            if job.unknownCount > 0 {
+                Text("· \(job.unknownCount) unknown").font(.footnote).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 6)
+            Text(job.age).font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct MetaLines: View {
     let job: PrototypeJob
-    var titleFont: Font = .title2.weight(.semibold)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(job.title)
-                .font(titleFont)
-                .lineLimit(3)
             Text(job.company)
+                .font(.system(.title, design: .serif))
+            Text(job.title)
                 .font(.headline)
+                .lineLimit(3)
+            Text(meta)
+                .font(.footnote.monospacedDigit())
                 .foregroundStyle(.secondary)
-            Text("\(job.location) · \(job.arrangement)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            if let salary = job.salary {
-                Text(salary)
-                    .font(.subheadline.monospacedDigit())
-            }
+                .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var meta: String {
+        [job.location, job.arrangement, job.salary].compactMap { $0 }.joined(separator: " · ")
     }
 }
 
@@ -29,13 +45,15 @@ struct BreakdownRowView: View {
     let row: PrototypeJob.Row
 
     var body: some View {
-        Label {
+        HStack(spacing: 10) {
+            Image(systemName: row.effect.symbol)
+                .foregroundStyle(row.effect.colour)
+                .frame(width: 20)
             Text(row.effect == .gated ? "Gate: \(row.label)" : row.label)
                 .foregroundStyle(row.effect == .unknown ? .secondary : .primary)
-        } icon: {
-            Image(systemName: row.effect.symbol).foregroundStyle(row.effect.colour)
         }
         .font(.subheadline)
+        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
     }
 }
 
@@ -155,7 +173,8 @@ struct UndoBanner: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(.regularMaterial, in: .rect(cornerRadius: 14, style: .continuous))
+            .background(Color(.systemBackground), in: .rect(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color(.separator)))
             .padding(.horizontal)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .task(id: entry.id) {

@@ -39,43 +39,21 @@ struct DueListView: View {
     }
 }
 
-struct Monogram: View {
-    let job: PrototypeJob
-    var size: CGFloat = 48
-
-    var body: some View {
-        Text(String(job.company.prefix(1)))
-            .font(size > 40 ? .title2.weight(.bold) : .headline.weight(.bold))
-            .fontDesign(.rounded)
-            .foregroundStyle(job.band.colour)
-            .frame(width: size, height: size)
-            .background(job.band.colour.opacity(0.14), in: .rect(cornerRadius: size / 4, style: .continuous))
-            .accessibilityHidden(true)
-    }
-}
-
 struct PrototypeJobPage: View {
     let job: PrototypeJob
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                HStack(spacing: 14) {
-                    Monogram(job: job)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(job.band.rawValue).font(.headline).foregroundStyle(job.band.colour)
-                            Text(job.score, format: .number).font(.headline.monospacedDigit()).foregroundStyle(.secondary)
-                        }
-                        Text("\(job.source.capitalized) · \(job.age) ago").font(.footnote).foregroundStyle(.secondary)
-                    }
+                VStack(alignment: .leading, spacing: 12) {
+                    BandRow(job: job)
+                    MetaLines(job: job)
                 }
-                MetaLines(job: job)
                 JobDetailBody(job: job)
             }
-            .padding(22)
+            .padding(16)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color(.systemBackground))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ShareLink(item: URL(string: "https://example.com/jobs/\(job.id)")!)

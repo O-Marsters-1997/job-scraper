@@ -5,7 +5,7 @@ struct TactileCard<Header: View>: View {
     let job: PrototypeJob
     let isExpanded: Bool
     let toggle: () -> Void
-    var radius: CGFloat = 20
+    var radius: CGFloat = 14
     @ViewBuilder let header: () -> Header
 
     var body: some View {
@@ -18,18 +18,21 @@ struct TactileCard<Header: View>: View {
                             MetaLines(job: job)
                             JobDetailBody(job: job)
                         }
-                        .padding(22)
+                        .padding(16)
                     }
                 } else {
                     Button(action: toggle) {
-                        VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 0) {
                             MetaLines(job: job)
-                            VStack(alignment: .leading, spacing: 10) {
-                                ForEach(job.topRows, id: \.self) { BreakdownRowView(row: $0) }
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
+                                .padding(.bottom, 16)
+                            ForEach(job.topRows, id: \.self) { row in
+                                Divider().padding(.leading, row == job.topRows.first ? 0 : 46)
+                                BreakdownRowView(row: row).padding(.horizontal, 16)
                             }
                             Spacer(minLength: 0)
                         }
-                        .padding(22)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .contentShape(.rect)
                     }
@@ -47,29 +50,28 @@ struct TactileCard<Header: View>: View {
             .accessibilityLabel(isExpanded ? "Show summary" : "Show details")
         }
         .frame(maxHeight: .infinity)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color(.systemBackground))
         .clipShape(.rect(cornerRadius: radius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color(.separator).opacity(0.6)))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color(.separator)))
     }
 }
 
 struct DeckEdges: View {
-    let colours: [Color]
-    var radius: CGFloat = 20
+    let count: Int
+    var radius: CGFloat = 14
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            ForEach(Array(colours.enumerated()).reversed(), id: \.offset) { i, colour in
+            ForEach((0..<count).reversed(), id: \.self) { i in
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
-                    .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(colour))
-                    .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color(.separator).opacity(0.6)))
+                    .fill(Color(.systemBackground))
+                    .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color(.separator)))
                     .frame(height: 40)
                     .scaleEffect(x: 1 - CGFloat(i + 1) * 0.05)
-                    .offset(y: CGFloat(i + 1) * 7)
+                    .offset(y: CGFloat(i + 1) * 6)
             }
         }
-        .animation(.snappy, value: colours.count)
+        .animation(.snappy(duration: 0.22), value: count)
         .accessibilityHidden(true)
     }
 }

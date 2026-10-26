@@ -295,7 +295,7 @@ private struct TaskRow: View {
     }
 }
 
-private struct DotLabel: View {
+struct DotLabel: View {
     let text: String
     let hue: Color
 

@@ -29,7 +29,7 @@ struct TriagePrototype: View {
                 VariantWallet(store: store)
                     .safeAreaInset(edge: .top, spacing: 0) { offlineRow }
                     .safeAreaInset(edge: .bottom, spacing: 8) { bottomStack }
-                    .background(Color(.systemGroupedBackground))
+                    .background(Color(.systemBackground))
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
                             Button("Undo", systemImage: "arrow.uturn.backward") { withAnimation { store.undo() } }
@@ -70,7 +70,8 @@ struct TriagePrototype: View {
                     .font(.footnote.weight(.semibold))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(.regularMaterial, in: .capsule)
+                    .background(Color(.systemBackground), in: .capsule)
+                    .overlay(Capsule().strokeBorder(Color(.separator)))
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .task {
                         try? await Task.sleep(for: .seconds(4))
