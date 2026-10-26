@@ -61,7 +61,7 @@ struct TriageMoreMenu<MenuLabel: View>: View {
             DismissReasonSheet { act(.dismissReason) }
         }
         .sheet(isPresented: $showNote) {
-            NoteSheet { act(.note) }
+            NoteSheet { store.saveNote($0, for: job) }
         }
     }
 
@@ -106,7 +106,8 @@ struct DismissReasonSheet: View {
 }
 
 struct NoteSheet: View {
-    let onSave: () -> Void
+    var initial = ""
+    let onSave: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
 
@@ -121,13 +122,14 @@ struct NoteSheet: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") {
                             dismiss()
-                            onSave()
+                            onSave(text)
                         }
                         .disabled(text.isEmpty)
                     }
                 }
         }
         .presentationDetents([.medium])
+        .onAppear { text = initial }
     }
 }
 
@@ -146,7 +148,7 @@ struct UndoBanner: View {
                     Button("Draft CV") { store.act(.draft, on: entry.job) }
                         .font(.footnote.weight(.semibold))
                 }
-                if entry.removed {
+                if entry.action.isUndoable {
                     Button("Undo") { withAnimation { store.undo() } }
                         .font(.footnote.weight(.semibold))
                 }

@@ -38,13 +38,7 @@ struct VariantWallet: View {
 
     private func header(_ job: PrototypeJob) -> some View {
         HStack(spacing: 14) {
-            Text(String(job.company.prefix(1)))
-                .font(.title2.weight(.bold))
-                .fontDesign(.rounded)
-                .foregroundStyle(job.band.colour)
-                .frame(width: 48, height: 48)
-                .background(job.band.colour.opacity(0.14), in: .rect(cornerRadius: 12, style: .continuous))
-                .accessibilityHidden(true)
+            Monogram(job: job)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(job.band.rawValue)
