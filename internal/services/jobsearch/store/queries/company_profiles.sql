@@ -6,5 +6,5 @@ ON CONFLICT (company_id, source) DO UPDATE SET data = EXCLUDED.data, fetched_at 
 SELECT DISTINCT ON (cp.company_id) cp.company_id, cp.data
 FROM tracked_companies tc
 JOIN company_profiles cp ON cp.company_id = tc.company_id
-WHERE tc.user_id = $1 AND tc.review_state = 'new'
+WHERE tc.user_id = $1 AND tc.review_state = 'new' AND tc.company_id = ANY(sqlc.arg(company_ids)::uuid[])
 ORDER BY cp.company_id, cp.fetched_at DESC;

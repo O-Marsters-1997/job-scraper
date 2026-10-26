@@ -155,14 +155,18 @@ SELECT c.id, c.name, c.slug, tc.created_at AS added_at
 FROM tracked_companies tc
 JOIN companies c ON c.id = tc.company_id
 WHERE tc.user_id = $1 AND tc.review_state = 'new'
-ORDER BY tc.created_at DESC, c.id;
+ORDER BY tc.created_at DESC, c.id
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+
+-- name: CountNewCompaniesForUser :one
+SELECT COUNT(*) FROM tracked_companies WHERE user_id = $1 AND review_state = 'new';
 
 -- name: ListNewCompanyJobs :many
 SELECT j.company_id, j.company_slug, j.title, j.location, js.suitability_score
 FROM tracked_companies tc
 JOIN jobs j ON j.company_id = tc.company_id AND j.closed_at IS NULL
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = tc.user_id
-WHERE tc.user_id = $1 AND tc.review_state = 'new';
+WHERE tc.user_id = $1 AND tc.review_state = 'new' AND tc.company_id = ANY(sqlc.arg(company_ids)::uuid[]);
 
 -- name: RenameCompany :exec
 UPDATE companies SET name = $2, updated_at = NOW() WHERE id = $1;

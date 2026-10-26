@@ -601,7 +601,7 @@ func (f *FakeStore) ListTrackedCompaniesForUser(_ context.Context, userID string
 	return out, nil
 }
 
-func (f *FakeStore) ListNewCompanies(_ context.Context, userID string) ([]dto.NewCompany, error) {
+func (f *FakeStore) ListNewCompanies(_ context.Context, userID string, limit, offset int32) (dto.NewCompanyPage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := make([]dto.NewCompany, 0)
@@ -622,7 +622,11 @@ func (f *FakeStore) ListNewCompanies(_ context.Context, userID string) ([]dto.Ne
 		out = append(out, nc)
 	}
 	slices.SortFunc(out, func(a, b dto.NewCompany) int { return cmp.Compare(b.ID, a.ID) })
-	return out, nil
+	page := dto.NewCompanyPage{Total: len(out), Items: []dto.NewCompany{}}
+	if start := int(offset); start < len(out) {
+		page.Items = out[start:min(start+int(limit), len(out))]
+	}
+	return page, nil
 }
 
 func (f *FakeStore) SaveCompanyProfile(_ context.Context, companyID, _ string, profile dto.CompanyProfile) error {
@@ -632,12 +636,12 @@ func (f *FakeStore) SaveCompanyProfile(_ context.Context, companyID, _ string, p
 	return nil
 }
 
-func (f *FakeStore) ListNewCompanyJobs(_ context.Context, userID string) ([]dto.Job, error) {
+func (f *FakeStore) ListNewCompanyJobs(_ context.Context, userID string, companyIDs []string) ([]dto.Job, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []dto.Job
 	for _, j := range f.jobs {
-		if f.tracking[trackingKey(userID, j.CompanyID)].ReviewState == "new" {
+		if f.tracking[trackingKey(userID, j.CompanyID)].ReviewState == "new" && slices.Contains(companyIDs, j.CompanyID) {
 			out = append(out, j)
 		}
 	}

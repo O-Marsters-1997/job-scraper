@@ -1,16 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { For, Show } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
 import { PageHeading } from "@/components/PageHeading";
+import { Pager } from "@/components/Pager";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
+	NEW_COMPANY_PAGE_SIZE,
 	newCompaniesQueryOptions,
 	useNewCompanies,
 	useSetCompanyReview,
 } from "../../hooks/useCompanies";
 import { queryClient } from "../../lib/queryClient";
+import { clampPage } from "../../lib/serverTable";
 import type {
 	CompanyProfile,
 	CompanyProfileEntry,
@@ -18,13 +21,21 @@ import type {
 } from "../../types/company";
 
 export const Route = createFileRoute("/_auth/companies_/new")({
-	loader: () => queryClient.ensureQueryData(newCompaniesQueryOptions),
+	loader: () => queryClient.ensureQueryData(newCompaniesQueryOptions(1)),
 	component: NewCompaniesPage,
 });
 
 function NewCompaniesPage() {
-	const query = useNewCompanies();
+	const [page, setPage] = createSignal(1);
+	const query = useNewCompanies(page);
 	const review = useSetCompanyReview();
+
+	createEffect(() => {
+		const total = query.data?.total;
+		if (total !== undefined) {
+			setPage((p) => clampPage(p, total, NEW_COMPANY_PAGE_SIZE));
+		}
+	});
 
 	return (
 		<div class="px-7 py-6">
@@ -38,13 +49,13 @@ function NewCompaniesPage() {
 			</PageHeading>
 
 			<QueryBoundary query={query} fallbackRows={4}>
-				{(companies) => (
+				{(data) => (
 					<Show
-						when={companies().length > 0}
+						when={data().total > 0}
 						fallback={<p class="text-sm text-faint">Nothing new to review.</p>}
 					>
 						<div class="grid gap-3">
-							<For each={companies()}>
+							<For each={data().items}>
 								{(c) => (
 									<NewCompanyCard
 										company={c}
@@ -54,6 +65,15 @@ function NewCompaniesPage() {
 								)}
 							</For>
 						</div>
+						<Card class="mt-3">
+							<Pager
+								total={data().total}
+								page={page()}
+								pageSize={NEW_COMPANY_PAGE_SIZE}
+								noun="companies"
+								onPage={setPage}
+							/>
+						</Card>
 					</Show>
 				)}
 			</QueryBoundary>

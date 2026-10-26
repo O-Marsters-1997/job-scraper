@@ -35,6 +35,12 @@ JOIN tracked_companies tc ON tc.company_id = cb.company_id
 WHERE tc.user_id = $1
 ORDER BY cb.created_at, cb.id;
 
+-- name: ListBoardsForCompanies :many
+SELECT id, company_id, source, board_token, status
+FROM company_boards
+WHERE company_id = ANY($1::uuid[])
+ORDER BY created_at, id;
+
 -- name: ListVerifiedBoardsBySlug :many
 SELECT c.slug, cb.source, cb.board_token,
   EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = c.id AND tc.enabled) AS tracked,

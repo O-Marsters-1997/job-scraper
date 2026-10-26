@@ -79,6 +79,17 @@ func (q *Queries) CountCompanyBoardCoverage(ctx context.Context) (CountCompanyBo
 	return i, err
 }
 
+const countNewCompaniesForUser = `-- name: CountNewCompaniesForUser :one
+SELECT COUNT(*) FROM tracked_companies WHERE user_id = $1 AND review_state = 'new'
+`
+
+func (q *Queries) CountNewCompaniesForUser(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countNewCompaniesForUser, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteCompanyTracking = `-- name: DeleteCompanyTracking :execrows
 DELETE FROM tracked_companies WHERE user_id = $1 AND company_id = $2
 `
@@ -252,7 +263,14 @@ FROM tracked_companies tc
 JOIN companies c ON c.id = tc.company_id
 WHERE tc.user_id = $1 AND tc.review_state = 'new'
 ORDER BY tc.created_at DESC, c.id
+LIMIT $3 OFFSET $2
 `
+
+type ListNewCompaniesForUserParams struct {
+	UserID     pgtype.UUID
+	PageOffset int32
+	PageLimit  int32
+}
 
 type ListNewCompaniesForUserRow struct {
 	ID      pgtype.UUID
@@ -261,8 +279,8 @@ type ListNewCompaniesForUserRow struct {
 	AddedAt pgtype.Timestamptz
 }
 
-func (q *Queries) ListNewCompaniesForUser(ctx context.Context, userID pgtype.UUID) ([]ListNewCompaniesForUserRow, error) {
-	rows, err := q.db.Query(ctx, listNewCompaniesForUser, userID)
+func (q *Queries) ListNewCompaniesForUser(ctx context.Context, arg ListNewCompaniesForUserParams) ([]ListNewCompaniesForUserRow, error) {
+	rows, err := q.db.Query(ctx, listNewCompaniesForUser, arg.UserID, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -291,8 +309,13 @@ SELECT j.company_id, j.company_slug, j.title, j.location, js.suitability_score
 FROM tracked_companies tc
 JOIN jobs j ON j.company_id = tc.company_id AND j.closed_at IS NULL
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = tc.user_id
-WHERE tc.user_id = $1 AND tc.review_state = 'new'
+WHERE tc.user_id = $1 AND tc.review_state = 'new' AND tc.company_id = ANY($2::uuid[])
 `
+
+type ListNewCompanyJobsParams struct {
+	UserID     pgtype.UUID
+	CompanyIds []pgtype.UUID
+}
 
 type ListNewCompanyJobsRow struct {
 	CompanyID        pgtype.UUID
@@ -302,8 +325,8 @@ type ListNewCompanyJobsRow struct {
 	SuitabilityScore pgtype.Int4
 }
 
-func (q *Queries) ListNewCompanyJobs(ctx context.Context, userID pgtype.UUID) ([]ListNewCompanyJobsRow, error) {
-	rows, err := q.db.Query(ctx, listNewCompanyJobs, userID)
+func (q *Queries) ListNewCompanyJobs(ctx context.Context, arg ListNewCompanyJobsParams) ([]ListNewCompanyJobsRow, error) {
+	rows, err := q.db.Query(ctx, listNewCompanyJobs, arg.UserID, arg.CompanyIds)
 	if err != nil {
 		return nil, err
 	}

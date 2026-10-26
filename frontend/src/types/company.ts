@@ -151,8 +151,14 @@ export const newCompanySchema = z.object({
 	profile: companyProfileSchema.nullable(),
 });
 
+export const newCompanyPageSchema = z.object({
+	items: z.array(newCompanySchema),
+	total: z.number(),
+});
+
 export type CompanyProfileEntry = z.infer<typeof companyProfileEntrySchema>;
 export type NewCompany = z.infer<typeof newCompanySchema>;
+export type NewCompanyPage = z.infer<typeof newCompanyPageSchema>;
 export type TrackedBoard = z.infer<typeof trackedBoardSchema>;
 export type TrackedCompany = z.infer<typeof trackedCompanySchema>;
 

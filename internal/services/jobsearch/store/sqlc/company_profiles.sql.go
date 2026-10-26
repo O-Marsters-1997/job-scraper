@@ -15,17 +15,22 @@ const listNewCompanyProfiles = `-- name: ListNewCompanyProfiles :many
 SELECT DISTINCT ON (cp.company_id) cp.company_id, cp.data
 FROM tracked_companies tc
 JOIN company_profiles cp ON cp.company_id = tc.company_id
-WHERE tc.user_id = $1 AND tc.review_state = 'new'
+WHERE tc.user_id = $1 AND tc.review_state = 'new' AND tc.company_id = ANY($2::uuid[])
 ORDER BY cp.company_id, cp.fetched_at DESC
 `
+
+type ListNewCompanyProfilesParams struct {
+	UserID     pgtype.UUID
+	CompanyIds []pgtype.UUID
+}
 
 type ListNewCompanyProfilesRow struct {
 	CompanyID pgtype.UUID
 	Data      []byte
 }
 
-func (q *Queries) ListNewCompanyProfiles(ctx context.Context, userID pgtype.UUID) ([]ListNewCompanyProfilesRow, error) {
-	rows, err := q.db.Query(ctx, listNewCompanyProfiles, userID)
+func (q *Queries) ListNewCompanyProfiles(ctx context.Context, arg ListNewCompanyProfilesParams) ([]ListNewCompanyProfilesRow, error) {
+	rows, err := q.db.Query(ctx, listNewCompanyProfiles, arg.UserID, arg.CompanyIds)
 	if err != nil {
 		return nil, err
 	}
