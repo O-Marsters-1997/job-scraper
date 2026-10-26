@@ -6,6 +6,7 @@ http://:8000 {
 	bind 127.0.0.1
 
 	handle_path /api/* {
+		encode zstd gzip
 		reverse_proxy 127.0.0.1:8080
 	}
 

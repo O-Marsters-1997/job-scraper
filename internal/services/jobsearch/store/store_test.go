@@ -1099,6 +1099,44 @@ func pageCompanies(t *testing.T, st *store.Store, userID string) []dto.Company {
 
 func TestPageCompaniesForUser(t *testing.T) {
 	t.Parallel()
+	t.Run("concurrent requests share one coverage read", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID := newUserStore(t)
+		insertCompany(t, pool, "acme")
+		var wg sync.WaitGroup
+		for range 8 {
+			wg.Go(func() {
+				page, err := st.PageCompaniesForUser(t.Context(), userID, dto.CompanyPageOptions{Limit: 100})
+				if err != nil || page.AllCompanies != 1 {
+					t.Errorf("PageCompaniesForUser() = %+v, %v, want AllCompanies 1", page, err)
+				}
+			})
+		}
+		wg.Wait()
+	})
+
+	t.Run("board coverage counts are cached between requests", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		insertCompany(t, pool, "acme")
+		first, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 100})
+		if err != nil {
+			t.Fatalf("PageCompaniesForUser() err = %v", err)
+		}
+		if first.AllCompanies != 1 {
+			t.Fatalf("cold AllCompanies = %d, want 1", first.AllCompanies)
+		}
+		insertCompany(t, pool, "globex")
+		second, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 100})
+		if err != nil {
+			t.Fatalf("PageCompaniesForUser() err = %v", err)
+		}
+		if second.AllCompanies != 1 || second.Total != 2 {
+			t.Errorf("warm AllCompanies = %d, Total = %d, want 1 (cached) and 2", second.AllCompanies, second.Total)
+		}
+	})
+
 	t.Run("job count is the user's open jobs that are scored and not blocked", func(t *testing.T) {
 		t.Parallel()
 		st, pool, userID := newUserStore(t)

@@ -34,6 +34,7 @@ func (s *Service) TriageQueue(ctx context.Context, userID string) (dto.JobPage, 
 		ScoredOnly:    true,
 		Seen:          "unseen",
 		NoApplication: true,
+		SkipTotal:     true,
 	})
 }
 
@@ -102,6 +103,7 @@ func parseJobsQuery(q dto.JobsQuery) (dto.JobPageOptions, error) {
 		Arrangements:  splitList(strings.ToLower(q.Work)),
 		SalaryOnly:    q.Salary == "1",
 		Search:        q.Q,
+		SkipTotal:     q.SkipTotal == "1",
 	}
 	if q.Suit != "" {
 		suit, err := strconv.ParseInt(q.Suit, 10, 32)

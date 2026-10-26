@@ -37,7 +37,7 @@ func TestIOSFixtures(t *testing.T) {
 			Channel: dto.ChannelEmail, Outcome: dto.OutcomeNoReply, CreatedAt: at,
 		},
 		"job_page": dto.JobPage{
-			Total: 1,
+			Total: new(1),
 			Items: []dto.Job{{
 				ID:               "job-1",
 				Title:            "Senior Go Engineer",

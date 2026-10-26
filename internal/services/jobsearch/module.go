@@ -66,8 +66,8 @@ type Store interface {
 	CountCompaniesByATS(ctx context.Context) ([]dto.ATSCount, error)
 	GetCompanyForUser(ctx context.Context, userID, id string) (dto.Company, error)
 	ListTrackedCompaniesForUser(ctx context.Context, userID string) ([]dto.TrackedCompany, error)
-	ListNewCompanies(ctx context.Context, userID string) ([]dto.NewCompany, error)
-	ListNewCompanyJobs(ctx context.Context, userID string) ([]dto.Job, error)
+	ListNewCompanies(ctx context.Context, userID string, limit, offset int32) (dto.NewCompanyPage, error)
+	ListNewCompanyJobs(ctx context.Context, userID string, companyIDs []string) ([]dto.Job, error)
 	SaveCompanyProfile(ctx context.Context, companyID, source string, profile dto.CompanyProfile) error
 	DeleteCompanyTracking(ctx context.Context, userID, companyID string) error
 	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)

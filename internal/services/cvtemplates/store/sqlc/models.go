@@ -471,6 +471,7 @@ type JobScore struct {
 	SuitabilityScore pgtype.Int4
 	Band             pgtype.Text
 	Breakdown        []byte
+	Blocked          bool
 	Cost             pgtype.Numeric
 	ScoreFingerprint pgtype.Text
 	ScoreModel       pgtype.Text

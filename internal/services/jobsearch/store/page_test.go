@@ -162,9 +162,14 @@ func TestPage(t *testing.T) {
 			if diff := cmp.Diff(tt.want, jobIDs(got.Items)); diff != "" {
 				t.Errorf("%s ids (-want +got):\n%s", tt.name, diff)
 			}
-			if got.Total != 5 {
-				t.Errorf("%s total = %d, want 5", tt.name, got.Total)
+			if got.Total == nil || *got.Total != 5 {
+				t.Errorf("%s total = %v, want 5", tt.name, got.Total)
 			}
+		}
+
+		skipped := pageOf(t, st, userID, func(o *dto.JobPageOptions) { o.Limit, o.Offset, o.Sort, o.SkipTotal = 2, 2, dto.JobSortNewest, true })
+		if skipped.Total != nil || len(skipped.Items) != 2 {
+			t.Errorf("SkipTotal page = %d items, total %v, want 2 items, nil total", len(skipped.Items), skipped.Total)
 		}
 	})
 
@@ -238,8 +243,8 @@ func TestPage(t *testing.T) {
 			if diff := cmp.Diff(sorted(tt.want), sorted(jobIDs(got.Items))); diff != "" {
 				t.Errorf("%s ids (-want +got):\n%s", tt.name, diff)
 			}
-			if got.Total != len(tt.want) {
-				t.Errorf("%s total = %d, want %d", tt.name, got.Total, len(tt.want))
+			if got.Total == nil || *got.Total != len(tt.want) {
+				t.Errorf("%s total = %v, want %d", tt.name, got.Total, len(tt.want))
 			}
 		}
 	})

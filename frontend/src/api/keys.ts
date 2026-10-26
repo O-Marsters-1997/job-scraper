@@ -47,6 +47,7 @@ export const keys = {
 		atsCounts: [...companiesAll, "ats-counts"] as const,
 		tracked: [...companiesAll, "tracked"] as const,
 		new: [...companiesAll, "new"] as const,
+		newPage: (page: number) => [...companiesAll, "new", page] as const,
 		boards: (id: string) => [...companiesAll, "boards", id] as const,
 	},
 	experience: ["experience"] as const,

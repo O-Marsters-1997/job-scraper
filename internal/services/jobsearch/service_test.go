@@ -74,10 +74,22 @@ func TestList(t *testing.T) {
 				if err != nil {
 					t.Fatalf("List(%+v) err = %v", tt.query, err)
 				}
-				if len(page.Items) != tt.wantItems || page.Total != 3 {
-					t.Errorf("List(%+v) = %d items, total %d, want %d items, total 3", tt.query, len(page.Items), page.Total, tt.wantItems)
+				if len(page.Items) != tt.wantItems || page.Total == nil || *page.Total != 3 {
+					t.Errorf("List(%+v) = %d items, total %v, want %d items, total 3", tt.query, len(page.Items), page.Total, tt.wantItems)
 				}
 			})
+		}
+	})
+
+	t.Run("skip_total=1 leaves the total null", func(t *testing.T) {
+		t.Parallel()
+		svc := jobsearch.NewService(seedJobs(t, 3), nil, jobsearchtest.NewNoopScoring())
+		page, err := svc.List(t.Context(), userID, dto.JobsQuery{Page: "2", PageSize: "2", SkipTotal: "1"})
+		if err != nil {
+			t.Fatalf("List(skip_total=1) err = %v", err)
+		}
+		if len(page.Items) != 1 || page.Total != nil {
+			t.Errorf("List(skip_total=1) = %d items, total %v, want 1 item, nil total", len(page.Items), page.Total)
 		}
 	})
 }

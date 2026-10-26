@@ -32,13 +32,14 @@ type JobPageOptions struct {
 	Search         string
 	Bands          []string
 	ScrapedSince   *time.Time
+	SkipTotal      bool
 
 	ExcludedCompanySlugs []string
 }
 
 type JobPage struct {
 	Items []Job `json:"items"`
-	Total int   `json:"total"`
+	Total *int  `json:"total"`
 }
 
 type JobStatsOptions struct {
