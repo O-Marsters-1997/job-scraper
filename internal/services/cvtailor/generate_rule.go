@@ -1,6 +1,7 @@
 package cvtailor
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -99,13 +100,7 @@ func (leanRule) Replacements(in RuleInput) []Replacement {
 			slices.SortStableFunc(pool, func(x, y dto.Achievement) int {
 				lx, _ := leanOf(x)
 				ly, _ := leanOf(y)
-				switch {
-				case lx > ly:
-					return -1
-				case lx < ly:
-					return 1
-				}
-				return 0
+				return cmp.Compare(ly, lx)
 			})
 			free := in.Lines(cp.PositionID, b.Text)
 			var ids []string
