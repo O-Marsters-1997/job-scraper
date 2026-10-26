@@ -21,6 +21,7 @@ struct APIClient {
     var clearChase: (_ applicationID: String) async throws -> Void
     var logContact: (_ jobID: String, _ channel: ContactChannel, _ outcome: ContactOutcome) async throws -> RecruiterContact
     var setTaskDone: (_ taskID: String, _ done: Bool) async throws -> Void
+    var recruiterContacts: (_ jobID: String) async throws -> [RecruiterContact]
     var cvTemplates: () async throws -> [CVTemplate]
     var createDraft: (_ jobID: String, _ cv: CVTemplate) async throws -> DraftRef
     var draftPDF: (_ draftID: String) async throws -> URL
@@ -97,6 +98,9 @@ extension APIClient {
             setTaskDone: { taskID, done in
                 try await http.put("tasks/\(taskID)/done", body: TaskDoneInput(done: done))
             },
+            recruiterContacts: { jobID in
+                try await http.get("jobs/\(jobID)/recruiter-contacts")
+            },
             cvTemplates: {
                 try await http.get("cv-templates", query: [URLQueryItem(name: "kind", value: "cv")])
             },
@@ -113,7 +117,7 @@ extension APIClient {
 }
 
 extension APIClient {
-    static func mock(jobs: [Job] = [.sample], due: [DueJob] = [], failure: APIError? = nil) -> APIClient {
+    static func mock(jobs: [Job] = [.sample], due: [DueJob] = [], contacts: [RecruiterContact] = [], failure: APIError? = nil) -> APIClient {
         func respond<T>(_ value: T) throws -> T {
             if let failure { throw failure }
             return value
@@ -140,6 +144,7 @@ extension APIClient {
                 try respond(RecruiterContact(id: "contact-\(jobID)", contactedOn: .now, channel: channel, outcome: outcome))
             },
             setTaskDone: { _, _ in try respond(()) },
+            recruiterContacts: { _ in try respond(contacts) },
             cvTemplates: { try respond([CVTemplate(docID: "doc", tabID: "tab", title: "Backend", isDefault: true)]) },
             createDraft: { _, _ in try respond(DraftRef(id: "draft-new")) },
             draftPDF: { _ in try respond(FileManager.default.temporaryDirectory.appending(path: "cv-draft.pdf")) }

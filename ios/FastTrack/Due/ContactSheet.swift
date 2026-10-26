@@ -1,8 +1,7 @@
 import SwiftUI
 
 struct ContactSheet: View {
-    let job: DueJob
-    let model: DueModel
+    let log: (ContactChannel, ContactOutcome) async -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var channel = ContactChannel.email
     @State private var outcome = ContactOutcome.noReply
@@ -11,7 +10,7 @@ struct ContactSheet: View {
     private func submit() {
         isSubmitting = true
         Task {
-            if await model.logContact(job, channel: channel, outcome: outcome) { dismiss() }
+            if await log(channel, outcome) { dismiss() }
             isSubmitting = false
         }
     }
