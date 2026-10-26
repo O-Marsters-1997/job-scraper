@@ -2,9 +2,9 @@
 import SwiftUI
 
 struct TriagePrototype: View {
-    private static let variants = [("C", "Evidence · baseline"), ("D", "Paper"), ("E", "Signal"), ("F", "Tactile")]
+    private static let variants = [("1", "Wallet"), ("2", "Arcade"), ("3", "Instrument")]
 
-    @AppStorage("triagePrototypeVariant") private var variant = "C"
+    @AppStorage("triagePrototypeVariant") private var variant = "1"
     @State private var store = TriagePrototypeStore()
 
     var body: some View {
@@ -12,10 +12,9 @@ struct TriagePrototype: View {
             NavigationStack {
                 Group {
                     switch variant {
-                    case "D": VariantPaper(store: store)
-                    case "E": VariantSignal(store: store)
-                    case "F": VariantTactile(store: store)
-                    default: VariantEvidence(store: store)
+                    case "2": VariantArcade(store: store)
+                    case "3": VariantInstrument(store: store)
+                    default: VariantWallet(store: store)
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 8) {
@@ -67,11 +66,11 @@ struct TriagePrototype: View {
                 .lineLimit(1)
                 .opacity(0.8)
         }
-        .foregroundStyle(.white)
-        .tint(.white)
+        .foregroundStyle(Color(.systemBackground))
+        .tint(Color(.systemBackground))
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
-        .background(.black.opacity(0.85), in: .capsule)
+        .background(Color(.label).opacity(0.85), in: .capsule)
         .padding(.bottom, 4)
     }
 

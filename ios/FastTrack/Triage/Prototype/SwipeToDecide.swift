@@ -6,6 +6,8 @@ enum SwipeDirection { case left, right, up }
 struct SwipeToDecide: ViewModifier {
     var allowsUp = false
     var isEnabled = true
+    var showsStamp = true
+    var onProgress: ((CGFloat) -> Void)?
     let onCommit: (SwipeDirection) -> Void
 
     @State private var offset: CGSize = .zero
@@ -17,7 +19,7 @@ struct SwipeToDecide: ViewModifier {
         GeometryReader { proxy in
             let threshold = proxy.size.width * 0.35
             content
-                .overlay(alignment: .top) { stamp }
+                .overlay(alignment: .top) { if showsStamp { stamp } }
                 .offset(x: offset.width, y: allowsUp ? min(offset.height, 0) : 0)
                 .rotationEffect(.degrees(reduceMotion ? 0 : Double(offset.width / proxy.size.width) * 8))
                 .simultaneousGesture(drag(threshold: threshold), including: isEnabled ? .all : .subviews)
@@ -52,6 +54,7 @@ struct SwipeToDecide: ViewModifier {
                 }
                 offset = value.translation
                 armed = direction(for: value.translation, predicted: value.translation, threshold: threshold)
+                onProgress?(value.translation.width / threshold)
             }
             .onEnded { value in
                 if lockedVertical {
@@ -64,6 +67,7 @@ struct SwipeToDecide: ViewModifier {
                     }
                     Task {
                         try? await Task.sleep(for: .milliseconds(200))
+                        onProgress?(0)
                         onCommit(dir)
                         offset = .zero
                         armed = nil
@@ -71,6 +75,7 @@ struct SwipeToDecide: ViewModifier {
                 } else {
                     withAnimation(.spring(duration: 0.3, bounce: reduceMotion ? 0 : 0.15)) { offset = .zero }
                     armed = nil
+                    onProgress?(0)
                 }
             }
     }
@@ -94,8 +99,14 @@ struct SwipeToDecide: ViewModifier {
 }
 
 extension View {
-    func swipeToDecide(allowsUp: Bool = false, isEnabled: Bool = true, onCommit: @escaping (SwipeDirection) -> Void) -> some View {
-        modifier(SwipeToDecide(allowsUp: allowsUp, isEnabled: isEnabled, onCommit: onCommit))
+    func swipeToDecide(
+        allowsUp: Bool = false,
+        isEnabled: Bool = true,
+        showsStamp: Bool = true,
+        onProgress: ((CGFloat) -> Void)? = nil,
+        onCommit: @escaping (SwipeDirection) -> Void
+    ) -> some View {
+        modifier(SwipeToDecide(allowsUp: allowsUp, isEnabled: isEnabled, showsStamp: showsStamp, onProgress: onProgress, onCommit: onCommit))
     }
 }
 #endif

@@ -3,6 +3,8 @@ import SwiftUI
 
 struct TriageCardHost<Card: View>: View {
     let store: TriagePrototypeStore
+    var showsStamp = true
+    @Binding var progress: CGFloat
     @ViewBuilder let card: (_ job: PrototypeJob, _ isExpanded: Bool, _ toggle: @escaping () -> Void) -> Card
 
     @State private var expandedID: PrototypeJob.ID? =
@@ -14,7 +16,7 @@ struct TriageCardHost<Card: View>: View {
             if let job = store.current {
                 let isExpanded = expandedID == job.id
                 card(job, isExpanded) { toggle(job) }
-                    .swipeToDecide(allowsUp: !isExpanded) { dir in
+                    .swipeToDecide(allowsUp: !isExpanded, showsStamp: showsStamp, onProgress: { progress = $0 }) { dir in
                         expandedID = nil
                         withAnimation(.snappy) {
                             store.act(dir == .right ? .shortlist : dir == .left ? .dismiss : .skip, on: job)

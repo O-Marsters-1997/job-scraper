@@ -1,50 +1,6 @@
 #if DEBUG
 import SwiftUI
 
-struct BandScoreLine: View {
-    let job: PrototypeJob
-
-    var body: some View {
-        HStack(spacing: 8) {
-            BandChip(band: job.band)
-            Text(job.score, format: .number)
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(.secondary)
-            if job.unknownCount > 0 {
-                Text("· \(job.unknownCount) unknown")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text(job.age)
-                .font(.footnote.monospacedDigit())
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-struct BandChip: View {
-    let band: PrototypeJob.Band
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        Text(band.rawValue)
-            .font(.footnote.weight(.medium))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 3)
-            .foregroundStyle(ink)
-            .background(band.colour.opacity(0.14), in: .capsule)
-            .overlay(Capsule().strokeBorder(band.colour.opacity(0.3)))
-    }
-
-    private var ink: Color {
-        if #available(iOS 18, *) {
-            return band.colour.mix(with: scheme == .dark ? .white : .black, by: 0.35)
-        }
-        return band.colour
-    }
-}
-
 struct MetaLines: View {
     let job: PrototypeJob
     var titleFont: Font = .title2.weight(.semibold)
@@ -83,58 +39,9 @@ struct BreakdownRowView: View {
     }
 }
 
-struct GroupedBreakdown: View {
-    let job: PrototypeJob
-    private let order: [PrototypeJob.Effect] = [.gated, .boost, .meets, .misses, .level, .unknown]
-
-    var body: some View {
-        ForEach(order, id: \.self) { effect in
-            let rows = job.rows.filter { $0.effect == effect }
-            if !rows.isEmpty {
-                Section(effect.groupTitle) {
-                    ForEach(rows, id: \.self) { BreakdownRowView(row: $0) }
-                }
-            }
-        }
-    }
-}
-
-struct TriageActionBar: View {
-    let job: PrototypeJob
-    let store: TriagePrototypeStore
-    var onDetails: (() -> Void)?
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Button("Dismiss", systemImage: "xmark") { act(.dismiss) }
-                .buttonStyle(.bordered)
-                .tint(.secondary)
-                .controlSize(.large)
-            TriageMoreMenu(job: job, store: store, onDetails: onDetails) {
-                Label("More", systemImage: "ellipsis")
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.circle)
-            .tint(.secondary)
-            .controlSize(.large)
-            Button("Shortlist", systemImage: "checkmark") { act(.shortlist) }
-                .buttonStyle(.borderedProminent)
-                .tint(.brandTint)
-                .controlSize(.large)
-        }
-        .lineLimit(1)
-    }
-
-    private func act(_ action: TriagePrototypeStore.Action) {
-        withAnimation(.easeOut(duration: 0.25)) { store.act(action, on: job) }
-    }
-}
-
 struct TriageMoreMenu<MenuLabel: View>: View {
     let job: PrototypeJob
     let store: TriagePrototypeStore
-    var onDetails: (() -> Void)?
     @ViewBuilder let label: () -> MenuLabel
 
     @State private var showReasons = false
@@ -145,9 +52,6 @@ struct TriageMoreMenu<MenuLabel: View>: View {
             Button("Shortlist and draft CV", systemImage: "doc.badge.plus") { act(.shortlistDraft) }
             Button("Dismiss with reason…", systemImage: "text.badge.xmark") { showReasons = true }
             Button("Add note…", systemImage: "note.text") { showNote = true }
-            if let onDetails {
-                Button("Details", systemImage: "doc.text", action: onDetails)
-            }
             Divider()
             Button("Exclude \(job.company)", systemImage: "nosign", role: .destructive) { act(.exclude) }
         } label: {
@@ -271,53 +175,6 @@ struct QueueClearView: View {
         } actions: {
             Button("Reset prototype queue") { store.reset() }
         }
-    }
-}
-
-struct PrototypeJobDetail: View {
-    let job: PrototypeJob
-    let store: TriagePrototypeStore
-
-    var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    BandScoreLine(job: job)
-                    MetaLines(job: job)
-                }
-                .padding(.vertical, 4)
-            }
-            Section {
-                TriageActionBar(job: job, store: store)
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
-            }
-            Section("Description") {
-                Text(job.description).font(.body)
-            }
-            GroupedBreakdown(job: job)
-            Section("Note") {
-                Text("No note yet").foregroundStyle(.secondary)
-            }
-            Section("Recruiter contacts") {
-                Text("None logged").foregroundStyle(.secondary)
-                Button("Log contact", systemImage: "person.badge.plus") {}
-            }
-            Section {
-                Link("Open original posting", destination: URL(string: "https://example.com")!)
-            }
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ShareLink(item: URL(string: "https://example.com/jobs/\(job.id)")!)
-        }
-    }
-}
-
-extension View {
-    func cardSurface() -> some View {
-        background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color(.separator).opacity(0.6)))
     }
 }
 #endif
