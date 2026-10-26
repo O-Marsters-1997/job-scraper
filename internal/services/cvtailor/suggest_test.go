@@ -3,19 +3,19 @@ package cvtailor_test
 import (
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
-
-	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/openrouter"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
 )
 
-func (e draftEnv) suggestModule(editor cvtailor.Editor, creds cvtailor.Credentials) *cvtailor.Module {
-	return cvtailor.Build(cvtailor.Deps{Store: e.store, Drive: e.drive, Editor: editor, Creds: creds})
+func (e draftEnv) suggestModule(model lineedit.Model, creds cvtailor.Credentials) *cvtailor.Module {
+	return cvtailor.Build(cvtailor.Deps{Store: e.store, Drive: e.drive, Lines: lineedit.New(model), Creds: creds})
 }
 
 func collect(t *testing.T, m *cvtailor.Module, in dto.SuggestInput) ([]cvtailor.SuggestEvent, error) {
@@ -34,7 +34,7 @@ func TestSuggest(t *testing.T) {
 		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
 		m := e.suggestModule(cvtailortest.Suggesting("Leveraged ", "Kubernetes"), apiKey)
 
-		got, err := collect(t, m, dto.SuggestInput{ID: id, SlotID: slot, Action: "tighten", Text: "Cut p99 latency"})
+		got, err := collect(t, m, dto.SuggestInput{ID: id, SlotID: slot, Action: "tighten", Text: "Cut p99 latency using Kubernetes"})
 
 		if err != nil {
 			t.Fatalf("Suggest() error = %v", err)
@@ -58,6 +58,39 @@ func TestSuggest(t *testing.T) {
 		}
 	})
 
+	t.Run("a fit over its limit ends the stream with a try-again error", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+		m := e.suggestModule(cvtailortest.Suggesting("Cut p99 latency by a lot"), apiKey)
+
+		got, err := collect(t, m, dto.SuggestInput{ID: id, SlotID: slot, Action: "fit", MaxChars: 10, Text: "Cut p99 latency"})
+
+		if err != nil {
+			t.Fatalf("Suggest() error = %v", err)
+		}
+		last := got[len(got)-1]
+		if last.Done != nil || !apperr.IsKind(last.Err, apperr.KindUnprocessable) || !strings.HasSuffix(last.Err.Error(), "; try again") {
+			t.Errorf("Suggest() last event = %+v, want an unprocessable try-again error and no done", last)
+		}
+	})
+
+	t.Run("an unchanged line has no findings", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+		m := e.suggestModule(cvtailortest.Suggesting("Leveraged Kubernetes"), apiKey)
+
+		got, err := collect(t, m, dto.SuggestInput{ID: id, SlotID: slot, Action: "verb", Text: "Leveraged Kubernetes"})
+
+		if err != nil {
+			t.Fatalf("Suggest() error = %v", err)
+		}
+		if done := got[len(got)-1].Done; done == nil || len(done.Findings) != 0 {
+			t.Errorf("Suggest() last event = %+v, want done with no findings", got[len(got)-1])
+		}
+	})
+
 	t.Run("a bullet draws on its cited Achievements and the profile on the Draft's chosen ones", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id, _ := e.readyWithProfile(t, "Engineer who ships.", e.pos.Achievements[1].ID)
@@ -71,12 +104,13 @@ func TestSuggest(t *testing.T) {
 			}
 		}
 
-		bullet, profile := editor.SuggestInputs[0], editor.SuggestInputs[1]
-		if diff := cmp.Diff([]string{e.pos.Achievements[0].Text}, bullet.Achievements); diff != "" {
-			t.Errorf("bullet Achievements (-want +got):\n%s", diff)
+		bullet, profile := editor.Prompts[0].User, editor.Prompts[1].User
+		first, second := "- "+e.pos.Achievements[0].Text, "- "+e.pos.Achievements[1].Text
+		if !strings.Contains(bullet, first) || strings.Contains(bullet, second) {
+			t.Errorf("bullet prompt = %q, want only its cited Achievement", bullet)
 		}
-		if diff := cmp.Diff([]string{e.pos.Achievements[0].Text, e.pos.Achievements[1].Text}, profile.Achievements); diff != "" {
-			t.Errorf("profile Achievements (-want +got):\n%s", diff)
+		if !strings.Contains(profile, first) || !strings.Contains(profile, second) {
+			t.Errorf("profile prompt = %q, want the Draft's chosen Achievements", profile)
 		}
 	})
 
@@ -112,7 +146,7 @@ func TestSuggest(t *testing.T) {
 				if !apperr.IsKind(err, tc.kind) {
 					t.Errorf("Suggest(%+v) error = %v, want kind %v", tc.in, err, tc.kind)
 				}
-				if len(editor.SuggestInputs) != 0 {
+				if len(editor.Prompts) != 0 {
 					t.Errorf("Suggest(%+v) called the model, want a refusal first", tc.in)
 				}
 			})

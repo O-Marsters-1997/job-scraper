@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"slices"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/openrouter"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
@@ -30,7 +32,6 @@ const (
 )
 
 type Editor interface {
-	Suggest(ctx context.Context, apiKey string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error)
 	Explain(ctx context.Context, apiKey string, in cvedit.ExplainInput) (cvedit.ExplainResult, error)
 	Insights(ctx context.Context, apiKey string, in cvedit.InsightsInput) (cvedit.InsightsResult, error)
 }
@@ -187,6 +188,17 @@ func (s *Service) replaceLowLean(ctx context.Context, claim dto.DraftClaim, pl p
 	}
 	reps := leanRule{}.Replacements(bank, pl.baseContent().content(), answers)
 	return pl.withReplacements(bank, reps), nil
+}
+
+func suggestError(err error) error {
+	var se *openrouter.StatusError
+	if errors.As(err, &se) {
+		switch se.Code {
+		case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden:
+			return apperr.Unprocessable("OpenRouter refused the request; check your key and credit in Settings, AI")
+		}
+	}
+	return apperr.Upstream("the suggestion model failed")
 }
 
 func toDraftFindings(findings []checks.Finding) []dto.DraftFinding {

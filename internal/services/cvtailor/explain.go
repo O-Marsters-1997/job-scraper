@@ -55,7 +55,7 @@ func (m *Module) Explain(ctx context.Context, userID string, in dto.ExplainInput
 	})
 	slog.InfoContext(ctx, "bullet explanation", slog.String("achievement_id", in.AchievementID), slog.String("job_id", in.JobID),
 		slog.Float64("p_yes", answer.PYes), slog.Float64("p_no", answer.PNo), slog.Float64("p_not_stated", answer.PNotStated),
-		slog.String("model", cvedit.SuggestModel), slog.String("reply", res.Text), slog.Float64("cost", res.Cost),
+		slog.String("model", cvedit.ExplainModel), slog.String("reply", res.Text), slog.Float64("cost", res.Cost),
 		slog.Any(logger.KeyErr, err))
 	if err != nil {
 		return dto.Explanation{}, suggestError(err)

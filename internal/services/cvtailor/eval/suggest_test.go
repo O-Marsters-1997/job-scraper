@@ -7,6 +7,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/eval"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
 )
 
 func suggestFixture(t *testing.T, name string) eval.SuggestFixture {
@@ -66,13 +67,13 @@ func TestRunSuggestScoresGroundingBannedWordsAndLength(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := suggestFixture(t, tc.fixture)
 
-			out, err := eval.RunSuggest(t.Context(), cvtailortest.Suggesting(tc.output), "key", f)
+			out, err := eval.RunSuggest(t.Context(), lineedit.New(cvtailortest.Suggesting(tc.output)), "key", f)
 
 			if err != nil {
 				t.Fatalf("RunSuggest: %v", err)
 			}
 			if out.Passed() != tc.want {
-				t.Errorf("RunSuggest(%s, %q).Passed() = %t, want %t (findings %+v, over limit %t)", tc.fixture, tc.output, out.Passed(), tc.want, out.Findings, out.OverLimit)
+				t.Errorf("RunSuggest(%s, %q).Passed() = %t, want %t (findings %+v, rejection %q)", tc.fixture, tc.output, out.Passed(), tc.want, out.Findings, out.Rejection)
 			}
 		})
 	}
@@ -80,18 +81,18 @@ func TestRunSuggestScoresGroundingBannedWordsAndLength(t *testing.T) {
 
 func TestSuggestReportShowsPassRatePerFixture(t *testing.T) {
 	f := suggestFixture(t, "verb-weak")
-	good, err := eval.RunSuggest(t.Context(), cvtailortest.Suggesting("Ran the weekly release train for six squads"), "key", f)
+	good, err := eval.RunSuggest(t.Context(), lineedit.New(cvtailortest.Suggesting("Ran the weekly release train for six squads")), "key", f)
 	if err != nil {
 		t.Fatalf("RunSuggest(good): %v", err)
 	}
-	bad, err := eval.RunSuggest(t.Context(), cvtailortest.Suggesting("Spearheaded the weekly release train for six squads"), "key", f)
+	bad, err := eval.RunSuggest(t.Context(), lineedit.New(cvtailortest.Suggesting("Spearheaded the weekly release train for six squads")), "key", f)
 	if err != nil {
 		t.Fatalf("RunSuggest(bad): %v", err)
 	}
 
-	report := eval.SuggestReport("v1", "m", []eval.SuggestOutcome{good, bad})
+	report := eval.SuggestReport([]eval.SuggestOutcome{good, bad})
 
-	for _, want := range []string{"prompt_version=v1", "verb-weak: 1/2 (50%)", "pass 1/2 (50%)"} {
+	for _, want := range []string{"model=" + good.Model, "verb-weak: 1/2 (50%) prompt_key=" + good.PromptKey, "pass 1/2 (50%)"} {
 		if !strings.Contains(report, want) {
 			t.Errorf("report missing %q:\n%s", want, report)
 		}

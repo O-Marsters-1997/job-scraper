@@ -1,4 +1,4 @@
-package cvedit
+package lineedit
 
 import (
 	"strings"
@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-func TailorViolation(original, result string, maxChars int, maxShare float64) string {
+func tailorViolation(original, result string, maxChars int, maxShare float64) string {
 	orig, got := words(original), words(result)
 	switch {
 	case len(got) > len(orig):
