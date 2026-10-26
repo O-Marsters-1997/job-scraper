@@ -1,6 +1,6 @@
 import Foundation
 
-struct Job: Decodable, Identifiable, Hashable {
+struct Job: Codable, Identifiable, Hashable {
     let id: String
     let title: String
     let companyID: String
@@ -50,7 +50,7 @@ extension Job {
         url = try c.decode(String.self, forKey: .url)
         postedAt = try c.decodeIfPresent(Date.self, forKey: .postedAt)
         firstDiscoveredAt = try c.decode(Date.self, forKey: .firstDiscoveredAt)
-        band = Band(rawValue: try c.decode(String.self, forKey: .band).lowercased())
+        band = try c.decodeIfPresent(String.self, forKey: .band).flatMap { Band(rawValue: $0.lowercased()) }
         score = try c.decodeIfPresent(Int.self, forKey: .score)
         breakdown = try c.decodeIfPresent([ScoreRow].self, forKey: .breakdown) ?? []
         description = try c.decode(String.self, forKey: .description)
