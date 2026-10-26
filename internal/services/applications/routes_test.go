@@ -23,6 +23,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	r := newTestRouter()
 
 	handlerstest.RequiresAuth(t, r,
+		"GET /due",
 		"GET /application-statuses/",
 		"POST /application-statuses/",
 		"PATCH /application-statuses/{id}",
