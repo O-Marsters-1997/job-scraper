@@ -1,12 +1,19 @@
 -- +goose Up
 CREATE TEMP TABLE board_merge AS
-WITH ranked AS (
+WITH job_counts AS (
+    SELECT primary_board_id AS board_id, count(*) AS n
+    FROM jobs
+    WHERE primary_board_id IS NOT NULL
+    GROUP BY primary_board_id
+),
+ranked AS (
     SELECT b.id, b.source, lower(b.board_token) AS token_key,
         row_number() OVER (
             PARTITION BY b.source, lower(b.board_token)
-            ORDER BY (SELECT count(*) FROM jobs j WHERE j.primary_board_id = b.id) DESC, b.created_at, b.id
+            ORDER BY coalesce(jc.n, 0) DESC, b.created_at, b.id
         ) AS rank
     FROM company_boards b
+    LEFT JOIN job_counts jc ON jc.board_id = b.id
     WHERE b.status <> 'retired'
 )
 SELECT l.id AS loser_id, w.id AS survivor_id
