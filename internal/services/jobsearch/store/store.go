@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -133,39 +134,44 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 		filters.SalaryCeiling = pgtype.Float8{Float64: *options.SalaryMax, Valid: true}
 	}
 
-	rows, err := s.queries.PageJobs(ctx, sqlc.PageJobsParams{
-		UserID: filters.UserID, Now: filters.Now, ExcludedCompanySlugs: filters.ExcludedCompanySlugs,
-		CompanyID: filters.CompanyID, ScoredOnly: filters.ScoredOnly, MinSuitability: filters.MinSuitability,
-		Graded: filters.Graded, Seen: filters.Seen, Poster: filters.Poster, FavouriteOnly: filters.FavouriteOnly,
-		Sources: filters.Sources, Arrangements: filters.Arrangements, SalaryOnly: filters.SalaryOnly,
-		SalaryFloor: filters.SalaryFloor, SalaryCeiling: filters.SalaryCeiling, SearchPattern: filters.SearchPattern,
-		Bands: filters.Bands, ScrapedSince: filters.ScrapedSince,
-		Sort: string(options.Sort), PageOffset: options.Offset, PageLimit: options.Limit,
-	})
-	if err != nil {
-		return dto.JobPage{}, fmt.Errorf("page jobs: %w", err)
-	}
-	page := dto.JobPage{Items: make([]dto.Job, len(rows))}
-	for i, row := range rows {
-		job, err := toPageJobDTO(row)
+	g, gctx := errgroup.WithContext(ctx)
+	var page dto.JobPage
+	g.Go(func() error {
+		rows, err := s.queries.PageJobs(gctx, sqlc.PageJobsParams{
+			UserID: filters.UserID, Now: filters.Now, ExcludedCompanySlugs: filters.ExcludedCompanySlugs,
+			CompanyID: filters.CompanyID, ScoredOnly: filters.ScoredOnly, MinSuitability: filters.MinSuitability,
+			Graded: filters.Graded, Seen: filters.Seen, Poster: filters.Poster, FavouriteOnly: filters.FavouriteOnly,
+			Sources: filters.Sources, Arrangements: filters.Arrangements, SalaryOnly: filters.SalaryOnly,
+			SalaryFloor: filters.SalaryFloor, SalaryCeiling: filters.SalaryCeiling, SearchPattern: filters.SearchPattern,
+			Bands: filters.Bands, ScrapedSince: filters.ScrapedSince,
+			Sort: string(options.Sort), PageOffset: options.Offset, PageLimit: options.Limit,
+		})
 		if err != nil {
-			return dto.JobPage{}, fmt.Errorf("page jobs: %w", err)
+			return fmt.Errorf("page jobs: %w", err)
 		}
-		page.Items[i] = job
+		page.Items = make([]dto.Job, len(rows))
+		for i, row := range rows {
+			job, err := toPageJobDTO(row)
+			if err != nil {
+				return fmt.Errorf("page jobs: %w", err)
+			}
+			page.Items[i] = job
+		}
+		return s.attachListings(gctx, page.Items, rows)
+	})
+	if !options.SkipTotal {
+		g.Go(func() error {
+			total, err := s.queries.CountJobs(gctx, filters)
+			if err != nil {
+				return fmt.Errorf("count jobs: %w", err)
+			}
+			page.Total = new(int(total))
+			return nil
+		})
 	}
-	if err := s.attachListings(ctx, page.Items, rows); err != nil {
+	if err := g.Wait(); err != nil {
 		return dto.JobPage{}, err
 	}
-
-	if len(rows) > 0 && len(rows) < int(options.Limit) {
-		page.Total = int(options.Offset) + len(rows)
-		return page, nil
-	}
-	total, err := s.queries.CountJobs(ctx, filters)
-	if err != nil {
-		return dto.JobPage{}, fmt.Errorf("count jobs: %w", err)
-	}
-	page.Total = int(total)
 	return page, nil
 }
 

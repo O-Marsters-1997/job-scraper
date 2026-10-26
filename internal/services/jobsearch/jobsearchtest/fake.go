@@ -281,7 +281,11 @@ func (f *FakeStore) Page(_ context.Context, userID string, options dto.JobPageOp
 	if limit := int(options.Limit); limit > 0 && limit < len(items) {
 		items = items[:limit]
 	}
-	return dto.JobPage{Items: items, Total: total}, nil
+	page := dto.JobPage{Items: items}
+	if !options.SkipTotal {
+		page.Total = &total
+	}
+	return page, nil
 }
 
 func (f *FakeStore) GetJob(_ context.Context, jobID, userID string) (dto.Job, error) {

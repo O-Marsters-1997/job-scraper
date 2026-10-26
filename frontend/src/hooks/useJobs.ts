@@ -1,4 +1,8 @@
-import { createQuery, queryOptions } from "@tanstack/solid-query";
+import {
+	createQuery,
+	queryOptions,
+	useQueryClient,
+} from "@tanstack/solid-query";
 import {
 	fetchJob,
 	fetchJobInsights,
@@ -8,6 +12,7 @@ import {
 } from "../api/jobs";
 import { keys } from "../api/keys";
 import type { JobFilters } from "../lib/jobFilters";
+import type { JobPage } from "../lib/jobPage";
 import type { Job } from "../types/job";
 import { patchJobPages } from "./patchJobPages";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
@@ -38,13 +43,20 @@ export function useJobPages(
 	state: () => JobFilters,
 	onChange: (patch: Partial<JobFilters>) => void,
 ) {
+	const queryClient = useQueryClient();
 	return useServerTable({
 		state,
 		onChange,
 		pageSize: JOBS_PAGE_SIZE,
 		query: (filters) => ({
 			queryKey: keys.jobs.list(filters),
-			queryFn: () => fetchJobPage(filters, JOBS_PAGE_SIZE),
+			queryFn: () => {
+				const firstPage = queryClient.getQueryData<JobPage>(
+					keys.jobs.list({ ...filters, page: undefined }),
+				);
+				const knownTotal = filters.page ? firstPage?.total : undefined;
+				return fetchJobPage(filters, JOBS_PAGE_SIZE, knownTotal);
+			},
 		}),
 		rowId: (job) => job.ID,
 	});

@@ -139,6 +139,19 @@ try {
 		`${API_BASE}/jobs?${jobPageQuery({ ...DEFAULT_FILTERS, page: 2 }, 25)}`,
 	]);
 	assert.equal(page.total, 3);
+
+	requested.length = 0;
+	globalThis.fetch = async (input) => {
+		requested.push(String(input));
+		return Response.json({ total: null, items: [] });
+	};
+	const skipped = await fetchJobPage({ ...DEFAULT_FILTERS, page: 2 }, 25, 7);
+	assert.equal(
+		new URL(requested[0] ?? "").searchParams.get("skip_total"),
+		"1",
+		"a known total skips the server count",
+	);
+	assert.equal(skipped.total, 7, "the known total is kept");
 } finally {
 	globalThis.fetch = originalFetch;
 }
