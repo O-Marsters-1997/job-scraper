@@ -16,7 +16,7 @@ LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = sqlc.arg(user_id)::u
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > sqlc.arg(now)::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL(sqlc.arg(excluded_company_slugs)::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no'
   AND (sqlc.narg(company_id)::uuid IS NULL OR j.company_id = sqlc.narg(company_id)::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = sqlc.narg(company_id)::uuid)))
   AND (NOT sqlc.arg(scored_only)::bool OR js.job_id IS NOT NULL)
@@ -54,7 +54,7 @@ LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = sqlc.arg(user_id)::u
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > sqlc.arg(now)::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL(sqlc.arg(excluded_company_slugs)::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no'
   AND (sqlc.narg(company_id)::uuid IS NULL OR j.company_id = sqlc.narg(company_id)::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = sqlc.narg(company_id)::uuid)))
   AND (NOT sqlc.arg(scored_only)::bool OR js.job_id IS NOT NULL)
@@ -120,7 +120,7 @@ LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = sqlc.arg(user_id)::
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > sqlc.arg(now)::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL(sqlc.arg(excluded_company_slugs)::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no';
 
 -- name: JobInsightGroups :many
@@ -140,6 +140,6 @@ LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = sqlc.arg(user_id)::
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > sqlc.arg(now)::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL(sqlc.arg(excluded_company_slugs)::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no'
 GROUP BY 1, 2, 3, 4;

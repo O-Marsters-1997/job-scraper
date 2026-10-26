@@ -36,7 +36,7 @@ LEFT JOIN tracked_companies tc ON tc.user_id = sqlc.arg(user_id)::uuid AND tc.co
 LEFT JOIN (
     SELECT j.company_id, COUNT(*) AS n FROM job_scores js JOIN jobs j ON j.id = js.job_id
     WHERE js.user_id = sqlc.arg(user_id)::uuid AND j.closed_at IS NULL
-      AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
+      AND NOT COALESCE(js.blocked, false)
     GROUP BY j.company_id
 ) jc ON jc.company_id = c.id
 WHERE (sqlc.arg(search)::text = ''
@@ -82,7 +82,7 @@ SELECT c.id, c.slug, c.name,
     c.last_crawled_at, c.first_seen_at, c.kind,
     (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
      WHERE j.company_id = c.id AND j.closed_at IS NULL
-       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
+       AND NOT COALESCE(js.blocked, false)) AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
     EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1 AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
@@ -137,7 +137,7 @@ JOIN companies c ON c.id = tc.company_id
 LEFT JOIN (
     SELECT j.company_id, COUNT(*) AS open_jobs,
         COUNT(*) FILTER (WHERE js.job_id IS NOT NULL
-                           AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS relevant_jobs
+                           AND NOT COALESCE(js.blocked, false)) AS relevant_jobs
     FROM tracked_companies t
     JOIN jobs j ON j.company_id = t.company_id AND j.closed_at IS NULL
     LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = t.user_id

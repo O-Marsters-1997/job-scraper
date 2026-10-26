@@ -20,7 +20,7 @@ LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $1::uuid
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > $2::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL($3::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no'
   AND ($4::uuid IS NULL OR j.company_id = $4::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = $4::uuid)))
   AND (NOT $5::bool OR js.job_id IS NOT NULL)
@@ -205,7 +205,7 @@ LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $2::uuid
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > $3::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL($4::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no'
 GROUP BY 1, 2, 3, 4
 `
@@ -271,7 +271,7 @@ LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $2::uuid
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > $3::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL($4::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no'
 `
 
@@ -429,7 +429,7 @@ LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $1::uuid
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > $3::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL($4::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no'
   AND ($5::uuid IS NULL OR j.company_id = $5::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = $5::uuid)))
   AND (NOT $6::bool OR js.job_id IS NOT NULL)
