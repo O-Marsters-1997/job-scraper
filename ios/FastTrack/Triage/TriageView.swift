@@ -28,7 +28,7 @@ struct TriageView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 8) {
-                UndoBanner(decision: model.banner, onUndo: undo, onExpire: model.dismissBanner)
+                UndoBanner(decision: model.banner, onUndo: undo, onExpire: model.dismissBanner, onDraftCV: { model.draftCV($0) })
                     .animation(.snappy, value: model.banner)
             }
             .sheet(isPresented: $showReasons) {
@@ -84,14 +84,15 @@ struct TriageView: View {
                     .overlay { decisionWash }
                     .swipeToDecide(allowsUp: !isExpanded, onProgress: { progress = $0 }) { direction in
                         switch direction {
-                        case .right: decide(.shortlist)
+                        case .right: decide(.shortlist(draftCV: false))
                         case .left: decide(.dismiss(reasons: []))
                         case .up: decide(.skip)
                         }
                     }
                     .id(job.id)
                     .transition(.asymmetric(insertion: insertion, removal: removal))
-                    .accessibilityAction(named: "Shortlist") { decide(.shortlist) }
+                    .accessibilityAction(named: "Shortlist") { decide(.shortlist(draftCV: false)) }
+                    .accessibilityAction(named: "Shortlist and draft CV") { decide(.shortlist(draftCV: true)) }
                     .accessibilityAction(named: "Dismiss") { decide(.dismiss(reasons: [])) }
                     .accessibilityAction(named: "Skip") { decide(.skip) }
                     .accessibilityAction(named: isExpanded ? "Collapse details" : "Details") { toggle(job) }
@@ -131,6 +132,7 @@ struct TriageView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Dismiss")
             Menu {
+                Button("Shortlist and draft CV", systemImage: "doc.badge.plus") { decide(.shortlist(draftCV: true)) }
                 Button("Dismiss with reason…", systemImage: "text.badge.xmark") { showReasons = true }
                 Button("Add note…", systemImage: "note.text") { showNote = true }
                 Button("Exclude company", systemImage: "nosign", role: .destructive) { decide(.excludeCompany) }
@@ -145,7 +147,7 @@ struct TriageView: View {
             .accessibilityLabel("More")
             .tint(.secondary)
             .opacity(Double(1 - max(left, right) * 0.6))
-            Button { decide(.shortlist) } label: {
+            Button { decide(.shortlist(draftCV: false)) } label: {
                 Image(systemName: "checkmark")
                     .font(.title2.weight(.bold))
                     .foregroundStyle(.white)

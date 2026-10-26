@@ -67,6 +67,23 @@ struct DTODecodingTests {
         #expect(contact.outcome == .noReply)
         #expect(contact.contactedOn.dayString == "2026-10-01")
     }
+
+    @Test func cvTemplatesDecode() throws {
+        let cvs = try JSONDecoder.api.decode([CVTemplate].self, from: fixture("cv_templates"))
+
+        let cv = try #require(cvs.first)
+        #expect(cv.docID == "doc-1")
+        #expect(cv.tabID == "tab-1")
+        #expect(cv.title == "Backend")
+        #expect(cv.isDefault)
+    }
+
+    @Test func draftInputEncodesTheTailoringShape() throws {
+        let data = try JSONEncoder().encode(DraftInput(jobID: "j", docID: "d", tabID: "t"))
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: String])
+
+        #expect(json == ["jobId": "j", "docId": "d", "tabId": "t", "mode": "generate"])
+    }
 }
 
 private final class BundleToken {}
