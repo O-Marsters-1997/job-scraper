@@ -87,6 +87,7 @@ func parseJobsQuery(q dto.JobsQuery) (dto.JobPageOptions, error) {
 		Arrangements:  splitList(strings.ToLower(q.Work)),
 		SalaryOnly:    q.Salary == "1",
 		Search:        q.Q,
+		SkipTotal:     q.SkipTotal == "1",
 	}
 	if q.Suit != "" {
 		suit, err := strconv.ParseInt(q.Suit, 10, 32)

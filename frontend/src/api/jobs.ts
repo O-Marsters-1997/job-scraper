@@ -11,9 +11,9 @@ import { mocked } from "./config";
 
 const JOBS_PAGE_SIZE = 100;
 
-const jobPageSchema = z.object({
-	items: jobSchema.array(),
-	total: z.number(),
+export const jobPageSchema = z.object({
+	items: z.array(jobSchema),
+	total: z.number().nullable(),
 });
 
 export function jobPageQuery(
@@ -45,10 +45,16 @@ export function jobPageQuery(
 export async function fetchJobPage(
 	filters: JobFilters,
 	pageSize: number,
+	knownTotal?: number,
 ): Promise<JobPage> {
 	return mocked(
 		(db) => db.getJobPage(filters, pageSize),
-		() => apiFetch(`/jobs?${jobPageQuery(filters, pageSize)}`, jobPageSchema),
+		async () => {
+			const query = jobPageQuery(filters, pageSize);
+			if (knownTotal !== undefined) query.set("skip_total", "1");
+			const page = await apiFetch(`/jobs?${query}`, jobPageSchema);
+			return { ...page, total: page.total ?? knownTotal ?? page.items.length };
+		},
 	);
 }
 
@@ -78,7 +84,8 @@ export async function fetchAllJobs(): Promise<Job[]> {
 					jobPageSchema,
 				);
 				jobs.push(...res.items);
-				if (res.items.length === 0 || jobs.length >= res.total) return jobs;
+				if (res.items.length === 0 || jobs.length >= (res.total ?? 0))
+					return jobs;
 			}
 		},
 	);
