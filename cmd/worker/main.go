@@ -104,10 +104,10 @@ func run(ctx context.Context) error {
 	}
 	defer func() { _ = q.Close() }()
 
-	js := jobsearch.New(pool, q, scoringModule, nil, sourcetargets.DefaultMaxAutomatic)
+	js := jobsearch.New(pool, q, scoringModule, nil, sourcetargets.DefaultMaxAutomatic, slog.Default())
 	proxy.SetCache(js)
 
-	exporter := scraper.NewAPIExporter(apiBaseURL, ingestToken)
+	exporter := scraper.NewAPIExporter(apiBaseURL, ingestToken).WithLogger(slog.Default())
 	wellfoundGate := wellfound.NewGate()
 	sourceBuilder := builder.New(wellfoundGate, decodoScrapeToken)
 	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{Build: sourceBuilder.BuildSource, Profiles: js}, exporter)

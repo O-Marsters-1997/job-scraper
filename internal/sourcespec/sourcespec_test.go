@@ -32,6 +32,21 @@ func TestSources(t *testing.T) {
 	}
 }
 
+func TestNormalizeBoardToken(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct{ source, token, want string }{
+		{"ashby", "Acme", "acme"},
+		{"smartrecruiters", "Experian", "experian"},
+		{"pinpoint", "CFC", "cfc"},
+		{"greenhouse", "Speechify", "Speechify"},
+		{"unknown", "Acme", "Acme"},
+	} {
+		if got := sourcespec.NormalizeBoardToken(tt.source, tt.token); got != tt.want {
+			t.Errorf("NormalizeBoardToken(%q, %q) = %q, want %q", tt.source, tt.token, got, tt.want)
+		}
+	}
+}
+
 func TestSourceRole(t *testing.T) {
 	t.Parallel()
 	role, ok := sourcespec.SourceRole("other")
