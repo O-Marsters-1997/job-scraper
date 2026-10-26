@@ -1,0 +1,18 @@
+[
+  {
+    "ID": "type-1",
+    "Name": "Finish application",
+    "Colour": "#0f766e",
+    "SystemKey": "finish",
+    "TaskCount": 0,
+    "CreatedAt": "2026-10-01T09:00:00Z"
+  },
+  {
+    "ID": "type-2",
+    "Name": "Reach out",
+    "Colour": "#15803d",
+    "SystemKey": "",
+    "TaskCount": 0,
+    "CreatedAt": "2026-10-01T09:00:00Z"
+  }
+]

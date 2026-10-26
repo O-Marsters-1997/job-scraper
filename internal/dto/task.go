@@ -11,7 +11,10 @@ const (
 
 type TaskTypeSystemKey string
 
-const TaskTypeApply TaskTypeSystemKey = "apply"
+const (
+	TaskTypeApply  TaskTypeSystemKey = "apply"
+	TaskTypeFinish TaskTypeSystemKey = "finish"
+)
 
 type TaskType struct {
 	ID        string

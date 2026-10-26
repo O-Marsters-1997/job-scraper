@@ -115,6 +115,30 @@ struct ContactInput: Encodable {
     }
 }
 
+struct TaskType: Decodable {
+    let id: String
+    let name: String
+    let systemKey: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id = "ID"
+        case name = "Name"
+        case systemKey = "SystemKey"
+    }
+}
+
+struct CreateTaskInput: Encodable {
+    let typeID: String
+    let jobID: String
+    let notes: String
+
+    enum CodingKeys: String, CodingKey {
+        case notes
+        case typeID = "type_id"
+        case jobID = "job_id"
+    }
+}
+
 struct TaskDoneInput: Encodable {
     let done: Bool
 }

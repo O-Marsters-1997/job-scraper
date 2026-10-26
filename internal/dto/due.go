@@ -26,9 +26,10 @@ type DueJob struct {
 }
 
 type DueTask struct {
-	ID       string `json:"id"`
-	TypeName string `json:"type_name"`
-	Notes    string `json:"notes"`
+	ID        string            `json:"id"`
+	TypeName  string            `json:"type_name"`
+	SystemKey TaskTypeSystemKey `json:"system_key"`
+	Notes     string            `json:"notes"`
 }
 
 type DueDraft struct {

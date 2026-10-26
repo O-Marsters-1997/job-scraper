@@ -6,11 +6,13 @@ struct DueJob: Decodable, Identifiable, Hashable {
     struct Task: Decodable, Hashable {
         let id: String
         let typeName: String
+        let systemKey: String?
         let notes: String
 
         enum CodingKeys: String, CodingKey {
             case id, notes
             case typeName = "type_name"
+            case systemKey = "system_key"
         }
     }
 
@@ -37,6 +39,7 @@ struct DueJob: Decodable, Identifiable, Hashable {
     let tasks: [Task]
     let draft: Draft?
 
+    var isAtDesk: Bool { tasks.contains { $0.systemKey == "finish" } }
     var companyName: String { companySlug.replacing("-", with: " ").capitalized }
 
     enum CodingKeys: String, CodingKey {
@@ -77,7 +80,7 @@ extension DueJob {
     static let sample = DueJob(
         jobID: "sample", title: "Senior Go Engineer", companySlug: "monzo", band: .great, score: 92,
         applicationID: "application-sample", chaseBy: Calendar.current.date(byAdding: .day, value: -2, to: .now),
-        applyTaskID: nil, tasks: [Task(id: "task-1", typeName: "Reach out", notes: "")],
+        applyTaskID: nil, tasks: [Task(id: "task-1", typeName: "Reach out", systemKey: nil, notes: "")],
         draft: Draft(id: "draft-1", state: .ready, cvTitle: "Backend")
     )
 }

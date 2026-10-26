@@ -13,7 +13,14 @@
         {
           "id": "task-1",
           "type_name": "Apply",
+          "system_key": "apply",
           "notes": "Tailor the CV"
+        },
+        {
+          "id": "task-2",
+          "type_name": "Finish application",
+          "system_key": "finish",
+          "notes": "Needs a cover letter"
         }
       ],
       "draft": {

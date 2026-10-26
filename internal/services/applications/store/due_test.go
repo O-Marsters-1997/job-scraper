@@ -105,6 +105,7 @@ func TestStore_ListDue(t *testing.T) {
 		reachID := addTask(t, pool, userID, reach, jobID, "email Sam")
 		doneID := addTask(t, pool, userID, reach, jobID, "")
 		exec(t, pool, `UPDATE tasks SET completed_at = NOW() WHERE id = $1`, doneID)
+		finishID := addTask(t, pool, userID, taskType(t, pool, userID, "Finish application", "finish"), jobID, "needs a cover letter")
 
 		got, err := st.ListDue(t.Context(), userID)
 		if err != nil {
@@ -117,7 +118,10 @@ func TestStore_ListDue(t *testing.T) {
 		if j.ApplyTaskID == nil || *j.ApplyTaskID != applyID {
 			t.Errorf("ApplyTaskID = %v, want %s", j.ApplyTaskID, applyID)
 		}
-		wantTasks := []dto.DueTask{{ID: reachID, TypeName: "Reach out", Notes: "email Sam"}}
+		wantTasks := []dto.DueTask{
+			{ID: reachID, TypeName: "Reach out", Notes: "email Sam"},
+			{ID: finishID, TypeName: "Finish application", SystemKey: dto.TaskTypeFinish, Notes: "needs a cover letter"},
+		}
 		if diff := cmp.Diff(wantTasks, j.Tasks); diff != "" {
 			t.Errorf("Tasks (-want +got):\n%s", diff)
 		}

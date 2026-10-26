@@ -21,7 +21,7 @@ struct DueModelTests {
         DueJob(
             jobID: id, title: "Role \(id)", companySlug: "co-\(id)", band: .great, score: 90, applicationID: "app-\(id)",
             chaseBy: chase.map(day), applyTaskID: applyTaskID,
-            tasks: tasks.map { DueJob.Task(id: $0, typeName: "Reach out", notes: "") },
+            tasks: tasks.map { DueJob.Task(id: $0, typeName: "Reach out", systemKey: nil, notes: "") },
             draft: draft.map { DueJob.Draft(id: "d-\(id)", state: $0, cvTitle: "CV") })
     }
 

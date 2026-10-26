@@ -403,6 +403,7 @@ const seedDefaultTaskTypes = `-- name: SeedDefaultTaskTypes :exec
 INSERT INTO task_types (user_id, name, colour, system_key)
 VALUES
     ($1, 'Apply',     '#6366f1', 'apply'),
+    ($1, 'Finish application', '#0f766e', 'finish'),
     ($1, 'Follow up', '#c2410c', NULL),
     ($1, 'Reach out', '#15803d', NULL),
     ($1, 'Prep',      '#64748b', NULL)
