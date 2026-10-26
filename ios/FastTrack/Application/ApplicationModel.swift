@@ -63,6 +63,7 @@ final class ApplicationModel {
     }
 
     func requestLetter() async {
+        guard !requestingLetter else { return }
         requestingLetter = true
         letterError = nil
         defer { requestingLetter = false }
