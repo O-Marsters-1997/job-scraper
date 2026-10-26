@@ -3,18 +3,28 @@ import SwiftUI
 
 @Observable
 final class TriageModel {
+    static let cacheSize = 50
+
     private(set) var queue: [Job] = []
     private(set) var loadState: LoadState<Void> = .idle
     private(set) var undoStack: [TriageDecision] = []
     private(set) var banner: TriageDecision?
     private(set) var lastRemoved: TriageAction?
     private(set) var failureMessage = ""
+    private(set) var queued: [QueuedAction]
+    private(set) var isOffline = false
+    private(set) var syncNote: String?
+    private(set) var sessionExpired = false
     var hasFailure = false
 
     private let client: APIClient
+    private let store: OfflineStore
+    private var receipts: [UUID: UndoReceipt] = [:]
 
-    init(client: APIClient) {
+    init(client: APIClient, store: OfflineStore = .memory()) {
         self.client = client
+        self.store = store
+        queued = (try? store.loadQueue()) ?? []
     }
 
     var current: Job? { queue.first }
@@ -22,11 +32,17 @@ final class TriageModel {
 
     func load() async {
         if queue.isEmpty { loadState = .loading }
+        await sync()
         do {
             try await reloadQueue()
+            isOffline = false
             loadState = .loaded(())
         } catch is CancellationError {
             return
+        } catch is URLError {
+            isOffline = true
+            if queue.isEmpty { queue = (try? store.loadCards()) ?? [] }
+            loadState = .loaded(())
         } catch {
             loadState = .failed(error)
         }
@@ -36,19 +52,30 @@ final class TriageModel {
     func decide(_ action: TriageAction) -> Task<Void, Never> {
         guard let job = queue.first else { return Task {} }
         if !action.keepsCard { queue.removeFirst() }
+        persistCards()
         lastRemoved = action
         banner = nil
+        let id = UUID()
+        let kind = kind(of: action, on: job)
         return Task {
+            var receipt: UndoReceipt?
             do {
-                let receipt = try await perform(action, on: job)
-                if case .excludeCompany = action { queue.removeAll { $0.companyID == job.companyID } }
-                let decision = TriageDecision(id: UUID(), job: job, action: action, receipt: receipt)
-                undoStack.append(decision)
-                if action != .skip { banner = decision }
+                guard !isOffline else { throw URLError(.notConnectedToInternet) }
+                receipt = try await client.perform(kind, jobID: job.id)
+                if case .shortlist(draftCV: true) = action { await startDraft(for: job) }
+            } catch where cannotReach(error) {
+                enqueue(QueuedAction(id: id, jobID: job.id, kind: kind, queuedAt: .now), after: error)
             } catch {
                 if !action.keepsCard { queue.insert(job, at: 0) }
+                persistCards()
                 fail(error)
+                return
             }
+            if case .excludeCompany = action { queue.removeAll { $0.companyID == job.companyID } }
+            persistCards()
+            let decision = TriageDecision(id: id, job: job, action: action, receipt: receipt)
+            undoStack.append(decision)
+            if action != .skip { banner = decision }
         }
     }
 
@@ -57,12 +84,24 @@ final class TriageModel {
         guard let decision = undoStack.popLast() else { return Task {} }
         let keepsCard = decision.action.keepsCard
         if !keepsCard { queue.insert(decision.job, at: 0) }
+        persistCards()
         banner = nil
+        if let index = queued.firstIndex(where: { $0.id == decision.id }) {
+            queued.remove(at: index)
+            persistQueue()
+            return Task {}
+        }
         return Task {
             do {
-                try await revert(decision)
+                guard !isOffline else { throw URLError(.notConnectedToInternet) }
+                try await client.revert(decision.receipt, jobID: decision.job.id)
+                if case .exclusion = decision.receipt { try? await reloadQueue() }
+            } catch where cannotReach(error) && decision.receipt != nil {
+                receipts[decision.id] = decision.receipt
+                enqueue(QueuedAction(id: UUID(), jobID: decision.job.id, kind: .undo(of: decision.id), queuedAt: .now), after: error)
             } catch {
                 if !keepsCard { queue.removeAll { $0.id == decision.job.id } }
+                persistCards()
                 undoStack.append(decision)
                 fail(error)
             }
@@ -76,6 +115,10 @@ final class TriageModel {
 
     func dismissBanner(_ id: UUID) {
         if banner?.id == id { banner = nil }
+    }
+
+    func clearSyncNote() {
+        syncNote = nil
     }
 
     @discardableResult
@@ -96,51 +139,55 @@ final class TriageModel {
         }
     }
 
-    private func perform(_ action: TriageAction, on job: Job) async throws -> UndoReceipt? {
+    private func kind(of action: TriageAction, on job: Job) -> QueuedAction.Kind {
         switch action {
-        case .shortlist(let draftCV):
-            let id = try await client.shortlist(job.id).id
-            if draftCV { await startDraft(for: job) }
-            return .application(id: id)
-        case .dismiss(let reasons):
-            try await client.dismiss(job.id, reasons)
-            try? await client.recordEvent(EventInput(type: .jobDismissed, subjectID: job.id, reason: "", undone: false))
-            return .grade
-        case .skip:
-            try await client.setSeen([job.id], true)
-            return .seen
-        case .excludeCompany:
-            let exclusion = try await client.excludeCompany(job.companyID)
-            return .exclusion(companyID: job.companyID, removeName: exclusion.added)
-        case .note(let body):
-            let previous = try await client.note(job.id).body
-            try await client.putNote(job.id, body)
-            return .note(previous: previous)
+        case .shortlist(let draftCV): .shortlist(draftCV: draftCV)
+        case .dismiss(let reasons): .dismiss(reasons: reasons)
+        case .skip: .skip
+        case .excludeCompany: .excludeCompany(companyID: job.companyID)
+        case .note(let body): .note(body: body)
         }
     }
 
-    private func revert(_ decision: TriageDecision) async throws {
-        switch decision.receipt {
-        case .application(let id):
-            try await client.deleteApplication(id)
-        case .grade:
-            try await client.clearGrade(decision.job.id)
-            try? await client.recordEvent(EventInput(type: .jobDismissed, subjectID: decision.job.id, reason: "", undone: true))
-        case .seen:
-            try await client.setSeen([decision.job.id], false)
-        case .exclusion(let companyID, let removeName):
-            try await client.unexcludeCompany(companyID, removeName)
-            try? await reloadQueue()
-        case .note(let previous):
-            try await client.putNote(decision.job.id, previous)
-        case nil:
-            break
+    private func cannotReach(_ error: any Error) -> Bool {
+        error is URLError || error as? APIError == .unauthorized
+    }
+
+    private func enqueue(_ action: QueuedAction, after error: any Error) {
+        queued.append(action)
+        persistQueue()
+        if error is URLError { isOffline = true } else { sessionExpired = true }
+    }
+
+    private func sync() async {
+        guard !queued.isEmpty else { return }
+        var local = receipts
+        let outcome = await replay(queued, client: client, receipts: &local)
+        receipts = local
+        queued = outcome.remaining
+        persistQueue()
+        undoStack = undoStack.map { decision in
+            var decision = decision
+            decision.receipt = decision.receipt ?? receipts[decision.id]
+            return decision
         }
+        if !outcome.result.isEmpty { syncNote = outcome.result.note }
+        if outcome.stoppedBy is URLError { isOffline = true }
+        if outcome.stoppedBy as? APIError == .unauthorized { sessionExpired = true }
     }
 
     private func reloadQueue() async throws {
         let decided = Set(undoStack.filter { !$0.action.keepsCard }.map(\.job.id))
         queue = try await client.triageQueue().filter { !decided.contains($0.id) }
+        persistCards()
+    }
+
+    private func persistCards() {
+        try? store.saveCards(Array(queue.prefix(Self.cacheSize)))
+    }
+
+    private func persistQueue() {
+        try? store.saveQueue(queued)
     }
 
     private func fail(_ error: any Error) {

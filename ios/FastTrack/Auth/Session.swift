@@ -28,6 +28,10 @@ final class Session {
         }
     }
 
+    func expire() {
+        state = .signedOut
+    }
+
     func logIn(username: String, password: String) async throws {
         try await client.logIn(username, password)
         state = .signedIn

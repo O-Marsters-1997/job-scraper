@@ -7,9 +7,11 @@ struct TriageView: View {
     @State private var showReasons = false
     @State private var showNote = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(Session.self) private var session
 
-    init(client: APIClient) {
-        _model = State(initialValue: TriageModel(client: client))
+    init(client: APIClient, store: OfflineStore = .live) {
+        _model = State(initialValue: TriageModel(client: client, store: store))
     }
 
     var body: some View {
@@ -26,6 +28,20 @@ struct TriageView: View {
                         Button("Skip") { decide(.skip) }
                     }
                 }
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                OfflineRow(
+                    isOffline: model.isOffline,
+                    queuedCount: model.queued.count,
+                    syncNote: model.syncNote,
+                    onSync: sync,
+                    onClearNote: model.clearSyncNote)
+            }
+            .onChange(of: scenePhase) {
+                if scenePhase == .active, model.isOffline || !model.queued.isEmpty { sync() }
+            }
+            .onChange(of: model.sessionExpired) {
+                if model.sessionExpired { session.expire() }
             }
             .safeAreaInset(edge: .bottom, spacing: 8) {
                 UndoBanner(decision: model.banner, onUndo: undo, onExpire: model.dismissBanner, onDraftCV: { model.draftCV($0) })
@@ -64,11 +80,13 @@ struct TriageView: View {
                 deck(job)
             } else {
                 ContentUnavailableView {
-                    Label("Queue clear", systemImage: "checkmark.circle")
+                    Label(
+                        model.isOffline ? "No more cached jobs" : "Queue clear",
+                        systemImage: model.isOffline ? "wifi.slash" : "checkmark.circle")
                 } description: {
-                    Text("New jobs arrive after the next scrape.")
+                    Text(model.isOffline ? "Reconnect to load more." : "New jobs arrive after the next scrape.")
                 } actions: {
-                    Button("Check again") { Task { await model.load() } }
+                    Button("Check again", action: sync)
                 }
             }
         }
@@ -171,6 +189,10 @@ struct TriageView: View {
         }
     }
 
+    private func sync() {
+        Task { await model.load() }
+    }
+
     private func undo() {
         _ = withAnimation { model.undo() }
     }
@@ -201,5 +223,6 @@ struct TriageView: View {
 }
 
 #Preview {
-    NavigationStack { TriageView(client: .mock(jobs: [.sample, .sample])) }
+    NavigationStack { TriageView(client: .mock(jobs: [.sample, .sample]), store: .memory()) }
+        .environment(Session(client: .mock()))
 }
