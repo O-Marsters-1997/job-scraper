@@ -50,7 +50,9 @@ services:
 
   db:
     image: postgres:17-alpine
-    command: ["postgres", "-c", "jit=off"]
+    command: ["postgres", "-c", "jit=off",
+              "-c", "shared_preload_libraries=pg_stat_statements",
+              "-c", "log_min_duration_statement=250"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
