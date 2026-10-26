@@ -11,6 +11,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
 )
 
 type Key string
@@ -27,11 +28,6 @@ var (
 )
 
 type RecordingEditor struct {
-	deltas        []string
-	suggestErr    error
-	pace          time.Duration
-	SuggestInputs []cvedit.SuggestInput
-
 	explanation   string
 	ExplainInputs []cvedit.ExplainInput
 
@@ -58,29 +54,37 @@ func (e *RecordingEditor) Explain(_ context.Context, _ string, in cvedit.Explain
 	return cvedit.ExplainResult{Text: e.explanation, Cost: 0.001}, nil
 }
 
-// Suggesting is an Editor whose suggestions stream the given deltas.
-func Suggesting(deltas ...string) *RecordingEditor {
-	return &RecordingEditor{deltas: deltas}
+type RecordingModel struct {
+	deltas  []string
+	err     error
+	pace    time.Duration
+	Prompts []lineedit.Prompt
 }
 
-func SuggestingEvery(pace time.Duration, deltas ...string) *RecordingEditor {
-	return &RecordingEditor{deltas: deltas, pace: pace}
+func Suggesting(deltas ...string) *RecordingModel {
+	return &RecordingModel{deltas: deltas}
+}
+
+func SuggestingEvery(pace time.Duration, deltas ...string) *RecordingModel {
+	return &RecordingModel{deltas: deltas, pace: pace}
 }
 
 // SuggestFailing streams the deltas, then fails with err; with no deltas the
 // stream never opens.
-func SuggestFailing(err error, deltas ...string) *RecordingEditor {
-	return &RecordingEditor{deltas: deltas, suggestErr: err}
+func SuggestFailing(err error, deltas ...string) *RecordingModel {
+	return &RecordingModel{deltas: deltas, err: err}
 }
 
-func (e *RecordingEditor) Suggest(_ context.Context, _ string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error) {
-	e.SuggestInputs = append(e.SuggestInputs, in)
-	for _, d := range e.deltas {
-		time.Sleep(e.pace)
+func (m *RecordingModel) Complete(_ context.Context, _ string, p lineedit.Prompt, onDelta func(string)) (lineedit.Completion, error) {
+	m.Prompts = append(m.Prompts, p)
+	for _, d := range m.deltas {
+		time.Sleep(m.pace)
 		onDelta(d)
 	}
-	return cvedit.SuggestResult{Text: strings.Join(e.deltas, ""), Cost: 0.001}, e.suggestErr
+	return lineedit.Completion{Text: strings.Join(m.deltas, ""), Cost: 0.001}, m.err
 }
+
+var _ lineedit.Model = (*RecordingModel)(nil)
 
 var _ cvtailor.Editor = (*RecordingEditor)(nil)
 

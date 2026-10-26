@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/eval"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
 )
 
 func main() {
@@ -24,14 +24,14 @@ func main() {
 	if err != nil {
 		fail(err.Error())
 	}
-	client := cvedit.NewClient()
+	editor := lineedit.New(lineedit.NewOpenRouter())
 	var outcomes []eval.SuggestOutcome
 	for _, f := range fixtures {
 		if !strings.Contains(f.Name, *only) {
 			continue
 		}
 		for range *runs {
-			o, err := eval.RunSuggest(context.Background(), client, apiKey, f)
+			o, err := eval.RunSuggest(context.Background(), editor, apiKey, f)
 			if err != nil {
 				fail(err.Error())
 			}
@@ -41,7 +41,7 @@ func main() {
 	if len(outcomes) == 0 {
 		fail("no fixture matched")
 	}
-	fmt.Print(eval.SuggestReport(cvedit.SuggestPromptVersion, cvedit.SuggestModel, outcomes))
+	fmt.Print(eval.SuggestReport(outcomes))
 }
 
 func fail(msg string) {

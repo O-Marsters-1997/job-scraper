@@ -10,6 +10,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/letterwrite"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 )
 
@@ -23,6 +24,7 @@ type Deps struct {
 	Drive  Drive
 	Asker  Asker
 	Editor Editor
+	Lines  *lineedit.Editor
 	Creds  Credentials
 
 	Scaffolder Scaffolder
@@ -34,6 +36,7 @@ type Module struct {
 	docs       DocFetcher
 	drive      Drive
 	editor     Editor
+	lines      *lineedit.Editor
 	creds      Credentials
 	scaffolder Scaffolder
 }
@@ -45,6 +48,7 @@ func Build(deps Deps) *Module {
 		docs:   deps.Docs,
 		drive:  deps.Drive,
 		editor: deps.Editor,
+		lines:  deps.Lines,
 		creds:  deps.Creds,
 
 		scaffolder: deps.Scaffolder,
@@ -52,7 +56,7 @@ func Build(deps Deps) *Module {
 }
 
 func New(pool *pgxpool.Pool, docs Docs, asker Asker, creds Credentials) *Module {
-	return Build(Deps{Store: store.New(pool), Docs: docs, Drive: docs, Asker: asker, Editor: cvedit.NewClient(), Creds: creds, Scaffolder: letterwrite.NewClient()})
+	return Build(Deps{Store: store.New(pool), Docs: docs, Drive: docs, Asker: asker, Editor: cvedit.NewClient(), Lines: lineedit.New(lineedit.NewOpenRouter()), Creds: creds, Scaffolder: letterwrite.NewClient()})
 }
 
 // Run generates pending Drafts until ctx is cancelled.

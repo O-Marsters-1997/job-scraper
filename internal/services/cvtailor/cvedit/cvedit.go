@@ -3,9 +3,7 @@
 package cvedit
 
 import (
-	"crypto/sha256"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -22,15 +20,7 @@ const (
 )
 
 //go:embed voice.md
-var voice string
-
-func hashPrompts(voice, rules string) string {
-	h := sha256.New()
-	for _, part := range []string{voice, rules} {
-		_, _ = fmt.Fprintf(h, "%d:%s", len(part), part)
-	}
-	return hex.EncodeToString(h.Sum(nil))[:16]
-}
+var Voice string
 
 type Client struct {
 	http    *http.Client

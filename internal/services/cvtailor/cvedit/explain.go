@@ -23,6 +23,8 @@ type ExplainInput struct {
 	PNotStated     float64
 }
 
+const ExplainModel = "anthropic/claude-haiku-4.5"
+
 type ExplainResult struct {
 	Text string
 	Cost float64
@@ -33,7 +35,7 @@ func (c *Client) Explain(ctx context.Context, apiKey string, in ExplainInput) (E
 	task := fmt.Sprintf("Bullet:\n%s\n\nJob description:\n%s\n\nProbabilities that the job values the bullet: yes %.2f, no %.2f, not stated %.2f\n",
 		in.Bullet, in.JobDescription, in.PYes, in.PNo, in.PNotStated)
 	reply, err := openrouter.Chat(ctx, c.http, c.baseURL, apiKey, openrouter.Request{
-		Model: SuggestModel,
+		Model: ExplainModel,
 		Messages: []openrouter.Message{
 			{Role: "system", Content: explainRules},
 			{Role: "user", Content: task},

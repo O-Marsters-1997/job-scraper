@@ -17,6 +17,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
 )
 
 func newRouter(deps cvtailor.Deps) chi.Router {
@@ -205,7 +206,7 @@ func TestSuggestRoute(t *testing.T) {
 	body := `{"action":"tighten","text":"Cut p99 latency"}`
 
 	t.Run("streams delta events then done as text/event-stream", func(t *testing.T) {
-		r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.Suggesting("Cut ", "latency"), Creds: apiKey})
+		r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(cvtailortest.Suggesting("Cut ", "latency")), Creds: apiKey})
 
 		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", body)
 
@@ -221,7 +222,7 @@ func TestSuggestRoute(t *testing.T) {
 	})
 
 	t.Run("a failure before the stream opens is a JSON error", func(t *testing.T) {
-		r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.Suggesting("x"), Creds: cvtailortest.NoKey{}})
+		r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(cvtailortest.Suggesting("x")), Creds: cvtailortest.NoKey{}})
 
 		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", body)
 
@@ -233,26 +234,26 @@ func TestSuggestRoute(t *testing.T) {
 	t.Run("tailor", func(t *testing.T) {
 		t.Parallel()
 		const text = "Built REST services in Go for the payments team"
-		tailor := func(reply, quote string, maxChars int) (*cvtailortest.RecordingEditor, string) {
-			editor := cvtailortest.Suggesting(reply)
-			r := newRouter(cvtailor.Deps{Store: e.store, Editor: editor, Creds: apiKey})
+		tailor := func(reply, quote string, maxChars int) (*cvtailortest.RecordingModel, string) {
+			model := cvtailortest.Suggesting(reply)
+			r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(model), Creds: apiKey})
 			in, err := json.Marshal(dto.SuggestInput{Action: "tailor", Quote: quote, Text: text, MaxChars: maxChars})
 			if err != nil {
 				t.Fatalf("marshal body: %v", err)
 			}
 			w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", string(in))
-			return editor, w.Body.String()
+			return model, w.Body.String()
 		}
 
 		t.Run("a term swap is done and the quote reaches the model", func(t *testing.T) {
 			t.Parallel()
-			editor, body := tailor("Built microservices in Go for the payments team", "microservices in Go", len(text))
+			model, body := tailor("Built microservices in Go for the payments team", "microservices in Go", len(text))
 
 			if !strings.Contains(body, "event: done") {
 				t.Errorf("tailor body = %q, want a done event", body)
 			}
-			if len(editor.SuggestInputs) != 1 || editor.SuggestInputs[0].Quote != "microservices in Go" {
-				t.Errorf("model inputs = %+v, want the quote forwarded", editor.SuggestInputs)
+			if len(model.Prompts) != 1 || !strings.Contains(model.Prompts[0].User, "microservices in Go") {
+				t.Errorf("model prompts = %+v, want the quote forwarded", model.Prompts)
 			}
 		})
 
@@ -277,7 +278,7 @@ func TestSuggestRoute(t *testing.T) {
 
 		t.Run("needs a quote", func(t *testing.T) {
 			t.Parallel()
-			r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.Suggesting("x"), Creds: apiKey})
+			r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(cvtailortest.Suggesting("x")), Creds: apiKey})
 
 			w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", `{"action":"tailor","text":"Cut"}`)
 
@@ -288,8 +289,7 @@ func TestSuggestRoute(t *testing.T) {
 	})
 
 	t.Run("the path ids win over the body's", func(t *testing.T) {
-		editor := cvtailortest.Suggesting("x")
-		r := newRouter(cvtailor.Deps{Store: e.store, Editor: editor, Creds: apiKey})
+		r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(cvtailortest.Suggesting("x")), Creds: apiKey})
 
 		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", `{"id":"other","slotId":"nope","action":"tighten","text":"Cut"}`)
 
@@ -303,7 +303,7 @@ func TestSuggestRouteOutlivesWriteTimeout(t *testing.T) {
 	e := newDraftEnv(t)
 	id := e.readyDrafts(t, 1)[0]
 	slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
-	r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.SuggestingEvery(150*time.Millisecond, "a", "b", "c", "d"), Creds: apiKey})
+	r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(cvtailortest.SuggestingEvery(150*time.Millisecond, "a", "b", "c", "d")), Creds: apiKey})
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		r.ServeHTTP(w, handlerstest.Authed(req))
 	}))
