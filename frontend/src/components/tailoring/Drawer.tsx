@@ -1,5 +1,6 @@
-import { type JSX, onCleanup, onMount } from "solid-js";
+import { type JSX, onCleanup, onMount, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
+import type { RoleBudgetValue } from "@/lib/tailoring";
 import { cn } from "@/lib/utils";
 
 export function LineBudget(props: { used: number; budget: number }) {
@@ -21,6 +22,26 @@ export function LineBudget(props: { used: number; budget: number }) {
 				/>
 			</span>
 			{props.used} / {props.budget} lines
+		</span>
+	);
+}
+
+export function RoleBudget(props: { budget: RoleBudgetValue }) {
+	const over = () => props.budget.over > 0;
+	return (
+		<span
+			data-testid="role-budget"
+			class={cn(
+				"inline-flex items-center gap-1.5 font-mono text-xs tabular-nums",
+				over() ? "text-destructive-strong" : "text-muted",
+			)}
+		>
+			<Show when={over()}>
+				<span aria-hidden="true" class="size-1.5 rounded-full bg-destructive" />
+			</Show>
+			{over()
+				? `${props.budget.over} over`
+				: `${props.budget.used}/${props.budget.budget} lines`}
 		</span>
 	);
 }

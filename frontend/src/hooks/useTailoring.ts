@@ -9,6 +9,7 @@ import {
 	fetchDraftInsights,
 	fetchDraftLayout,
 	fetchDraftLean,
+	fetchDraftRoles,
 	fetchExperienceMatch,
 	fetchJobDrafts,
 	fetchSuggestions,
@@ -96,6 +97,19 @@ export function useDraftLean(id: Accessor<string>, enabled: Accessor<boolean>) {
 		retry: false,
 		refetchOnWindowFocus: false,
 		staleTime: 5 * 60 * 1000,
+	}));
+}
+
+export function useDraftRoles(
+	id: Accessor<string>,
+	enabled: Accessor<boolean>,
+) {
+	return createQuery(() => ({
+		queryKey: keys.tailoring.draftRoles(id()),
+		queryFn: () => fetchDraftRoles(id()),
+		enabled: enabled(),
+		retry: false,
+		refetchOnWindowFocus: false,
 	}));
 }
 

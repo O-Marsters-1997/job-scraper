@@ -2,8 +2,9 @@ import { Show } from "solid-js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SkeletonList } from "@/components/ui/skeleton";
+import type { RoleBudgetValue } from "@/lib/tailoring";
 import type { Suggestion } from "@/types/tailoring";
-import { Drawer, LineBudget } from "./Drawer";
+import { Drawer, LineBudget, RoleBudget } from "./Drawer";
 import { PickList, type PickListProps } from "./PickList";
 
 const HINT =
@@ -17,6 +18,7 @@ export function AchievementsDrawer(
 		loading: boolean;
 		usedLines: number;
 		budgetLines: number;
+		roleBudget: RoleBudgetValue | undefined;
 		onClear: () => void;
 		onClose: () => void;
 	},
@@ -29,7 +31,12 @@ export function AchievementsDrawer(
 			onClose={props.onClose}
 		>
 			<div class="flex items-center justify-between border-b border-border px-5 py-2">
-				<LineBudget used={props.usedLines} budget={props.budgetLines} />
+				<div class="flex items-center gap-4">
+					<LineBudget used={props.usedLines} budget={props.budgetLines} />
+					<Show when={props.roleBudget}>
+						{(b) => <RoleBudget budget={b()} />}
+					</Show>
+				</div>
 				<Button variant="ghost" size="sm" onClick={() => props.onClear()}>
 					Clear and re-pick
 				</Button>

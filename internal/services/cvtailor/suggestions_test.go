@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -118,6 +119,41 @@ func TestSuggestionsPreselectSlotCountOfMappedHeading(t *testing.T) {
 	if len(all) != 8 {
 		t.Errorf("Suggestions() without a tab returned %d, want all 8", len(all))
 	}
+}
+
+func TestService_SuggestionsLines(t *testing.T) {
+	t.Parallel()
+	long := strings.Repeat("Cut p99 latency by moving queries to Postgres. ", 12)
+	e := newDraftEnv(t)
+	addAchievements(t, e.pos.ID, e.store, "Ran on-call", long)
+
+	t.Run("a tab gives each suggestion its wrapped line count", func(t *testing.T) {
+		t.Parallel()
+		got, err := e.svc.Suggestions(t.Context(), userID, dto.SuggestionsQuery{JobID: jobID, DocID: docID, TabID: tabID})
+		if err != nil {
+			t.Fatalf("Suggestions() error = %v", err)
+		}
+		lines := map[string]int{}
+		for _, s := range got {
+			lines[s.Text] = s.Lines
+		}
+		if lines["Ran on-call"] != 1 || lines[long] <= 1 {
+			t.Errorf("lines = %v, want 1 for the short text and more for the long one", lines)
+		}
+	})
+
+	t.Run("no tab leaves lines zero", func(t *testing.T) {
+		t.Parallel()
+		got, err := e.svc.Suggestions(t.Context(), userID, dto.SuggestionsQuery{JobID: jobID})
+		if err != nil {
+			t.Fatalf("Suggestions() error = %v", err)
+		}
+		for _, s := range got {
+			if s.Lines != 0 {
+				t.Errorf("Suggestions() lines for %q = %d, want 0", s.Text, s.Lines)
+			}
+		}
+	})
 }
 
 func TestSuggestionsEmptyBankMakesNoAskCall(t *testing.T) {

@@ -9,6 +9,7 @@ import type {
 	DraftPositionEdit,
 	DraftProvenance,
 	DraftRef,
+	DraftRoles,
 	ExperienceMatch,
 	HeadingMapping,
 	LayoutBlock,
@@ -60,6 +61,43 @@ export function getDraftLean(): BulletLean[] {
 	return [];
 }
 
+export function getDraftRoles(): DraftRoles {
+	const role = (
+		positionId: string,
+		title: string,
+		employer: string,
+		budget: number,
+		used: number,
+	) => ({
+		positionId,
+		employer,
+		title,
+		budget,
+		bullets: [
+			{
+				slotId: `${positionId}-s1`,
+				achievementId: null,
+				text: title,
+				lines: used,
+				lean: null,
+				state: null,
+				onSource: true,
+				replacedFrom: null,
+			},
+		],
+		bank: [],
+	});
+	return {
+		draftId: "draft-ready",
+		kept: false,
+		spills: false,
+		roles: [
+			role("position-1", "Senior Backend Engineer", "Acme Ltd", 4, 6),
+			role("position-2", "Software Engineer", "Globex", 3, 2),
+		],
+	};
+}
+
 export function getDraftInsights(): DraftInsights {
 	return { lines: [], stale: false };
 }
@@ -78,6 +116,7 @@ export function getSuggestions(): Suggestion[] {
 			text: a.text,
 			score: scores[i] ?? 0.1,
 			preselected: i < slots,
+			lines: 1 + (i % 2),
 			state: i === 2 ? "unclear" : i > 2 ? "low" : "fit",
 		}));
 	});
