@@ -15,10 +15,12 @@ struct DueModelTests {
         Calendar.current.date(byAdding: .day, value: offset, to: today)!
     }
 
-    private func job(_ id: String, chase: Int?, tasks: [String] = [], draft: DueJob.DraftState? = nil) -> DueJob {
+    private func job(
+        _ id: String, chase: Int?, tasks: [String] = [], draft: DueJob.DraftState? = nil, applyTaskID: String? = nil
+    ) -> DueJob {
         DueJob(
             jobID: id, title: "Role \(id)", companySlug: "co-\(id)", band: .great, score: 90, applicationID: "app-\(id)",
-            chaseBy: chase.map(day), applyTaskID: nil,
+            chaseBy: chase.map(day), applyTaskID: applyTaskID,
             tasks: tasks.map { DueJob.Task(id: $0, typeName: "Reach out", notes: "") },
             draft: draft.map { DueJob.Draft(id: "d-\(id)", state: $0, cvTitle: "CV") })
     }
@@ -32,6 +34,10 @@ struct DueModelTests {
         }
         client.setChase = { id, date in calls.log.append("setChase \(id) \(date.dayString)") }
         client.setTaskDone = { id, done in calls.log.append("setTaskDone \(id) \(done)") }
+        client.createDraft = { id, cv in
+            calls.log.append("createDraft \(id) \(cv.title)")
+            return DraftRef(id: "new")
+        }
         let model = DueModel(client: client, now: { [today] in today.addingTimeInterval(3_600) })
         await model.load()
         return model
@@ -88,6 +94,34 @@ struct DueModelTests {
 
         #expect(calls.log == ["setTaskDone t1 true", "setTaskDone t1 false"])
         #expect(model.jobs[0].tasks.map(\.id) == ["t1", "t2"])
+    }
+
+    @Test func markAppliedTicksTheApplyTaskKeepsTheDraftAndUndoUnticks() async {
+        let model = await model([job("a", chase: nil, tasks: ["apply"], draft: .ready, applyTaskID: "apply")])
+
+        await model.markApplied(model.jobs[0]).value
+        #expect(model.jobs[0].tasks.isEmpty)
+        #expect(model.jobs[0].draft?.state == .ready)
+        await model.undo().value
+
+        #expect(calls.log == ["setTaskDone apply true", "setTaskDone apply false"])
+        #expect(model.jobs[0].tasks.map(\.id) == ["apply"])
+    }
+
+    @Test func markAppliedWithoutAnApplyTaskDoesNothing() async {
+        let model = await model([job("a", chase: nil, draft: .ready)])
+
+        await model.markApplied(model.jobs[0]).value
+
+        #expect(calls.log.isEmpty)
+    }
+
+    @Test func retryingAFailedDraftStartsOneFromTheDefaultCV() async {
+        let model = await model([job("a", chase: nil, draft: .failed)])
+
+        await model.retryDraft(model.jobs[0])
+
+        #expect(calls.log == ["createDraft a Backend"])
     }
 
     @Test func undoingAnEarlierTaskKeepsALaterOneDone() async {

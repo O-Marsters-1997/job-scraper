@@ -22,7 +22,7 @@ struct DueView: View {
                         .animation(.snappy, value: model.banner?.id)
                 }
                 .sheet(item: $contactFor) { job in
-                    ContactSheet(job: job, model: model)
+                    ContactSheet { await model.logContact(job, channel: $0, outcome: $1) }
                 }
                 .alert("Couldn't save that", isPresented: Bindable(model).hasFailure) {
                     Button("OK") {}

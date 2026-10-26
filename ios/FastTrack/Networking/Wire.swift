@@ -119,6 +119,38 @@ struct TaskDoneInput: Encodable {
     let done: Bool
 }
 
+struct CVTemplate: Decodable {
+    let docID: String
+    let tabID: String
+    let title: String
+    let isDefault: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case title = "Title"
+        case docID = "DocID"
+        case tabID = "TabID"
+        case isDefault = "Default"
+    }
+}
+
+struct DraftRef: Decodable {
+    let id: String
+}
+
+struct DraftInput: Encodable {
+    let jobID: String
+    let docID: String
+    let tabID: String
+    let mode = "generate"
+
+    enum CodingKeys: String, CodingKey {
+        case mode
+        case jobID = "jobId"
+        case docID = "docId"
+        case tabID = "tabId"
+    }
+}
+
 extension Date {
     static var dayFormat: Date.ISO8601FormatStyle {
         Date.ISO8601FormatStyle(timeZone: .current).year().month().day()

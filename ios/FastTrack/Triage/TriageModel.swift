@@ -62,6 +62,7 @@ final class TriageModel {
             do {
                 guard !isOffline else { throw URLError(.notConnectedToInternet) }
                 receipt = try await client.perform(kind, jobID: job.id)
+                if case .shortlist(draftCV: true) = action { await startDraft(for: job) }
             } catch where cannotReach(error) {
                 enqueue(QueuedAction(id: id, jobID: job.id, kind: kind, queuedAt: .now), after: error)
             } catch {
@@ -120,9 +121,27 @@ final class TriageModel {
         syncNote = nil
     }
 
+    @discardableResult
+    func draftCV(_ decision: TriageDecision) -> Task<Void, Never> {
+        banner = nil
+        return Task { await startDraft(for: decision.job) }
+    }
+
+    private func startDraft(for job: Job) async {
+        do {
+            guard let cv = try await client.cvTemplates().first(where: \.isDefault) else {
+                fail("There's no default CV, so the job was shortlisted without a draft.")
+                return
+            }
+            _ = try await client.createDraft(job.id, cv)
+        } catch {
+            fail("The job was shortlisted, but the CV draft didn't start: \(error.localizedDescription)")
+        }
+    }
+
     private func kind(of action: TriageAction, on job: Job) -> QueuedAction.Kind {
         switch action {
-        case .shortlist: .shortlist(draftCV: false)
+        case .shortlist(let draftCV): .shortlist(draftCV: draftCV)
         case .dismiss(let reasons): .dismiss(reasons: reasons)
         case .skip: .skip
         case .excludeCompany: .excludeCompany(companyID: job.companyID)
@@ -172,7 +191,11 @@ final class TriageModel {
     }
 
     private func fail(_ error: any Error) {
-        failureMessage = error.localizedDescription
+        fail(error.localizedDescription)
+    }
+
+    private func fail(_ message: String) {
+        failureMessage = message
         hasFailure = true
     }
 }

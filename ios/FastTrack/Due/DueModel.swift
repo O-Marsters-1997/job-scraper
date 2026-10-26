@@ -85,7 +85,41 @@ final class DueModel {
     }
 
     @discardableResult
-    func complete(_ task: DueJob.Task, in job: DueJob) -> Task<Void, Never> {
+    func markApplied(_ job: DueJob) -> Task<Void, Never> {
+        guard let taskID = job.applyTaskID else { return Task {} }
+        if let task = job.tasks.first(where: { $0.id == taskID }) { return complete(task, in: job, title: "Marked applied") }
+        let client = client
+        return run("Marked applied", job, job, restoreLocally: { $0 }) {
+            try await client.setTaskDone(taskID, true)
+        } revert: {
+            try await client.setTaskDone(taskID, false)
+        }
+    }
+
+    func retryDraft(_ job: DueJob) async {
+        do {
+            guard let cv = try await client.cvTemplates().first(where: \.isDefault) else {
+                fail("There's no default CV to draft from.")
+                return
+            }
+            _ = try await client.createDraft(job.id, cv)
+            await load()
+        } catch {
+            fail(error)
+        }
+    }
+
+    func pdf(_ draft: DueJob.Draft) async -> URL? {
+        do {
+            return try await client.draftPDF(draft.id)
+        } catch {
+            fail(error)
+            return nil
+        }
+    }
+
+    @discardableResult
+    func complete(_ task: DueJob.Task, in job: DueJob, title: String = "Task done") -> Task<Void, Never> {
         let client = client
         let index = job.tasks.firstIndex(of: task) ?? job.tasks.endIndex
         let restore: (DueJob) -> DueJob = { current in
@@ -93,7 +127,7 @@ final class DueModel {
             tasks.insert(task, at: min(index, tasks.endIndex))
             return current.withTasks(tasks)
         }
-        return run("Task done", job, job.withTasks(job.tasks.filter { $0.id != task.id }), restoreLocally: restore) {
+        return run(title, job, job.withTasks(job.tasks.filter { $0.id != task.id }), restoreLocally: restore) {
             try await client.setTaskDone(task.id, true)
         } revert: {
             try await client.setTaskDone(task.id, false)
@@ -159,7 +193,11 @@ final class DueModel {
     }
 
     private func fail(_ error: any Error) {
-        failureMessage = error.localizedDescription
+        fail(error.localizedDescription)
+    }
+
+    private func fail(_ message: String) {
+        failureMessage = message
         hasFailure = true
     }
 }

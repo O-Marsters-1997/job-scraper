@@ -106,7 +106,7 @@ struct OfflineQueueTests {
         let model = TriageModel(client: client(), store: store)
         await model.load()
 
-        await model.decide(.shortlist).value
+        await model.decide(.shortlist(draftCV: false)).value
 
         #expect(model.isOffline)
         #expect(model.current?.id == "b")
@@ -119,7 +119,7 @@ struct OfflineQueueTests {
         calls.offline = true
         let model = TriageModel(client: client(), store: store)
         await model.load()
-        await model.decide(.shortlist).value
+        await model.decide(.shortlist(draftCV: false)).value
 
         await model.undo().value
 
@@ -133,7 +133,7 @@ struct OfflineQueueTests {
         calls.offline = true
         let model = TriageModel(client: client(), store: store)
         await model.load()
-        await model.decide(.shortlist).value
+        await model.decide(.shortlist(draftCV: false)).value
         calls.offline = false
 
         await model.load()

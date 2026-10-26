@@ -58,6 +58,10 @@ func replay(_ queue: [QueuedAction], client: APIClient, receipts: inout [UUID: U
                 receipts[original] = nil
             } else {
                 receipts[action.id] = try await client.perform(action.kind, jobID: action.jobID)
+                if case .shortlist(draftCV: true) = action.kind,
+                   let cv = try? await client.cvTemplates().first(where: \.isDefault) {
+                    _ = try? await client.createDraft(action.jobID, cv)
+                }
             }
             synced += 1
         } catch APIError.status(409) {

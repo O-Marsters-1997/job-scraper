@@ -13,7 +13,7 @@ struct JobDetailBody: View {
         VStack(alignment: .leading, spacing: 28) {
             if !shown.description.isEmpty {
                 section("Description") {
-                    Text(shown.description).font(.body).lineSpacing(3)
+                    Text(JobDescription.attributed(html: shown.description)).font(.body).lineSpacing(3)
                 }
             }
             section("Why this score") {
@@ -45,7 +45,7 @@ struct JobDetailBody: View {
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.headline)
+            Text(title).font(.headline).accessibilityAddTraits(.isHeader)
             content()
         }
     }
