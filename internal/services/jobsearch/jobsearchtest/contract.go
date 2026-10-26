@@ -37,6 +37,24 @@ func NewDeps(st Store) jobsearch.Deps {
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string)) {
 	t.Helper()
 
+	t.Run("a board token differing only in case resolves to the same board", func(t *testing.T) {
+		t.Parallel()
+		st, _ := newStore(t)
+		ctx := t.Context()
+		company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		first, err := st.UpsertCandidateBoard(ctx, company.ID, "ashby", "Acme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := st.UpsertCandidateBoard(ctx, company.ID, "ashby", "acme")
+		if err != nil || second.ID != first.ID {
+			t.Fatalf("UpsertCandidateBoard(acme) = %+v, %v, want board %s", second, err, first.ID)
+		}
+	})
+
 	t.Run("fetch cache round trips a redirect and forgets by url", func(t *testing.T) {
 		t.Parallel()
 		st, _ := newStore(t)

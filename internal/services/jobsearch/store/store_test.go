@@ -317,7 +317,7 @@ func TestSaveCanonical(t *testing.T) {
 		}
 	})
 
-	t.Run("a conflicting board cannot claim the URL", func(t *testing.T) {
+	t.Run("a different posting on the same board cannot claim the URL", func(t *testing.T) {
 		t.Parallel()
 		st, _ := newStore(t)
 		first := baseJob
@@ -326,7 +326,7 @@ func TestSaveCanonical(t *testing.T) {
 		saveJob(t, st, first)
 
 		conflict := baseJob
-		conflict.BoardID = boardB
+		conflict.BoardID = boardA
 		conflict.ProviderPostingID = "posting-2"
 		if _, _, err := st.SaveCanonical(t.Context(), conflict); !errors.Is(err, store.ErrCanonicalConflict) {
 			t.Fatalf("SaveCanonical(conflict) err = %v, want ErrCanonicalConflict", err)

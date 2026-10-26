@@ -121,3 +121,21 @@ WHERE (sqlc.arg(posting_id)::text <> '' AND j.provider_posting_id = sqlc.arg(pos
     OR EXISTS (SELECT 1 FROM job_urls u WHERE u.job_id = j.id AND u.normalized_url = sqlc.arg(url)::text)
 ORDER BY j.first_discovered_at
 LIMIT 1;
+
+-- name: RehomeBoardJobs :exec
+UPDATE jobs SET primary_board_id = sqlc.arg(owner_id) WHERE primary_board_id = sqlc.arg(duplicate_id);
+
+-- name: MoveBoardObservations :exec
+INSERT INTO board_job_observations (board_id, job_id, last_seen_at, last_snapshot_version)
+SELECT sqlc.arg(owner_id), o.job_id, o.last_seen_at, o.last_snapshot_version
+FROM board_job_observations o WHERE o.board_id = sqlc.arg(duplicate_id)
+ON CONFLICT ON CONSTRAINT board_job_observations_pkey DO NOTHING;
+
+-- name: DeleteBoardObservations :exec
+DELETE FROM board_job_observations WHERE board_id = $1;
+
+-- name: GetJobURLAlias :one
+SELECT job_id, source FROM job_urls WHERE normalized_url = $1;
+
+-- name: DeleteJobURLAlias :exec
+DELETE FROM job_urls WHERE normalized_url = $1 AND job_id = $2;

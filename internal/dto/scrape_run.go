@@ -55,8 +55,8 @@ type BoardTally struct {
 }
 
 type IngestTally struct {
-	Merged, Upgraded int
-	NewJobIDs        []string
+	Merged, Upgraded, Rejected int
+	NewJobIDs                  []string
 }
 
 type ScrapeRunOutcome string

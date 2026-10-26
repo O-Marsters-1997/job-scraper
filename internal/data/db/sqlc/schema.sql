@@ -405,6 +405,9 @@ CREATE TABLE IF NOT EXISTS company_boards (
     UNIQUE (source, board_token)
 );
 
+CREATE UNIQUE INDEX company_boards_source_token_lower_key
+    ON company_boards (source, lower(board_token)) WHERE status <> 'retired';
+
 CREATE TABLE board_poll_state (
     board_id UUID PRIMARY KEY REFERENCES company_boards(id) ON DELETE CASCADE,
     last_completed_at TIMESTAMPTZ,

@@ -695,6 +695,7 @@ func (f *FakeStore) SetCompanyReviewState(_ context.Context, userID, companyID, 
 }
 
 func (f *FakeStore) VerifyCompanyBoard(_ context.Context, companyID, source, token, method, via string) (dto.CompanyBoard, error) {
+	token = sourcespec.NormalizeBoardToken(source, token)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for id, b := range f.boards {
@@ -788,6 +789,7 @@ func (f *FakeStore) ListCompanyBoards(_ context.Context, companyID string) ([]dt
 }
 
 func (f *FakeStore) UpsertCandidateBoard(_ context.Context, companyID, source, token string) (dto.CompanyBoard, error) {
+	token = sourcespec.NormalizeBoardToken(source, token)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for id, b := range f.boards {
@@ -805,6 +807,7 @@ func (f *FakeStore) UpsertCandidateBoard(_ context.Context, companyID, source, t
 }
 
 func (f *FakeStore) GetBoardCompanyID(_ context.Context, source, token string) (string, error) {
+	token = sourcespec.NormalizeBoardToken(source, token)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, b := range f.boards {
@@ -816,6 +819,7 @@ func (f *FakeStore) GetBoardCompanyID(_ context.Context, source, token string) (
 }
 
 func (f *FakeStore) GetVerifiedBoardID(_ context.Context, source, token string) (string, error) {
+	token = sourcespec.NormalizeBoardToken(source, token)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for id, b := range f.boards {
