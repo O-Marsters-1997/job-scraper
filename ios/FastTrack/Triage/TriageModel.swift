@@ -23,8 +23,7 @@ final class TriageModel {
     func load() async {
         if queue.isEmpty { loadState = .loading }
         do {
-            let decided = Set(undoStack.map(\.job.id))
-            queue = try await client.triageQueue().filter { !decided.contains($0.id) }
+            try await reloadQueue()
             loadState = .loaded(())
         } catch is CancellationError {
             return
@@ -36,17 +35,18 @@ final class TriageModel {
     @discardableResult
     func decide(_ action: TriageAction) -> Task<Void, Never> {
         guard let job = queue.first else { return Task {} }
-        queue.removeFirst()
+        if !action.keepsCard { queue.removeFirst() }
         lastRemoved = action
         banner = nil
         return Task {
             do {
                 let receipt = try await perform(action, on: job)
+                if case .excludeCompany = action { queue.removeAll { $0.companyID == job.companyID } }
                 let decision = TriageDecision(id: UUID(), job: job, action: action, receipt: receipt)
                 undoStack.append(decision)
                 if action != .skip { banner = decision }
             } catch {
-                queue.insert(job, at: 0)
+                if !action.keepsCard { queue.insert(job, at: 0) }
                 fail(error)
             }
         }
@@ -55,17 +55,23 @@ final class TriageModel {
     @discardableResult
     func undo() -> Task<Void, Never> {
         guard let decision = undoStack.popLast() else { return Task {} }
-        queue.insert(decision.job, at: 0)
+        let keepsCard = decision.action.keepsCard
+        if !keepsCard { queue.insert(decision.job, at: 0) }
         banner = nil
         return Task {
             do {
                 try await revert(decision)
             } catch {
-                queue.removeAll { $0.id == decision.job.id }
+                if !keepsCard { queue.removeAll { $0.id == decision.job.id } }
                 undoStack.append(decision)
                 fail(error)
             }
         }
+    }
+
+    func currentNote() async throws -> String {
+        guard let job = current else { return "" }
+        return try await client.note(job.id).body
     }
 
     func dismissBanner(_ id: UUID) {
@@ -83,8 +89,13 @@ final class TriageModel {
         case .skip:
             try await client.setSeen([job.id], true)
             return .seen
-        case .excludeCompany, .note:
-            return nil
+        case .excludeCompany:
+            let exclusion = try await client.excludeCompany(job.companyID)
+            return .exclusion(companyID: job.companyID, removeName: exclusion.added)
+        case .note(let body):
+            let previous = try await client.note(job.id).body
+            try await client.putNote(job.id, body)
+            return .note(previous: previous)
         }
     }
 
@@ -97,9 +108,19 @@ final class TriageModel {
             try? await client.recordEvent(EventInput(type: .jobDismissed, subjectID: decision.job.id, reason: "", undone: true))
         case .seen:
             try await client.setSeen([decision.job.id], false)
-        case .exclusion, .note, nil:
+        case .exclusion(let companyID, let removeName):
+            try await client.unexcludeCompany(companyID, removeName)
+            try? await reloadQueue()
+        case .note(let previous):
+            try await client.putNote(decision.job.id, previous)
+        case nil:
             break
         }
+    }
+
+    private func reloadQueue() async throws {
+        let decided = Set(undoStack.filter { !$0.action.keepsCard }.map(\.job.id))
+        queue = try await client.triageQueue().filter { !decided.contains($0.id) }
     }
 
     private func fail(_ error: any Error) {

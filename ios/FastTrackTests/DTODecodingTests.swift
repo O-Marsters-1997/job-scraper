@@ -26,6 +26,20 @@ struct DTODecodingTests {
         #expect(job.breakdown.map(\.effect) == [.meets, .misses])
         #expect(job.breakdown.map(\.label) == ["Go", "Fintech"])
     }
+
+    @Test func companyExclusionDecodes() throws {
+        let exclusion = try JSONDecoder.api.decode(CompanyExclusion.self, from: fixture("company_exclusion"))
+
+        #expect(exclusion.name == "Monzo")
+        #expect(exclusion.added == true)
+    }
+
+    @Test func jobNoteDecodes() throws {
+        let note = try JSONDecoder.api.decode(JobNote.self, from: fixture("job_note"))
+
+        #expect(note.jobID == "job-1")
+        #expect(note.body == "call back Friday")
+    }
 }
 
 private final class BundleToken {}

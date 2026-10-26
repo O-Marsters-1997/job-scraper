@@ -12,6 +12,10 @@ struct APIClient {
     var clearGrade: (_ jobID: String) async throws -> Void
     var setSeen: (_ jobIDs: [String], _ seen: Bool) async throws -> Void
     var recordEvent: (_ event: EventInput) async throws -> Void
+    var excludeCompany: (_ companyID: String) async throws -> CompanyExclusion
+    var unexcludeCompany: (_ companyID: String, _ removeName: Bool) async throws -> Void
+    var note: (_ jobID: String) async throws -> JobNote
+    var putNote: (_ jobID: String, _ body: String) async throws -> Void
 }
 
 extension APIClient {
@@ -54,6 +58,18 @@ extension APIClient {
             },
             recordEvent: { event in
                 try await http.post("events", body: event)
+            },
+            excludeCompany: { companyID in
+                try await http.put("companies/\(companyID)/exclusion", body: EmptyBody())
+            },
+            unexcludeCompany: { companyID, removeName in
+                try await http.post("companies/\(companyID)/exclusion/undo", body: UnexcludeInput(removeName: removeName))
+            },
+            note: { jobID in
+                try await http.get("jobs/\(jobID)/note")
+            },
+            putNote: { jobID, body in
+                try await http.put("jobs/\(jobID)/note", body: NoteInput(body: body))
             }
         )
     }
@@ -75,7 +91,11 @@ extension APIClient {
             dismiss: { _, _ in try respond(()) },
             clearGrade: { _ in try respond(()) },
             setSeen: { _, _ in try respond(()) },
-            recordEvent: { _ in try respond(()) }
+            recordEvent: { _ in try respond(()) },
+            excludeCompany: { _ in try respond(CompanyExclusion(name: "Monzo", added: true)) },
+            unexcludeCompany: { _, _ in try respond(()) },
+            note: { jobID in try respond(JobNote(jobID: jobID, body: "")) },
+            putNote: { _, _ in try respond(()) }
         )
     }
 }

@@ -6,6 +6,10 @@ enum TriageAction: Hashable {
     case skip
     case excludeCompany
     case note(String)
+
+    var keepsCard: Bool {
+        if case .note = self { true } else { false }
+    }
 }
 
 enum UndoReceipt: Hashable {

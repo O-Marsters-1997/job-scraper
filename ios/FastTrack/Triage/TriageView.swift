@@ -5,6 +5,7 @@ struct TriageView: View {
     @State private var progress: CGFloat = 0
     @State private var expandedID: Job.ID?
     @State private var showReasons = false
+    @State private var showNote = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(client: APIClient) {
@@ -32,6 +33,9 @@ struct TriageView: View {
             }
             .sheet(isPresented: $showReasons) {
                 DismissReasonSheet { decide(.dismiss(reasons: $0)) }
+            }
+            .sheet(isPresented: $showNote) {
+                NoteSheet(load: model.currentNote) { decide(.note($0)) }
             }
             .alert("Couldn't save that", isPresented: $model.hasFailure) {
                 Button("OK") {}
@@ -128,6 +132,8 @@ struct TriageView: View {
             .accessibilityLabel("Dismiss")
             Menu {
                 Button("Dismiss with reason…", systemImage: "text.badge.xmark") { showReasons = true }
+                Button("Add note…", systemImage: "note.text") { showNote = true }
+                Button("Exclude company", systemImage: "nosign", role: .destructive) { decide(.excludeCompany) }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.body.weight(.semibold))
