@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -55,6 +56,8 @@ type Store struct {
 	queries *sqlc.Queries
 	scoring ScoringWriter
 	log     *slog.Logger
+
+	coverage coverageCache
 }
 
 type Option func(*Store)
@@ -131,39 +134,44 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 		filters.SalaryCeiling = pgtype.Float8{Float64: *options.SalaryMax, Valid: true}
 	}
 
-	rows, err := s.queries.PageJobs(ctx, sqlc.PageJobsParams{
-		UserID: filters.UserID, Now: filters.Now, ExcludedCompanySlugs: filters.ExcludedCompanySlugs,
-		CompanyID: filters.CompanyID, ScoredOnly: filters.ScoredOnly, MinSuitability: filters.MinSuitability,
-		Graded: filters.Graded, Seen: filters.Seen, Poster: filters.Poster, FavouriteOnly: filters.FavouriteOnly,
-		Sources: filters.Sources, Arrangements: filters.Arrangements, SalaryOnly: filters.SalaryOnly,
-		SalaryFloor: filters.SalaryFloor, SalaryCeiling: filters.SalaryCeiling, SearchPattern: filters.SearchPattern,
-		Bands: filters.Bands, ScrapedSince: filters.ScrapedSince,
-		Sort: string(options.Sort), PageOffset: options.Offset, PageLimit: options.Limit,
-	})
-	if err != nil {
-		return dto.JobPage{}, fmt.Errorf("page jobs: %w", err)
-	}
-	page := dto.JobPage{Items: make([]dto.Job, len(rows))}
-	for i, row := range rows {
-		job, err := toPageJobDTO(row)
+	g, gctx := errgroup.WithContext(ctx)
+	var page dto.JobPage
+	g.Go(func() error {
+		rows, err := s.queries.PageJobs(gctx, sqlc.PageJobsParams{
+			UserID: filters.UserID, Now: filters.Now, ExcludedCompanySlugs: filters.ExcludedCompanySlugs,
+			CompanyID: filters.CompanyID, ScoredOnly: filters.ScoredOnly, MinSuitability: filters.MinSuitability,
+			Graded: filters.Graded, Seen: filters.Seen, Poster: filters.Poster, FavouriteOnly: filters.FavouriteOnly,
+			Sources: filters.Sources, Arrangements: filters.Arrangements, SalaryOnly: filters.SalaryOnly,
+			SalaryFloor: filters.SalaryFloor, SalaryCeiling: filters.SalaryCeiling, SearchPattern: filters.SearchPattern,
+			Bands: filters.Bands, ScrapedSince: filters.ScrapedSince,
+			Sort: string(options.Sort), PageOffset: options.Offset, PageLimit: options.Limit,
+		})
 		if err != nil {
-			return dto.JobPage{}, fmt.Errorf("page jobs: %w", err)
+			return fmt.Errorf("page jobs: %w", err)
 		}
-		page.Items[i] = job
+		page.Items = make([]dto.Job, len(rows))
+		for i, row := range rows {
+			job, err := toPageJobDTO(row)
+			if err != nil {
+				return fmt.Errorf("page jobs: %w", err)
+			}
+			page.Items[i] = job
+		}
+		return s.attachListings(gctx, page.Items, rows)
+	})
+	if !options.SkipTotal {
+		g.Go(func() error {
+			total, err := s.queries.CountJobs(gctx, filters)
+			if err != nil {
+				return fmt.Errorf("count jobs: %w", err)
+			}
+			page.Total = new(int(total))
+			return nil
+		})
 	}
-	if err := s.attachListings(ctx, page.Items, rows); err != nil {
+	if err := g.Wait(); err != nil {
 		return dto.JobPage{}, err
 	}
-
-	if len(rows) > 0 && len(rows) < int(options.Limit) {
-		page.Total = int(options.Offset) + len(rows)
-		return page, nil
-	}
-	total, err := s.queries.CountJobs(ctx, filters)
-	if err != nil {
-		return dto.JobPage{}, fmt.Errorf("count jobs: %w", err)
-	}
-	page.Total = int(total)
 	return page, nil
 }
 
@@ -776,11 +784,10 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 			ReviewState: r.ReviewState, CheckIntervalMinutes: r.CheckIntervalMinutes, LastCheckedAt: r.LastCheckedAt,
 		})
 	}
-	coverage, err := s.queries.CountCompanyBoardCoverage(ctx)
+	page.AllCompanies, page.VerifiedBoardCompanies, err = s.coverage.get(ctx, s.queries)
 	if err != nil {
 		return dto.CompanyPage{}, fmt.Errorf("store.PageCompaniesForUser coverage: %w", err)
 	}
-	page.AllCompanies, page.VerifiedBoardCompanies = int(coverage.AllCompanies), int(coverage.VerifiedCompanies)
 	return page, nil
 }
 
@@ -850,18 +857,30 @@ func (s *Store) ListTrackedCompaniesForUser(ctx context.Context, userID string) 
 	return out, nil
 }
 
-func (s *Store) ListNewCompanies(ctx context.Context, userID string) ([]dto.NewCompany, error) {
+func (s *Store) ListNewCompanies(ctx context.Context, userID string, limit, offset int32) (dto.NewCompanyPage, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
-		return nil, err
+		return dto.NewCompanyPage{}, err
 	}
-	rows, err := s.queries.ListNewCompaniesForUser(ctx, uid)
+	total, err := s.queries.CountNewCompaniesForUser(ctx, uid)
 	if err != nil {
-		return nil, fmt.Errorf("store.ListNewCompanies: %w", err)
+		return dto.NewCompanyPage{}, fmt.Errorf("store.ListNewCompanies count: %w", err)
 	}
-	boardRows, err := s.queries.ListTrackedCompanyBoards(ctx, uid)
+	rows, err := s.queries.ListNewCompaniesForUser(ctx, sqlc.ListNewCompaniesForUserParams{UserID: uid, PageLimit: limit, PageOffset: offset})
 	if err != nil {
-		return nil, fmt.Errorf("store.ListNewCompanies boards: %w", err)
+		return dto.NewCompanyPage{}, fmt.Errorf("store.ListNewCompanies: %w", err)
+	}
+	page := dto.NewCompanyPage{Items: make([]dto.NewCompany, len(rows)), Total: int(total)}
+	if len(rows) == 0 {
+		return page, nil
+	}
+	ids := make([]pgtype.UUID, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	boardRows, err := s.queries.ListBoardsForCompanies(ctx, ids)
+	if err != nil {
+		return dto.NewCompanyPage{}, fmt.Errorf("store.ListNewCompanies boards: %w", err)
 	}
 	boards := make(map[string][]dto.TrackedBoard, len(rows))
 	for _, b := range boardRows {
@@ -870,27 +889,26 @@ func (s *Store) ListNewCompanies(ctx context.Context, userID string) ([]dto.NewC
 			ID: b.ID.String(), Source: b.Source, BoardToken: b.BoardToken, Status: dto.BoardStatus(b.Status),
 		})
 	}
-	profileRows, err := s.queries.ListNewCompanyProfiles(ctx, uid)
+	profileRows, err := s.queries.ListNewCompanyProfiles(ctx, sqlc.ListNewCompanyProfilesParams{UserID: uid, CompanyIds: ids})
 	if err != nil {
-		return nil, fmt.Errorf("store.ListNewCompanies profiles: %w", err)
+		return dto.NewCompanyPage{}, fmt.Errorf("store.ListNewCompanies profiles: %w", err)
 	}
 	profiles := make(map[string]*dto.CompanyProfile, len(profileRows))
 	for _, p := range profileRows {
 		var profile dto.CompanyProfile
 		if err := json.Unmarshal(p.Data, &profile); err != nil {
-			return nil, fmt.Errorf("store.ListNewCompanies profile: %w", err)
+			return dto.NewCompanyPage{}, fmt.Errorf("store.ListNewCompanies profile: %w", err)
 		}
 		profiles[p.CompanyID.String()] = &profile
 	}
-	out := make([]dto.NewCompany, len(rows))
 	for i, r := range rows {
 		id := r.ID.String()
-		out[i] = dto.NewCompany{ID: id, Name: r.Name, Slug: r.Slug, Boards: []dto.TrackedBoard{}, Profile: profiles[id]}
+		page.Items[i] = dto.NewCompany{ID: id, Name: r.Name, Slug: r.Slug, Boards: []dto.TrackedBoard{}, Profile: profiles[id]}
 		if b, ok := boards[id]; ok {
-			out[i].Boards = b
+			page.Items[i].Boards = b
 		}
 	}
-	return out, nil
+	return page, nil
 }
 
 func (s *Store) SaveCompanyProfile(ctx context.Context, companyID, source string, profile dto.CompanyProfile) error {
@@ -908,12 +926,16 @@ func (s *Store) SaveCompanyProfile(ctx context.Context, companyID, source string
 	return nil
 }
 
-func (s *Store) ListNewCompanyJobs(ctx context.Context, userID string) ([]dto.Job, error) {
+func (s *Store) ListNewCompanyJobs(ctx context.Context, userID string, companyIDs []string) ([]dto.Job, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.queries.ListNewCompanyJobs(ctx, uid)
+	ids, err := data.UUIDs(companyIDs)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListNewCompanyJobs(ctx, sqlc.ListNewCompanyJobsParams{UserID: uid, CompanyIds: ids})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListNewCompanyJobs: %w", err)
 	}

@@ -27,8 +27,8 @@ Check with: `grep -E '^ALLOY_ENV=' .env | cut -d= -f2` (prints only that value, 
 2. For traces: `just tracing-up` (Grafana `:3000`, OTLP `:4318`, Tempo `:3200`).
 3. `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 just run-api` (`OTEL_SERVICE_NAME=api`, `:8080`).
    Stop the compose `api` first if it's running (`docker compose stop api`): it also binds `:8080`.
-4. Production-like limits (the 2 vCPU / 4 GB VPS, split as api 1 CPU / 768 MB and db 1 CPU / 1.5 GB,
-   leaving the rest for worker and RabbitMQ):
+4. Local approximation of the VPS (2 vCPU ARM, 3.7 GB RAM; prod containers have **no** CPU or memory
+   limits), splitting api 1 CPU / 768 MB and db 1 CPU / 1.5 GB:
    `docker compose -f docker-compose.yml -f docker-compose.perf.yml up -d --build db api`.
 
 ## Auth
@@ -60,6 +60,9 @@ Production: the user copies their own `session_id` cookie into an env var, e.g.
 - Local: `docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`
   (credentials resolve inside the container, never on the command line).
 - Production: same command on the VPS. Use plain `EXPLAIN` only. *To be verified on first VPS run.*
+- The app runs parameterised statements through pgx, so Postgres may pick a generic plan after five
+  executions. Measure with `PREPARE` / `EXECUTE` (not inlined literals) to see both generic and
+  custom plans.
 - No slow-query log is configured (`log_min_duration_statement` unset). Possible fix:
   set it in the compose `db` command.
 
@@ -67,7 +70,7 @@ Production: the user copies their own `session_id` cookie into an env var, e.g.
 
 - Call gcx through **`.claude/perf/gcx-env.sh`** (maps `GRAFANA_URL`/`GRAFANA_SA_TOKEN` from
   `.env`). `gcx login` fails its own `/health` pre-check against this stack, so the wrapper is
-  the supported path, on the laptop and the VPS alike (the VPS just needs `gcx` installed).
+  the supported path on the laptop. `gcx` is not installed on the VPS.
 - Datasource UIDs: metrics `grafanacloud-prom`, logs `grafanacloud-logs`, traces
   `grafanacloud-traces`, profiles `grafanacloud-profiles`.
 - What actually arrives (checked 2026-10-25):
@@ -115,7 +118,7 @@ external calls (seeding can't reproduce them; investigate in production via Loki
   WHERE js.user_id = $user AND j.closed_at IS NULL AND NOT js.breakdown @> '[{"effect":"blocked"}]'
   GROUP BY j.company_id) jc ON jc.company_id = c.id`, with `COALESCE(jc.n, 0)` in select and sort.
   JIT (`jit=on`, default `jit_above_cost` 100000) adds ~200 ms more: the plan costs 1.5M, so 78
-  functions are compiled in 230 ms. JIT is *not* a factor for `/jobs`: on/off differs by ≤ 8 ms.
+  functions are compiled in 230 ms. Locally, JIT is *not* a factor for `/jobs`: on/off differs by ≤ 8 ms.
 - Local 1× baseline (2026-10-25): every other DB-bound GET has p50 < 80 ms. Slowest after
   `/companies`: `/jobs` 63–77 ms (`PageJobs` 37 + `CountJobs` 25, run in sequence), `/jobs/overview`
   45, `/jobs/insights` 29, `/companies/tracked` 28 (785 KB body). No N+1 anywhere (2–5 DB
@@ -136,16 +139,19 @@ external calls (seeding can't reproduce them; investigate in production via Loki
   | `/jobs/insights` | 94 ms | 126 ms | 2 KB |
   | 11 other routes | 0–4 ms | ≤ 35 ms | small |
 
-  Prod server time is 4–6× local 1× (real data size and a 1-CPU DB are likely; unconfirmed).
-  Caddy has no `encode` directive, so JSON is sent uncompressed.
+  Prod server time is 4–6× local 1×. Data size is ruled out as the cause: JIT is 72% of execution
+  (1,156 of 1,606 ms for `PageCompaniesForUser`, about 430 ms of `ListTrackedCompaniesForUser`).
+  Prod has 1 user. At this measurement Caddy had no `encode` directive, so JSON was sent
+  uncompressed.
 - Prod `/jobs` over 7 days (Loki, n=1957): p50 249, p95 406, p99 2028, max 8008 ms. Slow requests
   cluster in bursts. The worst, 2026-10-21 18:56–19:04, reached 3–8 s during a worker source-task
   and ingest surge and a 270 s checkpoint (4217 buffers = 25.7% → `shared_buffers` ≈ 128 MB
-  default, against a 1.5 GB DB container). API and worker CPU stayed ≤ 4% throughout, so the
+  default; the prod DB container has no memory limit). API and worker CPU stayed ≤ 4% throughout, so the
   wait is in the DB. After >10 min idle, p95 is 775 ms (cold cache, inferred).
 - Open questions for a VPS run: real plans and costs of `PageCompaniesForUser`, `PageJobs` and
-  `CountJobs` (plain EXPLAIN); `shared_buffers`, `jit` and table sizes in prod; what fills
-  `/companies/new`'s 5.3 MB (probably per-company profile JSON from `store.ListNewCompanies`).
+  `CountJobs` (plain EXPLAIN); `shared_buffers`, `jit` and table sizes in prod; plan
+  shapes (generic vs custom) via `PREPARE`/`EXECUTE`. `/companies/new`'s 5.3 MB is `rollup`, not
+  `profile`.
 - 17 FK columns have no leading index (e.g. `applications.job_id`, `job_views.job_id`,
   `job_grades.job_id`, `tracked_companies.company_id`, `company_favourites.company_id`,
   `board_job_observations.job_id`). Measured: deleting 73k jobs took 4 min 25 s from FK cascade

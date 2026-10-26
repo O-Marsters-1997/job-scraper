@@ -79,6 +79,17 @@ func (q *Queries) CountCompanyBoardCoverage(ctx context.Context) (CountCompanyBo
 	return i, err
 }
 
+const countNewCompaniesForUser = `-- name: CountNewCompaniesForUser :one
+SELECT COUNT(*) FROM tracked_companies WHERE user_id = $1 AND review_state = 'new'
+`
+
+func (q *Queries) CountNewCompaniesForUser(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countNewCompaniesForUser, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteCompanyTracking = `-- name: DeleteCompanyTracking :execrows
 DELETE FROM tracked_companies WHERE user_id = $1 AND company_id = $2
 `
@@ -129,7 +140,7 @@ SELECT c.id, c.slug, c.name,
     c.last_crawled_at, c.first_seen_at, c.kind,
     (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
      WHERE j.company_id = c.id AND j.closed_at IS NULL
-       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
+       AND NOT COALESCE(js.blocked, false)) AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
     EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1 AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
@@ -252,7 +263,14 @@ FROM tracked_companies tc
 JOIN companies c ON c.id = tc.company_id
 WHERE tc.user_id = $1 AND tc.review_state = 'new'
 ORDER BY tc.created_at DESC, c.id
+LIMIT $3 OFFSET $2
 `
+
+type ListNewCompaniesForUserParams struct {
+	UserID     pgtype.UUID
+	PageOffset int32
+	PageLimit  int32
+}
 
 type ListNewCompaniesForUserRow struct {
 	ID      pgtype.UUID
@@ -261,8 +279,8 @@ type ListNewCompaniesForUserRow struct {
 	AddedAt pgtype.Timestamptz
 }
 
-func (q *Queries) ListNewCompaniesForUser(ctx context.Context, userID pgtype.UUID) ([]ListNewCompaniesForUserRow, error) {
-	rows, err := q.db.Query(ctx, listNewCompaniesForUser, userID)
+func (q *Queries) ListNewCompaniesForUser(ctx context.Context, arg ListNewCompaniesForUserParams) ([]ListNewCompaniesForUserRow, error) {
+	rows, err := q.db.Query(ctx, listNewCompaniesForUser, arg.UserID, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -291,8 +309,13 @@ SELECT j.company_id, j.company_slug, j.title, j.location, js.suitability_score
 FROM tracked_companies tc
 JOIN jobs j ON j.company_id = tc.company_id AND j.closed_at IS NULL
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = tc.user_id
-WHERE tc.user_id = $1 AND tc.review_state = 'new'
+WHERE tc.user_id = $1 AND tc.review_state = 'new' AND tc.company_id = ANY($2::uuid[])
 `
+
+type ListNewCompanyJobsParams struct {
+	UserID     pgtype.UUID
+	CompanyIds []pgtype.UUID
+}
 
 type ListNewCompanyJobsRow struct {
 	CompanyID        pgtype.UUID
@@ -302,8 +325,8 @@ type ListNewCompanyJobsRow struct {
 	SuitabilityScore pgtype.Int4
 }
 
-func (q *Queries) ListNewCompanyJobs(ctx context.Context, userID pgtype.UUID) ([]ListNewCompanyJobsRow, error) {
-	rows, err := q.db.Query(ctx, listNewCompanyJobs, userID)
+func (q *Queries) ListNewCompanyJobs(ctx context.Context, arg ListNewCompanyJobsParams) ([]ListNewCompanyJobsRow, error) {
+	rows, err := q.db.Query(ctx, listNewCompanyJobs, arg.UserID, arg.CompanyIds)
 	if err != nil {
 		return nil, err
 	}
@@ -330,15 +353,23 @@ func (q *Queries) ListNewCompanyJobs(ctx context.Context, userID pgtype.UUID) ([
 
 const listTrackedCompaniesForUser = `-- name: ListTrackedCompaniesForUser :many
 SELECT c.id, c.name, c.slug, tc.enabled, tc.review_state, tc.check_interval_minutes,
-    (SELECT COUNT(*) FROM jobs j WHERE j.company_id = c.id AND j.closed_at IS NULL) AS open_jobs,
-    (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = tc.user_id
-     WHERE j.company_id = c.id AND j.closed_at IS NULL
-       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS relevant_jobs,
+    COALESCE(jc.open_jobs, 0) AS open_jobs,
+    COALESCE(jc.relevant_jobs, 0) AS relevant_jobs,
     (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
      JOIN board_poll_state bps ON bps.board_id = cb.id
      WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
 FROM tracked_companies tc
 JOIN companies c ON c.id = tc.company_id
+LEFT JOIN (
+    SELECT j.company_id, COUNT(*) AS open_jobs,
+        COUNT(*) FILTER (WHERE js.job_id IS NOT NULL
+                           AND NOT COALESCE(js.blocked, false)) AS relevant_jobs
+    FROM tracked_companies t
+    JOIN jobs j ON j.company_id = t.company_id AND j.closed_at IS NULL
+    LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = t.user_id
+    WHERE t.user_id = $1
+    GROUP BY j.company_id
+) jc ON jc.company_id = c.id
 WHERE tc.user_id = $1
 ORDER BY c.name, c.id
 `
@@ -392,7 +423,7 @@ SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name,
      ORDER BY cb.source = 'wttj', cb.verified_at, cb.id LIMIT 1), '')::text AS ats_source,
     c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at, c.kind,
-    jc.n AS job_count,
+    COALESCE(jc.n, 0)::bigint AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
     EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
@@ -402,11 +433,12 @@ SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name,
      WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
 FROM companies c
 LEFT JOIN tracked_companies tc ON tc.user_id = $1::uuid AND tc.company_id = c.id
-CROSS JOIN LATERAL (
-    SELECT COUNT(*) AS n FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
-    WHERE j.company_id = c.id AND j.closed_at IS NULL
-      AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
-) jc
+LEFT JOIN (
+    SELECT j.company_id, COUNT(*) AS n FROM job_scores js JOIN jobs j ON j.id = js.job_id
+    WHERE js.user_id = $1::uuid AND j.closed_at IS NULL
+      AND NOT COALESCE(js.blocked, false)
+    GROUP BY j.company_id
+) jc ON jc.company_id = c.id
 WHERE ($2::text = ''
        OR strpos(lower(c.name), lower($2::text)) > 0
        OR strpos(c.slug, lower($2::text)) > 0)
@@ -424,7 +456,7 @@ ORDER BY
           AND EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id)
          THEN 0 ELSE 1 END,
     CASE WHEN $8::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
-    CASE WHEN $8::text IN ('relevance', 'open_jobs') THEN jc.n ELSE 0 END DESC,
+    CASE WHEN $8::text IN ('relevance', 'open_jobs') THEN COALESCE(jc.n, 0) ELSE 0 END DESC,
     c.name, c.id
 LIMIT $10::int OFFSET $9::int
 `

@@ -17,6 +17,7 @@ type JobsQuery struct {
 	SalaryMin string `json:"salary_min"`
 	SalaryMax string `json:"salary_max"`
 	Q         string `json:"q"`
+	SkipTotal string `json:"skip_total"`
 }
 
 type ResolveBoardQuery struct {

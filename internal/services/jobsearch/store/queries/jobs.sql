@@ -1,5 +1,14 @@
 -- name: PageJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.reposted_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = sqlc.arg(user_id)::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))) AS company_favourite, COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified')::text AS company_kind, COALESCE(j.discovered_via, (SELECT cb.discovered_via FROM company_boards cb WHERE cb.id = j.primary_board_id), '')::text AS discovered_via
+WITH ranked AS (
+  SELECT j.id, row_number() OVER (ORDER BY
+    CASE WHEN sqlc.arg(sort)::text NOT IN ('newest', 'best') THEN
+      COALESCE(js.suitability_score, 50)::float8 * power(0.5::float8, GREATEST(0, extract(epoch FROM sqlc.arg(now)::timestamptz - COALESCE(j.posted_at, j.first_discovered_at))) / 86400 / 3)
+    END DESC NULLS LAST,
+    CASE WHEN sqlc.arg(sort)::text = 'best' THEN js.suitability_score END DESC NULLS LAST,
+    CASE WHEN sqlc.arg(sort)::text NOT IN ('newest', 'best') THEN j.first_discovered_at END DESC,
+    CASE WHEN sqlc.arg(sort)::text IN ('newest', 'best') THEN COALESCE(j.posted_at, j.first_discovered_at) END DESC,
+    j.id
+  ) AS rn
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
 LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = sqlc.arg(user_id)::uuid
@@ -7,7 +16,7 @@ LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = sqlc.arg(user_id)::u
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > sqlc.arg(now)::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL(sqlc.arg(excluded_company_slugs)::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no'
   AND (sqlc.narg(company_id)::uuid IS NULL OR j.company_id = sqlc.narg(company_id)::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = sqlc.narg(company_id)::uuid)))
   AND (NOT sqlc.arg(scored_only)::bool OR js.job_id IS NOT NULL)
@@ -25,15 +34,16 @@ WHERE j.closed_at IS NULL
     AND COALESCE(j.salary_max, j.salary_min) >= COALESCE(sqlc.narg(salary_floor)::float8, '-Infinity'::float8)
     AND j.salary_min <= COALESCE(sqlc.narg(salary_ceiling)::float8, 'Infinity'::float8)))
   AND (sqlc.arg(search_pattern)::text = '' OR concat_ws(' ', j.title, j.company_slug, j.location, j.source) ILIKE sqlc.arg(search_pattern)::text)
-ORDER BY
-  CASE WHEN sqlc.arg(sort)::text NOT IN ('newest', 'best') THEN
-    COALESCE(js.suitability_score, 50)::float8 * power(0.5::float8, GREATEST(0, extract(epoch FROM sqlc.arg(now)::timestamptz - COALESCE(j.posted_at, j.first_discovered_at))) / 86400 / 3)
-  END DESC NULLS LAST,
-  CASE WHEN sqlc.arg(sort)::text = 'best' THEN js.suitability_score END DESC NULLS LAST,
-  CASE WHEN sqlc.arg(sort)::text NOT IN ('newest', 'best') THEN j.first_discovered_at END DESC,
-  CASE WHEN sqlc.arg(sort)::text IN ('newest', 'best') THEN COALESCE(j.posted_at, j.first_discovered_at) END DESC,
-  j.id
-LIMIT sqlc.arg(page_limit)::int OFFSET sqlc.arg(page_offset)::int;
+  ORDER BY rn
+  LIMIT sqlc.arg(page_limit)::int OFFSET sqlc.arg(page_offset)::int
+)
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.reposted_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = sqlc.arg(user_id)::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))) AS company_favourite, COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified')::text AS company_kind, COALESCE(j.discovered_via, (SELECT cb.discovered_via FROM company_boards cb WHERE cb.id = j.primary_board_id), '')::text AS discovered_via
+FROM ranked r
+JOIN jobs j ON j.id = r.id
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = sqlc.arg(user_id)::uuid
+LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = sqlc.arg(user_id)::uuid
+ORDER BY r.rn;
 
 -- name: CountJobs :one
 SELECT count(*)
@@ -44,7 +54,7 @@ LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = sqlc.arg(user_id)::u
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > sqlc.arg(now)::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL(sqlc.arg(excluded_company_slugs)::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no'
   AND (sqlc.narg(company_id)::uuid IS NULL OR j.company_id = sqlc.narg(company_id)::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = sqlc.narg(company_id)::uuid)))
   AND (NOT sqlc.arg(scored_only)::bool OR js.job_id IS NOT NULL)
@@ -110,7 +120,7 @@ LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = sqlc.arg(user_id)::
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > sqlc.arg(now)::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL(sqlc.arg(excluded_company_slugs)::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no';
 
 -- name: JobInsightGroups :many
@@ -130,6 +140,6 @@ LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = sqlc.arg(user_id)::
 WHERE j.closed_at IS NULL
   AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > sqlc.arg(now)::timestamptz - interval '90 days'
   AND COALESCE(j.company_slug, '') <> ALL(sqlc.arg(excluded_company_slugs)::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT COALESCE(js.blocked, false)
   AND jg.grade IS DISTINCT FROM 'no'
 GROUP BY 1, 2, 3, 4;

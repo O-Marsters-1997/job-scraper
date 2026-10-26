@@ -600,7 +600,8 @@ func TestProcessBoardDiscover(t *testing.T) {
 		if err := f.discoverProcessor(withProfile, configsStub{match}).Process(ctx, task); err != nil {
 			t.Fatalf("Process() = %v, want nil", err)
 		}
-		got, err := f.store.ListNewCompanies(ctx, "match")
+		page, err := f.store.ListNewCompanies(ctx, "match", 25, 0)
+		got := page.Items
 		if err != nil || len(got) != 1 || got[0].Profile == nil || got[0].Profile.HQ != "London" {
 			t.Fatalf("ListNewCompanies() = %+v, %v, want one company with the London profile", got, err)
 		}
