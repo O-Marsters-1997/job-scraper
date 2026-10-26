@@ -27,6 +27,14 @@ SELECT EXISTS (
     WHERE d.user_id = $1 AND d.doc_id = $2 AND t.tab_id = $3 AND d.kind = 'letter'
 );
 
+-- name: DefaultLetterTab :one
+SELECT d.doc_id, t.tab_id
+FROM tracked_docs d
+JOIN tracked_doc_tabs t ON t.tracked_doc_id = d.id
+WHERE d.user_id = $1 AND d.kind = 'letter'
+ORDER BY t.is_default DESC, t.visible DESC, d.added_at, t.created_at, t.id
+LIMIT 1;
+
 -- name: GetJobBrief :one
 SELECT j.title, COALESCE(c.name, j.company_slug)::text AS company_name, j.description
 FROM jobs j

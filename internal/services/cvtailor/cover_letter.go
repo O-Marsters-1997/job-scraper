@@ -1,10 +1,12 @@
 package cvtailor
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -18,24 +20,46 @@ import (
 
 var errScaffoldCitation = apperr.Upstream("the model cited achievements you did not choose, try again")
 
+const defaultScaffoldAchievements = 3
+
 func (m *Module) Scaffold(ctx context.Context, userID string, in dto.ScaffoldInput) (dto.CoverLetter, error) {
-	if in.JobID == "" || in.DocID == "" || in.TabID == "" {
-		return dto.CoverLetter{}, apperr.Invalid("jobId, docId and tabId are required")
+	if in.JobID == "" {
+		return dto.CoverLetter{}, apperr.Invalid("jobId is required")
 	}
-	if len(in.AchievementIDs) == 0 {
-		return dto.CoverLetter{}, apperr.Invalid("choose at least one achievement")
+	docID, tabID := in.DocID, in.TabID
+	switch {
+	case docID == "" && tabID == "":
+		var ok bool
+		var err error
+		docID, tabID, ok, err = m.store.DefaultLetterTab(ctx, userID)
+		if err != nil {
+			return dto.CoverLetter{}, err
+		}
+		if !ok {
+			return dto.CoverLetter{}, apperr.Unprocessable("track a cover letter doc in Settings to scaffold from")
+		}
+	case docID == "" || tabID == "":
+		return dto.CoverLetter{}, apperr.Invalid("docId and tabId go together")
 	}
-	if hasDuplicates(in.AchievementIDs) {
+	achievementIDs := in.AchievementIDs
+	if len(achievementIDs) == 0 {
+		var err error
+		achievementIDs, err = m.topAchievementIDs(ctx, userID, in.JobID)
+		if err != nil {
+			return dto.CoverLetter{}, err
+		}
+	}
+	if hasDuplicates(achievementIDs) {
 		return dto.CoverLetter{}, apperr.Invalid("achievementIds must not repeat")
 	}
-	isLetter, err := m.store.IsLetterTab(ctx, userID, in.DocID, in.TabID)
+	isLetter, err := m.store.IsLetterTab(ctx, userID, docID, tabID)
 	if err != nil {
 		return dto.CoverLetter{}, err
 	}
 	if !isLetter {
 		return dto.CoverLetter{}, apperr.Invalid("the source must be a tab of a letter doc you track")
 	}
-	achievements, err := m.chosenAchievements(ctx, userID, in.AchievementIDs)
+	achievements, err := m.chosenAchievements(ctx, userID, achievementIDs)
 	if err != nil {
 		return dto.CoverLetter{}, err
 	}
@@ -54,7 +78,7 @@ func (m *Module) Scaffold(ctx context.Context, userID string, in dto.ScaffoldInp
 	if err != nil {
 		return dto.CoverLetter{}, err
 	}
-	paragraphs, err := m.sourceParagraphs(ctx, userID, in.DocID, in.TabID)
+	paragraphs, err := m.sourceParagraphs(ctx, userID, docID, tabID)
 	if err != nil {
 		return dto.CoverLetter{}, err
 	}
@@ -67,13 +91,13 @@ func (m *Module) Scaffold(ctx context.Context, userID string, in dto.ScaffoldInp
 		return dto.CoverLetter{}, err
 	}
 
-	tabID, err := m.writeScaffold(ctx, userID, in.DocID, brief, scaffoldText(skeleton, paragraphs, scaffold))
+	scaffoldTabID, err := m.writeScaffold(ctx, userID, docID, brief, scaffoldText(skeleton, paragraphs, scaffold))
 	if err != nil {
 		return dto.CoverLetter{}, err
 	}
 	return m.store.CreateCoverLetter(ctx, userID, dto.NewCoverLetter{
-		JobID: in.JobID, SourceDocID: in.DocID, SourceTabID: in.TabID, ScaffoldTabID: tabID,
-		AchievementIDs: in.AchievementIDs, Model: letterwrite.Model, Cost: cost,
+		JobID: in.JobID, SourceDocID: docID, SourceTabID: tabID, ScaffoldTabID: scaffoldTabID,
+		AchievementIDs: achievementIDs, Model: letterwrite.Model, Cost: cost,
 	})
 }
 
@@ -105,6 +129,34 @@ func (m *Module) CheckCoverLetter(ctx context.Context, userID string, q dto.Cove
 		return dto.LetterCheck{}, err
 	}
 	return checks.Letter(strings.Join(paragraphs, "\n"), brief.Company, brief.Title, chosen), nil
+}
+
+func (m *Module) topAchievementIDs(ctx context.Context, userID, jobID string) ([]string, error) {
+	positions, err := m.store.ListPositions(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	var all []dto.Achievement
+	for _, p := range positions {
+		all = append(all, p.Achievements...)
+	}
+	if len(all) == 0 {
+		return nil, apperr.Unprocessable("add achievements to your bank to scaffold a cover letter")
+	}
+	answers, err := m.svc.asker.Ask(ctx, userID, jobID, bankQuestions(positions))
+	if err != nil {
+		return nil, err
+	}
+	lean := func(a dto.Achievement) float64 {
+		ans := answers[achievementQuestion(a.Text)]
+		return ans.PYes - ans.PNo
+	}
+	slices.SortStableFunc(all, func(a, b dto.Achievement) int { return cmp.Compare(lean(b), lean(a)) })
+	ids := make([]string, 0, defaultScaffoldAchievements)
+	for _, a := range all[:min(len(all), defaultScaffoldAchievements)] {
+		ids = append(ids, a.ID)
+	}
+	return ids, nil
 }
 
 func (m *Module) chosenAchievements(ctx context.Context, userID string, ids []string) ([]letterwrite.Achievement, error) {

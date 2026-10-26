@@ -11,6 +11,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const defaultLetterTab = `-- name: DefaultLetterTab :one
+SELECT d.doc_id, t.tab_id
+FROM tracked_docs d
+JOIN tracked_doc_tabs t ON t.tracked_doc_id = d.id
+WHERE d.user_id = $1 AND d.kind = 'letter'
+ORDER BY t.is_default DESC, t.visible DESC, d.added_at, t.created_at, t.id
+LIMIT 1
+`
+
+type DefaultLetterTabRow struct {
+	DocID string
+	TabID string
+}
+
+func (q *Queries) DefaultLetterTab(ctx context.Context, userID pgtype.UUID) (DefaultLetterTabRow, error) {
+	row := q.db.QueryRow(ctx, defaultLetterTab, userID)
+	var i DefaultLetterTabRow
+	err := row.Scan(&i.DocID, &i.TabID)
+	return i, err
+}
+
 const getCoverLetter = `-- name: GetCoverLetter :one
 SELECT id, user_id, job_id, source_doc_id, source_tab_id, scaffold_tab_id, achievement_ids, model, cost, created_at, done_at
 FROM cover_letters WHERE id = $1 AND user_id = $2
