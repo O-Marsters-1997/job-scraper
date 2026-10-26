@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -154,7 +155,6 @@ func TestScaffold(t *testing.T) {
 			kind apperr.Kind
 		}{
 			{"a tab that is not a tracked letter", untracked, apperr.KindInvalid},
-			{"no achievements", func(in *dto.ScaffoldInput) { in.AchievementIDs = nil }, apperr.KindInvalid},
 			{"a repeated achievement", func(in *dto.ScaffoldInput) { in.AchievementIDs = append(in.AchievementIDs, in.AchievementIDs[0]) }, apperr.KindInvalid},
 			{"an unknown achievement", func(in *dto.ScaffoldInput) { in.AchievementIDs = []string{"nope"} }, apperr.KindInvalid},
 			{"a missing tab id", func(in *dto.ScaffoldInput) { in.TabID = "" }, apperr.KindInvalid},
@@ -173,6 +173,51 @@ func TestScaffold(t *testing.T) {
 					t.Errorf("Scaffold() = %v with %d model calls, want %v and none", err, len(sc.Inputs), tt.kind)
 				}
 			})
+		}
+	})
+
+	t.Run("an empty request uses the default letter tab and the three highest-lean achievements", func(t *testing.T) {
+		t.Parallel()
+		e := newLetterEnv(t)
+		more := addAchievements(t, e.pos.ID, e.store, "Shipped a billing rewrite", "Cut cloud spend", "Ran incident reviews")
+		all := append(slices.Clone(e.pos.Achievements), more...)
+		leans := []dto.Answer{{PYes: 0.1}, {PNo: 0.5}, {PYes: 0.9}, {PYes: 0.6}, {PYes: 0.3, PNo: 0.1}}
+		e.asker.answers = map[string]dto.Answer{}
+		for i, a := range all {
+			e.asker.answers[questionPrefix+a.Text] = leans[i]
+		}
+		sc := cvtailortest.Scaffolding(scaffoldOf(all[2].ID))
+		docs := cvtailortest.Docs{TabJSON: tabJSON(t, prose("I led a platform team."), prose("I want to join you."))}
+		m := cvtailor.Build(cvtailor.Deps{Store: e.store, Docs: docs, Drive: e.drive, Asker: e.asker, Creds: apiKey, Scaffolder: sc})
+
+		got, err := m.Scaffold(t.Context(), userID, dto.ScaffoldInput{JobID: jobID})
+
+		if err != nil {
+			t.Fatalf("Scaffold() error = %v", err)
+		}
+		var cited []string
+		for _, a := range sc.Inputs[0].Achievements {
+			cited = append(cited, a.ID)
+		}
+		want := []string{all[2].ID, all[3].ID, all[4].ID}
+		if diff := cmp.Diff(want, cited); diff != "" {
+			t.Errorf("model achievements (-want +got):\n%s", diff)
+		}
+		if got.SourceDocID != docID || got.SourceTabID != tabID {
+			t.Errorf("Scaffold() = %+v, want source %s/%s", got, docID, tabID)
+		}
+	})
+
+	t.Run("no tracked letter tab asks the user to set one up", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		sc := cvtailortest.Scaffolding(scaffoldOf("x"))
+		m := cvtailor.Build(cvtailor.Deps{Store: e.store, Asker: e.asker, Creds: apiKey, Scaffolder: sc})
+
+		_, err := m.Scaffold(t.Context(), userID, dto.ScaffoldInput{JobID: jobID})
+
+		if !apperr.IsKind(err, apperr.KindUnprocessable) || len(sc.Inputs) != 0 {
+			t.Errorf("Scaffold() = %v with %d model calls, want unprocessable and none", err, len(sc.Inputs))
 		}
 	})
 

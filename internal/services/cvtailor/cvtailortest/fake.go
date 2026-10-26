@@ -34,19 +34,20 @@ type achievement struct {
 }
 
 type FakeStore struct {
-	mu           sync.Mutex
-	positions    map[string]*position
-	achievements map[string]*achievement
-	mappings     map[headingKey]*string
-	skills       map[string]*bankSkill
-	drafts       map[string]*draft
-	jobs         map[string]dto.Job
-	annotations  map[string]dto.JobAnnotations
-	skeletons    map[string]dto.LetterSkeleton
-	letterTabs   map[letterTab]bool
-	coverLetters []coverLetter
-	outcomes     map[string][]dto.AchievementOutcome
-	seq          int
+	mu             sync.Mutex
+	positions      map[string]*position
+	achievements   map[string]*achievement
+	mappings       map[headingKey]*string
+	skills         map[string]*bankSkill
+	drafts         map[string]*draft
+	jobs           map[string]dto.Job
+	annotations    map[string]dto.JobAnnotations
+	skeletons      map[string]dto.LetterSkeleton
+	letterTabs     map[letterTab]bool
+	letterTabOrder []letterTab
+	coverLetters   []coverLetter
+	outcomes       map[string][]dto.AchievementOutcome
+	seq            int
 }
 
 func NewFakeStore() *FakeStore {

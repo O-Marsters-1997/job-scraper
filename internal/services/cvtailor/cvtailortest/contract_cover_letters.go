@@ -32,6 +32,23 @@ func runCoverLetterContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("the default letter tab is the user's first tracked one", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		if _, _, ok, err := f.Store.DefaultLetterTab(ctx, f.UserID); err != nil || ok {
+			t.Fatalf("DefaultLetterTab() with none tracked = %v, %v, want not ok", ok, err)
+		}
+		f.TrackLetterTab(t, f.UserID, "doc", "t.0")
+		f.TrackLetterTab(t, f.UserID, "later", "t.9")
+		docID, tabID, ok, err := f.Store.DefaultLetterTab(ctx, f.UserID)
+		if err != nil || !ok || docID != "doc" || tabID != "t.0" {
+			t.Errorf("DefaultLetterTab() = %q, %q, %v, %v, want doc, t.0", docID, tabID, ok, err)
+		}
+		if _, _, ok, err := f.Store.DefaultLetterTab(ctx, f.Other); err != nil || ok {
+			t.Errorf("other user's DefaultLetterTab() = %v, %v, want not ok", ok, err)
+		}
+	})
+
 	t.Run("created letters list newest first and per user", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
