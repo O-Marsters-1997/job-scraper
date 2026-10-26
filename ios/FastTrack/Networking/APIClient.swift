@@ -21,6 +21,7 @@ struct APIClient {
     var clearChase: (_ applicationID: String) async throws -> Void
     var logContact: (_ jobID: String, _ channel: ContactChannel, _ outcome: ContactOutcome) async throws -> RecruiterContact
     var setTaskDone: (_ taskID: String, _ done: Bool) async throws -> Void
+    var recruiterContacts: (_ jobID: String) async throws -> [RecruiterContact]
 }
 
 extension APIClient {
@@ -93,13 +94,16 @@ extension APIClient {
             },
             setTaskDone: { taskID, done in
                 try await http.put("tasks/\(taskID)/done", body: TaskDoneInput(done: done))
+            },
+            recruiterContacts: { jobID in
+                try await http.get("jobs/\(jobID)/recruiter-contacts")
             }
         )
     }
 }
 
 extension APIClient {
-    static func mock(jobs: [Job] = [.sample], due: [DueJob] = [], failure: APIError? = nil) -> APIClient {
+    static func mock(jobs: [Job] = [.sample], due: [DueJob] = [], contacts: [RecruiterContact] = [], failure: APIError? = nil) -> APIClient {
         func respond<T>(_ value: T) throws -> T {
             if let failure { throw failure }
             return value
@@ -125,7 +129,8 @@ extension APIClient {
             logContact: { jobID, channel, outcome in
                 try respond(RecruiterContact(id: "contact-\(jobID)", contactedOn: .now, channel: channel, outcome: outcome))
             },
-            setTaskDone: { _, _ in try respond(()) }
+            setTaskDone: { _, _ in try respond(()) },
+            recruiterContacts: { _ in try respond(contacts) }
         )
     }
 }
