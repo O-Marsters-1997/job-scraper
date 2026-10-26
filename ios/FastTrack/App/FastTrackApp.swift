@@ -6,21 +6,10 @@ struct FastTrackApp: App {
 
     var body: some Scene {
         WindowGroup {
-            #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-prototype-triage") {
-                TriagePrototype()
-            } else {
-                root
-            }
-            #else
-            root
-            #endif
+            RootView()
+                .environment(session)
+                .environment(\.apiClient, .live)
+                .tint(.brandTint)
         }
-    }
-
-    private var root: some View {
-        RootView()
-            .environment(session)
-            .environment(\.apiClient, .live)
     }
 }

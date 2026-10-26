@@ -6,10 +6,13 @@ struct JobHeader: View {
     var body: some View {
         Section {
             Text(job.title).font(.title2.bold())
-            Text(job.subtitle).foregroundStyle(.secondary)
+            Text("\(job.companyName) · \(job.location)").foregroundStyle(.secondary)
             if let score = job.score {
                 LabeledContent("Score") {
-                    Text(job.band.isEmpty ? "\(score)" : "\(score) · \(job.band)")
+                    HStack {
+                        if let band = job.band { DotLabel(text: band.title, hue: band.colour) }
+                        Text(score, format: .number).monospacedDigit()
+                    }
                 }
             }
             if let url = URL(string: job.url) {

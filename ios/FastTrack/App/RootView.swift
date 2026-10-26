@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(Session.self) private var session
+    @Environment(\.apiClient) private var client
     @State private var path: [Route] = []
 
     var body: some View {
@@ -13,7 +14,7 @@ struct RootView: View {
                 LoginView()
             case .signedIn:
                 NavigationStack(path: $path) {
-                    JobsView()
+                    TriageView(client: client)
                         .navigationDestination(for: Route.self, destination: destination)
                 }
             case .unreachable(let message):

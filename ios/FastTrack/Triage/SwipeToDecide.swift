@@ -1,12 +1,9 @@
-#if DEBUG
 import SwiftUI
 
 enum SwipeDirection { case left, right, up }
 
 struct SwipeToDecide: ViewModifier {
     var allowsUp = false
-    var isEnabled = true
-    var showsStamp = true
     var onProgress: ((CGFloat) -> Void)?
     let onCommit: (SwipeDirection) -> Void
 
@@ -19,29 +16,11 @@ struct SwipeToDecide: ViewModifier {
         GeometryReader { proxy in
             let threshold = proxy.size.width * 0.35
             content
-                .overlay(alignment: .top) { if showsStamp { stamp } }
                 .offset(x: offset.width, y: allowsUp ? min(offset.height, 0) : 0)
                 .rotationEffect(.degrees(reduceMotion ? 0 : Double(offset.width / proxy.size.width) * 8))
-                .simultaneousGesture(drag(threshold: threshold), including: isEnabled ? .all : .subviews)
+                .simultaneousGesture(drag(threshold: threshold))
                 .sensoryFeedback(.selection, trigger: armed) { _, new in new != nil }
         }
-    }
-
-    private var stamp: some View {
-        let isRight = offset.width > 0
-        let progress = min(abs(offset.width) / 120, 1)
-        return Label(isRight ? "Shortlist" : "Dismiss", systemImage: isRight ? "checkmark" : "xmark")
-            .font(.headline)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .foregroundStyle(.white)
-            .background(isRight ? Color.brandTint : Color(.systemGray), in: .capsule)
-            .opacity(armed == .left || armed == .right ? 1 : progress * 0.6)
-            .padding(.top, 20)
-            .frame(maxWidth: .infinity, alignment: isRight ? .leading : .trailing)
-            .padding(.horizontal, 20)
-            .opacity(offset.width == 0 ? 0 : 1)
-            .allowsHitTesting(false)
     }
 
     private func drag(threshold: CGFloat) -> some Gesture {
@@ -64,13 +43,9 @@ struct SwipeToDecide: ViewModifier {
                 if let dir = direction(for: value.translation, predicted: value.predictedEndTranslation, threshold: threshold) {
                     withAnimation(.easeOut(duration: 0.25)) {
                         offset = flyOff(dir)
-                    }
-                    Task {
-                        try? await Task.sleep(for: .milliseconds(200))
+                    } completion: {
                         onProgress?(0)
                         onCommit(dir)
-                        offset = .zero
-                        armed = nil
                     }
                 } else {
                     withAnimation(.spring(duration: 0.3, bounce: reduceMotion ? 0 : 0.15)) { offset = .zero }
@@ -101,12 +76,9 @@ struct SwipeToDecide: ViewModifier {
 extension View {
     func swipeToDecide(
         allowsUp: Bool = false,
-        isEnabled: Bool = true,
-        showsStamp: Bool = true,
         onProgress: ((CGFloat) -> Void)? = nil,
         onCommit: @escaping (SwipeDirection) -> Void
     ) -> some View {
-        modifier(SwipeToDecide(allowsUp: allowsUp, isEnabled: isEnabled, showsStamp: showsStamp, onProgress: onProgress, onCommit: onCommit))
+        modifier(SwipeToDecide(allowsUp: allowsUp, onProgress: onProgress, onCommit: onCommit))
     }
 }
-#endif
