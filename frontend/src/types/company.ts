@@ -139,7 +139,7 @@ const companyProfileSchema = z.object({
 
 export type CompanyProfile = z.infer<typeof companyProfileSchema>;
 
-export const newCompanySchema = z.object({
+const newCompanySchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	slug: z.string(),
