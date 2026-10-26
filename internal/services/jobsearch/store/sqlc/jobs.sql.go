@@ -412,45 +412,56 @@ func (q *Queries) MarkJobsUnseen(ctx context.Context, arg MarkJobsUnseenParams) 
 }
 
 const pageJobs = `-- name: PageJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.reposted_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))) AS company_favourite, COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified')::text AS company_kind, COALESCE(j.discovered_via, (SELECT cb.discovered_via FROM company_boards cb WHERE cb.id = j.primary_board_id), '')::text AS discovered_via
+WITH ranked AS (
+  SELECT j.id, row_number() OVER (ORDER BY
+    CASE WHEN $2::text NOT IN ('newest', 'best') THEN
+      COALESCE(js.suitability_score, 50)::float8 * power(0.5::float8, GREATEST(0, extract(epoch FROM $3::timestamptz - COALESCE(j.posted_at, j.first_discovered_at))) / 86400 / 3)
+    END DESC NULLS LAST,
+    CASE WHEN $2::text = 'best' THEN js.suitability_score END DESC NULLS LAST,
+    CASE WHEN $2::text NOT IN ('newest', 'best') THEN j.first_discovered_at END DESC,
+    CASE WHEN $2::text IN ('newest', 'best') THEN COALESCE(j.posted_at, j.first_discovered_at) END DESC,
+    j.id
+  ) AS rn
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
 LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1::uuid
 LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $1::uuid
 WHERE j.closed_at IS NULL
-  AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > $2::timestamptz - interval '90 days'
-  AND COALESCE(j.company_slug, '') <> ALL($3::text[])
+  AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > $3::timestamptz - interval '90 days'
+  AND COALESCE(j.company_slug, '') <> ALL($4::text[])
   AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
   AND jg.grade IS DISTINCT FROM 'no'
-  AND ($4::uuid IS NULL OR j.company_id = $4::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = $4::uuid)))
-  AND (NOT $5::bool OR js.job_id IS NOT NULL)
-  AND ($6::int IS NULL OR js.suitability_score >= $6::int)
-  AND (cardinality($7::text[]) = 0 OR js.band = ANY($7::text[]))
-  AND ($8::timestamptz IS NULL OR j.scraped_at >= $8::timestamptz)
-  AND ($9::text = 'all' OR ($9::text = 'graded') = (COALESCE(jg.grade, '') <> ''))
-  AND ($10::text = 'all' OR ($10::text = 'seen') = (jv.job_id IS NOT NULL))
-  AND ($11::text = 'all' OR ($11::text = 'agency') = (COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified') IN ('agency', 'likely_agency')))
-  AND (NOT $12::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))))
-  AND (cardinality($13::text[]) = 0 OR j.source = ANY($13::text[]))
-  AND (cardinality($14::text[]) = 0 OR (CASE lower(btrim(j.work_arrangement)) WHEN 'remote' THEN 'remote' WHEN 'hybrid' THEN 'hybrid' WHEN 'onsite' THEN 'onsite' ELSE 'unknown' END) = ANY($14::text[]))
-  AND (NOT $15::bool OR (
+  AND ($5::uuid IS NULL OR j.company_id = $5::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = $5::uuid)))
+  AND (NOT $6::bool OR js.job_id IS NOT NULL)
+  AND ($7::int IS NULL OR js.suitability_score >= $7::int)
+  AND (cardinality($8::text[]) = 0 OR js.band = ANY($8::text[]))
+  AND ($9::timestamptz IS NULL OR j.scraped_at >= $9::timestamptz)
+  AND ($10::text = 'all' OR ($10::text = 'graded') = (COALESCE(jg.grade, '') <> ''))
+  AND ($11::text = 'all' OR ($11::text = 'seen') = (jv.job_id IS NOT NULL))
+  AND ($12::text = 'all' OR ($12::text = 'agency') = (COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified') IN ('agency', 'likely_agency')))
+  AND (NOT $13::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))))
+  AND (cardinality($14::text[]) = 0 OR j.source = ANY($14::text[]))
+  AND (cardinality($15::text[]) = 0 OR (CASE lower(btrim(j.work_arrangement)) WHEN 'remote' THEN 'remote' WHEN 'hybrid' THEN 'hybrid' WHEN 'onsite' THEN 'onsite' ELSE 'unknown' END) = ANY($15::text[]))
+  AND (NOT $16::bool OR (
     j.salary_min IS NOT NULL
-    AND COALESCE(j.salary_max, j.salary_min) >= COALESCE($16::float8, '-Infinity'::float8)
-    AND j.salary_min <= COALESCE($17::float8, 'Infinity'::float8)))
-  AND ($18::text = '' OR concat_ws(' ', j.title, j.company_slug, j.location, j.source) ILIKE $18::text)
-ORDER BY
-  CASE WHEN $19::text NOT IN ('newest', 'best') THEN
-    COALESCE(js.suitability_score, 50)::float8 * power(0.5::float8, GREATEST(0, extract(epoch FROM $2::timestamptz - COALESCE(j.posted_at, j.first_discovered_at))) / 86400 / 3)
-  END DESC NULLS LAST,
-  CASE WHEN $19::text = 'best' THEN js.suitability_score END DESC NULLS LAST,
-  CASE WHEN $19::text NOT IN ('newest', 'best') THEN j.first_discovered_at END DESC,
-  CASE WHEN $19::text IN ('newest', 'best') THEN COALESCE(j.posted_at, j.first_discovered_at) END DESC,
-  j.id
-LIMIT $21::int OFFSET $20::int
+    AND COALESCE(j.salary_max, j.salary_min) >= COALESCE($17::float8, '-Infinity'::float8)
+    AND j.salary_min <= COALESCE($18::float8, 'Infinity'::float8)))
+  AND ($19::text = '' OR concat_ws(' ', j.title, j.company_slug, j.location, j.source) ILIKE $19::text)
+  ORDER BY rn
+  LIMIT $21::int OFFSET $20::int
+)
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.reposted_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))) AS company_favourite, COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified')::text AS company_kind, COALESCE(j.discovered_via, (SELECT cb.discovered_via FROM company_boards cb WHERE cb.id = j.primary_board_id), '')::text AS discovered_via
+FROM ranked r
+JOIN jobs j ON j.id = r.id
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1::uuid
+LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $1::uuid
+ORDER BY r.rn
 `
 
 type PageJobsParams struct {
 	UserID               pgtype.UUID
+	Sort                 string
 	Now                  pgtype.Timestamptz
 	ExcludedCompanySlugs []string
 	CompanyID            pgtype.UUID
@@ -468,7 +479,6 @@ type PageJobsParams struct {
 	SalaryFloor          pgtype.Float8
 	SalaryCeiling        pgtype.Float8
 	SearchPattern        string
-	Sort                 string
 	PageOffset           int32
 	PageLimit            int32
 }
@@ -504,6 +514,7 @@ type PageJobsRow struct {
 func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsRow, error) {
 	rows, err := q.db.Query(ctx, pageJobs,
 		arg.UserID,
+		arg.Sort,
 		arg.Now,
 		arg.ExcludedCompanySlugs,
 		arg.CompanyID,
@@ -521,7 +532,6 @@ func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsR
 		arg.SalaryFloor,
 		arg.SalaryCeiling,
 		arg.SearchPattern,
-		arg.Sort,
 		arg.PageOffset,
 		arg.PageLimit,
 	)
