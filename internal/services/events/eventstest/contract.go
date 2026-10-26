@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/ollymarsters/job-scraper/internal/client"
 	"github.com/ollymarsters/job-scraper/internal/services/events"
 )
 
@@ -44,6 +45,21 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("lists the client each event was inserted with", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		for _, c := range []client.Kind{client.Web, client.IOS} {
+			if err := f.Store.InsertEvent(t.Context(), nil, f.UserID, events.AlertOpened, "", c, []byte(`{}`)); err != nil {
+				t.Fatalf("InsertEvent(%s) err = %v", c, err)
+			}
+		}
+
+		got, err := f.Store.ListEvents(t.Context(), f.UserID, "")
+		if err != nil || len(got) != 2 || got[0].Client != "web" || got[1].Client != "ios" {
+			t.Errorf("ListEvents() = %+v, %v, want clients web then ios", got, err)
+		}
+	})
+
 	t.Run("filters by type", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t)
@@ -70,7 +86,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 
 func insert(t *testing.T, f Fixture, userID, eventType, subjectID, props string) {
 	t.Helper()
-	if err := f.Store.InsertEvent(t.Context(), nil, userID, eventType, subjectID, []byte(props)); err != nil {
+	if err := f.Store.InsertEvent(t.Context(), nil, userID, eventType, subjectID, client.Web, []byte(props)); err != nil {
 		t.Fatalf("InsertEvent(%s) err = %v", eventType, err)
 	}
 }

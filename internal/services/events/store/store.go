@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/client"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/events/store/sqlc"
@@ -24,7 +25,7 @@ func New(pool *pgxpool.Pool) *Store {
 
 // InsertEvent appends an event. A non-nil tx joins the caller's transaction;
 // nil writes on the pool. An empty subjectID stores NULL.
-func (s *Store) InsertEvent(ctx context.Context, tx pgx.Tx, userID, eventType, subjectID string, props []byte) error {
+func (s *Store) InsertEvent(ctx context.Context, tx pgx.Tx, userID, eventType, subjectID string, c client.Kind, props []byte) error {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
@@ -40,7 +41,7 @@ func (s *Store) InsertEvent(ctx context.Context, tx pgx.Tx, userID, eventType, s
 		q = q.WithTx(tx)
 	}
 	if err := q.InsertEvent(ctx, sqlc.InsertEventParams{
-		UserID: uid, Type: sqlc.EventType(eventType), SubjectID: sid, Props: props,
+		UserID: uid, Type: sqlc.EventType(eventType), SubjectID: sid, Client: string(c), Props: props,
 	}); err != nil {
 		return fmt.Errorf("store.InsertEvent: %w", err)
 	}
@@ -65,7 +66,7 @@ func (s *Store) ListEvents(ctx context.Context, userID, eventType string) ([]dto
 	out := make([]dto.Event, len(rows))
 	for i, r := range rows {
 		out[i] = dto.Event{
-			ID: r.ID.String(), Type: string(r.Type), Props: r.Props, CreatedAt: r.CreatedAt.Time,
+			ID: r.ID.String(), Type: string(r.Type), Client: r.Client, Props: r.Props, CreatedAt: r.CreatedAt.Time,
 		}
 		if r.SubjectID.Valid {
 			out[i].SubjectID = r.SubjectID.String()

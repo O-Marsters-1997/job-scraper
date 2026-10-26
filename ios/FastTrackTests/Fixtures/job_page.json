@@ -1,0 +1,56 @@
+{
+  "items": [
+    {
+      "ID": "job-1",
+      "Title": "Senior Go Engineer",
+      "Location": "London",
+      "URL": "https://example.com/jobs/1",
+      "ApplyURL": "",
+      "CompanySlug": "monzo",
+      "CompanyID": "",
+      "BoardID": "",
+      "ProviderPostingID": "",
+      "ContentFingerprint": "",
+      "Source": "",
+      "PostedAt": null,
+      "PostedAfter": null,
+      "RepostedAt": null,
+      "ScrapedAt": "2026-10-01T09:00:00Z",
+      "FirstDiscoveredAt": "0001-01-01T00:00:00Z",
+      "Description": "",
+      "SalaryRaw": "",
+      "WorkArrangement": "",
+      "RemoteCheckURL": "",
+      "SuitabilityScore": 92,
+      "Band": "Great",
+      "Grade": "",
+      "Seen": false,
+      "CompanyFavourite": false,
+      "CompanyKind": "",
+      "DiscoveredVia": "",
+      "DiscoveryURL": "",
+      "Breakdown": [
+        {
+          "key": "tech:go",
+          "label": "Go",
+          "stance": "want",
+          "resolved": "yes",
+          "effect": "meets",
+          "overridden": false,
+          "corrected": false
+        },
+        {
+          "key": "domain:fintech",
+          "label": "Fintech",
+          "stance": "want",
+          "resolved": "no",
+          "effect": "misses",
+          "overridden": false,
+          "corrected": false
+        }
+      ],
+      "Listings": null
+    }
+  ],
+  "total": 1
+}

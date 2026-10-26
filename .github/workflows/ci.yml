@@ -17,6 +17,7 @@ jobs:
       go: ${{ steps.filter.outputs.go }}
       frontend: ${{ steps.filter.outputs.frontend }}
       emails: ${{ steps.filter.outputs.emails }}
+      ios: ${{ steps.filter.outputs.ios }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v4
@@ -37,6 +38,10 @@ jobs:
             emails:
               - 'emails/**'
               - '.github/workflows/ci.yml'
+            ios:
+              - 'internal/dto/**'
+              - 'ios/FastTrackTests/Fixtures/**'
+              - 'ios/**'
 
   # --- Go ---
 
@@ -201,3 +206,15 @@ jobs:
         run: |
           bun install --frozen-lockfile
           bun run typecheck
+
+  # --- iOS ---
+
+  test-ios:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test iOS models against dto fixtures
+        working-directory: ios
+        run: xcodebuild test -scheme FastTrack -destination 'platform=iOS Simulator,name=iPhone 17'

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(Session.self) private var session
+    @Environment(\.apiClient) private var client
     @State private var path: [Route] = []
 
     var body: some View {
@@ -12,10 +13,7 @@ struct RootView: View {
             case .signedOut:
                 LoginView()
             case .signedIn:
-                NavigationStack(path: $path) {
-                    JobsView()
-                        .navigationDestination(for: Route.self, destination: destination)
-                }
+                MainTabs(client: client, path: $path)
             case .unreachable(let message):
                 ContentUnavailableView {
                     Label("Can't reach FastTrack", systemImage: "wifi.exclamationmark")
@@ -28,13 +26,6 @@ struct RootView: View {
         }
         .task { await session.restore() }
         .onOpenURL(perform: open)
-    }
-
-    @ViewBuilder
-    private func destination(for route: Route) -> some View {
-        switch route {
-        case .job(let id): JobDetailView(id: id)
-        }
     }
 
     private func open(_ url: URL) {

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/client"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
@@ -26,7 +27,7 @@ const (
 const maxReasonLen = 500
 
 type Store interface {
-	InsertEvent(ctx context.Context, tx pgx.Tx, userID, eventType, subjectID string, props []byte) error
+	InsertEvent(ctx context.Context, tx pgx.Tx, userID, eventType, subjectID string, c client.Kind, props []byte) error
 	ListEvents(ctx context.Context, userID, eventType string) ([]dto.Event, error)
 }
 
@@ -133,5 +134,5 @@ func (s *Service) insert(ctx context.Context, tx pgx.Tx, userID, eventType, subj
 	if err != nil {
 		return fmt.Errorf("events.insert: marshal props: %w", err)
 	}
-	return s.store.InsertEvent(ctx, tx, userID, eventType, subjectID, raw)
+	return s.store.InsertEvent(ctx, tx, userID, eventType, subjectID, client.FromContext(ctx), raw)
 }

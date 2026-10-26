@@ -6,14 +6,27 @@ struct JobDetailView: View {
     @State private var state: LoadState<Job> = .idle
 
     var body: some View {
-        List {
+        ScrollView {
             if let job = state.value {
-                JobHeader(job: job)
-                ScoreBreakdownSection(rows: job.breakdown ?? [])
+                VStack(alignment: .leading, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        BandRow(job: job)
+                        MetaLines(job: job, limitsTitle: false)
+                    }
+                    JobDetailBody(job: job)
+                    JobNoteSection(jobID: job.id)
+                    RecruiterContactsSection(jobID: job.id)
+                }
+                .padding(16)
             }
         }
         .overlay { LoadStateOverlay(state: state, failureTitle: "Couldn't load job") }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let url = state.value.flatMap({ URL(string: $0.url) }) {
+                ToolbarItem(placement: .primaryAction) { ShareLink(item: url) }
+            }
+        }
         .task(id: id) { await load() }
     }
 

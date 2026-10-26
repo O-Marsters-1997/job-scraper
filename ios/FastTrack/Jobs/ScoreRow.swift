@@ -1,8 +1,5 @@
-struct ScoreRow: Decodable, Identifiable {
+struct ScoreRow: Codable, Hashable {
     let key: String
     let label: String
-    let effect: String
-
-    var id: String { key }
-    var meets: Bool { effect == "meets" }
+    let effect: ScoreEffect
 }

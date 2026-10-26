@@ -49,6 +49,10 @@ func NewFakeStore() *FakeStore {
 	}
 }
 
+func (f *FakeStore) ListDue(context.Context, string) (dto.DueList, error) {
+	return dto.DueList{Jobs: []dto.DueJob{}}, nil
+}
+
 func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.CreateApplicationInput) (dto.Application, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
