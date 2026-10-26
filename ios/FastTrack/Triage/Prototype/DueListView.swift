@@ -3,12 +3,10 @@ import QuickLook
 import SwiftUI
 
 struct DueListView: View {
-    static let variants = [("1", "Passes"), ("2", "Timeline"), ("3", "Next up")]
-
     @Environment(TriagePrototypeStore.self) private var store
-    @AppStorage("dueVariant") private var variant = "1"
     @State private var pdfURL: URL?
     @State private var contactFor: PrototypeJob?
+    @State private var openJob: PrototypeJob?
 
     var body: some View {
         Group {
@@ -24,15 +22,12 @@ struct DueListView: View {
                 ContentUnavailableView("Nothing due", systemImage: "checkmark.circle",
                                        description: Text("Chases, open Tasks and ready CV drafts show up here."))
             } else {
-                switch variant {
-                case "2": DueTimeline(actions: actions)
-                case "3": DueFocus(actions: actions)
-                default: DuePasses(actions: actions)
-                }
+                DueNotebook(actions: actions)
             }
         }
         .navigationTitle("Due")
-        .navigationDestination(for: PrototypeJob.self) { PrototypeJobPage(job: $0) }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $openJob) { PrototypeJobPage(job: $0) }
         .quickLookPreview($pdfURL)
         .sheet(item: $contactFor) { job in
             ContactSheet { store.logContact($0, for: job) }
@@ -40,7 +35,7 @@ struct DueListView: View {
     }
 
     private var actions: DueActions {
-        DueActions(openPDF: { pdfURL = DraftPDF.render(for: $0) }, logContact: { contactFor = $0 })
+        DueActions(openPDF: { pdfURL = DraftPDF.render(for: $0) }, logContact: { contactFor = $0 }, openJob: { openJob = $0 })
     }
 }
 

@@ -4,7 +4,6 @@ import SwiftUI
 struct TriagePrototype: View {
     @State private var store = TriagePrototypeStore()
     @State private var tab = ProcessInfo.processInfo.arguments.contains("-prototype-due") ? 1 : 0
-    @AppStorage("dueVariant") private var dueVariant = "1"
 
     var body: some View {
         Group {
@@ -89,19 +88,7 @@ struct TriagePrototype: View {
     private var controls: some View {
         VStack(spacing: 2) {
             HStack(spacing: 16) {
-                if tab == 1 {
-                    let variants = DueListView.variants
-                    let index = variants.firstIndex { $0.0 == dueVariant } ?? 0
-                    Button {
-                        dueVariant = variants[(index + 1) % variants.count].0
-                    } label: {
-                        Text("\(variants[index].0) — \(variants[index].1) ›")
-                            .font(.caption.weight(.bold))
-                    }
-                    .labelStyle(.titleOnly)
-                } else {
-                    Text("PROTOTYPE").font(.caption2.weight(.bold)).tracking(0.5)
-                }
+                Text("PROTOTYPE").font(.caption2.weight(.bold)).tracking(0.5)
                 Button(store.offline ? "Go online" : "Go offline", systemImage: store.offline ? "wifi" : "wifi.slash") {
                     store.offline.toggle()
                 }
