@@ -14,7 +14,16 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/tasks/store"
 )
 
-var defaultTypeNames = []string{"Apply", "Follow up", "Reach out", "Prep"}
+var defaultTypes = []struct {
+	name string
+	key  dto.TaskTypeSystemKey
+}{
+	{"Apply", dto.TaskTypeApply},
+	{"Finish application", dto.TaskTypeFinish},
+	{"Follow up", ""},
+	{"Reach out", ""},
+	{"Prep", ""},
+}
 
 func fakeID(n int) string {
 	return fmt.Sprintf("00000000-0000-0000-0000-%012d", n)
@@ -65,12 +74,8 @@ func (f *FakeStore) AddSystemType(userID, name string, key dto.TaskTypeSystemKey
 }
 
 func (f *FakeStore) SeedDefaultTaskTypes(_ context.Context, _ pgx.Tx, userID string) error {
-	for _, name := range defaultTypeNames {
-		var key dto.TaskTypeSystemKey
-		if name == "Apply" {
-			key = dto.TaskTypeApply
-		}
-		f.AddSystemType(userID, name, key)
+	for _, d := range defaultTypes {
+		f.AddSystemType(userID, d.name, d.key)
 	}
 	return nil
 }

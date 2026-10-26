@@ -50,13 +50,24 @@ struct DTODecodingTests {
         #expect(due.score == 92)
         #expect(due.applicationID == "app-1")
         #expect(due.chaseBy?.dayString == "2026-10-01")
-        #expect(due.tasks.map(\.typeName) == ["Apply"])
+        #expect(due.tasks.map(\.typeName) == ["Apply", "Finish application"])
+        #expect(due.tasks.map(\.systemKey) == ["apply", "finish"])
+        #expect(due.isAtDesk)
         #expect(due.draft?.state == .ready)
         let bare = try #require(list.jobs.last)
         #expect(bare.band == nil)
         #expect(bare.score == nil)
         #expect(bare.chaseBy == nil)
         #expect(bare.draft == nil)
+        #expect(!bare.isAtDesk)
+    }
+
+    @Test func taskTypesDecode() throws {
+        let types = try JSONDecoder.api.decode([TaskType].self, from: fixture("task_types"))
+
+        #expect(types.map(\.name) == ["Finish application", "Reach out"])
+        #expect(types.first?.systemKey == "finish")
+        #expect(types.last?.systemKey == "")
     }
 
     @Test func recruiterContactDecodes() throws {

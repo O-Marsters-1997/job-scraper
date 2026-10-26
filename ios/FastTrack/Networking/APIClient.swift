@@ -21,6 +21,8 @@ struct APIClient {
     var clearChase: (_ applicationID: String) async throws -> Void
     var logContact: (_ jobID: String, _ channel: ContactChannel, _ outcome: ContactOutcome) async throws -> RecruiterContact
     var setTaskDone: (_ taskID: String, _ done: Bool) async throws -> Void
+    var taskTypes: () async throws -> [TaskType]
+    var createTask: (_ typeID: String, _ jobID: String, _ notes: String) async throws -> Void
     var recruiterContacts: (_ jobID: String) async throws -> [RecruiterContact]
     var cvTemplates: () async throws -> [CVTemplate]
     var createDraft: (_ jobID: String, _ cv: CVTemplate) async throws -> DraftRef
@@ -94,6 +96,12 @@ extension APIClient {
             setTaskDone: { taskID, done in
                 try await http.put("tasks/\(taskID)/done", body: TaskDoneInput(done: done))
             },
+            taskTypes: {
+                try await http.get("task-types")
+            },
+            createTask: { typeID, jobID, notes in
+                try await http.post("tasks", body: CreateTaskInput(typeID: typeID, jobID: jobID, notes: notes))
+            },
             recruiterContacts: { jobID in
                 try await http.get("jobs/\(jobID)/recruiter-contacts")
             },
@@ -140,6 +148,8 @@ extension APIClient {
                 try respond(RecruiterContact(id: "contact-\(jobID)", contactedOn: .now, channel: channel, outcome: outcome))
             },
             setTaskDone: { _, _ in try respond(()) },
+            taskTypes: { try respond([TaskType(id: "type-finish", name: "Finish application", systemKey: "finish")]) },
+            createTask: { _, _, _ in try respond(()) },
             recruiterContacts: { _ in try respond(contacts) },
             cvTemplates: { try respond([CVTemplate(docID: "doc", tabID: "tab", title: "Backend", isDefault: true)]) },
             createDraft: { _, _ in try respond(DraftRef(id: "draft-new")) },

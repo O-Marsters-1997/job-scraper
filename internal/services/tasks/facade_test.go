@@ -31,8 +31,8 @@ func TestSeedDefaultsSeedsTheUsersTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 4 {
-		t.Fatalf("SeedDefaults seeded %d types, want 4", len(got))
+	if len(got) != 5 {
+		t.Fatalf("SeedDefaults seeded %d types, want 5", len(got))
 	}
 }
 
