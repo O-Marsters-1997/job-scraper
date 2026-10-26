@@ -16,6 +16,11 @@ struct APIClient {
     var unexcludeCompany: (_ companyID: String, _ removeName: Bool) async throws -> Void
     var note: (_ jobID: String) async throws -> JobNote
     var putNote: (_ jobID: String, _ body: String) async throws -> Void
+    var due: () async throws -> [DueJob]
+    var setChase: (_ applicationID: String, _ chaseBy: Date) async throws -> Void
+    var clearChase: (_ applicationID: String) async throws -> Void
+    var logContact: (_ jobID: String, _ channel: ContactChannel, _ outcome: ContactOutcome) async throws -> RecruiterContact
+    var setTaskDone: (_ taskID: String, _ done: Bool) async throws -> Void
 }
 
 extension APIClient {
@@ -70,13 +75,31 @@ extension APIClient {
             },
             putNote: { jobID, body in
                 try await http.put("jobs/\(jobID)/note", body: NoteInput(body: body))
+            },
+            due: {
+                let list: DueList = try await http.get("due")
+                return list.jobs
+            },
+            setChase: { applicationID, chaseBy in
+                try await http.put("applications/\(applicationID)/chase", body: ChaseInput(chaseBy: chaseBy.dayString))
+            },
+            clearChase: { applicationID in
+                try await http.delete("applications/\(applicationID)/chase")
+            },
+            logContact: { jobID, channel, outcome in
+                try await http.post(
+                    "jobs/\(jobID)/recruiter-contacts",
+                    body: ContactInput(contactedOn: Date.now.dayString, channel: channel, outcome: outcome))
+            },
+            setTaskDone: { taskID, done in
+                try await http.put("tasks/\(taskID)/done", body: TaskDoneInput(done: done))
             }
         )
     }
 }
 
 extension APIClient {
-    static func mock(jobs: [Job] = [.sample], failure: APIError? = nil) -> APIClient {
+    static func mock(jobs: [Job] = [.sample], due: [DueJob] = [], failure: APIError? = nil) -> APIClient {
         func respond<T>(_ value: T) throws -> T {
             if let failure { throw failure }
             return value
@@ -95,7 +118,14 @@ extension APIClient {
             excludeCompany: { _ in try respond(CompanyExclusion(name: "Monzo", added: true)) },
             unexcludeCompany: { _, _ in try respond(()) },
             note: { jobID in try respond(JobNote(jobID: jobID, body: "")) },
-            putNote: { _, _ in try respond(()) }
+            putNote: { _, _ in try respond(()) },
+            due: { try respond(due) },
+            setChase: { _, _ in try respond(()) },
+            clearChase: { _ in try respond(()) },
+            logContact: { jobID, channel, outcome in
+                try respond(RecruiterContact(id: "contact-\(jobID)", contactedOn: .now, channel: channel, outcome: outcome))
+            },
+            setTaskDone: { _, _ in try respond(()) }
         )
     }
 }

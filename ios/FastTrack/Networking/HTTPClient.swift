@@ -63,6 +63,7 @@ extension JSONDecoder {
             let text = try decoder.singleValueContainer().decode(String.self)
             if let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(text) { return date }
             if let date = try? Date.ISO8601FormatStyle().parse(text) { return date }
+            if let date = try? Date.dayFormat.parse(text) { return date }
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Bad date \(text)"))
         }
         return decoder

@@ -20,7 +20,22 @@ func TestIOSFixtures(t *testing.T) {
 	score := 92
 	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 
+	chaseBy := "2026-10-01"
+	applyTaskID := "task-1"
 	fixtures := map[string]any{
+		"due_list": dto.DueList{Jobs: []dto.DueJob{
+			{
+				JobID: "job-1", Title: "Senior Go Engineer", CompanySlug: "monzo", Band: "great", Score: &score,
+				ApplicationID: "app-1", ChaseBy: &chaseBy, ApplyTaskID: &applyTaskID,
+				Tasks: []dto.DueTask{{ID: "task-1", TypeName: "Apply", Notes: "Tailor the CV"}},
+				Draft: &dto.DueDraft{ID: "draft-1", State: dto.DraftStateReady, CVTitle: "Backend"},
+			},
+			{JobID: "job-2", Title: "Backend Engineer", CompanySlug: "wise", ApplicationID: "app-2", Tasks: []dto.DueTask{}},
+		}},
+		"recruiter_contact": dto.RecruiterContact{
+			ID: "contact-1", JobID: "job-1", ContactedOn: "2026-10-01",
+			Channel: dto.ChannelEmail, Outcome: dto.OutcomeNoReply, CreatedAt: at,
+		},
 		"job_page": dto.JobPage{
 			Total: 1,
 			Items: []dto.Job{{
