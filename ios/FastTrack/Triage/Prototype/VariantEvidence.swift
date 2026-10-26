@@ -3,42 +3,23 @@ import SwiftUI
 
 struct VariantEvidence: View {
     let store: TriagePrototypeStore
-    @State private var detailJob: PrototypeJob?
 
     var body: some View {
         VStack(spacing: 12) {
-            ProgressView(value: Double(PrototypeJob.fixtures.count - store.queue.count),
-                         total: Double(PrototypeJob.fixtures.count))
-                .tint(.brandTint)
-                .padding(.horizontal)
+            TriageCardHost(store: store) { job, isExpanded, toggle in
+                card(job, isExpanded: isExpanded, toggle: toggle)
+            }
+            .padding(.horizontal)
             if let job = store.current {
-                card(job)
-                    .id(job.id)
-                    .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
-                    .padding(.horizontal)
-                TriageActionBar(job: job, store: store) { detailJob = job }
-            } else {
-                QueueClearView(store: store)
+                TriageActionBar(job: job, store: store)
             }
         }
         .padding(.bottom, 8)
         .navigationTitle("Triage")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let job = store.current {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Skip") { withAnimation { store.act(.skip, on: job) } }
-                }
-            }
-        }
-        .sheet(item: $detailJob) { job in
-            NavigationStack { PrototypeJobDetail(job: job, store: store) }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
     }
 
-    private func card(_ job: PrototypeJob) -> some View {
+    private func card(_ job: PrototypeJob, isExpanded: Bool, toggle: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text(job.band.rawValue)
@@ -60,35 +41,41 @@ struct VariantEvidence: View {
                     .padding(.vertical, 10)
                     .background(gate.effect.colour.opacity(0.1))
             }
-            ScrollView {
+            if isExpanded {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        titleBlock(job, chevron: "chevron.down", toggle: toggle)
+                        Divider()
+                        JobDetailBody(job: job)
+                    }
+                    .padding(20)
+                }
+            } else {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(job.rows.filter { $0.effect != .gated }, id: \.self) { BreakdownRowView(row: $0) }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(20)
+                Divider()
+                titleBlock(job, chevron: "chevron.up", toggle: toggle)
+                    .padding(20)
             }
-            .scrollBounceBehavior(.basedOnSize)
-            Divider()
-            Button { detailJob = job } label: {
-                HStack(alignment: .bottom) {
-                    MetaLines(job: job, titleFont: .headline)
-                    Image(systemName: "chevron.up").foregroundStyle(.secondary)
-                }
-                .padding(20)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
         }
         .frame(maxHeight: .infinity)
         .cardSurface()
-        .swipeToDecide { dir in
-            withAnimation { store.act(dir == .right ? .shortlist : .dismiss, on: job) }
-        }
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: isExpanded ? .contain : .ignore)
         .accessibilityLabel(job.accessibilitySummary)
-        .accessibilityAction(named: "Shortlist") { store.act(.shortlist, on: job) }
-        .accessibilityAction(named: "Dismiss") { store.act(.dismiss, on: job) }
-        .accessibilityAction(named: "Details") { detailJob = job }
+    }
+
+    private func titleBlock(_ job: PrototypeJob, chevron: String, toggle: @escaping () -> Void) -> some View {
+        Button(action: toggle) {
+            HStack(alignment: .bottom) {
+                MetaLines(job: job, titleFont: .headline)
+                Image(systemName: chevron).foregroundStyle(.secondary)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
     }
 }
 #endif

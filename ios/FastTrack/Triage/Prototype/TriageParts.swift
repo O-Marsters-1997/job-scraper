@@ -104,24 +104,14 @@ struct TriageActionBar: View {
     let store: TriagePrototypeStore
     var onDetails: (() -> Void)?
 
-    @State private var showReasons = false
-    @State private var showNote = false
-
     var body: some View {
         HStack(spacing: 12) {
             Button("Dismiss", systemImage: "xmark") { act(.dismiss) }
                 .buttonStyle(.bordered)
                 .tint(.secondary)
                 .controlSize(.large)
-            Menu("More", systemImage: "ellipsis") {
-                Button("Shortlist and draft CV", systemImage: "doc.badge.plus") { act(.shortlistDraft) }
-                Button("Dismiss with reason…", systemImage: "text.badge.xmark") { showReasons = true }
-                Button("Add note…", systemImage: "note.text") { showNote = true }
-                if let onDetails {
-                    Button("Details", systemImage: "doc.text", action: onDetails)
-                }
-                Divider()
-                Button("Exclude \(job.company)", systemImage: "nosign", role: .destructive) { act(.exclude) }
+            TriageMoreMenu(job: job, store: store, onDetails: onDetails) {
+                Label("More", systemImage: "ellipsis")
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.bordered)
@@ -134,6 +124,35 @@ struct TriageActionBar: View {
                 .controlSize(.large)
         }
         .lineLimit(1)
+    }
+
+    private func act(_ action: TriagePrototypeStore.Action) {
+        withAnimation(.easeOut(duration: 0.25)) { store.act(action, on: job) }
+    }
+}
+
+struct TriageMoreMenu<MenuLabel: View>: View {
+    let job: PrototypeJob
+    let store: TriagePrototypeStore
+    var onDetails: (() -> Void)?
+    @ViewBuilder let label: () -> MenuLabel
+
+    @State private var showReasons = false
+    @State private var showNote = false
+
+    var body: some View {
+        Menu {
+            Button("Shortlist and draft CV", systemImage: "doc.badge.plus") { act(.shortlistDraft) }
+            Button("Dismiss with reason…", systemImage: "text.badge.xmark") { showReasons = true }
+            Button("Add note…", systemImage: "note.text") { showNote = true }
+            if let onDetails {
+                Button("Details", systemImage: "doc.text", action: onDetails)
+            }
+            Divider()
+            Button("Exclude \(job.company)", systemImage: "nosign", role: .destructive) { act(.exclude) }
+        } label: {
+            label()
+        }
         .sheet(isPresented: $showReasons) {
             DismissReasonSheet { act(.dismissReason) }
         }

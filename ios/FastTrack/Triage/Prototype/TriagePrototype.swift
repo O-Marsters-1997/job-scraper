@@ -2,9 +2,9 @@
 import SwiftUI
 
 struct TriagePrototype: View {
-    private static let variants = [("A", "Deck · flip for details"), ("B", "Pager · push details"), ("C", "Evidence · sheet details")]
+    private static let variants = [("C", "Evidence · baseline"), ("D", "Paper"), ("E", "Signal"), ("F", "Tactile")]
 
-    @AppStorage("triagePrototypeVariant") private var variant = "A"
+    @AppStorage("triagePrototypeVariant") private var variant = "C"
     @State private var store = TriagePrototypeStore()
 
     var body: some View {
@@ -12,9 +12,10 @@ struct TriagePrototype: View {
             NavigationStack {
                 Group {
                     switch variant {
-                    case "B": VariantPager(store: store)
-                    case "C": VariantEvidence(store: store)
-                    default: VariantDeck(store: store)
+                    case "D": VariantPaper(store: store)
+                    case "E": VariantSignal(store: store)
+                    case "F": VariantTactile(store: store)
+                    default: VariantEvidence(store: store)
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 8) {
