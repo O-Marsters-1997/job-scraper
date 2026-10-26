@@ -11,7 +11,7 @@ import { mocked } from "./config";
 
 const JOBS_PAGE_SIZE = 100;
 
-export const jobPageSchema = z.object({
+const jobPageSchema = z.object({
 	items: z.array(jobSchema),
 	total: z.number().nullable(),
 });
