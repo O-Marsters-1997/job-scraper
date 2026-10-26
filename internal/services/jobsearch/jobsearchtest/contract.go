@@ -601,25 +601,20 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
+		ids := map[string]string{}
 		for _, slug := range []string{"verified", "wttj-only", "candidate", "bare"} {
-			if _, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug, Name: slug}); err != nil {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug, Name: slug})
+			if err != nil {
 				t.Fatalf("UpsertCompany(%q) = %v", slug, err)
 			}
-		}
-		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10})
-		if err != nil {
-			t.Fatalf("PageCompaniesForUser(...) = %v", err)
-		}
-		ids := map[string]string{}
-		for _, c := range page.Items {
-			ids[c.Slug] = c.ID
+			ids[slug] = c.ID
 		}
 		verifyBoard(t, st, ids["verified"], "greenhouse")
 		verifyBoard(t, st, ids["wttj-only"], "wttj")
 		if _, err := st.UpsertCandidateBoard(ctx, ids["candidate"], "greenhouse", "candidate"); err != nil {
 			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
 		}
-		page, err = st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, Search: "bare"})
+		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, Search: "bare"})
 		if err != nil || page.Total != 1 || page.AllCompanies != 4 || page.VerifiedBoardCompanies != 1 {
 			t.Fatalf("PageCompaniesForUser(search bare) = %+v, %v, want total 1, 1 of 4 verified", page, err)
 		}

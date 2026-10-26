@@ -55,6 +55,8 @@ type Store struct {
 	queries *sqlc.Queries
 	scoring ScoringWriter
 	log     *slog.Logger
+
+	coverage coverageCache
 }
 
 type Option func(*Store)
@@ -776,11 +778,10 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 			ReviewState: r.ReviewState, CheckIntervalMinutes: r.CheckIntervalMinutes, LastCheckedAt: r.LastCheckedAt,
 		})
 	}
-	coverage, err := s.queries.CountCompanyBoardCoverage(ctx)
+	page.AllCompanies, page.VerifiedBoardCompanies, err = s.coverage.get(ctx, s.queries)
 	if err != nil {
 		return dto.CompanyPage{}, fmt.Errorf("store.PageCompaniesForUser coverage: %w", err)
 	}
-	page.AllCompanies, page.VerifiedBoardCompanies = int(coverage.AllCompanies), int(coverage.VerifiedCompanies)
 	return page, nil
 }
 
