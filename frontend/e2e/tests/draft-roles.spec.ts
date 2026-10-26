@@ -21,6 +21,16 @@ test.describe("Roles drawer", () => {
 		await expect(rows.nth(1).getByRole("button")).toHaveText("2");
 	});
 
+	test("each role shows its line budget, or how far over it is", async ({
+		draftPage,
+	}) => {
+		const rows = draftPage.rolesDrawer.getByRole("option");
+		await expect(rows.nth(0).getByTestId("role-budget")).toHaveText("2 over");
+		await expect(rows.nth(1).getByTestId("role-budget")).toHaveText(
+			"2/3 lines",
+		);
+	});
+
 	test("1-9 moves a role's heading and bullets together and saves", async ({
 		page,
 		draftPage,

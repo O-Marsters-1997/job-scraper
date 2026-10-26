@@ -215,6 +215,9 @@ export function createDraftEditor(
 		void queryClient.invalidateQueries({
 			queryKey: keys.tailoring.draftInsights(id),
 		});
+		void queryClient.invalidateQueries({
+			queryKey: keys.tailoring.draftRoles(id),
+		});
 	};
 
 	const sendRoles = async () => {
@@ -275,6 +278,9 @@ export function createDraftEditor(
 		queryClient.setQueryData(keys.tailoring.draft(id), result);
 		void queryClient.invalidateQueries({
 			queryKey: keys.tailoring.draftInsights(id),
+		});
+		void queryClient.invalidateQueries({
+			queryKey: keys.tailoring.draftRoles(id),
 		});
 	};
 	const loop = createSaveLoop({

@@ -1,7 +1,8 @@
 import { Show } from "solid-js";
 import { Button } from "@/components/ui/button";
+import type { RoleBudgetValue } from "@/lib/tailoring";
 import type { Position } from "@/types/experience";
-import { Drawer, LineBudget } from "./Drawer";
+import { Drawer, LineBudget, RoleBudget } from "./Drawer";
 import { PickList, type PickListProps } from "./PickList";
 
 const HINT =
@@ -20,6 +21,7 @@ export function RolesDrawer(
 		positions: Position[];
 		usedLines: number;
 		budgetLines: number;
+		budgetOf: (positionId: string) => RoleBudgetValue | undefined;
 		onChooseAchievements: (positionId: string) => void;
 		onClose: () => void;
 	},
@@ -50,6 +52,9 @@ export function RolesDrawer(
 							<span class="block font-medium">
 								{p.title}, {p.employer}
 							</span>
+							<Show when={props.budgetOf(p.id)}>
+								{(b) => <RoleBudget budget={b()} />}
+							</Show>
 							<span class="block text-xs text-faint">
 								{p.achievements.length} Achievement
 								{p.achievements.length === 1 ? "" : "s"}

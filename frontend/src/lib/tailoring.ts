@@ -1,4 +1,4 @@
-import type { DraftFinding, DraftStatus } from "../types/tailoring";
+import type { DraftFinding, DraftRoles, DraftStatus } from "../types/tailoring";
 
 export function isSettled(status: DraftStatus): boolean {
 	return status === "ready" || status === "failed";
@@ -30,6 +30,17 @@ export function keptDraft<T extends { outcome: string | null }>(
 	drafts: T[],
 ): T | undefined {
 	return drafts.find((d) => d.outcome === "kept");
+}
+
+export type RoleBudgetValue = {
+	used: number;
+	budget: number;
+	over: number;
+};
+
+export function roleBudget(role: DraftRoles["roles"][number]): RoleBudgetValue {
+	const used = role.bullets.reduce((sum, b) => sum + b.lines, 0);
+	return { used, budget: role.budget, over: Math.max(0, used - role.budget) };
 }
 
 export function lineWithIds(current: string[], ids: string[]): string[] {
