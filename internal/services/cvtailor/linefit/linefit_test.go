@@ -62,6 +62,7 @@ func TestLines(t *testing.T) {
 			"Comic Sans MS": "Arial",
 			"DejaVu Serif":  "Times New Roman",
 			"Open Sans":     "Arial",
+			"Sans Serif":    "Arial",
 			"  arial ":      "Arial",
 		} {
 			if got, want := lines(font), lines(like); got != want {
