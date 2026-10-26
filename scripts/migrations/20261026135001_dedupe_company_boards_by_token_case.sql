@@ -21,6 +21,14 @@ FROM ranked l
 JOIN ranked w ON w.source = l.source AND w.token_key = l.token_key AND w.rank = 1
 WHERE l.rank > 1;
 
+DELETE FROM jobs lj
+USING board_merge m
+WHERE lj.primary_board_id = m.loser_id
+  AND EXISTS (
+      SELECT 1 FROM jobs s
+      WHERE s.primary_board_id = m.survivor_id AND s.provider_posting_id = lj.provider_posting_id
+  );
+
 UPDATE jobs SET primary_board_id = m.survivor_id
 FROM board_merge m
 WHERE jobs.primary_board_id = m.loser_id;
