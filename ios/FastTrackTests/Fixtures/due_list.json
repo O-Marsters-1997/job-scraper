@@ -1,0 +1,38 @@
+{
+  "jobs": [
+    {
+      "job_id": "job-1",
+      "title": "Senior Go Engineer",
+      "company_slug": "monzo",
+      "band": "great",
+      "score": 92,
+      "application_id": "app-1",
+      "chase_by": "2026-10-01",
+      "apply_task_id": "task-1",
+      "tasks": [
+        {
+          "id": "task-1",
+          "type_name": "Apply",
+          "notes": "Tailor the CV"
+        }
+      ],
+      "draft": {
+        "id": "draft-1",
+        "state": "ready",
+        "cv_title": "Backend"
+      }
+    },
+    {
+      "job_id": "job-2",
+      "title": "Backend Engineer",
+      "company_slug": "wise",
+      "band": "",
+      "score": null,
+      "application_id": "app-2",
+      "chase_by": null,
+      "apply_task_id": null,
+      "tasks": [],
+      "draft": null
+    }
+  ]
+}

@@ -40,6 +40,33 @@ struct DTODecodingTests {
         #expect(note.jobID == "job-1")
         #expect(note.body == "call back Friday")
     }
+
+    @Test func dueListDecodes() throws {
+        let list = try JSONDecoder.api.decode(DueList.self, from: fixture("due_list"))
+
+        let due = try #require(list.jobs.first)
+        #expect(due.id == "job-1")
+        #expect(due.band == .great)
+        #expect(due.score == 92)
+        #expect(due.applicationID == "app-1")
+        #expect(due.chaseBy?.dayString == "2026-10-01")
+        #expect(due.tasks.map(\.typeName) == ["Apply"])
+        #expect(due.draft?.state == .ready)
+        let bare = try #require(list.jobs.last)
+        #expect(bare.band == nil)
+        #expect(bare.score == nil)
+        #expect(bare.chaseBy == nil)
+        #expect(bare.draft == nil)
+    }
+
+    @Test func recruiterContactDecodes() throws {
+        let contact = try JSONDecoder.api.decode(RecruiterContact.self, from: fixture("recruiter_contact"))
+
+        #expect(contact.id == "contact-1")
+        #expect(contact.channel == .email)
+        #expect(contact.outcome == .noReply)
+        #expect(contact.contactedOn.dayString == "2026-10-01")
+    }
 }
 
 private final class BundleToken {}
