@@ -5,6 +5,7 @@ import Testing
 struct ApplicationModelTests {
     private final class Calls {
         var log: [String] = []
+        var kept = false
     }
 
     private let calls = Calls()
@@ -13,8 +14,11 @@ struct ApplicationModelTests {
     private func model(roles: DraftRoles = .sample, applyTaskID: String? = "apply-1") -> ApplicationModel {
         var client = APIClient.mock()
         let calls = calls
-        client.draftRoles = { _ in roles }
-        client.keepDraft = { calls.log.append("keep \($0)") }
+        client.draftRoles = { _ in DraftRoles(draftID: roles.draftID, kept: calls.kept, spills: roles.spills, roles: roles.roles) }
+        client.keepDraft = {
+            calls.log.append("keep \($0)")
+            calls.kept = true
+        }
         client.discardDraft = { calls.log.append("discard \($0)") }
         client.setTaskDone = { calls.log.append("setTaskDone \($0) \($1)") }
         client.createDraft = { job, cv in
@@ -74,6 +78,7 @@ struct ApplicationModelTests {
         await model.markApplied()
 
         #expect(calls.log == ["keep draft-1", "setTaskDone apply-1 true"])
+        #expect(model.kept)
         #expect(model.exit == .applied)
     }
 
@@ -110,6 +115,8 @@ struct ApplicationModelTests {
         client.keepDraft = { _ in throw URLError(.notConnectedToInternet) }
         let job = DueJob.sample
         let model = ApplicationModel(client: client, job: job, draft: draft)
+        await model.load()
+        #expect(model.canKeep)
 
         await model.keep()
 

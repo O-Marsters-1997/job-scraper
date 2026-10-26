@@ -41,7 +41,7 @@ struct ApplyOnListingSheet: View {
                 Button("Yes, applied") {
                     Task {
                         await model.markApplied()
-                        dismiss()
+                        if model.exit != nil { dismiss() }
                     }
                 }
                 Button("Not yet", role: .cancel) { openedListing = false }

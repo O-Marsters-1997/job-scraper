@@ -22,7 +22,7 @@ struct FinishAtDeskSheet: View {
                     Button("Add task") {
                         Task {
                             await model.finishAtDesk(note: note)
-                            dismiss()
+                            if model.exit != nil { dismiss() }
                         }
                     }
                 }
