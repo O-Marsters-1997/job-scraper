@@ -16,6 +16,7 @@ import (
 var update = flag.Bool("update", false, "rewrite the iOS fixtures under ios/FastTrackTests/Fixtures")
 
 func TestIOSFixtures(t *testing.T) {
+	t.Parallel()
 	score := 92
 	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 
@@ -41,6 +42,7 @@ func TestIOSFixtures(t *testing.T) {
 
 	for name, v := range fixtures {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			path := filepath.Join("..", "..", "ios", "FastTrackTests", "Fixtures", name+".json")
 			got, err := json.MarshalIndent(v, "", "  ")
 			if err != nil {
@@ -49,7 +51,7 @@ func TestIOSFixtures(t *testing.T) {
 			got = append(got, '\n')
 
 			if *update {
-				if err := os.WriteFile(path, got, 0o644); err != nil {
+				if err := os.WriteFile(path, got, 0o600); err != nil {
 					t.Fatalf("write %s: %v", path, err)
 				}
 				return
