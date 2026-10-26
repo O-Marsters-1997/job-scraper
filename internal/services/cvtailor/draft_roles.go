@@ -1,6 +1,7 @@
 package cvtailor
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,15 +12,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/linefit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/tabcopy"
 )
 
-const (
-	pageCountCheck = "page_count"
-	blockSeverity  = "block"
-)
+const pageCountCheck = "page_count"
 
 type pageGeometry struct {
 	page     dto.LayoutPage
@@ -48,6 +47,9 @@ func (s *Service) DraftRoles(ctx context.Context, userID string, q dto.DraftQuer
 	}
 	if len(draft.EditSet) == 0 {
 		return dto.DraftRoles{}, apperr.Conflict("this draft has no edits yet")
+	}
+	if outcome(draft) == dto.OutcomeDiscarded {
+		return dto.DraftRoles{}, apperr.Conflict("this draft was discarded")
 	}
 	var edits cvedit.EditSet
 	if err := json.Unmarshal(draft.EditSet, &edits); err != nil {
@@ -107,7 +109,7 @@ func (s *Service) DraftRoles(ctx context.Context, userID string, q dto.DraftQuer
 		DraftID: draft.ID,
 		Kept:    outcome(draft) == dto.OutcomeKept,
 		Spills: slices.ContainsFunc(draft.Findings, func(f dto.DraftFinding) bool {
-			return f.Check == pageCountCheck && f.Severity == blockSeverity
+			return f.Check == pageCountCheck && f.Severity == string(checks.Block)
 		}),
 		Roles: []dto.DraftRole{},
 	}
@@ -201,15 +203,7 @@ func (s *Service) fillBank(ctx context.Context, userID, jobID string, roles []dt
 				OnSource: sourceTexts[*r.PositionID][normalizeText(a.Text)],
 			})
 		}
-		slices.SortStableFunc(r.Bank, func(x, y dto.RoleBullet) int {
-			switch {
-			case *x.Lean > *y.Lean:
-				return -1
-			case *x.Lean < *y.Lean:
-				return 1
-			}
-			return 0
-		})
+		slices.SortStableFunc(r.Bank, func(x, y dto.RoleBullet) int { return cmp.Compare(*y.Lean, *x.Lean) })
 	}
 	return nil
 }
