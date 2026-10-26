@@ -27,18 +27,19 @@ export function LineBudget(props: { used: number; budget: number }) {
 }
 
 export function RoleBudget(props: { budget: RoleBudgetValue }) {
+	const over = () => props.budget.over > 0;
 	return (
 		<span
 			data-testid="role-budget"
 			class={cn(
 				"inline-flex items-center gap-1.5 font-mono text-xs tabular-nums",
-				props.budget.over > 0 ? "text-destructive-strong" : "text-muted",
+				over() ? "text-destructive-strong" : "text-muted",
 			)}
 		>
-			<Show when={props.budget.over > 0}>
+			<Show when={over()}>
 				<span aria-hidden="true" class="size-1.5 rounded-full bg-destructive" />
 			</Show>
-			{props.budget.over > 0
+			{over()
 				? `${props.budget.over} over`
 				: `${props.budget.used}/${props.budget.budget} lines`}
 		</span>

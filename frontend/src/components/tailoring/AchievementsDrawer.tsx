@@ -31,10 +31,12 @@ export function AchievementsDrawer(
 			onClose={props.onClose}
 		>
 			<div class="flex items-center justify-between border-b border-border px-5 py-2">
-				<LineBudget used={props.usedLines} budget={props.budgetLines} />
-				<Show when={props.roleBudget}>
-					{(b) => <RoleBudget budget={b()} />}
-				</Show>
+				<div class="flex items-center gap-4">
+					<LineBudget used={props.usedLines} budget={props.budgetLines} />
+					<Show when={props.roleBudget}>
+						{(b) => <RoleBudget budget={b()} />}
+					</Show>
+				</div>
 				<Button variant="ghost" size="sm" onClick={() => props.onClear()}>
 					Clear and re-pick
 				</Button>
