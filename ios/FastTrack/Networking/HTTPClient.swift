@@ -16,6 +16,10 @@ struct HTTPClient {
         _ = try await send(try request("POST", path, body: body))
     }
 
+    func put<T: Decodable>(_ path: String, body: some Encodable) async throws -> T {
+        try JSONDecoder.api.decode(T.self, from: await send(try request("PUT", path, body: body)))
+    }
+
     func put(_ path: String, body: some Encodable) async throws {
         _ = try await send(try request("PUT", path, body: body))
     }

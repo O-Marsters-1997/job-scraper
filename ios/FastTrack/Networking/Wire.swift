@@ -46,3 +46,28 @@ struct SeenInput: Encodable {
 struct JobPage: Decodable {
     let items: [Job]
 }
+
+struct CompanyExclusion: Decodable {
+    let name: String
+    let added: Bool
+}
+
+struct JobNote: Decodable {
+    let jobID: String
+    let body: String
+
+    enum CodingKeys: String, CodingKey {
+        case jobID = "JobID"
+        case body = "Body"
+    }
+}
+
+struct EmptyBody: Encodable {}
+
+struct UnexcludeInput: Encodable {
+    let removeName: Bool
+}
+
+struct NoteInput: Encodable {
+    let body: String
+}

@@ -22,9 +22,35 @@ struct TriageModelTests {
         client.clearGrade = { calls.log.append("clearGrade \($0)") }
         client.setSeen = { ids, seen in calls.log.append("setSeen \(ids) \(seen)") }
         client.recordEvent = { calls.log.append("event \($0.type.rawValue) undone=\($0.undone)") }
+        client.excludeCompany = { calls.log.append("exclude \($0)"); return CompanyExclusion(name: "Monzo", added: true) }
+        client.unexcludeCompany = { id, remove in calls.log.append("unexclude \(id) \(remove)") }
+        client.note = { JobNote(jobID: $0, body: "old") }
+        client.putNote = { id, body in calls.log.append("putNote \(id) \(body)") }
         let model = TriageModel(client: client)
         await model.load()
         return model
+    }
+
+    @Test func excludeDropsTheCompanysJobsAndUndoRestoresThem() async {
+        let model = await model()
+
+        await model.decide(.excludeCompany).value
+        #expect(model.current == nil)
+        await model.undo().value
+
+        #expect(calls.log == ["exclude company-monzo", "unexclude company-monzo true"])
+        #expect(model.queue.map(\.id) == ["a", "b"])
+    }
+
+    @Test func noteKeepsTheCardAndUndoPutsThePreviousBodyBack() async {
+        let model = await model()
+
+        await model.decide(.note("new")).value
+        #expect(model.current?.id == "a")
+        await model.undo().value
+
+        #expect(calls.log == ["putNote a new", "putNote a old"])
+        #expect(model.queue.map(\.id) == ["a", "b"])
     }
 
     @Test func shortlistThenUndoDeletesTheApplication() async throws {
