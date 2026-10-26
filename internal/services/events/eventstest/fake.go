@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/ollymarsters/job-scraper/internal/client"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -24,13 +25,14 @@ type FakeStore struct {
 
 func NewFakeStore() *FakeStore { return &FakeStore{} }
 
-func (f *FakeStore) InsertEvent(_ context.Context, _ pgx.Tx, userID, eventType, subjectID string, props []byte) error {
+func (f *FakeStore) InsertEvent(_ context.Context, _ pgx.Tx, userID, eventType, subjectID string, c client.Kind, props []byte) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.rows = append(f.rows, row{userID: userID, event: dto.Event{
 		ID:        fmt.Sprintf("event-%d", len(f.rows)+1),
 		Type:      eventType,
 		SubjectID: subjectID,
+		Client:    string(c),
 		Props:     props,
 		CreatedAt: time.Now(),
 	}})

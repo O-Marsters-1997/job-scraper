@@ -12,14 +12,15 @@ import (
 )
 
 const insertEvent = `-- name: InsertEvent :exec
-INSERT INTO events (user_id, type, subject_id, props)
-VALUES ($1, $2, $3, $4)
+INSERT INTO events (user_id, type, subject_id, client, props)
+VALUES ($1, $2, $3, $4, $5)
 `
 
 type InsertEventParams struct {
 	UserID    pgtype.UUID
 	Type      EventType
 	SubjectID pgtype.UUID
+	Client    string
 	Props     []byte
 }
 
@@ -28,13 +29,14 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error 
 		arg.UserID,
 		arg.Type,
 		arg.SubjectID,
+		arg.Client,
 		arg.Props,
 	)
 	return err
 }
 
 const listEventsByUser = `-- name: ListEventsByUser :many
-SELECT id, type, subject_id, props, created_at
+SELECT id, type, subject_id, client, props, created_at
 FROM events
 WHERE user_id = $1
   AND ($2::event_type IS NULL OR type = $2)
@@ -50,6 +52,7 @@ type ListEventsByUserRow struct {
 	ID        pgtype.UUID
 	Type      EventType
 	SubjectID pgtype.UUID
+	Client    string
 	Props     []byte
 	CreatedAt pgtype.Timestamptz
 }
@@ -67,6 +70,7 @@ func (q *Queries) ListEventsByUser(ctx context.Context, arg ListEventsByUserPara
 			&i.ID,
 			&i.Type,
 			&i.SubjectID,
+			&i.Client,
 			&i.Props,
 			&i.CreatedAt,
 		); err != nil {
