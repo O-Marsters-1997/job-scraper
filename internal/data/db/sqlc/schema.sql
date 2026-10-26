@@ -283,7 +283,7 @@ CREATE TABLE effect_outbox (
 CREATE UNIQUE INDEX effect_outbox_pending_idx ON effect_outbox (job_id, fingerprint, model)
     WHERE status IN ('pending', 'running');
 CREATE INDEX job_scores_user_job_idx ON job_scores (user_id, job_id);
-CREATE INDEX job_scores_user_best_idx ON job_scores (user_id, suitability_score DESC) WHERE NOT blocked;
+CREATE INDEX job_scores_user_best_idx ON job_scores (user_id, suitability_score DESC NULLS LAST) WHERE NOT blocked;
 
 CREATE TABLE job_rejections (
     user_id               UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
