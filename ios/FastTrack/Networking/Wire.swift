@@ -175,6 +175,12 @@ struct DraftInput: Encodable {
     }
 }
 
+struct CoverLetter: Decodable, Identifiable {
+    let id: String
+    let createdAt: Date
+    let doneAt: Date?
+}
+
 extension Date {
     static var dayFormat: Date.ISO8601FormatStyle {
         Date.ISO8601FormatStyle(timeZone: .current).year().month().day()
