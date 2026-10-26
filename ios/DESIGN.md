@@ -478,4 +478,4 @@ This extends PRODUCT.md's AA baseline:
   leaves white space under the three breakdown rows.
 - The Due card header colours the Band word (caption semibold in the Band hue), which breaks The Dot, Not
   the Word Rule for Fair. Either make it a dot-label too, or accept it because the score sits beside it.
-- Not yet verified: dark mode on the login, and large Dynamic Type sizes across the app.
+- Not yet verified: large Dynamic Type sizes across the app (the login was checked at AX3 and in dark).
