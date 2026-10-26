@@ -50,6 +50,22 @@ final class ApplicationModel {
         }
     }
 
+    func replace(_ old: DraftRoles.Bullet, with new: DraftRoles.Bullet, in role: DraftRoles.Role) async {
+        await save(role, role.replacing(old, with: new))
+    }
+
+    func add(_ new: DraftRoles.Bullet, to role: DraftRoles.Role) async {
+        await save(role, role.adding(new))
+    }
+
+    func remove(_ old: DraftRoles.Bullet, from role: DraftRoles.Role) async {
+        await save(role, role.removing(old))
+    }
+
+    func move(_ bullet: DraftRoles.Bullet, by offset: Int, in role: DraftRoles.Role) async {
+        await save(role, role.moving(bullet, by: offset))
+    }
+
     func markApplied() async {
         guard let taskID = job.applyTaskID else { return fail("This application has no apply task.") }
         await attempt {
@@ -80,6 +96,16 @@ final class ApplicationModel {
             }
             try await client.createTask(type.id, job.id, note)
             exit = .atDesk
+        }
+    }
+
+    private func save(_ role: DraftRoles.Role, _ bullets: [DraftRoles.Bullet]) async {
+        guard let positionID = role.positionID else { return }
+        guard !bullets.isEmpty else { return fail("A role needs at least one bullet.") }
+        let edits = bullets.map { DraftBulletEdit(text: $0.text, achievementIDs: $0.achievementID.map { [$0] } ?? []) }
+        await attempt {
+            try await client.saveRole(draft.id, positionID, edits)
+            roles = .loaded(try await client.draftRoles(draft.id))
         }
     }
 
