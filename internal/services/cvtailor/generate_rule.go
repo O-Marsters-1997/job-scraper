@@ -1,18 +1,36 @@
 package cvtailor
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"slices"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/linefit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/tabcopy"
 )
 
+const AppendSlot = -1
+
+const maxFreeLines = 1
+
 type Replacement struct {
-	PositionID    string
-	SlotIndex     int
-	AchievementID string
+	PositionID     string
+	SlotIndex      int
+	AchievementIDs []string
+}
+
+type RuleInput struct {
+	Positions []dto.Position
+	Content   dto.DraftContent
+	Answers   map[string]dto.Answer
+	Lines     func(positionID, text string) int
 }
 
 type ReplacementRule interface {
-	Replacements(positions []dto.Position, content dto.DraftContent, answers map[string]dto.Answer) []Replacement
+	Replacements(in RuleInput) []Replacement
 }
 
 func buildsFromSource(mode dto.DraftMode, achievementIDs []string) bool {
@@ -23,11 +41,11 @@ type leanRule struct{}
 
 var _ ReplacementRule = leanRule{}
 
-func (leanRule) Replacements(positions []dto.Position, content dto.DraftContent, answers map[string]dto.Answer) []Replacement {
-	byPosition := make(map[string]dto.Position, len(positions))
+func (leanRule) Replacements(in RuleInput) []Replacement {
+	byPosition := make(map[string]dto.Position, len(in.Positions))
 	byText := map[string]dto.Achievement{}
 	byID := map[string]dto.Achievement{}
-	for _, p := range positions {
+	for _, p := range in.Positions {
 		byPosition[p.ID] = p
 		for _, a := range p.Achievements {
 			byText[normalizeText(a.Text)] = a
@@ -35,7 +53,7 @@ func (leanRule) Replacements(positions []dto.Position, content dto.DraftContent,
 		}
 	}
 	leanOf := func(a dto.Achievement) (float64, bool) {
-		ans, ok := answers[achievementQuestion(a.Text)]
+		ans, ok := in.Answers[achievementQuestion(a.Text)]
 		return ans.PYes - ans.PNo, ok
 	}
 	linked := func(b dto.DraftBullet) (dto.Achievement, bool) {
@@ -49,7 +67,7 @@ func (leanRule) Replacements(positions []dto.Position, content dto.DraftContent,
 	}
 
 	used := map[string]bool{}
-	for _, cp := range content.Positions {
+	for _, cp := range in.Content.Positions {
 		for _, b := range cp.Bullets {
 			if a, ok := linked(b); ok {
 				used[a.ID] = true
@@ -58,7 +76,7 @@ func (leanRule) Replacements(positions []dto.Position, content dto.DraftContent,
 	}
 
 	var out []Replacement
-	for _, cp := range content.Positions {
+	for _, cp := range in.Content.Positions {
 		bank, ok := byPosition[cp.PositionID]
 		if !ok {
 			continue
@@ -72,23 +90,85 @@ func (leanRule) Replacements(positions []dto.Position, content dto.DraftContent,
 			if !ok || lean > lowFitLean {
 				continue
 			}
-			best, bestLean := "", lean
+			var pool []dto.Achievement
 			for _, c := range bank.Achievements {
-				if used[c.ID] {
-					continue
-				}
-				if l, ok := leanOf(c); ok && l > bestLean {
-					best, bestLean = c.ID, l
+				if l, ok := leanOf(c); ok && !used[c.ID] && l > lean {
+					pool = append(pool, c)
 				}
 			}
-			if best == "" {
+			slices.SortStableFunc(pool, func(x, y dto.Achievement) int {
+				lx, _ := leanOf(x)
+				ly, _ := leanOf(y)
+				switch {
+				case lx > ly:
+					return -1
+				case lx < ly:
+					return 1
+				}
+				return 0
+			})
+			free := in.Lines(cp.PositionID, b.Text)
+			var ids []string
+			for _, c := range pool {
+				if n := in.Lines(cp.PositionID, c.Text); n <= free {
+					ids = append(ids, c.ID)
+					free -= n
+				}
+			}
+			if len(ids) == 0 || free > maxFreeLines {
 				continue
 			}
-			used[best] = true
-			out = append(out, Replacement{PositionID: cp.PositionID, SlotIndex: i, AchievementID: best})
+			for _, id := range ids {
+				used[id] = true
+			}
+			out = append(out, Replacement{PositionID: cp.PositionID, SlotIndex: i, AchievementIDs: ids})
 		}
 	}
 	return out
+}
+
+func sourceLines(raw json.RawMessage, pl plan) (func(positionID, text string) int, error) {
+	doc, err := tabcopy.Layout(raw)
+	if errors.Is(err, tabcopy.ErrUnsupported) {
+		return func(string, string) int { return 1 }, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lay out CV tab: %w", err)
+	}
+	blockAt := make(map[int]tabcopy.Block, len(doc.Blocks))
+	for _, b := range doc.Blocks {
+		blockAt[b.StartIndex] = b
+	}
+	startOf := make(map[string]int, len(pl.structure.Slots))
+	for _, slot := range pl.structure.Slots {
+		startOf[slot.ID] = slot.StartIndex
+	}
+	type measure struct {
+		style linefit.Style
+		width float64
+	}
+	byPosition := map[string]measure{}
+	for _, p := range pl.positions {
+		if len(p.slotIDs) == 0 {
+			continue
+		}
+		b, ok := blockAt[startOf[p.slotIDs[0]]]
+		if !ok || len(b.Runs) == 0 {
+			continue
+		}
+		r := b.Runs[0]
+		byPosition[p.ID] = measure{
+			style: linefit.Style{Font: r.Font, Size: r.Size, Bold: r.Bold, Italic: r.Italic},
+			width: linefit.Width(doc.Page, b.LayoutBlock),
+		}
+	}
+	return func(positionID, text string) int {
+		m, ok := byPosition[positionID]
+		if !ok {
+			return 1
+		}
+		return linefit.Lines(text, m.style, m.width)
+	}, nil
 }
 
 func (pl plan) withReplacements(positions []dto.Position, reps []Replacement) cvedit.EditSet {
@@ -104,11 +184,37 @@ func (pl plan) withReplacements(positions []dto.Position, reps []Replacement) cv
 		index[p.ID] = i
 	}
 	for _, r := range reps {
-		i := index[r.PositionID]
-		text := texts[r.AchievementID]
-		pl.positions[i].texts[r.AchievementID] = text
-		edits.Positions[i].Bullets[r.SlotIndex] = cvedit.Bullet{
-			SlotID: pl.positions[i].slotIDs[r.SlotIndex], Text: text, AchievementIDs: []string{r.AchievementID},
+		i, ok := index[r.PositionID]
+		if !ok || len(r.AchievementIDs) == 0 {
+			continue
+		}
+		pe := &edits.Positions[i]
+		ids := r.AchievementIDs
+		after := ""
+		if r.SlotIndex == AppendSlot {
+			if n := len(pe.Bullets); n > 0 {
+				after = pe.Bullets[n-1].SlotID
+			}
+			follows := func(a cvedit.AddedBullet) bool { return a.After == after }
+			for at := slices.IndexFunc(pe.Added, follows); at >= 0; at = slices.IndexFunc(pe.Added, follows) {
+				after = pe.Added[at].SlotID
+			}
+		} else {
+			text := texts[ids[0]]
+			pl.positions[i].texts[ids[0]] = text
+			slotID := pl.positions[i].slotIDs[r.SlotIndex]
+			pe.Bullets[r.SlotIndex] = cvedit.Bullet{SlotID: slotID, Text: text, AchievementIDs: []string{ids[0]}}
+			after, ids = slotID, ids[1:]
+		}
+		for _, id := range ids {
+			text := texts[id]
+			pl.positions[i].texts[id] = text
+			added := cvedit.AddedBullet{
+				SlotID: fmt.Sprintf("%s%s-%d", addedSlotPrefix, r.PositionID, len(pe.Added)),
+				After:  after, Text: text, AchievementIDs: []string{id},
+			}
+			pe.Added = append(pe.Added, added)
+			after = added.SlotID
 		}
 	}
 	return edits
