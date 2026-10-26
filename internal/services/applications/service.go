@@ -19,6 +19,7 @@ type Store interface {
 	ClearChase(ctx context.Context, userID, id string) error
 	DeleteApplication(ctx context.Context, userID, id string) error
 	GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error)
+	ListDue(ctx context.Context, userID string) (dto.DueList, error)
 
 	CreateApplicationStatus(ctx context.Context, userID, name, colour string, replyWindowDays *int, countsAsReply bool) (dto.ApplicationStatus, error)
 	UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string, replyWindowDays *int, countsAsReply bool) (dto.ApplicationStatus, error)
