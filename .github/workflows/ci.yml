@@ -215,6 +215,6 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Decode dto fixtures
+      - name: Test iOS models against dto fixtures
         working-directory: ios
         run: xcodebuild test -scheme FastTrack -destination 'platform=iOS Simulator,name=iPhone 17'
