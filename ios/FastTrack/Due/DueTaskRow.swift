@@ -1,3 +1,4 @@
+import QuickLook
 import SwiftUI
 
 struct DueTaskRow: View {
@@ -7,6 +8,7 @@ struct DueTaskRow: View {
     let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
     @State private var struck = false
+    @State private var previewURL: URL?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -31,6 +33,7 @@ struct DueTaskRow: View {
         }
         .padding(.leading, 1)
         .padding(.trailing, 14)
+        .quickLookPreview($previewURL)
     }
 
     private var title: String {
@@ -77,26 +80,42 @@ struct DueTaskRow: View {
             case .pending:
                 ProgressView().controlSize(.small).accessibilityLabel("Drafting")
             case .failed:
-                Image(systemName: "exclamationmark.triangle").font(.caption).foregroundStyle(.red).accessibilityHidden(true)
+                Button { Task { await model.retryDraft(job) } } label: {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .strokeBorder(.red, lineWidth: 1.5)
+                        .overlay { Image(systemName: "arrow.clockwise").font(.caption2.weight(.bold)).foregroundStyle(.red) }
+                        .frame(width: 18, height: 18)
+                        .frame(width: 44, height: 44)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Retry draft")
             case .ready:
-                Image(systemName: "doc.text").font(.caption).foregroundStyle(Color.brandTint).accessibilityHidden(true)
+                if job.applyTaskID != nil {
+                    checkbox.accessibilityLabel("Mark applied")
+                } else {
+                    Image(systemName: "doc.text").font(.caption).foregroundStyle(Color.brandTint).accessibilityHidden(true)
+                }
             }
         case .chase, .task:
-            Button(action: complete) {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .strokeBorder(struck ? Color.brandTint : Color(.tertiaryLabel), lineWidth: 1.5)
-                    .background(struck ? Color.brandTint : .clear, in: .rect(cornerRadius: 5, style: .continuous))
-                    .overlay {
-                        if struck { Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundStyle(.white) }
-                    }
-                    .frame(width: 18, height: 18)
-                    .frame(width: 44, height: 44)
-                    .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .sensoryFeedback(.success, trigger: struck) { _, new in new }
-            .accessibilityLabel("Complete: \(title)")
+            checkbox.accessibilityLabel("Complete: \(title)")
         }
+    }
+
+    private var checkbox: some View {
+        Button(action: complete) {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .strokeBorder(struck ? Color.brandTint : Color(.tertiaryLabel), lineWidth: 1.5)
+                .background(struck ? Color.brandTint : .clear, in: .rect(cornerRadius: 5, style: .continuous))
+                .overlay {
+                    if struck { Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundStyle(.white) }
+                }
+                .frame(width: 18, height: 18)
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.success, trigger: struck) { _, new in new }
     }
 
     @ViewBuilder
@@ -112,8 +131,16 @@ struct DueTaskRow: View {
             Button("Log contact", systemImage: "person.badge.plus") { logContact(job) }
         case .task:
             Button("Mark done", systemImage: "checkmark", action: complete)
-        case .draft:
-            EmptyView()
+        case .draft(let draft):
+            switch draft.state {
+            case .ready:
+                Button("View PDF", systemImage: "doc.richtext") { Task { previewURL = await model.pdf(draft) } }
+                if job.applyTaskID != nil { Button("Mark applied", systemImage: "checkmark", action: complete) }
+            case .failed:
+                Button("Retry draft", systemImage: "arrow.clockwise") { Task { await model.retryDraft(job) } }
+            case .pending:
+                EmptyView()
+            }
         }
         Divider()
         Button("Open job", systemImage: "arrow.up.right") { openJob(job) }
@@ -128,7 +155,7 @@ struct DueTaskRow: View {
                 switch row {
                 case .chase: _ = model.completeChase(job)
                 case .task(let task): _ = model.complete(task, in: job)
-                case .draft: break
+                case .draft: _ = model.markApplied(job)
                 }
             }
             struck = false
