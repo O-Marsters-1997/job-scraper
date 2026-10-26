@@ -78,10 +78,30 @@ final class TriageModel {
         if banner?.id == id { banner = nil }
     }
 
+    @discardableResult
+    func draftCV(_ decision: TriageDecision) -> Task<Void, Never> {
+        banner = nil
+        return Task { await startDraft(for: decision.job) }
+    }
+
+    private func startDraft(for job: Job) async {
+        do {
+            guard let cv = try await client.cvTemplates().first(where: \.isDefault) else {
+                fail("There's no default CV, so the job was shortlisted without a draft.")
+                return
+            }
+            _ = try await client.createDraft(job.id, cv)
+        } catch {
+            fail("The job was shortlisted, but the CV draft didn't start: \(error.localizedDescription)")
+        }
+    }
+
     private func perform(_ action: TriageAction, on job: Job) async throws -> UndoReceipt? {
         switch action {
-        case .shortlist:
-            return .application(id: try await client.shortlist(job.id).id)
+        case .shortlist(let draftCV):
+            let id = try await client.shortlist(job.id).id
+            if draftCV { await startDraft(for: job) }
+            return .application(id: id)
         case .dismiss(let reasons):
             try await client.dismiss(job.id, reasons)
             try? await client.recordEvent(EventInput(type: .jobDismissed, subjectID: job.id, reason: "", undone: false))
@@ -124,7 +144,11 @@ final class TriageModel {
     }
 
     private func fail(_ error: any Error) {
-        failureMessage = error.localizedDescription
+        fail(error.localizedDescription)
+    }
+
+    private func fail(_ message: String) {
+        failureMessage = message
         hasFailure = true
     }
 }

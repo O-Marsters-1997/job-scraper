@@ -8,6 +8,10 @@ struct HTTPClient {
         try JSONDecoder.api.decode(T.self, from: await send(URLRequest(url: baseURL.appending(path: path).appending(queryItems: query))))
     }
 
+    func data(_ path: String) async throws -> Data {
+        try await send(URLRequest(url: baseURL.appending(path: path)))
+    }
+
     func post<T: Decodable>(_ path: String, body: some Encodable) async throws -> T {
         try JSONDecoder.api.decode(T.self, from: await send(try request("POST", path, body: body)))
     }

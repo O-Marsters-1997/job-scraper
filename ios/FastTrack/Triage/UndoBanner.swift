@@ -4,6 +4,7 @@ struct UndoBanner: View {
     let decision: TriageDecision?
     let onUndo: () -> Void
     let onExpire: (UUID) -> Void
+    let onDraftCV: (TriageDecision) -> Void
 
     var body: some View {
         if let decision {
@@ -13,6 +14,11 @@ struct UndoBanner: View {
                     Text(decision.job.title).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
+                if decision.action == .shortlist(draftCV: false) {
+                    Button("Draft CV") { onDraftCV(decision) }
+                        .font(.footnote.weight(.semibold))
+                        .frame(minHeight: 44)
+                }
                 Button("Undo", action: onUndo)
                     .font(.footnote.weight(.semibold))
                     .frame(minHeight: 44)
@@ -31,7 +37,7 @@ struct UndoBanner: View {
 
     private func verb(_ action: TriageAction) -> String {
         switch action {
-        case .shortlist: "Shortlisted"
+        case .shortlist(let draftCV): draftCV ? "Shortlisted, drafting CV" : "Shortlisted"
         case .dismiss: "Dismissed"
         case .skip: "Skipped"
         case .excludeCompany: "Excluded company"

@@ -1,7 +1,7 @@
 import Foundation
 
 enum TriageAction: Hashable {
-    case shortlist
+    case shortlist(draftCV: Bool)
     case dismiss(reasons: [GradeReason])
     case skip
     case excludeCompany

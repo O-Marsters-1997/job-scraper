@@ -5,6 +5,7 @@ struct TriageModelTests {
     private final class Calls {
         var log: [String] = []
         var failShortlist = false
+        var noDefaultCV = false
     }
 
     private let calls = Calls()
@@ -26,6 +27,13 @@ struct TriageModelTests {
         client.unexcludeCompany = { id, remove in calls.log.append("unexclude \(id) \(remove)") }
         client.note = { JobNote(jobID: $0, body: "old") }
         client.putNote = { id, body in calls.log.append("putNote \(id) \(body)") }
+        client.cvTemplates = {
+            [CVTemplate(docID: "d", tabID: "t", title: "Backend", isDefault: !calls.noDefaultCV)]
+        }
+        client.createDraft = { id, cv in
+            calls.log.append("createDraft \(id) \(cv.title)")
+            return DraftRef(id: "draft-\(id)")
+        }
         let model = TriageModel(client: client)
         await model.load()
         return model
@@ -56,12 +64,52 @@ struct TriageModelTests {
     @Test func shortlistThenUndoDeletesTheApplication() async throws {
         let model = await model()
 
-        await model.decide(.shortlist).value
+        await model.decide(.shortlist(draftCV: false)).value
         #expect(model.current?.id == "b")
         await model.undo().value
 
         #expect(calls.log == ["shortlist a", "deleteApplication app-a"])
         #expect(model.current?.id == "a")
+    }
+
+    @Test func shortlistAndDraftStartsADraftFromTheDefaultCV() async {
+        let model = await model()
+
+        await model.decide(.shortlist(draftCV: true)).value
+
+        #expect(calls.log == ["shortlist a", "createDraft a Backend"])
+        #expect(!model.hasFailure)
+    }
+
+    @Test func plainShortlistNeverDrafts() async {
+        let model = await model()
+
+        await model.decide(.shortlist(draftCV: false)).value
+
+        #expect(calls.log == ["shortlist a"])
+    }
+
+    @Test func shortlistAndDraftWithoutADefaultCVShortlistsAndSaysSo() async {
+        let model = await model()
+        calls.noDefaultCV = true
+
+        await model.decide(.shortlist(draftCV: true)).value
+
+        #expect(calls.log == ["shortlist a"])
+        #expect(model.undoStack.count == 1)
+        #expect(model.hasFailure)
+        #expect(model.failureMessage.contains("default CV"))
+    }
+
+    @Test func draftCVFromTheBannerStartsADraft() async throws {
+        let model = await model()
+        await model.decide(.shortlist(draftCV: false)).value
+        let decision = try #require(model.banner)
+
+        await model.draftCV(decision).value
+
+        #expect(calls.log == ["shortlist a", "createDraft a Backend"])
+        #expect(model.banner == nil)
     }
 
     @Test func dismissPostsEventAndUndoClearsGrade() async {
@@ -89,7 +137,7 @@ struct TriageModelTests {
     @Test func undoWalksBackNewestFirst() async {
         let model = await model()
 
-        await model.decide(.shortlist).value
+        await model.decide(.shortlist(draftCV: false)).value
         await model.decide(.skip).value
         await model.undo().value
 
@@ -102,7 +150,7 @@ struct TriageModelTests {
         let model = await model()
         calls.failShortlist = true
 
-        await model.decide(.shortlist).value
+        await model.decide(.shortlist(draftCV: false)).value
 
         #expect(model.current?.id == "a")
         #expect(model.undoStack.isEmpty)
