@@ -47,6 +47,9 @@ func (s *Service) IngestJobs(ctx context.Context, jobs []dto.Job) ([]IngestResul
 			results[idx] = IngestResult{Status: "rejected", Reason: "invalid job identity"}
 			continue
 		}
+		if companyID := s.upsertCompany(ctx, job); job.CompanyID == "" {
+			job.CompanyID = companyID
+		}
 		saved, status, err := s.store.SaveCanonical(ctx, job)
 		if err != nil {
 			if errors.Is(err, store.ErrCanonicalConflict) {
@@ -59,7 +62,6 @@ func (s *Service) IngestJobs(ctx context.Context, jobs []dto.Job) ([]IngestResul
 		if status == "unchanged" || status == "merged" {
 			continue
 		}
-		s.upsertCompany(ctx, saved)
 		s.discoverBoard(ctx, job, discovered)
 	}
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
@@ -108,16 +110,19 @@ func countByStatus(results []IngestResult) map[string]int {
 	return counts
 }
 
-func (s *Service) upsertCompany(ctx context.Context, j dto.Job) {
+func (s *Service) upsertCompany(ctx context.Context, j dto.Job) string {
 	if j.CompanySlug == "" {
-		return
+		return ""
 	}
 	upsert := dto.CompanyUpsert{Slug: j.CompanySlug, Name: slug.Humanize(j.CompanySlug)}
 	if role, _ := sourcespec.SourceRole(j.Source); role == sourcespec.RoleATS {
 		upsert.ATSSource, upsert.ATSToken, upsert.Kind = j.Source, j.CompanySlug, dto.KindDirect
 	}
-	if _, err := s.store.UpsertCompany(ctx, upsert); err != nil {
+	company, err := s.store.UpsertCompany(ctx, upsert)
+	if err != nil {
 		slog.WarnContext(ctx, "ingest: could not upsert company",
 			slog.String(logger.KeyCompanySlug, j.CompanySlug), slog.Any(logger.KeyErr, err))
+		return ""
 	}
+	return company.ID
 }
