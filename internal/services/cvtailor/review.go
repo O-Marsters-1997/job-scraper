@@ -140,6 +140,7 @@ func (s *Service) DiscardDraft(ctx context.Context, userID string, q dto.DraftQu
 
 // DraftPDF streams Google's PDF export of the Draft's Doc. The caller must
 // close the body.
+// By Tab: Google's whole-Doc export drops heading styles, https://github.com/O-Marsters-1997/job-scraper/pull/1434
 func (s *Service) DraftPDF(ctx context.Context, userID string, q dto.DraftQuery) (io.ReadCloser, error) {
 	draft, err := s.store.GetDraft(ctx, userID, q.ID)
 	if err != nil {
@@ -148,7 +149,7 @@ func (s *Service) DraftPDF(ctx context.Context, userID string, q dto.DraftQuery)
 	if (draft.Status != statusReady && draft.Status != statusKeeping) || draft.DraftDocID == "" {
 		return nil, apperr.NotFound("draft has no document")
 	}
-	body, err := s.drive.ExportPDF(ctx, userID, draft.DraftDocID, "")
+	body, err := s.drive.ExportPDF(ctx, userID, draft.DraftDocID, draft.BaseTabID)
 	if err != nil {
 		slog.ErrorContext(ctx, "export draft pdf failed", slog.String("draft_id", draft.ID), slog.Any(logger.KeyErr, err))
 		return nil, apperr.Upstream("failed to export PDF")
