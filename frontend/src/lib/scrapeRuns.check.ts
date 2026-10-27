@@ -52,6 +52,7 @@ const health = (
 	Status,
 	Reason: "ok",
 	Recent: [],
+	Transient: [],
 	LastRunAt,
 	New: 0,
 	New24h: 0,
@@ -90,6 +91,10 @@ assert.deepEqual(
 assert.equal(
 	healthLabel({ ...health("amber", null), Reason: "retried", Retries: 1 }),
 	"1 retried attempt",
+);
+assert.equal(
+	healthLabel({ ...health("amber", null), Reason: "transient_errors" }),
+	"Timeouts or rate limiting",
 );
 
 const paged = { before: "c2", trail: "c1" };

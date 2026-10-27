@@ -189,6 +189,7 @@ type HealthReason string
 const (
 	ReasonLastFailed    HealthReason = "last_failed"
 	ReasonFailingStreak HealthReason = "failing_streak"
+	ReasonTransient     HealthReason = "transient_errors"
 	ReasonRetried       HealthReason = "retried"
 	ReasonNoNew         HealthReason = "no_new"
 	ReasonNoRuns        HealthReason = "no_runs"
@@ -211,6 +212,7 @@ type SourceHealth struct {
 	Status        HealthStatus
 	Reason        HealthReason
 	Recent        []ScrapeRunOutcome
+	Transient     []bool
 	LastRunAt     *time.Time
 
 	New, Elsewhere, Removed, Retries int

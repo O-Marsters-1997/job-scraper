@@ -371,7 +371,7 @@ func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.Sour
 		if len(out) == 0 || out[len(out)-1].TargetID != id {
 			h := dto.SourceHealth{
 				Kind: dto.ScrapeRunSearch, TargetID: id, Source: row.Source, TargetValue: row.TargetValue,
-				TargetFilters: map[string]string{}, Recent: []dto.ScrapeRunOutcome{},
+				TargetFilters: map[string]string{}, Recent: []dto.ScrapeRunOutcome{}, Transient: []bool{},
 			}
 			if len(row.TargetFilters) > 0 {
 				_ = json.Unmarshal(row.TargetFilters, &h.TargetFilters)
@@ -383,6 +383,7 @@ func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.Sour
 		}
 		h := &out[len(out)-1]
 		h.Recent = append(h.Recent, scrapeRunOutcome(true, dto.StopReason(row.StopReason.String), int(row.Retries)))
+		h.Transient = append(h.Transient, row.Transient)
 		h.LastRunAt = &row.StartedAt.Time
 		h.New += int(row.NewListings)
 		h.Elsewhere += int(row.Elsewhere)
@@ -398,7 +399,7 @@ func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.Sour
 		if len(out) == searches || out[len(out)-1].BoardID != id {
 			out = append(out, dto.SourceHealth{
 				Kind: dto.ScrapeRunBoard, BoardID: id, Source: row.Source, CompanyName: row.CompanyName,
-				TargetFilters: map[string]string{}, Recent: []dto.ScrapeRunOutcome{},
+				TargetFilters: map[string]string{}, Recent: []dto.ScrapeRunOutcome{}, Transient: []bool{},
 			})
 		}
 		if !row.StartedAt.Valid {
@@ -406,6 +407,7 @@ func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.Sour
 		}
 		h := &out[len(out)-1]
 		h.Recent = append(h.Recent, scrapeRunOutcome(true, dto.StopReason(row.StopReason.String), int(row.Retries)))
+		h.Transient = append(h.Transient, row.Transient)
 		h.LastRunAt = &row.StartedAt.Time
 		h.New += int(row.NewListings)
 		h.Elsewhere += int(row.Elsewhere)
