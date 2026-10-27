@@ -30,8 +30,9 @@ struct DTODecodingTests {
 
     @Test(arguments: ["\"CompanyKind\": \"\"", "\"CompanyKind\": \"recruiter_ish\"", "\"Other\": 1"])
     func unknownOrAbsentCompanyKindDecodesAsUnclassified(replacement: String) throws {
-        let json = try #require(String(data: fixture("job_page"), encoding: .utf8))
-            .replacingOccurrences(of: "\"CompanyKind\": \"agency\"", with: replacement)
+        let original = try #require(String(data: fixture("job_page"), encoding: .utf8))
+        try #require(original.contains("\"CompanyKind\": \"agency\""))
+        let json = original.replacingOccurrences(of: "\"CompanyKind\": \"agency\"", with: replacement)
         let job = try #require(JSONDecoder.api.decode(Page.self, from: Data(json.utf8)).items.first)
         #expect(job.companyKind == .unclassified)
     }
