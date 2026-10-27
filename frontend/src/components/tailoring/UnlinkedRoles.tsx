@@ -31,19 +31,18 @@ export function UnlinkedRoles(props: { draft: Draft }) {
 				</p>
 				<For each={unlinked()}>
 					{(p) => (
-						<label class="flex items-center gap-3 py-1">
-							<span class="text-muted">{p.headingText}</span>
+						<label class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,18rem)] items-center gap-3 py-1">
+							<span class="truncate text-muted">{p.headingText}</span>
 							<span class="rounded bg-border/60 px-1.5 py-0.5 text-xs text-muted">
 								Not linked to bank
 							</span>
 							<select
 								aria-label={`Link ${p.headingText} to a Position`}
 								class="h-8 rounded-md border border-border bg-surface px-2 text-sm text-foreground"
-								value=""
 								disabled={save.isPending}
 								onChange={(e) => link(p.headingText, e.currentTarget.value)}
 							>
-								<option value="" disabled>
+								<option value="" disabled selected>
 									Choose a Position
 								</option>
 								<For each={positions.data ?? []}>
