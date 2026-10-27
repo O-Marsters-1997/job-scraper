@@ -62,6 +62,7 @@ func alternating(i int) string {
 
 func TestFit(t *testing.T) {
 	t.Run("too few labels leaves the default weights", func(t *testing.T) {
+		t.Parallel()
 		st := fitFixture(t, 40, nil)
 		svc := newService(t, st)
 		gradeJobs(t, svc, 0, 29, alternating)
@@ -113,6 +114,7 @@ func TestFit(t *testing.T) {
 	})
 
 	t.Run("grading never refits", func(t *testing.T) {
+		t.Parallel()
 		st := fitFixture(t, 60, nil)
 		svc := newService(t, st)
 
