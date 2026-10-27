@@ -27,9 +27,10 @@ struct OfflineQueueTests {
             if calls.offline { throw URLError(.notConnectedToInternet) }
             calls.log.append("setSeen \(ids) \(seen)")
         }
-        client.triageQueue = {
+        client.triageQueue = { stack in
             if calls.offline { throw URLError(.notConnectedToInternet) }
-            return [.sample.with(id: "a"), .sample.with(id: "b")]
+            let items = stack == .direct ? [Job.sample.with(id: "a"), .sample.with(id: "b")] : []
+            return JobPage(items: items, total: items.count)
         }
         return client
     }
@@ -128,6 +129,30 @@ struct OfflineQueueTests {
         #expect(try store.loadQueue().isEmpty)
     }
 
+    @Test func offlineReclassifyQueuesAndReplays() async {
+        let store = OfflineStore.memory(cards: [.sample.with(id: "a"), .sample.with(id: "b")])
+        calls.offline = true
+        var client = client()
+        let calls = calls
+        client.setCompanyKind = { id, kind in
+            if calls.offline { throw URLError(.notConnectedToInternet) }
+            calls.log.append("set \(id) \(kind.rawValue)")
+        }
+        let model = TriageModel(client: client, store: store)
+        await model.load()
+
+        await model.decide(.reclassify(to: .agency)).value
+
+        #expect(model.queued.map(\.jobID) == ["a"])
+        #expect(model.queues[.agency]?.map(\.id) == ["a", "b"])
+        calls.offline = false
+
+        await model.load()
+
+        #expect(calls.log == ["set company-monzo agency"])
+        #expect(model.queued.isEmpty)
+    }
+
     @Test func reconnectingReplaysAndReportsTheNote() async {
         let store = OfflineStore.memory(cards: [.sample.with(id: "a"), .sample.with(id: "b")])
         calls.offline = true
@@ -151,12 +176,14 @@ struct OfflineQueueTests {
         let dismiss = action(.dismiss(reasons: [.tech]), job: "a", at: 5)
 
         try store.saveQueue([dismiss])
-        try store.saveCards([.sample])
+        try store.saveCards([.sample], .direct)
+        try store.saveCards([.sample.with(id: "agency-job")], .agency)
 
         let queue = try store.loadQueue()
         #expect(queue.map(\.id) == [dismiss.id])
         #expect(queue.first?.queuedAt == dismiss.queuedAt)
-        let cards = try store.loadCards()
+        #expect(try store.loadCards(.agency).map(\.id) == ["agency-job"])
+        let cards = try store.loadCards(.direct)
         #expect(cards.map(\.id) == ["sample"])
         #expect(cards.first?.band == .great)
         #expect(cards.first?.breakdown == Job.sample.breakdown)
@@ -168,6 +195,6 @@ private extension Job {
         Job(id: id, title: title, companyID: companyID, companySlug: companySlug, location: location,
             workArrangement: workArrangement, salaryRaw: salaryRaw, url: url, postedAt: postedAt,
             firstDiscoveredAt: firstDiscoveredAt, band: band, score: score, breakdown: breakdown,
-            description: description)
+            description: description, companyKind: companyKind)
     }
 }

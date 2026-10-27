@@ -6,6 +6,7 @@ struct QueuedAction: Codable, Identifiable {
         case dismiss(reasons: [GradeReason])
         case skip
         case excludeCompany(companyID: String)
+        case reclassify(companyID: String, to: CompanyKind)
         case note(body: String)
         case undo(of: UUID)
     }

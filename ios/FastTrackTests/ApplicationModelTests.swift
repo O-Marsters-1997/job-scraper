@@ -27,7 +27,7 @@ struct ApplicationModelTests {
         }
         client.createTask = { calls.log.append("createTask \($0) \($1) \($2)") }
         let job = DueJob(
-            jobID: "job-1", title: "Engineer", companySlug: "monzo", band: .great, score: 90, applicationID: "app-1",
+            jobID: "job-1", title: "Engineer", companySlug: "monzo", companyKind: .direct, band: .great, score: 90, applicationID: "app-1",
             chaseBy: nil, applyTaskID: applyTaskID, tasks: [], draft: draft)
         return ApplicationModel(client: client, job: job, draft: draft)
     }

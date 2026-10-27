@@ -66,6 +66,7 @@ struct ShortlistedView: View {
                                 Text(score, format: .number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                             }
                         }
+                        CompanyKindBadge(kind: job.companyKind)
                         Spacer(minLength: 6)
                     }
                     Text(job.title).font(.footnote).foregroundStyle(.secondary).lineLimit(1)

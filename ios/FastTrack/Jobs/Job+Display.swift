@@ -17,7 +17,7 @@ extension Job {
     }
 
     var accessibilitySummary: String {
-        [title, companyName, location, workArrangement, salaryRaw, JobAge(since: effectiveAge).spoken, band?.title,
+        [title, companyName, location, workArrangement, salaryRaw, JobAge(since: effectiveAge).spoken, band?.title, companyKind.badge,
          score.map { "score \($0)" }, gate.map { "gate: \($0.label)" }]
             .compactMap { $0 }
             .filter { !$0.isEmpty }

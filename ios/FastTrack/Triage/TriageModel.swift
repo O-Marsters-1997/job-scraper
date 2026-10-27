@@ -5,7 +5,9 @@ import SwiftUI
 final class TriageModel {
     static let cacheSize = 50
 
-    private(set) var queue: [Job] = []
+    var stack: TriageStack = .direct
+    private(set) var queues: [TriageStack: [Job]] = [:]
+    private(set) var unseen: [TriageStack: Int] = [:]
     private(set) var loadState: LoadState<Void> = .idle
     private(set) var undoStack: [TriageDecision] = []
     private(set) var banner: TriageDecision?
@@ -27,11 +29,11 @@ final class TriageModel {
         queued = (try? store.loadQueue()) ?? []
     }
 
-    var current: Job? { queue.first }
-    var upcoming: [Job] { Array(queue.dropFirst().prefix(3)) }
+    var current: Job? { queues[stack]?.first }
+    var upcoming: [Job] { Array((queues[stack] ?? []).dropFirst().prefix(3)) }
 
     func load() async {
-        if queue.isEmpty { loadState = .loading }
+        if queues.values.allSatisfy(\.isEmpty) { loadState = .loading }
         await sync()
         do {
             try await reloadQueue()
@@ -41,7 +43,11 @@ final class TriageModel {
             return
         } catch is URLError {
             isOffline = true
-            if queue.isEmpty { queue = (try? store.loadCards()) ?? [] }
+            for stack in TriageStack.allCases where queues[stack, default: []].isEmpty {
+                let cards = (try? store.loadCards(stack)) ?? []
+                queues[stack] = cards
+                unseen[stack] = cards.count
+            }
             loadState = .loaded(())
         } catch {
             loadState = .failed(error)
@@ -50,8 +56,8 @@ final class TriageModel {
 
     @discardableResult
     func decide(_ action: TriageAction) -> Task<Void, Never> {
-        guard let job = queue.first else { return Task {} }
-        if !action.keepsCard { queue.removeFirst() }
+        guard let job = current else { return Task {} }
+        apply(action, to: job)
         persistCards()
         lastRemoved = action
         banner = nil
@@ -66,12 +72,12 @@ final class TriageModel {
             } catch where cannotReach(error) {
                 enqueue(QueuedAction(id: id, jobID: job.id, kind: kind, queuedAt: .now), after: error)
             } catch {
-                if !action.keepsCard { queue.insert(job, at: 0) }
+                rollback(action, of: job)
                 persistCards()
                 fail(error)
                 return
             }
-            if case .excludeCompany = action { queue.removeAll { $0.companyID == job.companyID } }
+            if case .excludeCompany = action { removeCompany(job.companyID) }
             persistCards()
             let decision = TriageDecision(id: id, job: job, action: action, receipt: receipt)
             undoStack.append(decision)
@@ -82,8 +88,7 @@ final class TriageModel {
     @discardableResult
     func undo() -> Task<Void, Never> {
         guard let decision = undoStack.popLast() else { return Task {} }
-        let keepsCard = decision.action.keepsCard
-        if !keepsCard { queue.insert(decision.job, at: 0) }
+        rollback(decision.action, of: decision.job)
         persistCards()
         banner = nil
         if let index = queued.firstIndex(where: { $0.id == decision.id }) {
@@ -100,7 +105,7 @@ final class TriageModel {
                 receipts[decision.id] = decision.receipt
                 enqueue(QueuedAction(id: UUID(), jobID: decision.job.id, kind: .undo(of: decision.id), queuedAt: .now), after: error)
             } catch {
-                if !keepsCard { queue.removeAll { $0.id == decision.job.id } }
+                apply(decision.action, to: decision.job)
                 persistCards()
                 undoStack.append(decision)
                 fail(error)
@@ -145,6 +150,7 @@ final class TriageModel {
         case .dismiss(let reasons): .dismiss(reasons: reasons)
         case .skip: .skip
         case .excludeCompany: .excludeCompany(companyID: job.companyID)
+        case .reclassify(let kind): .reclassify(companyID: job.companyID, to: kind)
         case .note(let body): .note(body: body)
         }
     }
@@ -178,12 +184,73 @@ final class TriageModel {
 
     private func reloadQueue() async throws {
         let decided = Set(undoStack.filter { !$0.action.keepsCard }.map(\.job.id))
-        queue = try await client.triageQueue().filter { !decided.contains($0.id) }
+        var pages: [TriageStack: JobPage] = [:]
+        for stack in TriageStack.allCases { pages[stack] = try await client.triageQueue(stack) }
+        for (stack, page) in pages {
+            let items = page.items.filter { !decided.contains($0.id) }
+            queues[stack] = items
+            let dropped = page.items.count - items.count
+            unseen[stack] = max((page.total ?? page.items.count) - dropped, items.count)
+        }
         persistCards()
     }
 
+    private func apply(_ action: TriageAction, to job: Job) {
+        if case .reclassify(let kind) = action {
+            move(company: job.companyID, to: kind)
+        } else if !action.keepsCard {
+            remove(job)
+        }
+    }
+
+    private func rollback(_ action: TriageAction, of job: Job) {
+        if case .reclassify = action {
+            move(company: job.companyID, to: job.companyKind)
+            stack = job.stack
+        } else if !action.keepsCard {
+            restore(job)
+        }
+    }
+
+    private func move(company companyID: String, to kind: CompanyKind) {
+        var moved: [Job] = []
+        for stack in TriageStack.allCases {
+            let jobs = queues[stack, default: []]
+            let mine = jobs.filter { $0.companyID == companyID }
+            queues[stack] = jobs.filter { $0.companyID != companyID }
+            unseen[stack] = max((unseen[stack] ?? 0) - mine.count, 0)
+            moved += mine
+        }
+        let target: TriageStack = kind.isAgency ? .agency : .direct
+        queues[target, default: []].insert(contentsOf: moved.map { var job = $0; job.companyKind = kind; return job }, at: 0)
+        unseen[target, default: 0] += moved.count
+    }
+
+    private func remove(_ job: Job) {
+        let stack = job.stack
+        guard let index = queues[stack]?.firstIndex(where: { $0.id == job.id }) else { return }
+        queues[stack]?.remove(at: index)
+        unseen[stack] = max((unseen[stack] ?? 0) - 1, 0)
+    }
+
+    private func restore(_ job: Job) {
+        let stack = job.stack
+        queues[stack, default: []].insert(job, at: 0)
+        unseen[stack, default: 0] += 1
+    }
+
+    private func removeCompany(_ companyID: String) {
+        for stack in TriageStack.allCases {
+            let before = queues[stack, default: []].count
+            queues[stack]?.removeAll { $0.companyID == companyID }
+            unseen[stack] = max((unseen[stack] ?? 0) - (before - (queues[stack]?.count ?? 0)), 0)
+        }
+    }
+
     private func persistCards() {
-        try? store.saveCards(Array(queue.prefix(Self.cacheSize)))
+        for stack in TriageStack.allCases {
+            try? store.saveCards(Array(queues[stack, default: []].prefix(Self.cacheSize)), stack)
+        }
     }
 
     private func persistQueue() {

@@ -16,12 +16,24 @@ struct TriageView: View {
 
     var body: some View {
         content
-            .navigationTitle("Triage")
+            .background(isAgency ? Color.orange.opacity(0.08) : .clear)
+            .navigationTitle(isAgency ? "Agency detour" : "Triage")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Undo", systemImage: "arrow.uturn.backward", action: undo)
                         .disabled(model.undoStack.isEmpty)
+                }
+                if isAgency {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Back to Direct") { show(.direct) }
+                    }
+                } else if agencyCount > 0 {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("\(agencyCount) agency") { show(.agency) }
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 if model.current != nil {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -87,6 +99,10 @@ struct TriageView: View {
                     Text(model.isOffline ? "Reconnect to load more." : "New jobs arrive after the next scrape.")
                 } actions: {
                     Button("Check again", action: sync)
+                    if !isAgency, agencyCount > 0 {
+                        Button("Look at \(agencyCount) agency jobs") { show(.agency) }
+                            .buttonStyle(.borderedProminent)
+                    }
                 }
             }
         }
@@ -153,6 +169,11 @@ struct TriageView: View {
                 Button("Shortlist and draft CV", systemImage: "doc.badge.plus") { decide(.shortlist(draftCV: true)) }
                 Button("Dismiss with reason…", systemImage: "text.badge.xmark") { showReasons = true }
                 Button("Add note…", systemImage: "note.text") { showNote = true }
+                if isAgency {
+                    Button("Not an agency", systemImage: "building.2") { decide(.reclassify(to: .direct)) }
+                } else {
+                    Button("This is an agency", systemImage: "person.2") { decide(.reclassify(to: .agency)) }
+                }
                 Button("Exclude company", systemImage: "nosign", role: .destructive) { decide(.excludeCompany) }
             } label: {
                 Image(systemName: "ellipsis")
@@ -187,6 +208,15 @@ struct TriageView: View {
         case .dismiss: return .impact(weight: .light)
         default: return nil
         }
+    }
+
+    private var isAgency: Bool { model.stack == .agency }
+
+    private var agencyCount: Int { model.unseen[.agency] ?? 0 }
+
+    private func show(_ stack: TriageStack) {
+        expandedID = nil
+        withAnimation { model.stack = stack }
     }
 
     private func sync() {
