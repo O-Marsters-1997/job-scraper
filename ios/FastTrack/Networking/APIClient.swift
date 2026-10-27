@@ -4,7 +4,7 @@ import SwiftUI
 struct APIClient {
     var restoreSession: () async throws -> Void
     var logIn: (_ username: String, _ password: String) async throws -> Void
-    var triageQueue: () async throws -> [Job]
+    var triageQueue: (_ stack: TriageStack) async throws -> JobPage
     var job: (_ id: String) async throws -> Job
     var shortlist: (_ jobID: String) async throws -> Application
     var deleteApplication: (_ id: String) async throws -> Void
@@ -47,9 +47,8 @@ extension APIClient {
             logIn: { username, password in
                 let _: Me = try await http.post("auth/login", body: Credentials(username: username, password: password))
             },
-            triageQueue: {
-                let page: JobPage = try await http.get("jobs/triage")
-                return page.items
+            triageQueue: { stack in
+                try await http.get("jobs/triage", query: [URLQueryItem(name: "poster", value: stack.rawValue)])
             },
             job: { id in
                 try await http.get("jobs/\(id)")
@@ -155,7 +154,10 @@ extension APIClient {
         return APIClient(
             restoreSession: { try respond(()) },
             logIn: { _, _ in try respond(()) },
-            triageQueue: { try respond(jobs) },
+            triageQueue: { stack in
+                let items = jobs.filter { $0.stack == stack }
+                return try respond(JobPage(items: items, total: items.count))
+            },
             job: { id in try respond(jobs.first { $0.id == id } ?? .sample) },
             shortlist: { jobID in try respond(Application(id: "application-\(jobID)", jobID: jobID)) },
             deleteApplication: { _ in try respond(()) },

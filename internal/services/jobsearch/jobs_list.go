@@ -39,7 +39,6 @@ func (s *Service) TriageQueue(ctx context.Context, userID string, q dto.TriageQu
 		ScoredOnly:    true,
 		Seen:          "unseen",
 		NoApplication: true,
-		SkipTotal:     true,
 	})
 }
 

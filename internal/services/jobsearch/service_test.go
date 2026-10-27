@@ -108,6 +108,17 @@ func TestTriageQueue(t *testing.T) {
 		}
 	})
 
+	t.Run("reports the stack's unseen total", func(t *testing.T) {
+		t.Parallel()
+		page, err := svc.TriageQueue(t.Context(), userID, dto.TriageQuery{Poster: "agency"})
+		if err != nil {
+			t.Fatalf("TriageQueue(agency) err = %v", err)
+		}
+		if page.Total == nil {
+			t.Error("TriageQueue(agency) total = nil, want the unseen count")
+		}
+	})
+
 	t.Run("rejects any other poster", func(t *testing.T) {
 		t.Parallel()
 		for _, poster := range []string{"all", "recruiter"} {
