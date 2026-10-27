@@ -7,6 +7,7 @@ struct DueView: View {
     @State private var openApplication: DueJob?
     @State private var query = ""
     @State private var showingShortlisted = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
@@ -40,6 +41,10 @@ struct DueView: View {
                     Text(model.failureMessage)
                 }
                 .task { await model.load() }
+                .task(id: model.hasPendingDraft) { await model.refreshWhilePending() }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { Task { await model.load() } }
+                }
         }
     }
 

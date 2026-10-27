@@ -35,6 +35,7 @@ final class DueModel {
     var comingUp: [DueJob] { jobs.filter { $0.chaseBy != nil && !hasChaseDue($0) }.sorted { ($0.chaseBy ?? .distantFuture) < ($1.chaseBy ?? .distantFuture) } }
     var chasesDue: Int { jobs.filter(hasChaseDue).count }
     var readyDrafts: Int { jobs.filter { $0.draft?.state == .ready }.count }
+    var hasPendingDraft: Bool { jobs.contains { $0.draft?.state == .pending } }
     var badge: Int { loadState.value == nil ? 0 : chasesDue + readyDrafts }
 
     func hasChaseDue(_ job: DueJob) -> Bool {
@@ -61,6 +62,14 @@ final class DueModel {
         } catch {
             jobs = []
             loadState = .failed(error)
+        }
+    }
+
+    func refreshWhilePending(every interval: Duration = .seconds(2)) async {
+        while hasPendingDraft {
+            try? await Task.sleep(for: interval)
+            if Task.isCancelled { return }
+            await load()
         }
     }
 
