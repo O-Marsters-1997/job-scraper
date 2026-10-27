@@ -95,6 +95,8 @@ func TestList(t *testing.T) {
 }
 
 func TestTriageQueue(t *testing.T) {
+	t.Parallel()
+
 	svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
 
 	t.Run("accepts the poster values", func(t *testing.T) {
