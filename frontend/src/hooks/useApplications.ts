@@ -12,6 +12,7 @@ import {
 	updateApplication,
 } from "../api/applications";
 import { keys } from "../api/keys";
+import { cvStage, isCvStageBusy } from "../lib/cvStage";
 import type { UpdateApplicationPayload } from "../types/application";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
@@ -34,6 +35,10 @@ export function useApplications(
 	return createQuery(() => ({
 		...applicationsQueryOptions(statusId?.(), chase?.() ?? false),
 		placeholderData: keepPreviousData,
+		refetchInterval: (query) =>
+			query.state.data?.some((a) => isCvStageBusy(cvStage(a.Draft)))
+				? 3000
+				: false,
 	}));
 }
 

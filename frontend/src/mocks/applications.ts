@@ -35,6 +35,7 @@ function buildWithDetails(app: Application): ApplicationWithDetails {
 		JobClosedAt: seed.closedJobIDs.has(job.ID) ? job.PostedAt : null,
 		StatusName: status.Name,
 		StatusColour: status.Colour,
+		Draft: null,
 	};
 }
 

@@ -187,10 +187,22 @@ SELECT
     j.url          AS job_url,
     j.closed_at    AS job_closed_at,
     s.name         AS status_name,
-    s.colour       AS status_colour
+    s.colour       AS status_colour,
+    d.id           AS draft_id,
+    COALESCE(d.status, '')     AS draft_status,
+    d.outcome                  AS draft_outcome,
+    COALESCE(d.last_error, '') AS draft_last_error
 FROM applications a
 JOIN jobs j ON a.job_id = j.id
 LEFT JOIN application_statuses s ON a.status_id = s.id
+LEFT JOIN LATERAL (
+    SELECT c.id, c.status, c.outcome, c.last_error
+    FROM tailored_cvs c
+    WHERE c.user_id = a.user_id AND c.job_id = a.job_id
+      AND (c.outcome = 'kept' OR c.outcome IS NULL)
+    ORDER BY (c.outcome = 'kept') DESC NULLS LAST
+    LIMIT 1
+) d ON TRUE
 WHERE a.user_id = $1
   AND ($2::uuid IS NULL OR a.status_id = $2)
   AND (NOT $3::boolean OR a.chase_by IS NOT NULL)
@@ -222,6 +234,10 @@ type ListApplicationsRow struct {
 	JobClosedAt    pgtype.Timestamptz
 	StatusName     pgtype.Text
 	StatusColour   pgtype.Text
+	DraftID        pgtype.UUID
+	DraftStatus    string
+	DraftOutcome   pgtype.Text
+	DraftLastError string
 }
 
 func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsParams) ([]ListApplicationsRow, error) {
@@ -250,6 +266,10 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 			&i.JobClosedAt,
 			&i.StatusName,
 			&i.StatusColour,
+			&i.DraftID,
+			&i.DraftStatus,
+			&i.DraftOutcome,
+			&i.DraftLastError,
 		); err != nil {
 			return nil, err
 		}
