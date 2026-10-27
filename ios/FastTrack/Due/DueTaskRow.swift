@@ -48,7 +48,6 @@ struct DueTaskRow: View {
         case .chase: "Chase the application"
         case .draft(let draft): draft.state == .ready ? "Apply with tailored CV" : "Tailored CV"
         case .task(let task): task.typeName
-        case .apply: "Apply"
         }
     }
 
@@ -77,8 +76,6 @@ struct DueTaskRow: View {
             }
         case .task(let task):
             if !task.notes.isEmpty { Text(task.notes).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
-        case .apply:
-            Text("No CV drafted yet").font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -107,8 +104,6 @@ struct DueTaskRow: View {
                     Image(systemName: "doc.text").font(.caption).foregroundStyle(Color.brandTint).accessibilityHidden(true)
                 }
             }
-        case .apply:
-            checkbox.accessibilityLabel("Mark applied")
         case .chase, .task:
             checkbox.accessibilityLabel("Complete: \(title)")
         }
@@ -143,8 +138,6 @@ struct DueTaskRow: View {
             Button("Log contact", systemImage: "person.badge.plus") { logContact(job) }
         case .task:
             Button("Mark done", systemImage: "checkmark", action: complete)
-        case .apply:
-            Button("Mark applied", systemImage: "checkmark", action: complete)
         case .draft(let draft):
             switch draft.state {
             case .ready:
@@ -170,7 +163,7 @@ struct DueTaskRow: View {
                 switch row {
                 case .chase: _ = model.completeChase(job)
                 case .task(let task): _ = model.complete(task, in: job)
-                case .draft, .apply: _ = model.markApplied(job)
+                case .draft: _ = model.markApplied(job)
                 }
             }
             struck = false
