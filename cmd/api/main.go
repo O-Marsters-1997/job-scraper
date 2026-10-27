@@ -116,7 +116,7 @@ func run(ctx context.Context) error {
 	}
 
 	cvTemplates := cvtemplates.New(pool, idm.DocsClient())
-	cvtailorModule := cvtailor.New(pool, idm.DocsClient(), scoringModule, idm)
+	cvtailorModule := cvtailor.New(pool, idm.DocsClient(), scoringModule, idm, slog.Default())
 
 	router, err := api.NewRouter(idm, js, apps, taskModule, cvTemplates, scoringModule, cvtailorModule, eventsModule)
 	if err != nil {
