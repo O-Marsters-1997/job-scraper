@@ -135,6 +135,7 @@ final class ApplicationModel {
         await attempt {
             try await client.saveRole(draft.id, positionID, edits)
             roles = .loaded(try await client.draftRoles(draft.id))
+            await fetchPDF()
         }
     }
 

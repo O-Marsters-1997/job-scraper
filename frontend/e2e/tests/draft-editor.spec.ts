@@ -79,13 +79,12 @@ test.describe("Draft editor", () => {
 		});
 	});
 
-	test("is read-only once the draft is kept", async ({ draftPage }) => {
+	test("stays editable once the draft is kept", async ({ draftPage }) => {
 		await draftPage.goto("draft-kept");
-		await expect(draftPage.line(BULLET)).toHaveAttribute(
-			"contenteditable",
-			"false",
-		);
-		await expect(draftPage.saveStatus).toHaveCount(0);
+		await draftPage.type(BULLET, " again");
+		await expect(draftPage.saveStatus).toHaveText("Saved", {
+			timeout: SAVED_TIMEOUT_MS,
+		});
 	});
 
 	test("shows an edit in the line's card", async ({ draftPage }) => {

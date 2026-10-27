@@ -122,7 +122,8 @@ export function DraftEditor(props: {
 	let measureLines: (slotId: string, text: string) => number = () => 1;
 
 	const editable = () =>
-		props.draft.status === "ready" && props.draft.outcome === null;
+		props.draft.status === "ready" && props.draft.outcome !== "discarded";
+	const keepable = () => editable() && props.draft.outcome === null;
 	const changes = () => {
 		const { base, content } = props.draft;
 		return base && content ? { base, content } : null;
@@ -553,7 +554,7 @@ export function DraftEditor(props: {
 				</div>
 			</header>
 
-			<KeepNotices draft={props.draft} editable={editable()} flow={flow} />
+			<KeepNotices draft={props.draft} editable={keepable()} flow={flow} />
 			<Show when={editable()}>
 				<UnlinkedRoles draft={props.draft} />
 			</Show>

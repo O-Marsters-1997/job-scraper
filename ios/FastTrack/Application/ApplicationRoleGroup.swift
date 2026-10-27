@@ -30,14 +30,13 @@ struct ApplicationRoleGroup: View {
                         isFirst: bullet.id == role.bullets.first?.id,
                         isLast: bullet.id == role.bullets.last?.id,
                         isOnlyOne: role.bullets.count == 1,
-                        editable: !model.kept,
                         replace: { replacing = bullet },
                         move: { offset in Task { await model.move(bullet, by: offset, in: role) } },
                         remove: { Task { await model.remove(bullet, from: role) } }
                     )
                     Divider().padding(.leading, 42)
                 }
-                if !model.kept, !role.bank.isEmpty {
+                if !role.bank.isEmpty {
                     bankToggle
                     if showBank {
                         ForEach(role.rankedBank) { bullet in
@@ -131,29 +130,24 @@ struct ApplicationBulletRow: View {
     let isFirst: Bool
     let isLast: Bool
     let isOnlyOne: Bool
-    let editable: Bool
     let replace: () -> Void
     let move: (Int) -> Void
     let remove: () -> Void
 
     var body: some View {
-        if editable {
-            Menu {
-                Button("Replace with…", systemImage: "arrow.left.arrow.right", action: replace)
-                if !isFirst { Button("Move up", systemImage: "arrow.up") { move(-1) } }
-                if !isLast { Button("Move down", systemImage: "arrow.down") { move(1) } }
-                if !isOnlyOne {
-                    Divider()
-                    Button("Remove", systemImage: "minus.circle", role: .destructive, action: remove)
-                }
-            } label: {
-                content.frame(minHeight: 44).contentShape(.rect)
+        Menu {
+            Button("Replace with…", systemImage: "arrow.left.arrow.right", action: replace)
+            if !isFirst { Button("Move up", systemImage: "arrow.up") { move(-1) } }
+            if !isLast { Button("Move down", systemImage: "arrow.down") { move(1) } }
+            if !isOnlyOne {
+                Divider()
+                Button("Remove", systemImage: "minus.circle", role: .destructive, action: remove)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint("Shows replace, move and remove actions")
-        } else {
-            content
+        } label: {
+            content.frame(minHeight: 44).contentShape(.rect)
         }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows replace, move and remove actions")
     }
 
     private var content: some View {

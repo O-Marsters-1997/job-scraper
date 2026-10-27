@@ -170,6 +170,20 @@ func (q *Queries) CompleteKeep(ctx context.Context, arg CompleteKeepParams) (int
 	return result.RowsAffected(), nil
 }
 
+const deleteAchievementOutcomes = `-- name: DeleteAchievementOutcomes :exec
+DELETE FROM achievement_outcomes WHERE draft_id = $1 AND user_id = $2
+`
+
+type DeleteAchievementOutcomesParams struct {
+	DraftID pgtype.UUID
+	UserID  pgtype.UUID
+}
+
+func (q *Queries) DeleteAchievementOutcomes(ctx context.Context, arg DeleteAchievementOutcomesParams) error {
+	_, err := q.db.Exec(ctx, deleteAchievementOutcomes, arg.DraftID, arg.UserID)
+	return err
+}
+
 const failDraft = `-- name: FailDraft :execrows
 UPDATE tailored_cvs SET
     status = CASE WHEN $1::bool OR attempts >= $2::int THEN 'failed' ELSE 'pending' END,
