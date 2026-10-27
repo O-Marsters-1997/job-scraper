@@ -388,9 +388,13 @@ func TestSetCompanyKind(t *testing.T) {
 }
 
 func TestUndoCompanyKind(t *testing.T) {
+	t.Parallel()
+
 	t.Run("restores any kind after a user set one", func(t *testing.T) {
+		t.Parallel()
 		for _, kind := range []dto.CompanyKind{dto.KindUnclassified, dto.KindLikelyAgency, dto.KindLikelyDirect, dto.KindAgency, dto.KindDirect} {
 			t.Run(string(kind), func(t *testing.T) {
+				t.Parallel()
 				svc, st := newCompanyService(queuetest.NewRecorder())
 				company := seedAcme(t, st)
 				if _, err := svc.SetCompanyKind(t.Context(), userID, dto.SetCompanyKindInput{CompanyID: company.ID, Kind: dto.KindAgency}); err != nil {
@@ -405,6 +409,7 @@ func TestUndoCompanyKind(t *testing.T) {
 	})
 
 	t.Run("rejects bad input", func(t *testing.T) {
+		t.Parallel()
 		tests := []struct {
 			name      string
 			companyID func(id string) string
@@ -416,6 +421,7 @@ func TestUndoCompanyKind(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
 				svc, st := newCompanyService(queuetest.NewRecorder())
 				company := seedAcme(t, st)
 				_, err := svc.UndoCompanyKind(t.Context(), userID, dto.UndoCompanyKindInput{CompanyID: tt.companyID(company.ID), Kind: tt.kind})
