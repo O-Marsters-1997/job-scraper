@@ -531,6 +531,18 @@ type Position struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type ProfileAttempt struct {
+	ID        pgtype.UUID
+	DraftID   pgtype.UUID
+	Text      string
+	Steer     string
+	Rejection string
+	PromptKey string
+	Model     string
+	Cost      pgtype.Numeric
+	CreatedAt pgtype.Timestamptz
+}
+
 type PushSubscription struct {
 	ID        pgtype.UUID
 	UserID    pgtype.UUID

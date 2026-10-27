@@ -409,3 +409,31 @@ func (s *Store) JobAnnotations(ctx context.Context, userID, jobID string) (dto.J
 	}
 	return dto.JobAnnotations{Note: note, Comments: comments}, nil
 }
+
+// AddProfileAttempts records the Profile Attempts of a Draft the User owns,
+// in order; ErrDraftNotFound when userID does not own it.
+func (s *Store) AddProfileAttempts(ctx context.Context, userID, draftID string, attempts []dto.ProfileAttempt) error {
+	uid, err := parseID(userID, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	did, err := parseID(draftID, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	return s.inTx(ctx, func(q *sqlc.Queries) error {
+		for _, a := range attempts {
+			n, err := q.AddProfileAttempt(ctx, sqlc.AddProfileAttemptParams{
+				DraftID: did, UserID: uid, Text: a.Text, Steer: a.Steer, Rejection: a.Rejection,
+				PromptKey: a.PromptKey, Model: a.Model, Cost: a.Cost,
+			})
+			if err != nil {
+				return fmt.Errorf("store.AddProfileAttempts: %w", err)
+			}
+			if n == 0 {
+				return ErrDraftNotFound
+			}
+		}
+		return nil
+	})
+}

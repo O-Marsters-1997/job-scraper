@@ -96,3 +96,9 @@ SELECT body FROM job_comments WHERE user_id = $1 AND job_id = $2 ORDER BY create
 -- name: InsertAchievementOutcomes :copyfrom
 INSERT INTO achievement_outcomes (draft_id, achievement_id, user_id, job_id, p_yes, p_no, on_source_cv, in_final_cv, outscored_kept_but_left_out, reworded)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+
+-- name: AddProfileAttempt :execrows
+INSERT INTO profile_attempts (draft_id, text, steer, rejection, prompt_key, model, cost, created_at)
+SELECT d.id, @text::text, @steer::text, @rejection::text, @prompt_key::text, @model::text, @cost::float8, clock_timestamp()
+FROM tailored_cvs d
+WHERE d.id = @draft_id::uuid AND d.user_id = @user_id::uuid;

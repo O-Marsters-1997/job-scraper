@@ -310,3 +310,21 @@ func (f *FakeStore) SetDraftInsights(_ context.Context, userID, id string, insig
 	d.InsightLines, d.InsightsFor = slices.Clone(insights), forHash
 	return nil
 }
+
+// ProfileAttempts returns what AddProfileAttempts recorded for the Draft.
+func (f *FakeStore) ProfileAttempts(draftID string) []dto.ProfileAttempt {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.attempts[draftID])
+}
+
+func (f *FakeStore) AddProfileAttempts(_ context.Context, userID, draftID string, attempts []dto.ProfileAttempt) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.drafts[draftID]
+	if !ok || d.userID != userID {
+		return errDraftNotFound
+	}
+	f.attempts[draftID] = append(f.attempts[draftID], attempts...)
+	return nil
+}
