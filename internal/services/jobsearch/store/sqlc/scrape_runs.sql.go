@@ -285,6 +285,15 @@ WHERE ch.change = 'new'
   AND r.started_at >= $1::timestamptz
   AND (t.user_id = $2
        OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = $2 AND tc.company_id = b.company_id))
+UNION ALL
+SELECT t.id, NULL::uuid, c.card_title, c.card_location, c.card_company
+FROM source_targets t
+JOIN candidate_discoveries d ON d.source_target_id = t.id
+JOIN job_candidates c ON c.id = d.candidate_id
+WHERE t.user_id = $2
+  AND c.first_seen_at >= $1::timestamptz
+  AND EXISTS (SELECT 1 FROM scrape_runs r
+              WHERE r.source_target_id = t.id AND c.first_seen_at BETWEEN r.started_at AND COALESCE(r.finished_at, NOW()))
 LIMIT 50000
 `
 

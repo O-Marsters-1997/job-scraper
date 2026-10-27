@@ -393,23 +393,24 @@ func TestStore_ListRecentNewJobs(t *testing.T) {
 	ctx := t.Context()
 	mine := createTarget(t, st, userID, "linkedin", "mine")
 	theirs := createTarget(t, st, pgtest.InsertUser(t, pool), "linkedin", "theirs")
-	seed := func(target dto.SourceTarget, title string, age time.Duration) {
+	seed := func(target dto.SourceTarget, title string, runAge, firstSeenAge time.Duration) {
 		t.Helper()
 		run := startRun(t, st, target.ID)
-		if _, err := pool.Exec(ctx, "UPDATE scrape_runs SET started_at = NOW() - $2::float8 * INTERVAL '1 second' WHERE id = $1::uuid", run.RunID, age.Seconds()); err != nil {
+		if _, err := pool.Exec(ctx, "UPDATE scrape_runs SET started_at = NOW() - $2::float8 * INTERVAL '1 second', finished_at = NOW() - $2::float8 * INTERVAL '1 second' + INTERVAL '10 minutes', stop_reason = 'last_page' WHERE id = $1::uuid", run.RunID, runAge.Seconds()); err != nil {
 			t.Fatal(err)
 		}
-		_, err := pool.Exec(ctx, `WITH j AS (
-			INSERT INTO jobs (title, location, url, company_slug, source) VALUES ($2, 'London', 'https://x.test/' || $2 || $3, 'acme', 'linkedin') RETURNING id)
-			INSERT INTO scrape_run_job_changes (run_id, job_id, change, snapshot)
-			SELECT $1::uuid, j.id, 'new', jsonb_build_object('Title', $2::text, 'Location', 'London', 'CompanySlug', 'acme') FROM j`, run.RunID, title, target.ID)
+		_, err := pool.Exec(ctx, `WITH c AS (
+			INSERT INTO job_candidates (normalized_url, source, card_title, card_location, card_company, first_seen_at)
+			VALUES ('https://x.test/' || $2::text || $1::text, 'linkedin', $2, 'London', 'acme', NOW() - $3::float8 * INTERVAL '1 second') RETURNING id)
+			INSERT INTO candidate_discoveries (candidate_id, source_target_id) SELECT c.id, $1::uuid FROM c`, target.ID, title, firstSeenAge.Seconds())
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	seed(mine, "recent", time.Hour)
-	seed(mine, "old", 48*time.Hour)
-	seed(theirs, "other user", time.Hour)
+	seed(mine, "recent", time.Hour, 55*time.Minute)
+	seed(mine, "old run", 48*time.Hour, 47*time.Hour)
+	seed(mine, "seen before the run", time.Hour, 5*time.Hour)
+	seed(theirs, "other user", time.Hour, 55*time.Minute)
 
 	got, err := st.ListRecentNewJobs(ctx, userID, time.Now().Add(-24*time.Hour))
 	if err != nil {
@@ -454,6 +455,13 @@ func TestStore_BoardRuns(t *testing.T) {
 	}
 	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_run_job_changes WHERE run_id = $1", run.ID); n != 4 {
 		t.Errorf("change rows = %d, want 4 from the first finish only", n)
+	}
+	fresh, err := env.st.ListRecentNewJobs(ctx, other, time.Now().Add(-24*time.Hour))
+	if err != nil || len(fresh) != 2 || fresh[0].BoardID != env.board.ID || fresh[0].TargetID != "" {
+		t.Errorf("ListRecentNewJobs() = %+v, %v, want the board's two new jobs", fresh, err)
+	}
+	if none, err := env.st.ListRecentNewJobs(ctx, outsider, time.Now().Add(-24*time.Hour)); err != nil || len(none) != 0 {
+		t.Errorf("ListRecentNewJobs(outsider) = %+v, %v, want none", none, err)
 	}
 
 	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_runs WHERE kind = 'board'"); n != 1 {
