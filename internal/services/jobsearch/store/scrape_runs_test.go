@@ -391,7 +391,7 @@ func TestStore_ListSourceHealth(t *testing.T) {
 		t.Errorf("busy Transient (-want +got):\n%s", diff)
 	}
 	if h.New != 10 || h.Retries != 2 || h.LastRunAt == nil {
-		t.Errorf("busy = %+v, want New 10 over the last 5 finished runs, Retries 1 and a last run", h)
+		t.Errorf("busy = %+v, want New 10 over the last 5 finished runs, Retries 2 and a last run", h)
 	}
 }
 

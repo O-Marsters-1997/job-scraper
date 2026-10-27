@@ -167,16 +167,19 @@ func TestService_SourceHealth(t *testing.T) {
 			{"a hard failure last is red", []dto.ScrapeRunOutcome{f, f}, []bool{true, false}, dto.HealthRed, dto.ReasonLastFailed},
 			{"a transient failure followed by success is healthy", []dto.ScrapeRunOutcome{ok, f, ok}, []bool{false, true, false}, dto.HealthGreen, dto.ReasonOK},
 			{"a hard pair is red even when not last", []dto.ScrapeRunOutcome{f, f, ok}, []bool{false, false, false}, dto.HealthRed, dto.ReasonFailingStreak},
-			{"a transient failure between hard ones breaks the pair", []dto.ScrapeRunOutcome{f, f, ok}, []bool{false, true, false}, dto.HealthGreen, dto.ReasonOK},
+			{"a transient failure beside a hard one is not a hard pair", []dto.ScrapeRunOutcome{f, f, ok}, []bool{false, true, false}, dto.HealthGreen, dto.ReasonOK},
 		} {
-			st := &healthStore{FakeStore: jobsearchtest.NewFakeStore(), rows: []dto.SourceHealth{{Recent: tt.recent, Transient: tt.transient, New: 1}}}
-			got, err := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring()).SourceHealth(t.Context(), userID)
-			if err != nil || len(got) != 1 {
-				t.Fatalf("%s: SourceHealth() = %v, %v", tt.name, got, err)
-			}
-			if got[0].Status != tt.status || got[0].Reason != tt.reason {
-				t.Errorf("%s: SourceHealth() = %s/%s, want %s/%s", tt.name, got[0].Status, got[0].Reason, tt.status, tt.reason)
-			}
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				st := &healthStore{FakeStore: jobsearchtest.NewFakeStore(), rows: []dto.SourceHealth{{Recent: tt.recent, Transient: tt.transient, New: 1}}}
+				got, err := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring()).SourceHealth(t.Context(), userID)
+				if err != nil || len(got) != 1 {
+					t.Fatalf("SourceHealth() = %v, %v", got, err)
+				}
+				if got[0].Status != tt.status || got[0].Reason != tt.reason {
+					t.Errorf("SourceHealth() = %s/%s, want %s/%s", got[0].Status, got[0].Reason, tt.status, tt.reason)
+				}
+			})
 		}
 	})
 
