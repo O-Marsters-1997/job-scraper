@@ -1295,6 +1295,7 @@ func TestAsk(t *testing.T) {
 	})
 
 	t.Run("an OpenRouter refusal is unprocessable, other failures are not", func(t *testing.T) {
+		t.Parallel()
 		for _, tt := range []struct {
 			name string
 			err  error
