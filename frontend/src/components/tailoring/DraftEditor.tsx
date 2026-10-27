@@ -197,6 +197,7 @@ export function DraftEditor(props: {
 	const [profileTop, setProfileTop] = createSignal(0);
 	const baseProfile = () => props.draft.base?.profile ?? undefined;
 	const runRedraft = async (steer?: string) => {
+		setLastRedraft(undefined);
 		await ed.flush();
 		const from = ed.text(PROFILE_SLOT);
 		redraft.mutate(steer ? { steer } : {}, {
