@@ -71,9 +71,6 @@ struct BandRow: View {
             if let score = job.score {
                 Text(score, format: .number).font(.footnote.weight(.medium).monospacedDigit())
             }
-            if job.unknownCount > 0 {
-                Text("· \(job.unknownCount) unknown").font(.footnote).foregroundStyle(.secondary)
-            }
             Spacer(minLength: 6)
             Text(job.age).font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
         }
