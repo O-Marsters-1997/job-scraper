@@ -37,3 +37,8 @@ type JobOverviewQuery struct {
 	DayStart string `json:"day_start"`
 	Ranked   string `json:"ranked"`
 }
+
+// TriageQuery's Poster is direct or agency; empty means direct.
+type TriageQuery struct {
+	Poster string `json:"poster"`
+}

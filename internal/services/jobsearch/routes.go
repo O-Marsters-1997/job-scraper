@@ -15,7 +15,7 @@ import (
 
 func (m *Module) Routes(r chi.Router) {
 	r.Get("/jobs", handlers.Query(m.jobs.List))
-	r.Get("/jobs/triage", handlers.GetAll(m.jobs.TriageQueue))
+	r.Get("/jobs/triage", handlers.Query(m.jobs.TriageQueue))
 	r.Get("/jobs/overview", handlers.Query(m.jobs.Overview))
 	r.Get("/jobs/insights", handlers.Query(m.jobs.Insights))
 	r.Post("/jobs/seen", handlers.Create(m.jobs.MarkSeen))
