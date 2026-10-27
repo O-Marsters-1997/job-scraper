@@ -35,3 +35,72 @@ func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotification
 	err := row.Scan(&id)
 	return id, err
 }
+
+const listNotifications = `-- name: ListNotifications :many
+SELECT id, job_id, title, body, created_at, read_at
+FROM notifications
+WHERE user_id = $1
+ORDER BY (read_at IS NOT NULL), created_at DESC
+LIMIT 50
+`
+
+type ListNotificationsRow struct {
+	ID        pgtype.UUID
+	JobID     pgtype.UUID
+	Title     string
+	Body      string
+	CreatedAt pgtype.Timestamptz
+	ReadAt    pgtype.Timestamptz
+}
+
+func (q *Queries) ListNotifications(ctx context.Context, userID pgtype.UUID) ([]ListNotificationsRow, error) {
+	rows, err := q.db.Query(ctx, listNotifications, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListNotificationsRow
+	for rows.Next() {
+		var i ListNotificationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.JobID,
+			&i.Title,
+			&i.Body,
+			&i.CreatedAt,
+			&i.ReadAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markAllNotificationsRead = `-- name: MarkAllNotificationsRead :exec
+UPDATE notifications SET read_at = NOW()
+WHERE user_id = $1 AND read_at IS NULL
+`
+
+func (q *Queries) MarkAllNotificationsRead(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markAllNotificationsRead, userID)
+	return err
+}
+
+const markNotificationRead = `-- name: MarkNotificationRead :exec
+UPDATE notifications SET read_at = NOW()
+WHERE id = $1 AND user_id = $2 AND read_at IS NULL
+`
+
+type MarkNotificationReadParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error {
+	_, err := q.db.Exec(ctx, markNotificationRead, arg.ID, arg.UserID)
+	return err
+}

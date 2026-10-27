@@ -24,6 +24,14 @@ func (f *fakeStore) InsertNotification(_ context.Context, userID, jobID, _, _ st
 	return "n1", nil
 }
 
+func (f *fakeStore) ListNotifications(context.Context, string) ([]dto.Notification, error) {
+	return nil, nil
+}
+
+func (f *fakeStore) MarkNotificationRead(context.Context, string, string) error { return nil }
+
+func (f *fakeStore) MarkAllNotificationsRead(context.Context, string) error { return nil }
+
 type recordingPhone struct {
 	sent []dto.PushMessage
 	err  error
