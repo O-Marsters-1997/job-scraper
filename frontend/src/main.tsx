@@ -20,7 +20,7 @@ const router = createRouter({
 	defaultPreloadStaleTime: 0,
 	scrollRestoration: true,
 	defaultPendingComponent: PageSkeleton,
-	defaultPendingMs: 0,
+	defaultPendingMs: 150,
 	defaultPendingMinMs: 0,
 	defaultErrorComponent: (props) => (
 		<ErrorState error={props.error} onRetry={props.reset} />

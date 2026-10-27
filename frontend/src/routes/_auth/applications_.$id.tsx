@@ -74,11 +74,11 @@ export const Route = createFileRoute("/_auth/applications_/$id")({
 		const apps = await queryClient.ensureQueryData(applicationsQueryOptions());
 		const jobId = apps.find((a) => a.ID === params.id)?.JobID;
 		if (!jobId) return;
-		void queryClient.prefetchQuery(jobQueryOptions(jobId));
 		void queryClient.prefetchQuery(jobDraftsQueryOptions(jobId));
 		void queryClient.prefetchQuery(jobOpenTasksQueryOptions(jobId));
 		void queryClient.prefetchQuery(jobNoteQueryOptions(jobId));
 		void queryClient.prefetchQuery(jobCommentsQueryOptions(jobId));
+		await queryClient.prefetchQuery(jobQueryOptions(jobId));
 	},
 	component: ApplicationDetailPage,
 });
