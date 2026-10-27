@@ -18,7 +18,13 @@ type fakeStore struct {
 }
 
 func (f *fakeStore) GetNotificationJob(context.Context, string, string) (dto.NotificationJob, error) {
-	return f.summary, f.err
+	return f.summary, nil
+}
+
+type failingLookup struct{ *fakeStore }
+
+func (failingLookup) GetNotificationJob(context.Context, string, string) (dto.NotificationJob, error) {
+	return dto.NotificationJob{}, errors.New("db")
 }
 
 func (f *fakeStore) InsertNotification(_ context.Context, userID, jobID, _, _ string) (string, error) {
@@ -116,13 +122,25 @@ func TestModule_NewJob(t *testing.T) {
 
 	t.Run("store failure sends nothing", func(t *testing.T) {
 		t.Parallel()
-		phone := &recordingPhone{}
-		m := notify.Build(notify.Deps{Store: &fakeStore{err: errors.New("db")}, Phone: phone})
-		if err := m.NewJob(t.Context(), "u1", job); err == nil {
-			t.Error("NewJob() = nil, want error")
+		tests := []struct {
+			name  string
+			store notify.Store
+		}{
+			{"insert fails", &fakeStore{err: errors.New("db")}},
+			{"summary lookup fails", failingLookup{&fakeStore{}}},
 		}
-		if len(phone.sent) != 0 {
-			t.Errorf("sent = %v, want none", phone.sent)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				phone := &recordingPhone{}
+				m := notify.Build(notify.Deps{Store: tt.store, Phone: phone})
+				if err := m.NewJob(t.Context(), "u1", job); err == nil {
+					t.Error("NewJob() = nil, want error")
+				}
+				if len(phone.sent) != 0 {
+					t.Errorf("sent = %v, want none", phone.sent)
+				}
+			})
 		}
 	})
 }

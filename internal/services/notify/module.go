@@ -44,12 +44,12 @@ func New(pool *pgxpool.Pool, ntfy Ntfy) *Module {
 func (m *Module) NewJob(ctx context.Context, userID string, job dto.Job) error {
 	summary, err := m.store.GetNotificationJob(ctx, userID, job.ID)
 	if err != nil {
-		return fmt.Errorf("notify.NewJob: %w", err)
+		return fmt.Errorf("get notification job: %w", err)
 	}
 	title, body := "New job: "+job.Title, pushBody(summary)
 	id, err := m.store.InsertNotification(ctx, userID, job.ID, title, body)
 	if err != nil {
-		return fmt.Errorf("notify.NewJob: %w", err)
+		return fmt.Errorf("insert notification: %w", err)
 	}
 	if m.phone == nil {
 		return nil
@@ -62,13 +62,13 @@ func (m *Module) NewJob(ctx context.Context, userID string, job dto.Job) error {
 }
 
 func pushBody(job dto.NotificationJob) string {
-	var fit []string
+	var bandScore []string
 	if job.Band != "" {
-		fit = append(fit, strings.ToUpper(job.Band[:1])+job.Band[1:])
+		bandScore = append(bandScore, strings.ToUpper(job.Band[:1])+job.Band[1:])
 	}
 	if job.Score != nil {
-		fit = append(fit, strconv.Itoa(*job.Score))
+		bandScore = append(bandScore, strconv.Itoa(*job.Score))
 	}
-	parts := slices.DeleteFunc([]string{job.CompanyName, job.Location, strings.Join(fit, " ")}, func(s string) bool { return s == "" })
+	parts := slices.DeleteFunc([]string{job.CompanyName, job.Location, strings.Join(bandScore, " ")}, func(s string) bool { return s == "" })
 	return strings.Join(parts, " · ")
 }
