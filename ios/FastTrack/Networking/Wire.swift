@@ -166,6 +166,13 @@ struct DraftRef: Decodable {
     let id: String
 }
 
+struct DraftStatus: Decodable {
+    let status: String
+    let lastError: String
+
+    var isKeeping: Bool { status == "keeping" }
+}
+
 struct DraftInput: Encodable {
     let jobID: String
     let docID: String

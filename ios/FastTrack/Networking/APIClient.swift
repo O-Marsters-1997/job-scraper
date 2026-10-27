@@ -33,6 +33,7 @@ struct APIClient {
     var draftRoles: (_ draftID: String) async throws -> DraftRoles
     var saveRole: (_ draftID: String, _ positionID: String, _ bullets: [DraftBulletEdit]) async throws -> Void
     var keepDraft: (_ draftID: String) async throws -> Void
+    var draftStatus: (_ draftID: String) async throws -> DraftStatus
     var discardDraft: (_ draftID: String) async throws -> Void
     var coverLetters: (_ jobID: String) async throws -> [CoverLetter]
     var requestCoverLetter: (_ jobID: String) async throws -> CoverLetter
@@ -147,6 +148,9 @@ extension APIClient {
             keepDraft: { draftID in
                 try await http.post("tailoring/drafts/\(draftID)/keep", body: EmptyBody())
             },
+            draftStatus: { draftID in
+                try await http.get("tailoring/drafts/\(draftID)")
+            },
             discardDraft: { draftID in
                 try await http.post("tailoring/drafts/\(draftID)/discard", body: EmptyBody())
             },
@@ -212,6 +216,7 @@ extension APIClient {
             draftRoles: { _ in try respond(.sample) },
             saveRole: { _, _, _ in try respond(()) },
             keepDraft: { _ in try respond(()) },
+            draftStatus: { _ in try respond(DraftStatus(status: "ready", lastError: "")) },
             discardDraft: { _ in try respond(()) },
             coverLetters: { _ in try respond([]) },
             requestCoverLetter: { _ in try respond(CoverLetter(id: "letter-new", createdAt: .now, doneAt: nil)) },

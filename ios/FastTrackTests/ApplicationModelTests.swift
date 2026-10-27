@@ -206,6 +206,37 @@ struct ApplicationModelTests {
         #expect(model.hasFailure == false)
     }
 
+    @Test func keepPollsUntilTheDraftSettles() async {
+        var client = APIClient.mock()
+        let statuses = Statuses(["keeping", "keeping", "ready"])
+        client.draftRoles = { _ in DraftRoles(draftID: "draft-1", kept: statuses.polls >= 3, spills: false, roles: []) }
+        client.draftStatus = { _ in DraftStatus(status: statuses.next(), lastError: "") }
+        let model = ApplicationModel(client: client, job: .sample, draft: draft)
+        await model.load()
+
+        await model.keep(pollEvery: .milliseconds(1))
+
+        #expect(statuses.polls == 3)
+        #expect(model.kept)
+        #expect(model.keeping == false)
+        #expect(model.hasFailure == false)
+    }
+
+    @Test func failedKeepSurfacesTheErrorAndReenablesKeep() async {
+        var client = APIClient.mock()
+        client.draftRoles = { _ in DraftRoles(draftID: "draft-1", kept: false, spills: false, roles: []) }
+        client.draftStatus = { _ in DraftStatus(status: "failed", lastError: "boom") }
+        let model = ApplicationModel(client: client, job: .sample, draft: draft)
+        await model.load()
+
+        await model.keep(pollEvery: .milliseconds(1))
+
+        #expect(model.kept == false)
+        #expect(model.hasFailure)
+        #expect(model.failureMessage == "Keeping the CV failed: boom")
+        #expect(model.keeping == false)
+    }
+
     @Test func offlineFailureDisablesActions() async {
         var client = APIClient.mock()
         client.keepDraft = { _ in throw URLError(.notConnectedToInternet) }
@@ -218,6 +249,18 @@ struct ApplicationModelTests {
 
         #expect(model.isOffline)
         #expect(model.canKeep == false)
+    }
+}
+
+private final class Statuses: @unchecked Sendable {
+    private var remaining: [String]
+    private(set) var polls = 0
+
+    init(_ statuses: [String]) { remaining = statuses }
+
+    func next() -> String {
+        polls += 1
+        return remaining.count > 1 ? remaining.removeFirst() : remaining[0]
     }
 }
 
