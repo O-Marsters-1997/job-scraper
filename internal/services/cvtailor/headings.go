@@ -2,6 +2,7 @@ package cvtailor
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -52,6 +53,7 @@ func (s *Service) linkedMappings(ctx context.Context, userID, docID, tabID strin
 	if err != nil {
 		return nil, err
 	}
+	mappings = slices.DeleteFunc(mappings, func(m dto.HeadingMapping) bool { return m.PositionID == nil })
 	known := make(map[string]bool, len(mappings))
 	for _, m := range mappings {
 		known[m.HeadingText] = true

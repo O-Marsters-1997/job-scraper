@@ -114,6 +114,24 @@ func TestService_DraftRoles(t *testing.T) {
 		}
 	})
 
+	t.Run("a heading whose link was nulled by a deleted position auto-links again", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyWith(t, tick{}, e.citedEdit("Cut p99 latency"))
+		if err := e.store.SaveHeadingMappings(t.Context(), userID, docID, tabID, []dto.HeadingMapping{{HeadingText: heading}}); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := e.svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+		if err != nil {
+			t.Fatalf("DraftRoles() error = %v", err)
+		}
+
+		if len(got.Roles) != 1 || got.Roles[0].Budget != sourceBudget() {
+			t.Errorf("DraftRoles() roles = %+v, want one linked role with budget %d", got.Roles, sourceBudget())
+		}
+	})
+
 	t.Run("an achievement whose text is on the source CV is marked on source", func(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
