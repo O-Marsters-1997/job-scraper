@@ -148,7 +148,7 @@ func (s *Service) DraftPDF(ctx context.Context, userID string, q dto.DraftQuery)
 	if (draft.Status != statusReady && draft.Status != statusKeeping) || draft.DraftDocID == "" {
 		return nil, apperr.NotFound("draft has no document")
 	}
-	body, err := s.drive.ExportPDF(ctx, userID, draft.DraftDocID, "")
+	body, err := s.drive.ExportPDF(ctx, userID, draft.DraftDocID, draft.BaseTabID)
 	if err != nil {
 		slog.ErrorContext(ctx, "export draft pdf failed", slog.String("draft_id", draft.ID), slog.Any(logger.KeyErr, err))
 		return nil, apperr.Upstream("failed to export PDF")
