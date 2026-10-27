@@ -12,8 +12,13 @@ import (
 )
 
 type fakeStore struct {
-	rows []string
-	err  error
+	summary dto.NotificationJob
+	rows    []string
+	err     error
+}
+
+func (f *fakeStore) GetNotificationJob(context.Context, string, string) (dto.NotificationJob, error) {
+	return f.summary, f.err
 }
 
 func (f *fakeStore) InsertNotification(_ context.Context, userID, jobID, _, _ string) (string, error) {
@@ -57,6 +62,32 @@ func TestModule_NewJob(t *testing.T) {
 		}
 		if len(phone.sent) != 1 || phone.sent[0].URL != "fasttrack://jobs/j1?n=n1" {
 			t.Errorf("sent = %+v, want one message with the Notification link", phone.sent)
+		}
+	})
+
+	t.Run("push body summarises the scored job, skipping empty parts", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			name    string
+			summary dto.NotificationJob
+			want    string
+		}{
+			{"all parts", dto.NotificationJob{CompanyName: "Monzo", Location: "London", Band: "great", Score: new(92)}, "Monzo · London · Great 92"},
+			{"no location", dto.NotificationJob{CompanyName: "Monzo", Band: "good", Score: new(75)}, "Monzo · Good 75"},
+			{"unscored", dto.NotificationJob{CompanyName: "Monzo", Location: "London"}, "Monzo · London"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				phone := &recordingPhone{}
+				m := notify.Build(notify.Deps{Store: &fakeStore{summary: tt.summary}, Phone: phone})
+				if err := m.NewJob(t.Context(), "u1", job); err != nil {
+					t.Fatalf("NewJob() = %v", err)
+				}
+				if len(phone.sent) != 1 || phone.sent[0].Body != tt.want {
+					t.Errorf("sent = %+v, want one message with body %q", phone.sent, tt.want)
+				}
+			})
 		}
 	})
 

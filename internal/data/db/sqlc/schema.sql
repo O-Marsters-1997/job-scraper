@@ -733,7 +733,8 @@ CREATE TABLE notifications (
     title      TEXT        NOT NULL,
     body       TEXT        NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    read_at    TIMESTAMPTZ
+    read_at    TIMESTAMPTZ,
+    kind       TEXT        NOT NULL DEFAULT 'new_match' CONSTRAINT notifications_kind_check CHECK (kind IN ('new_match'))
 );
 
 CREATE INDEX notifications_user_created ON notifications (user_id, created_at DESC);
