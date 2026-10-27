@@ -165,13 +165,11 @@ struct ApplicationView: View {
 
     private var letterCard: some View {
         ApplicationNotebookCard(
-            title: "Cover letter", summary: "Write it at the desk", done: false, status: nil,
+            title: "Cover letter", summary: model.letters.isEmpty ? "Optional" : "Requested", done: false,
+            status: model.letters.isEmpty ? nil : ("Requested", .green),
             isOpen: open.contains(.letter), toggle: { toggle(.letter) }
         ) {
-            Text("Cover letters are drafted and reviewed at the desk.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .padding(14)
+            ApplicationLetterRequest(model: model)
         }
     }
 

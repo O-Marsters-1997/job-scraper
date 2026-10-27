@@ -110,6 +110,34 @@ struct ApplicationModelTests {
         #expect(model.exit == .redrafted)
     }
 
+    @Test func requestingALetterRecordsItOnce() async {
+        var client = APIClient.mock()
+        let calls = calls
+        client.requestCoverLetter = {
+            calls.log.append("letter \($0)")
+            return CoverLetter(id: "l1", createdAt: .now, doneAt: nil)
+        }
+        let model = ApplicationModel(client: client, job: .sample, draft: draft)
+
+        await model.requestLetter()
+
+        #expect(calls.log == ["letter \(DueJob.sample.id)"])
+        #expect(model.letters.count == 1)
+        #expect(model.letterError == nil)
+    }
+
+    @Test func rejectedLetterRequestShowsServerMessageInline() async {
+        var client = APIClient.mock()
+        client.requestCoverLetter = { _ in throw APIError.unprocessable("No letter tab") }
+        let model = ApplicationModel(client: client, job: .sample, draft: draft)
+
+        await model.requestLetter()
+
+        #expect(model.letters.isEmpty)
+        #expect(model.letterError == "No letter tab")
+        #expect(model.hasFailure == false)
+    }
+
     @Test func offlineFailureDisablesActions() async {
         var client = APIClient.mock()
         client.keepDraft = { _ in throw URLError(.notConnectedToInternet) }
