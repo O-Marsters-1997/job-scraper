@@ -24,6 +24,7 @@ type planned struct {
 }
 
 type plan struct {
+	raw        json.RawMessage
 	structure  docparse.DocStructure
 	positions  []planned
 	bank       []string
@@ -33,11 +34,13 @@ type plan struct {
 }
 
 func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) (plan, error) {
-	ds, err := loadTab(ctx, s.docs, claim.UserID, docID, claim.TabID)
+	raw, ds, err := fetchTab(ctx, s.docs, claim.UserID, docID, claim.TabID)
 	if err != nil {
 		return plan{}, err
 	}
-	return s.planOf(ctx, claim, ds)
+	pl, err := s.planOf(ctx, claim, ds)
+	pl.raw = raw
+	return pl, err
 }
 
 func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.DocStructure) (plan, error) {
@@ -257,16 +260,21 @@ func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Dra
 }
 
 func loadTab(ctx context.Context, docs DocFetcher, userID, docID, tabID string) (docparse.DocStructure, error) {
+	_, ds, err := fetchTab(ctx, docs, userID, docID, tabID)
+	return ds, err
+}
+
+func fetchTab(ctx context.Context, docs DocFetcher, userID, docID, tabID string) (json.RawMessage, docparse.DocStructure, error) {
 	raw, err := docs.GetDocument(ctx, userID, docID, tabID)
 	if err != nil {
-		return docparse.DocStructure{}, fmt.Errorf("load CV tab: %w", err)
+		return nil, docparse.DocStructure{}, fmt.Errorf("load CV tab: %w", err)
 	}
 	ds, err := docparse.Parse(raw)
 	if err != nil {
 		slog.ErrorContext(ctx, "parse CV tab failed", slog.Any(logger.KeyErr, err))
-		return docparse.DocStructure{}, apperr.Unprocessable("could not read the CV tab")
+		return nil, docparse.DocStructure{}, apperr.Unprocessable("could not read the CV tab")
 	}
-	return ds, nil
+	return raw, ds, nil
 }
 
 func (pl plan) withSlotIDs(edits cvedit.EditSet) cvedit.EditSet {

@@ -14,7 +14,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 )
 
-const tickInterval = 2 * time.Second
+const tickInterval = 500 * time.Millisecond
 
 // Deps are the stores and collaborators Build wires into the Module; New
 // builds the real ones and calls Build (ADR 0012).
