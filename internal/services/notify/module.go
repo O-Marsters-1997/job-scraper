@@ -20,8 +20,6 @@ type Module struct {
 	phone PhonePusher
 }
 
-// Deps are the collaborators Build wires into the Module; tests call Build
-// with fakes (ADR 0012). A nil Phone disables phone delivery.
 type Deps struct {
 	Store Store
 	Phone PhonePusher
