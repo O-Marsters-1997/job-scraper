@@ -1,0 +1,10 @@
+{
+ "Scenario": "The person's steer asks for a fact the Bank lacks.",
+ "Profile": "Backend engineer building Go services for payments and billing teams.",
+ "BankSkills": ["Go", "PostgreSQL"],
+ "Bank": ["Moved the billing service to Kubernetes", "Built REST services in Go for the payments team"],
+ "JobTitle": "Engineering Lead",
+ "Company": "Contoso",
+ "JobDescription": "<p>Lead a small team of backend engineers and mentor juniors.</p>",
+ "Steer": "say I led a team of 12 engineers"
+}
