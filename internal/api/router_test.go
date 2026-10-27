@@ -54,7 +54,7 @@ func newApp(t *testing.T, extra ...api.Module) *app {
 		t.Fatalf("identity.New: %v", err)
 	}
 	js := jobsearch.New(pool, &queue.Broker{}, scoringFacade, nil, sourcetargets.DefaultMaxAutomatic, slog.Default())
-	sc := scoring.New(pool, idm, idm, js, js, "", "", scoring.VAPID{})
+	sc := scoring.New(pool, idm, idm, js, js, nil, "", "", scoring.VAPID{})
 	cv := cvtemplates.New(pool, idm.DocsClient())
 	router, err := api.NewRouter(idm, js, append([]api.Module{apps, taskModule, cv, sc, eventsModule}, extra...)...)
 	if err != nil {
