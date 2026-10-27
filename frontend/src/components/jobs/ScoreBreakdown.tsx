@@ -2,6 +2,7 @@ import { createSignal, For, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { useRevertCorrection, useSetCorrection } from "@/hooks/useCorrections";
 import { MATCHED_COLOUR, MISSING_COLOUR, tintedChip } from "@/lib/scoreColour";
+import { rowLabel } from "@/lib/scoreRows";
 import { cn } from "@/lib/utils";
 import type { Job, ScoreRow } from "@/types/job";
 
@@ -35,24 +36,9 @@ const GROUPS: {
 		style: tintedChip(MISSING_COLOUR),
 	},
 	{
-		label: "Level",
-		keep: (r) => r.effect === "level",
-		class: "bg-surface text-muted border border-border",
-	},
-	{
-		label: "Unknown",
-		keep: (r) => r.effect === "unknown",
-		class: "bg-surface-muted text-muted border border-border",
-	},
-	{
 		label: "Corrected",
 		keep: (r) => r.corrected === true && r.effect === "neutral",
 		class: CORRECTED_CLASS,
-	},
-	{
-		label: "Retired",
-		keep: (r) => r.effect === "retired",
-		class: "bg-surface-muted text-muted",
 	},
 ];
 
@@ -96,14 +82,16 @@ export function ScoreBreakdown(props: { job: Job }) {
 												r.corrected ? CORRECTED_CLASS : g.class,
 											)}
 											style={r.corrected ? undefined : g.style}
-											title={r.corrected ? `${r.label} (corrected)` : r.label}
+											title={
+												r.corrected ? `${rowLabel(r)} (corrected)` : rowLabel(r)
+											}
 											onClick={() =>
 												setSelectedKey(
 													selectedKey() === r.key ? undefined : r.key,
 												)
 											}
 										>
-											{r.label}
+											{rowLabel(r)}
 										</button>
 									)}
 								</For>

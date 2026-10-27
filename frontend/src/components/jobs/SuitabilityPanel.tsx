@@ -19,7 +19,6 @@ export function SuitabilityPanel(props: { job: Job }) {
 				<SuitabilityScoreValue
 					score={props.job.SuitabilityScore}
 					band={props.job.Band}
-					breakdown={props.job.Breakdown}
 					size="lg"
 				/>
 				<ScoreBreakdown job={props.job} />

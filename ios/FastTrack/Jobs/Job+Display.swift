@@ -1,10 +1,9 @@
 import Foundation
 
 extension Job {
-    private static let hiddenEffects: Set<ScoreEffect> = [.neutral, .retired]
+    private static let hiddenEffects: Set<ScoreEffect> = [.neutral, .retired, .unknown, .level]
 
     var gate: ScoreRow? { breakdown.first { $0.effect.isGate } }
-    var unknownCount: Int { breakdown.filter { $0.effect == .unknown }.count }
 
     var topRows: [ScoreRow] {
         let shown = breakdown.filter { !Self.hiddenEffects.contains($0.effect) }

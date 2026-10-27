@@ -5,7 +5,7 @@ struct JobDetailBody: View {
     @Environment(\.apiClient) private var client
     @State private var detail: Job?
 
-    private static let order: [ScoreEffect] = [.gated, .blocked, .favourite, .meets, .misses, .level, .unknown]
+    private static let order: [ScoreEffect] = [.gated, .blocked, .favourite, .meets, .misses]
 
     private var shown: Job { detail ?? job }
 
