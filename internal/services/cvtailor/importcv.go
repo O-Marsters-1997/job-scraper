@@ -221,6 +221,9 @@ func repairableRole(existing []dto.Position, in dto.ImportPosition) (string, boo
 		return "", false
 	}
 	want := words(in.Employer + " " + in.Title)
+	if len(want) == 0 {
+		return "", false
+	}
 	var id string
 	n := 0
 	for _, p := range existing {

@@ -62,6 +62,27 @@ func TestImportPositionsRepairsMisparsedPositions(t *testing.T) {
 		}
 	})
 
+	t.Run("different dates create a fresh position", func(t *testing.T) {
+		svc, st := newService(t, nil, nil)
+		if _, err := st.CreatePosition(t.Context(), userID, bad); err != nil {
+			t.Fatal(err)
+		}
+		later := imp
+		later.EndDate = ptr("2026-08-01")
+
+		if _, err := svc.ImportPositions(t.Context(), userID, dto.ImportInput{Positions: []dto.ImportPosition{later}}); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := st.ListPositions(t.Context(), userID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("Bank = %d positions, want 2", len(got))
+		}
+	})
+
 	t.Run("ambiguous or absent match creates a fresh position", func(t *testing.T) {
 		svc, st := newService(t, nil, nil)
 		if _, err := st.CreatePosition(t.Context(), userID, bad); err != nil {
