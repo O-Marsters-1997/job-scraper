@@ -55,6 +55,7 @@ func (m *Module) Routes(r chi.Router) {
 		r.Put("/{id}/favourite", handlers.GetByID(m.jobs.FavouriteCompany))
 		r.Delete("/{id}/favourite", handlers.GetByID(m.jobs.UnfavouriteCompany))
 		r.Put("/{id}/kind", handlers.Update(m.jobs.SetCompanyKind))
+		r.Post("/{id}/kind/undo", handlers.Update(m.jobs.UndoCompanyKind))
 		r.Put("/{id}/review", handlers.Update(m.jobs.SetCompanyReview))
 		r.Put("/{id}/exclusion", handlers.Update(m.ExcludeCompany))
 		r.Post("/{id}/exclusion/undo", handlers.Update(m.UnexcludeCompany))

@@ -23,3 +23,8 @@ type SetCompanyKindInput struct {
 	CompanyID string      `json:"-" path:"id"`
 	Kind      CompanyKind `json:"kind"`
 }
+
+type UndoCompanyKindInput struct {
+	CompanyID string      `json:"-" path:"id"`
+	Kind      CompanyKind `json:"kind"`
+}
