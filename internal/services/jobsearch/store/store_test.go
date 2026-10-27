@@ -16,6 +16,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
+	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
@@ -1028,6 +1030,44 @@ func optionAnswerFingerprints(t *testing.T, pool *pgxpool.Pool, jobID string) ma
 		counts[fp]++
 	}
 	return counts
+}
+
+func TestIngestLinksJobToCompany(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newUserStore(t)
+	svc := jobsearch.NewService(st, queuetest.NewRecorder(), jobsearchtest.NewNoopScoring())
+	in := dto.Job{Title: "Engineer", URL: "https://example.com/jobs/linked", CompanySlug: "linked-co", Source: "linkedin"}
+
+	var jobID string
+	for range 2 {
+		results, err := svc.IngestJobs(t.Context(), []dto.Job{in})
+		if err != nil {
+			t.Fatalf("IngestJobs err = %v", err)
+		}
+		jobID = results[0].JobID
+	}
+
+	var linked bool
+	var companies int
+	if err := pool.QueryRow(t.Context(),
+		`SELECT company_id IS NOT NULL, (SELECT COUNT(*) FROM companies WHERE slug = 'linked-co') FROM jobs WHERE id = $1::uuid`,
+		jobID).Scan(&linked, &companies); err != nil {
+		t.Fatalf("query job: %v", err)
+	}
+	if !linked || companies != 1 {
+		t.Errorf("company_id set = %v, companies = %d, want true and 1", linked, companies)
+	}
+
+	if _, err := pool.Exec(t.Context(), `UPDATE jobs SET company_id = NULL WHERE id = $1::uuid`, jobID); err != nil {
+		t.Fatalf("unlink job: %v", err)
+	}
+	got, err := st.GetJob(t.Context(), jobID, userID)
+	if err != nil {
+		t.Fatalf("GetJob err = %v", err)
+	}
+	if got.CompanyID == "" {
+		t.Error("GetJob CompanyID is empty for an unlinked job, want it resolved through the slug")
+	}
 }
 
 func TestUpsertCompany(t *testing.T) {

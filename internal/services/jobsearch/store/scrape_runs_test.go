@@ -357,6 +357,11 @@ func TestStore_ListSourceHealth(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+		if i == 5 {
+			if err := st.ScrapeRunAttemptFailed(ctx, run.RunID, 0, 1, "Get x: timeout awaiting response headers"); err != nil {
+				t.Fatal(err)
+			}
+		}
 		if err := st.FinishScrapeRun(ctx, run.RunID, stop); err != nil {
 			t.Fatal(err)
 		}
@@ -382,8 +387,53 @@ func TestStore_ListSourceHealth(t *testing.T) {
 	if diff := cmp.Diff(wantRecent, h.Recent); diff != "" {
 		t.Errorf("busy Recent (-want +got):\n%s", diff)
 	}
-	if h.New != 10 || h.Retries != 1 || h.LastRunAt == nil {
-		t.Errorf("busy = %+v, want New 10 over the last 5 finished runs, Retries 1 and a last run", h)
+	if diff := cmp.Diff([]bool{false, false, false, false, true}, h.Transient); diff != "" {
+		t.Errorf("busy Transient (-want +got):\n%s", diff)
+	}
+	if h.New != 10 || h.Retries != 2 || h.LastRunAt == nil {
+		t.Errorf("busy = %+v, want New 10 over the last 5 finished runs, Retries 2 and a last run", h)
+	}
+}
+
+func TestStore_ListRecentNewJobs(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newUserStore(t)
+	ctx := t.Context()
+	mine := createTarget(t, st, userID, "linkedin", "mine")
+	theirs := createTarget(t, st, pgtest.InsertUser(t, pool), "linkedin", "theirs")
+	seed := func(target dto.SourceTarget, title string, runAge, firstSeenAge time.Duration) {
+		t.Helper()
+		run := startRun(t, st, target.ID)
+		if _, err := pool.Exec(ctx, "UPDATE scrape_runs SET started_at = NOW() - $2::float8 * INTERVAL '1 second', finished_at = NOW() - $2::float8 * INTERVAL '1 second' + INTERVAL '10 minutes', stop_reason = 'last_page' WHERE id = $1::uuid", run.RunID, runAge.Seconds()); err != nil {
+			t.Fatal(err)
+		}
+		_, err := pool.Exec(ctx, `WITH c AS (
+			INSERT INTO job_candidates (normalized_url, source, card_title, card_location, card_company, first_seen_at)
+			VALUES ('https://x.test/' || $2::text || $1::text, 'linkedin', $2, 'London', 'acme', NOW() - $3::float8 * INTERVAL '1 second') RETURNING id)
+			INSERT INTO candidate_discoveries (candidate_id, source_target_id) SELECT c.id, $1::uuid FROM c`, target.ID, title, firstSeenAge.Seconds())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	seed(mine, "recent", time.Hour, 55*time.Minute)
+	seed(mine, "old run", 48*time.Hour, 47*time.Hour)
+	seed(mine, "seen before the run", time.Hour, 5*time.Hour)
+	seed(theirs, "other user", time.Hour, 55*time.Minute)
+	seed(mine, "already a job", time.Hour, 55*time.Minute)
+	if _, err := pool.Exec(ctx, `WITH j AS (
+		INSERT INTO jobs (title, url, company_slug, source) VALUES ('already a job', 'https://x.test/job', 'acme', 'greenhouse') RETURNING id)
+		INSERT INTO job_urls (job_id, normalized_url, source, first_seen_at)
+		SELECT j.id, 'https://x.test/already a job' || $1::text, 'greenhouse', NOW() - INTERVAL '3 days' FROM j`, mine.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := st.ListRecentNewJobs(ctx, userID, time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []dto.SourceNewJob{{TargetID: mine.ID, Job: dto.Job{Title: "recent", Location: "London", CompanySlug: "acme"}}}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ListRecentNewJobs() (-want +got):\n%s", diff)
 	}
 }
 
@@ -420,6 +470,13 @@ func TestStore_BoardRuns(t *testing.T) {
 	}
 	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_run_job_changes WHERE run_id = $1", run.ID); n != 4 {
 		t.Errorf("change rows = %d, want 4 from the first finish only", n)
+	}
+	fresh, err := env.st.ListRecentNewJobs(ctx, other, time.Now().Add(-24*time.Hour))
+	if err != nil || len(fresh) != 2 || fresh[0].BoardID != env.board.ID || fresh[0].TargetID != "" {
+		t.Errorf("ListRecentNewJobs() = %+v, %v, want the board's two new jobs", fresh, err)
+	}
+	if none, err := env.st.ListRecentNewJobs(ctx, outsider, time.Now().Add(-24*time.Hour)); err != nil || len(none) != 0 {
+		t.Errorf("ListRecentNewJobs(outsider) = %+v, %v, want none", none, err)
 	}
 
 	if n := countRows(t, env.pool, "SELECT count(*) FROM scrape_runs WHERE kind = 'board'"); n != 1 {

@@ -174,6 +174,14 @@ export function formatDuration(startedAt: string, finishedAt: string): string {
 
 const STATUS_RANK = { red: 0, amber: 1, green: 2 } as const;
 
+export function byNew24h(
+	rows: SourceHealth[],
+	opts: { onlyNew: boolean; sortByNew: boolean },
+): SourceHealth[] {
+	const kept = opts.onlyNew ? rows.filter((r) => r.New24h > 0) : [...rows];
+	return opts.sortByNew ? kept.sort((a, b) => b.New24h - a.New24h) : kept;
+}
+
 export function splitHealth(rows: SourceHealth[]): {
 	attention: SourceHealth[];
 	healthy: SourceHealth[];
@@ -196,6 +204,8 @@ export function healthLabel(row: SourceHealth): string {
 			return "Last run failed";
 		case "failing_streak":
 			return "Failing repeatedly";
+		case "transient_errors":
+			return "Timeouts or rate limiting";
 		case "retried":
 			return `${row.Retries} retried ${row.Retries === 1 ? "attempt" : "attempts"}`;
 		case "no_new":

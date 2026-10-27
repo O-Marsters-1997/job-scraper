@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -331,6 +332,30 @@ func scrapeRunOutcome(finished bool, stop dto.StopReason, retries int) dto.Scrap
 	}
 }
 
+func (s *Store) ListRecentNewJobs(ctx context.Context, userID string, since time.Time) ([]dto.SourceNewJob, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, ErrInvalidID
+	}
+	rows, err := s.queries.ListRecentNewJobSnapshots(ctx, sqlc.ListRecentNewJobSnapshotsParams{
+		Since: pgtype.Timestamptz{Time: since, Valid: true}, UserID: uid,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListRecentNewJobs: %w", err)
+	}
+	out := make([]dto.SourceNewJob, len(rows))
+	for i, r := range rows {
+		out[i] = dto.SourceNewJob{Job: dto.Job{Title: r.Title, Location: r.Location, CompanySlug: r.CompanySlug}}
+		if r.SourceTargetID.Valid {
+			out[i].TargetID = r.SourceTargetID.String()
+		}
+		if r.BoardID.Valid {
+			out[i].BoardID = r.BoardID.String()
+		}
+	}
+	return out, nil
+}
+
 func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
@@ -346,7 +371,7 @@ func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.Sour
 		if len(out) == 0 || out[len(out)-1].TargetID != id {
 			h := dto.SourceHealth{
 				Kind: dto.ScrapeRunSearch, TargetID: id, Source: row.Source, TargetValue: row.TargetValue,
-				TargetFilters: map[string]string{}, Recent: []dto.ScrapeRunOutcome{},
+				TargetFilters: map[string]string{}, Recent: []dto.ScrapeRunOutcome{}, Transient: []bool{},
 			}
 			if len(row.TargetFilters) > 0 {
 				_ = json.Unmarshal(row.TargetFilters, &h.TargetFilters)
@@ -358,6 +383,7 @@ func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.Sour
 		}
 		h := &out[len(out)-1]
 		h.Recent = append(h.Recent, scrapeRunOutcome(true, dto.StopReason(row.StopReason.String), int(row.Retries)))
+		h.Transient = append(h.Transient, row.Transient)
 		h.LastRunAt = &row.StartedAt.Time
 		h.New += int(row.NewListings)
 		h.Elsewhere += int(row.Elsewhere)
@@ -373,7 +399,7 @@ func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.Sour
 		if len(out) == searches || out[len(out)-1].BoardID != id {
 			out = append(out, dto.SourceHealth{
 				Kind: dto.ScrapeRunBoard, BoardID: id, Source: row.Source, CompanyName: row.CompanyName,
-				TargetFilters: map[string]string{}, Recent: []dto.ScrapeRunOutcome{},
+				TargetFilters: map[string]string{}, Recent: []dto.ScrapeRunOutcome{}, Transient: []bool{},
 			})
 		}
 		if !row.StartedAt.Valid {
@@ -381,6 +407,7 @@ func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.Sour
 		}
 		h := &out[len(out)-1]
 		h.Recent = append(h.Recent, scrapeRunOutcome(true, dto.StopReason(row.StopReason.String), int(row.Retries)))
+		h.Transient = append(h.Transient, row.Transient)
 		h.LastRunAt = &row.StartedAt.Time
 		h.New += int(row.NewListings)
 		h.Elsewhere += int(row.Elsewhere)

@@ -87,6 +87,7 @@ type Store interface {
 	ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error)
 	MarkBoardCheckPublished(ctx context.Context, id string) error
 	ClearBoardCheckPublished(ctx context.Context, id string) error
+	RetireBoard(ctx context.Context, id string) error
 	ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error)
 	ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error)
 	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) ([]dto.JobChange, error)
@@ -112,6 +113,7 @@ type Store interface {
 	ListScrapeRuns(ctx context.Context, userID string, opts dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error)
 	ListScrapeRunJobSnapshots(ctx context.Context, userID, runID string) ([]dto.ScrapeRunJobSnapshot, error)
 	ListSourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error)
+	ListRecentNewJobs(ctx context.Context, userID string, since time.Time) ([]dto.SourceNewJob, error)
 	ScrapeRunSummary(ctx context.Context, userID string, opts dto.ScrapeRunSummaryOptions) (dto.ScrapeRunSummary, error)
 	MarkBoardUKJobsSeen(ctx context.Context, source, token string) error
 	RecordDiscoverMiss(ctx context.Context, source, token string) error

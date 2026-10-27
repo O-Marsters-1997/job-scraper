@@ -484,7 +484,8 @@ func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
 			return &queue.DeferError{Until: until, Err: err}
 		}
-		if !errors.Is(err, sources.ErrUnparseable) {
+		gone := errors.Is(err, sources.ErrGone) || errors.Is(err, sources.ErrMoved)
+		if !gone && !errors.Is(err, sources.ErrUnparseable) {
 			if tally.Claimed {
 				if recordErr := p.js.BoardRunAttemptFailed(ctx, run, task.Attempt, err.Error()); recordErr != nil {
 					p.log.WarnContext(ctx, "record board run attempt failed", slog.Any(logger.KeyErr, recordErr))
@@ -492,12 +493,20 @@ func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 			}
 			return err
 		}
-		p.log.WarnContext(ctx, "board page unparseable", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyBoardID, task.BoardID), slog.Any(logger.KeyErr, err))
-		boardErr := p.finishBoardRun(ctx, run, dto.StopFailed, tally)
+		message := "The board's page could not be read."
+		var boardErr error
+		if gone {
+			message = "The board no longer exists."
+			p.log.WarnContext(ctx, "board gone, retiring", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyBoardID, task.BoardID), slog.Any(logger.KeyErr, err))
+			boardErr = p.js.Boards().RetireBoard(ctx, task.BoardID)
+		} else {
+			p.log.WarnContext(ctx, "board page unparseable", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyBoardID, task.BoardID), slog.Any(logger.KeyErr, err))
+		}
+		boardErr = errors.Join(boardErr, p.finishBoardRun(ctx, run, dto.StopFailed, tally))
 		if task.TargetID == "" {
 			return boardErr
 		}
-		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "The board's page could not be read.")
+		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", message)
 		return errors.Join(boardErr, err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
 	}
 	if err := p.finishBoardRun(ctx, run, dto.StopLastPage, tally); err != nil {

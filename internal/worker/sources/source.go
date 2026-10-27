@@ -36,6 +36,8 @@ type Config struct {
 	Header      http.Header // overrides the default request headers for a host that rejects them
 	Cookies     bool
 	NewestFirst bool
+
+	RedirectRetires bool
 }
 
 // SnapshotSource is implemented by any source that has snapshot-testable parsers.
@@ -84,6 +86,8 @@ type BoardPoller interface {
 
 // ErrGone is returned by Get and PostJSON for a 404 or 410 response.
 var ErrGone = errors.New("gone")
+
+var ErrMoved = errors.New("moved")
 
 var ErrNotRemote = errors.New("not remote")
 
@@ -169,6 +173,9 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte,
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if b.cfg.RedirectRetires && resp.Request != nil && resp.Request.URL.Host != req.URL.Host {
+		return nil, fmt.Errorf("%w: redirected to %s", ErrMoved, resp.Request.URL.Host)
+	}
 	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
 		return nil, fmt.Errorf("%w: status %s", ErrGone, resp.Status)
 	}

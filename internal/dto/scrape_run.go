@@ -189,11 +189,17 @@ type HealthReason string
 const (
 	ReasonLastFailed    HealthReason = "last_failed"
 	ReasonFailingStreak HealthReason = "failing_streak"
+	ReasonTransient     HealthReason = "transient_errors"
 	ReasonRetried       HealthReason = "retried"
 	ReasonNoNew         HealthReason = "no_new"
 	ReasonNoRuns        HealthReason = "no_runs"
 	ReasonOK            HealthReason = "ok"
 )
+
+type SourceNewJob struct {
+	TargetID, BoardID string
+	Job               Job
+}
 
 type SourceHealth struct {
 	Kind          ScrapeRunKind
@@ -206,7 +212,9 @@ type SourceHealth struct {
 	Status        HealthStatus
 	Reason        HealthReason
 	Recent        []ScrapeRunOutcome
+	Transient     []bool
 	LastRunAt     *time.Time
 
 	New, Elsewhere, Removed, Retries int
+	New24h                           int
 }
