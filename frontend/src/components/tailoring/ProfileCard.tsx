@@ -1,4 +1,4 @@
-import { createSignal, Show } from "solid-js";
+import { createEffect, createSignal, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,20 +16,22 @@ export function ProfileCard(props: {
 	onRevert: () => void;
 }) {
 	const [steer, setSteer] = createSignal("");
-	const [before, setBefore] = createSignal<string>();
+	const [attempt, setAttempt] = createSignal<{ from: string; to?: string }>();
 	const differs = () => props.text !== props.base;
 	const undoable = () => {
-		const prior = before();
-		return prior !== undefined && props.text !== prior;
+		const a = attempt();
+		return a?.to !== undefined && a.to !== a.from && props.text === a.to;
 	};
 	const redraft = () => {
-		setBefore(props.text);
+		setAttempt({ from: props.text });
 		props.onRedraft(steer().trim() || undefined);
 	};
-	const revert = () => {
-		setBefore(undefined);
-		props.onRevert();
-	};
+	createEffect(() => {
+		const a = attempt();
+		if (!a || a.to !== undefined) return;
+		if (props.pending || props.error || props.text === a.from) return;
+		setAttempt({ ...a, to: props.text });
+	});
 	return (
 		<section
 			aria-label="Profile"
@@ -64,30 +66,15 @@ export function ProfileCard(props: {
 					<Icon name="wand" size={14} />
 					Redraft
 				</Button>
-				<Show
-					when={undoable()}
-					fallback={
-						<Show when={differs()}>
-							<Button
-								variant="ghost"
-								size="sm"
-								disabled={props.pending}
-								onClick={revert}
-							>
-								<Icon name="rotateCcw" size={14} />
-								Revert to base
-							</Button>
-						</Show>
-					}
-				>
+				<Show when={undoable() || differs()}>
 					<Button
 						variant="ghost"
 						size="sm"
 						disabled={props.pending}
-						onClick={revert}
+						onClick={() => props.onRevert()}
 					>
 						<Icon name="rotateCcw" size={14} />
-						Undo
+						{undoable() ? "Undo" : "Revert to base"}
 					</Button>
 				</Show>
 			</div>

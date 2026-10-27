@@ -190,24 +190,30 @@ export function DraftEditor(props: {
 	);
 
 	const redraft = useRedraftProfile(() => props.draft.id);
-	const [beforeRedraft, setBeforeRedraft] = createSignal<string>();
+	const [lastRedraft, setLastRedraft] = createSignal<{
+		from: string;
+		to: string;
+	}>();
 	const [profileTop, setProfileTop] = createSignal(0);
 	const baseProfile = () => props.draft.base?.profile ?? undefined;
-	const redraftProfile = async (steer?: string) => {
+	const runRedraft = async (steer?: string) => {
 		await ed.flush();
-		const prior = ed.text(PROFILE_SLOT);
+		const from = ed.text(PROFILE_SLOT);
 		redraft.mutate(steer ? { steer } : {}, {
 			onSuccess: (saved) => {
 				const next = saved.content?.profile;
-				if (next == null || next === prior) return;
-				setBeforeRedraft(prior);
+				if (next == null || next === from) return;
 				ed.setText(PROFILE_SLOT, next);
+				setLastRedraft({ from, to: ed.text(PROFILE_SLOT) });
 			},
 		});
 	};
 	const revertProfile = () => {
-		const to = beforeRedraft() ?? baseProfile();
-		setBeforeRedraft(undefined);
+		const last = lastRedraft();
+		const undo = last && ed.text(PROFILE_SLOT) === last.to;
+		const to = undo ? last.from : baseProfile();
+		setLastRedraft(undefined);
+		redraft.reset();
 		if (to === undefined) return;
 		ed.setText(PROFILE_SLOT, to);
 		void ed.flush();
@@ -678,7 +684,7 @@ export function DraftEditor(props: {
 												{...(redraft.error && {
 													error: redraft.error.message,
 												})}
-												onRedraft={(steer) => void redraftProfile(steer)}
+												onRedraft={(steer) => void runRedraft(steer)}
 												onRevert={revertProfile}
 											/>
 										</div>
