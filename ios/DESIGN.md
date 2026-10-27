@@ -226,7 +226,7 @@ Always `RoundedRectangle(cornerRadius:style: .continuous)`.
 - **12pt** (`field`): login fields and the Sign in button.
 - **8pt**: the "Coming up" chase chips.
 - **5pt** (`chip`): dot-labels and the 18pt task checkbox, a rounded square, not a circle.
-- **Circles**: the action bar buttons. **Capsules**: the sync note and the prototype controls.
+- **Circles**: the action bar buttons and the Shortlisted card actions. **Capsules**: the sync note and the prototype controls.
 - System lists, sheets and menus keep their own radii.
 
 ## Components
@@ -297,8 +297,7 @@ digits), on a 10% tint of the hue with 5pt corners. Used for Bands, chase state 
 
 - **Header** (a button, 14pt padding, 6pt between its lines):
   - Line 1: the company in serif `.title3`, then the Band dot-label and score (caption, secondary) 10pt
-    after the name. On the trailing side, the to-do count and a chevron that rotates 90° when
-    open.
+    after the name. On the trailing side, the to-do count and a chevron that rotates 90° when open.
   - Line 2: the role in `.footnote` secondary, with a dot-label for the most urgent item on the trailing side.
     It fades out while the card is open.
 - **Body**: Task rows under a full-width divider. Only the first card starts open.
@@ -411,7 +410,8 @@ snoozing or marking applied on the Due list is undoable the same way.
 - **Shortlisted.** Pushed from Due. Shortlisted jobs with no CV draft, highest score first, as hairline cards
   with the Due card header (company, Band dot-label, score, a trailing chevron, then the role line). Under a
   divider sit two 36pt circular actions, each with its word: **Draft CV** (Brand Violet fill, white glyph,
-  a spinner while it queues) and **Apply** (outlined like `···`). Tapping the header opens Job detail. It has the same native search field.
+  a spinner while it queues) and **Apply** (outlined like `···`). Tapping the header opens Job detail. It
+  has the same native search field.
 - **Job detail.** Pushed from a Due card's **Open job**. It has the band row, the serif company header, then
   the detail body, with a `ShareLink` in the toolbar and the back swipe intact.
 - **CV draft PDF.** **View PDF** opens the draft in `.quickLookPreview`, which brings sharing and Save to Files
@@ -471,7 +471,7 @@ This extends PRODUCT.md's AA baseline:
   `.primary` on a tint, so the hue only has to pass as a glyph.
 - **Dynamic Type through AX5.** Text styles only, and the card has an accessibility-size layout.
 - **Hit targets.** At least 44×44pt (the checkbox's target, not its 18pt square). Action bar buttons are
-  48–64pt.
+  48–64pt. Shortlisted card circles are 36pt (scaling with Dynamic Type) inside a 44pt row.
 - **Not colour alone.** Every Band, breakdown row, status and swipe wash pairs its colour with a word or symbol.
 - **Verification.** Simulator screenshots in light, dark and AX3, plus a VoiceOver walk through one triage
   burst on a device.

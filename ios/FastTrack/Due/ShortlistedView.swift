@@ -6,6 +6,7 @@ struct ShortlistedView: View {
     @State private var openJobID: String?
     @State private var applying: DueJob?
     @State private var drafting: Set<String> = []
+    @ScaledMetric(relativeTo: .subheadline) private var actionSize = 36.0
 
     var body: some View {
         let jobs = model.shortlisted(matching: query)
@@ -100,7 +101,7 @@ struct ShortlistedView: View {
                         .foregroundStyle(primary ? Color.white : Color.secondary)
                 }
             }
-            .frame(width: 36, height: 36)
+            .frame(width: actionSize, height: actionSize)
             .background(primary ? Color.brandTint : Color(.systemBackground), in: .circle)
             .overlay { if !primary { Circle().strokeBorder(Color(.separator)) } }
             .accessibilityHidden(true)
