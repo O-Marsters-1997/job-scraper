@@ -87,11 +87,32 @@ func TestStore_ListDue(t *testing.T) {
 		chase := "2026-03-04"
 		score := 82
 		want := []dto.DueJob{{
-			JobID: jobID, Title: "Chased", CompanySlug: got.Jobs[0].CompanySlug, Band: "great", Score: &score,
+			JobID: jobID, Title: "Chased", CompanySlug: got.Jobs[0].CompanySlug, CompanyKind: dto.KindUnclassified, Band: "great", Score: &score,
 			ApplicationID: appID, ChaseBy: &chase, Tasks: []dto.DueTask{},
 		}}
 		if diff := cmp.Diff(want, got.Jobs); diff != "" {
 			t.Errorf("ListDue jobs (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("carries the company kind, unclassified when the job has no company", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID := newStore(t)
+		linked, _ := trackJob(t, pool, userID, "Linked", "2026-03-04")
+		trackJob(t, pool, userID, "Orphan", "2026-03-05")
+		exec(t, pool, `INSERT INTO companies (slug, name, kind) VALUES ('acme-recruit', 'Acme Recruit', 'agency')`)
+		exec(t, pool, `UPDATE jobs SET company_id = (SELECT id FROM companies WHERE slug = 'acme-recruit') WHERE id = $1`, linked)
+
+		got, err := st.ListDue(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("ListDue err = %v", err)
+		}
+		var kinds []dto.CompanyKind
+		for _, j := range got.Jobs {
+			kinds = append(kinds, j.CompanyKind)
+		}
+		if diff := cmp.Diff([]dto.CompanyKind{dto.KindAgency, dto.KindUnclassified}, kinds); diff != "" {
+			t.Errorf("ListDue kinds (-want +got):\n%s", diff)
 		}
 	})
 

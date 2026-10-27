@@ -16,6 +16,7 @@ SELECT
     j.id           AS job_id,
     j.title        AS job_title,
     j.company_slug AS company_slug,
+    COALESCE(co.kind, 'unclassified')::text AS company_kind,
     COALESCE(js.band, '')::text AS band,
     js.suitability_score AS score,
     a.id           AS application_id,
@@ -27,6 +28,7 @@ SELECT
     COALESCE(d.cv_title, '')::text AS draft_cv_title
 FROM applications a
 JOIN jobs j ON j.id = a.job_id
+LEFT JOIN companies co ON co.id = j.company_id
 LEFT JOIN job_scores js ON js.job_id = a.job_id AND js.user_id = a.user_id
 LEFT JOIN LATERAL (
     SELECT t.id
@@ -70,6 +72,7 @@ type ListDueRow struct {
 	JobID         pgtype.UUID
 	JobTitle      string
 	CompanySlug   string
+	CompanyKind   string
 	Band          string
 	Score         pgtype.Int4
 	ApplicationID pgtype.UUID
@@ -94,6 +97,7 @@ func (q *Queries) ListDue(ctx context.Context, userID pgtype.UUID) ([]ListDueRow
 			&i.JobID,
 			&i.JobTitle,
 			&i.CompanySlug,
+			&i.CompanyKind,
 			&i.Band,
 			&i.Score,
 			&i.ApplicationID,
