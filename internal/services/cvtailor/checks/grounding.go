@@ -3,6 +3,7 @@ package checks
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -26,7 +27,7 @@ func Grounding(d Draft) []Finding {
 		}
 	}
 	if d.Profile != nil {
-		out = append(out, groundSlot(*d.Profile, d.Bank, d.Bank)...)
+		out = append(out, groundSlot(*d.Profile, d.Bank, slices.Concat(d.Bank, d.BankSkills))...)
 	}
 	return append(out, groundSkills(d)...)
 }
