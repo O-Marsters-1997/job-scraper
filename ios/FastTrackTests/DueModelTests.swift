@@ -162,6 +162,23 @@ struct DueModelTests {
         #expect(model.dueJobs.map(\.id) == ["drafted", "desk"])
     }
 
+    @Test func readyToApplyHoldsKeptUnappliedJobsAndLeavesNotDrafted() async throws {
+        func kept(_ id: String, apply: String?, score: Int) -> DueJob {
+            DueJob(
+                jobID: id, title: "Role \(id)", companySlug: "co-\(id)", companyKind: .direct, band: .great, score: score, applicationID: "app-\(id)",
+                chaseBy: nil, applyTaskID: apply, tasks: [], draft: nil, keptDraftID: "kept-\(id)")
+        }
+        let model = await model([
+            kept("low", apply: "x", score: 60), kept("high", apply: "x", score: 95), kept("applied", apply: nil, score: 99),
+            job("plain", chase: nil, applyTaskID: "x"),
+        ])
+
+        #expect(model.readyToApply.map(\.id) == ["high", "low"])
+        #expect(try #require(model.readyToApply.first).keptDraft?.id == "kept-high")
+        #expect(model.shortlisted.map(\.id) == ["plain"])
+        #expect(model.shortlistedCount == 3)
+    }
+
     @Test(arguments: [
         ("engineer", ["a"], ["c"]), ("MONZO", ["b"], []), ("  go ", ["a", "b"], ["c"]), ("", ["a", "b"], ["c"]),
         ("zzz", [], []),

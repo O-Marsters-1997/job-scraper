@@ -20,6 +20,11 @@ in on the phone, and neither list can be searched.
     apply-on-listing sheet Due already uses). Tapping the row opens Job detail.
   - It is built from the due payload the app already loads. There is no new endpoint, and it is online
     only, like Due.
+- **Ready to apply** (added by #1444). The Shortlisted screen has a segmented control, **Not drafted** and
+  **Ready to apply**. Ready to apply lists jobs with an open `apply` Task, a kept CV (`kept_draft_id` in the
+  due payload) and no pending draft or `finish` Task, highest score first. Tapping one opens its
+  Application screen for the kept CV rather than Job detail, and the card has no Draft CV or Apply buttons.
+  The Due entry row is now "Shortlisted · N", counting both categories.
 - **Search.** Native `.searchable` on Due and on the Shortlisted list. It filters the loaded list locally
   by job title and company.
 - Still out of scope: browsing or searching all jobs, and a third tab.
