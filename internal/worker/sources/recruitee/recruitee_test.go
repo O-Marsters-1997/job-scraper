@@ -42,6 +42,7 @@ type replyTransport func(*http.Request) *http.Response
 func (f replyTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req), nil }
 
 func TestPollBoard_Retirement(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		reply func(*http.Request) *http.Response
@@ -58,6 +59,7 @@ func TestPollBoard_Retirement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			src := recruitee.New("intralot", noGap())
 			src.Client().Transport = replyTransport(tt.reply)
 			if _, err := src.PollBoard(t.Context()); !errors.Is(err, tt.want) {
