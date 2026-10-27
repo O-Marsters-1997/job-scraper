@@ -982,6 +982,17 @@ func (f *FakeStore) ListDueBoards(context.Context) ([]dto.BoardPoll, error) {
 	return out, nil
 }
 
+func (f *FakeStore) RetireBoard(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if b, ok := f.boards[id]; ok && b.Status != dto.BoardRetired {
+		now := time.Now()
+		b.Status, b.RetiredAt = dto.BoardRetired, &now
+		f.boards[id] = b
+	}
+	return nil
+}
+
 func (f *FakeStore) MarkBoardCheckPublished(_ context.Context, id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
