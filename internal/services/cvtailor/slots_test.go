@@ -171,7 +171,7 @@ func TestSaveDraftSlots(t *testing.T) {
 		}
 	})
 
-	t.Run("a replace drops a cited achievement from the draft and may remove bullets", func(t *testing.T) {
+	t.Run("a replace drops a cited achievement from the draft", func(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
@@ -180,8 +180,10 @@ func TestSaveDraftSlots(t *testing.T) {
 		two := dto.DraftPosition{PositionID: e.pos.ID, Bullets: []dto.DraftBullet{
 			{Text: e.pos.Achievements[0].Text, AchievementIDs: []string{e.pos.Achievements[0].ID}},
 			{Text: swapped.Text, AchievementIDs: []string{swapped.ID}},
+			{Text: "Wrote docs"},
 		}}
-		one := dto.DraftPosition{PositionID: e.pos.ID, Bullets: two.Bullets[1:]}
+		one := dto.DraftPosition{PositionID: e.pos.ID, Bullets: slices.Clone(two.Bullets)}
+		one.Bullets[0] = dto.DraftBullet{Text: "Ran on-call"}
 		for _, rep := range []dto.DraftPosition{two, one} {
 			if _, err := svc.SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{rep}}); err != nil {
 				t.Fatalf("SaveDraftSlots() error = %v", err)
@@ -230,6 +232,40 @@ func TestSaveDraftSlots(t *testing.T) {
 			if !apperr.IsKind(err, apperr.KindInvalid) {
 				t.Errorf("SaveDraftSlots(%+v) error = %v, want an invalid error", edit, err)
 			}
+		}
+	})
+
+	t.Run("a replace that omits a base bullet is rejected and changes nothing", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		before := e.draft(t, id)
+		rep := dto.DraftPosition{PositionID: e.pos.ID, Bullets: []dto.DraftBullet{{Text: "Ran on-call"}, {Text: "Wrote docs"}}}
+
+		_, err := e.editing(t, e.drive).SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{rep}})
+
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("SaveDraftSlots() error = %v, want an invalid error", err)
+		}
+		if diff := cmp.Diff(before.Content, e.draft(t, id).Content); diff != "" {
+			t.Errorf("Draft content changed by a rejected save (-before +after):\n%s", diff)
+		}
+	})
+
+	t.Run("a replace may reorder base bullets", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		bullets := []dto.DraftBullet{{Text: "Wrote docs", AchievementIDs: []string{}}, {Text: "Ran on-call", AchievementIDs: []string{}}, {Text: "Built and maintained the public APIs for the platform", AchievementIDs: []string{}}}
+		rep := dto.DraftPosition{PositionID: e.pos.ID, Bullets: bullets}
+
+		got, err := e.editing(t, e.drive).SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{rep}})
+		if err != nil {
+			t.Fatalf("SaveDraftSlots() error = %v", err)
+		}
+
+		if diff := cmp.Diff(bullets, got.Content.Positions[0].Bullets); diff != "" {
+			t.Errorf("SaveDraftSlots().Content bullets mismatch (-want +got):\n%s", diff)
 		}
 	})
 
