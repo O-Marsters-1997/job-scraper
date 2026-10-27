@@ -1,0 +1,9 @@
+{
+ "Scenario": "A short base Profile and a long job description tempt a longer paragraph than the base.",
+ "Profile": "Backend engineer who builds Go services for payments teams.",
+ "BankSkills": ["Go", "PostgreSQL"],
+ "Bank": ["Built REST services in Go for the payments team"],
+ "JobTitle": "Backend Engineer",
+ "Company": "Fabrikam",
+ "JobDescription": "<p>We are a growing payments company looking for an engineer who writes reliable services, reviews code carefully, works well with product managers and designers, documents decisions, and cares about operating what they build in production.</p>"
+}
