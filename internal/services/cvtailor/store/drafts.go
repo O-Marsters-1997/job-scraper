@@ -12,6 +12,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/profiledraft"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store/sqlc"
 )
 
@@ -408,4 +409,94 @@ func (s *Store) JobAnnotations(ctx context.Context, userID, jobID string) (dto.J
 		comments = []string{}
 	}
 	return dto.JobAnnotations{Note: note, Comments: comments}, nil
+}
+
+// AddProfileAttempts records the Profile Attempts of a Draft the User owns,
+// in order; ErrDraftNotFound when userID does not own it.
+func (s *Store) AddProfileAttempts(ctx context.Context, userID, draftID string, attempts []dto.ProfileAttempt) error {
+	uid, err := parseID(userID, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	did, err := parseID(draftID, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	return s.inTx(ctx, func(q *sqlc.Queries) error {
+		for _, a := range attempts {
+			n, err := q.AddProfileAttempt(ctx, sqlc.AddProfileAttemptParams{
+				DraftID: did, UserID: uid, Text: a.Text, Steer: a.Steer, Rejection: a.Rejection,
+				PromptKey: a.PromptKey, Model: a.Model, Cost: a.Cost,
+			})
+			if err != nil {
+				return fmt.Errorf("store.AddProfileAttempts: %w", err)
+			}
+			if n == 0 {
+				return ErrDraftNotFound
+			}
+		}
+		return nil
+	})
+}
+
+func (s *Store) ListProfileCaptures(ctx context.Context, userID string) ([]dto.ProfileCapture, error) {
+	uid, err := parseID(userID, ErrDraftNotFound)
+	if err != nil {
+		return nil, err
+	}
+	drafts, err := s.queries.ListProfileCaptureDrafts(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListProfileCaptures: drafts: %w", err)
+	}
+	if len(drafts) == 0 {
+		return []dto.ProfileCapture{}, nil
+	}
+	ids := make([]pgtype.UUID, len(drafts))
+	for i, d := range drafts {
+		ids[i] = d.ID
+	}
+	rows, err := s.queries.ListProfileAttempts(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListProfileCaptures: attempts: %w", err)
+	}
+	attempts := map[pgtype.UUID][]dto.ProfileAttempt{}
+	for _, r := range rows {
+		attempts[r.DraftID] = append(attempts[r.DraftID], dto.ProfileAttempt{
+			Text: r.Text, Steer: r.Steer, Rejection: r.Rejection, PromptKey: r.PromptKey, Model: r.Model, Cost: r.Cost,
+		})
+	}
+	skills, err := s.ListBankSkills(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	positions, err := s.ListPositions(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	var skillNames, bank []string
+	for _, sk := range skills {
+		skillNames = append(skillNames, sk.Name)
+	}
+	for _, p := range positions {
+		for _, a := range p.Achievements {
+			bank = append(bank, a.Text)
+		}
+	}
+
+	out := make([]dto.ProfileCapture, 0, len(drafts))
+	for _, d := range drafts {
+		var base, edits dto.DraftContent
+		if json.Unmarshal(d.BaseContent, &base) != nil || base.Profile == nil {
+			continue
+		}
+		final := *base.Profile
+		if json.Unmarshal(d.EditSet, &edits) == nil && edits.Profile != nil {
+			final = *edits.Profile
+		}
+		out = append(out, dto.ProfileCapture{
+			DraftID: d.ID.String(), JobTitle: d.JobTitle, Company: d.Company, JobDescription: profiledraft.JobText(d.JobDescription),
+			BaseProfile: *base.Profile, FinalProfile: final, BankSkills: skillNames, Bank: bank, Attempts: attempts[d.ID],
+		})
+	}
+	return out, nil
 }

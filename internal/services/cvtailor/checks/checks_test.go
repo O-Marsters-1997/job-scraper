@@ -94,6 +94,15 @@ func TestGroundingBullets(t *testing.T) {
 				[]string{"Wrote Go"}),
 		},
 		{
+			name: "technology only in BankSkills blocks",
+			draft: func() checks.Draft {
+				d := bulletDraft("Deployed services in Go", "", []string{"Deployed services"}, []string{"Deployed services"})
+				d.BankSkills = []string{"Go"}
+				return d
+			}(),
+			want: []want{{checks.Block, "s1"}},
+		},
+		{
 			name: "substring of another term does not ground",
 			draft: bulletDraft("Wrote Java services", "", []string{"Wrote JavaScript services"},
 				[]string{"Wrote JavaScript services"}),
@@ -117,12 +126,13 @@ func TestGroundingProfileUsesWholeBank(t *testing.T) {
 		want []want
 	}{
 		{"terms and numbers from anywhere in the Bank pass", "Engineer who runs Kubernetes and improved queries by 30%", nil},
+		{"term only in BankSkills passes", "Engineer who runs Go services", nil},
 		{"term outside the Bank blocks", "Engineer who runs Terraform", []want{{checks.Block, "profile"}}},
 		{"number outside the Bank blocks", "Engineer with 10 years of experience", []want{{checks.Block, "profile"}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := checks.Draft{Bank: bank, Profile: &checks.Slot{ID: "profile", Text: tt.text}}
+			d := checks.Draft{Bank: bank, BankSkills: []string{"Go"}, Profile: &checks.Slot{ID: "profile", Text: tt.text}}
 			if diff := cmp.Diff(tt.want, findings(checks.Grounding(d), "grounding")); diff != "" {
 				t.Errorf("grounding findings (-want +got):\n%s", diff)
 			}

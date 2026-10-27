@@ -204,6 +204,32 @@ type DraftSlotsInput struct {
 	Roles     []string        `json:"roles"`
 }
 
+type ProfileAttempt struct {
+	Text      string
+	Steer     string
+	Rejection string
+	PromptKey string
+	Model     string
+	Cost      float64
+}
+
+type ProfileCapture struct {
+	DraftID        string
+	JobTitle       string
+	Company        string
+	JobDescription string
+	BaseProfile    string
+	FinalProfile   string
+	BankSkills     []string
+	Bank           []string
+	Attempts       []ProfileAttempt
+}
+
+type ProfileRedraftInput struct {
+	ID    string `json:"-" path:"id"`
+	Steer string `json:"steer"`
+}
+
 // DraftLayout is a Draft Doc's single-column page geometry and styled
 // paragraphs, in pt, for rendering at true size.
 type DraftLayout struct {

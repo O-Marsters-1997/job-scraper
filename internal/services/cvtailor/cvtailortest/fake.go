@@ -35,6 +35,7 @@ type achievement struct {
 
 type FakeStore struct {
 	mu             sync.Mutex
+	attempts       map[string][]dto.ProfileAttempt
 	positions      map[string]*position
 	achievements   map[string]*achievement
 	mappings       map[headingKey]*string
@@ -51,7 +52,7 @@ type FakeStore struct {
 }
 
 func NewFakeStore() *FakeStore {
-	return &FakeStore{positions: map[string]*position{}, achievements: map[string]*achievement{}, mappings: map[headingKey]*string{}, skills: map[string]*bankSkill{}, drafts: map[string]*draft{}, outcomes: map[string][]dto.AchievementOutcome{}, jobs: map[string]dto.Job{}, skeletons: map[string]dto.LetterSkeleton{}, letterTabs: map[letterTab]bool{}}
+	return &FakeStore{attempts: map[string][]dto.ProfileAttempt{}, positions: map[string]*position{}, achievements: map[string]*achievement{}, mappings: map[headingKey]*string{}, skills: map[string]*bankSkill{}, drafts: map[string]*draft{}, outcomes: map[string][]dto.AchievementOutcome{}, jobs: map[string]dto.Job{}, skeletons: map[string]dto.LetterSkeleton{}, letterTabs: map[letterTab]bool{}}
 }
 
 func (f *FakeStore) nextID() string {

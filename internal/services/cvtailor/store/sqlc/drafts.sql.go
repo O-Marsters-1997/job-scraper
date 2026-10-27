@@ -11,6 +11,41 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addProfileAttempt = `-- name: AddProfileAttempt :execrows
+INSERT INTO profile_attempts (draft_id, text, steer, rejection, prompt_key, model, cost, created_at)
+SELECT d.id, $1::text, $2::text, $3::text, $4::text, $5::text, $6::float8, clock_timestamp()
+FROM tailored_cvs d
+WHERE d.id = $7::uuid AND d.user_id = $8::uuid
+`
+
+type AddProfileAttemptParams struct {
+	Text      string
+	Steer     string
+	Rejection string
+	PromptKey string
+	Model     string
+	Cost      float64
+	DraftID   pgtype.UUID
+	UserID    pgtype.UUID
+}
+
+func (q *Queries) AddProfileAttempt(ctx context.Context, arg AddProfileAttemptParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addProfileAttempt,
+		arg.Text,
+		arg.Steer,
+		arg.Rejection,
+		arg.PromptKey,
+		arg.Model,
+		arg.Cost,
+		arg.DraftID,
+		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const claimDraft = `-- name: ClaimDraft :one
 WITH next AS (
     SELECT id FROM tailored_cvs
@@ -422,6 +457,98 @@ func (q *Queries) ListJobDrafts(ctx context.Context, arg ListJobDraftsParams) ([
 			&i.CreatedAt,
 			&i.Insights,
 			&i.InsightsFor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProfileAttempts = `-- name: ListProfileAttempts :many
+SELECT draft_id, text, steer, rejection, prompt_key, model, cost::float8 AS cost
+FROM profile_attempts
+WHERE draft_id = ANY($1::uuid[])
+ORDER BY draft_id, created_at, id
+`
+
+type ListProfileAttemptsRow struct {
+	DraftID   pgtype.UUID
+	Text      string
+	Steer     string
+	Rejection string
+	PromptKey string
+	Model     string
+	Cost      float64
+}
+
+func (q *Queries) ListProfileAttempts(ctx context.Context, dollar_1 []pgtype.UUID) ([]ListProfileAttemptsRow, error) {
+	rows, err := q.db.Query(ctx, listProfileAttempts, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListProfileAttemptsRow
+	for rows.Next() {
+		var i ListProfileAttemptsRow
+		if err := rows.Scan(
+			&i.DraftID,
+			&i.Text,
+			&i.Steer,
+			&i.Rejection,
+			&i.PromptKey,
+			&i.Model,
+			&i.Cost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProfileCaptureDrafts = `-- name: ListProfileCaptureDrafts :many
+SELECT d.id, d.base_content, d.edit_set, j.title AS job_title,
+    COALESCE(c.name, j.company_slug)::text AS company, j.description AS job_description
+FROM tailored_cvs d
+JOIN jobs j ON j.id = d.job_id
+LEFT JOIN companies c ON c.id = j.company_id
+WHERE d.user_id = $1 AND d.outcome = 'kept'
+  AND EXISTS (SELECT 1 FROM profile_attempts a WHERE a.draft_id = d.id)
+ORDER BY d.created_at, d.id
+`
+
+type ListProfileCaptureDraftsRow struct {
+	ID             pgtype.UUID
+	BaseContent    []byte
+	EditSet        []byte
+	JobTitle       string
+	Company        string
+	JobDescription string
+}
+
+func (q *Queries) ListProfileCaptureDrafts(ctx context.Context, userID pgtype.UUID) ([]ListProfileCaptureDraftsRow, error) {
+	rows, err := q.db.Query(ctx, listProfileCaptureDrafts, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListProfileCaptureDraftsRow
+	for rows.Next() {
+		var i ListProfileCaptureDraftsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BaseContent,
+			&i.EditSet,
+			&i.JobTitle,
+			&i.Company,
+			&i.JobDescription,
 		); err != nil {
 			return nil, err
 		}

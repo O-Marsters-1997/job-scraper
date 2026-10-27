@@ -12,7 +12,25 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/profiledraft"
 )
+
+type RecordingProfileWriter struct {
+	result profiledraft.Result
+	err    error
+	Inputs []profiledraft.Input
+}
+
+func Redrafting(res profiledraft.Result, err error) *RecordingProfileWriter {
+	return &RecordingProfileWriter{result: res, err: err}
+}
+
+func (w *RecordingProfileWriter) Redraft(_ context.Context, _ string, in profiledraft.Input) (profiledraft.Result, error) {
+	w.Inputs = append(w.Inputs, in)
+	return w.result, w.err
+}
+
+var _ cvtailor.ProfileWriter = (*RecordingProfileWriter)(nil)
 
 type Key string
 
