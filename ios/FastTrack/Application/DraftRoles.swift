@@ -12,14 +12,32 @@ struct DraftRoles: Decodable {
         let title: String
         let budget: Int
         let bullets: [Bullet]
+        let bank: [Bullet]
 
         var id: String { positionID ?? "\(employer)|\(title)" }
         var isLinked: Bool { positionID != nil }
         var used: Int { bullets.reduce(0) { $0 + $1.lines } }
         var over: Int { max(used - budget, 0) }
+        var free: Int { max(budget - used, 0) }
+        var rankedBank: [Bullet] { bank.sorted { ($0.lean ?? -1) > ($1.lean ?? -1) } }
+
+        func fits(_ new: Bullet) -> Bool { used + new.lines <= budget }
+        func linesAfter(replacing old: Bullet, with new: Bullet) -> Int { used - old.lines + new.lines }
+        func budgetLabel(forLines lines: Int) -> String { lines > budget ? "\(lines - budget) over" : "\(lines)/\(budget)" }
+
+        func replacing(_ old: Bullet, with new: Bullet) -> [Bullet] { bullets.map { $0.id == old.id ? new : $0 } }
+        func adding(_ new: Bullet) -> [Bullet] { bullets + [new] }
+        func removing(_ old: Bullet) -> [Bullet] { bullets.filter { $0.id != old.id } }
+
+        func moving(_ bullet: Bullet, by offset: Int) -> [Bullet] {
+            guard let i = bullets.firstIndex(of: bullet), bullets.indices.contains(i + offset) else { return bullets }
+            var moved = bullets
+            moved.swapAt(i, i + offset)
+            return moved
+        }
 
         enum CodingKeys: String, CodingKey {
-            case employer, title, budget, bullets
+            case employer, title, budget, bullets, bank
             case positionID = "positionId"
         }
     }
@@ -33,7 +51,7 @@ struct DraftRoles: Decodable {
         let onSource: Bool
         let replacedFrom: String?
 
-        var id: String { slotID }
+        var id: String { slotID.isEmpty ? achievementID ?? text : slotID }
         var fitPercent: Int? { lean.map { Int((($0 + 1) * 50).rounded()) } }
 
         enum CodingKeys: String, CodingKey {
@@ -65,6 +83,11 @@ extension DraftRoles {
                     Bullet(
                         slotID: "s1", achievementID: "achievement-3", text: "Led the payments migration", lines: 2, lean: -0.3,
                         onSource: true, replacedFrom: nil),
+                ],
+                bank: [
+                    Bullet(
+                        slotID: "", achievementID: "achievement-1", text: "Mentored four engineers", lines: 1, lean: 0.2,
+                        onSource: false, replacedFrom: nil)
                 ])
         ])
 }

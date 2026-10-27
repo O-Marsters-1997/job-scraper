@@ -175,6 +175,30 @@ struct DraftInput: Encodable {
     }
 }
 
+struct DraftBulletEdit: Encodable {
+    let text: String
+    let achievementIDs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case achievementIDs = "achievementIds"
+    }
+}
+
+struct DraftPositionEdit: Encodable {
+    let positionID: String
+    let bullets: [DraftBulletEdit]
+
+    enum CodingKeys: String, CodingKey {
+        case bullets
+        case positionID = "positionId"
+    }
+}
+
+struct DraftSlotsInput: Encodable {
+    let positions: [DraftPositionEdit]
+}
+
 struct CoverLetter: Decodable, Identifiable {
     let id: String
     let createdAt: Date

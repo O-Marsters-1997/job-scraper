@@ -36,8 +36,76 @@ struct ApplicationModelTests {
         let bullets = lines.enumerated().map {
             DraftRoles.Bullet(slotID: "s\($0.offset)", achievementID: nil, text: "b", lines: $0.element, lean: nil, onSource: true, replacedFrom: nil)
         }
-        let role = DraftRoles.Role(positionID: "p", employer: "Acme", title: "Eng", budget: budget, bullets: bullets)
+        let bank = DraftRoles.Bullet(
+            slotID: "", achievementID: "bank-1", text: "banked", lines: 1, lean: 0.4, onSource: false, replacedFrom: nil)
+        let role = DraftRoles.Role(positionID: "p", employer: "Acme", title: "Eng", budget: budget, bullets: bullets, bank: [bank])
         return DraftRoles(draftID: "draft-1", kept: kept, spills: spills, roles: [role])
+    }
+
+    private func recordingModel(lines: [Int], budget: Int = 3) -> ApplicationModel {
+        var client = APIClient.mock()
+        let calls = calls
+        let roles = roles(budget: budget, lines: lines)
+        client.draftRoles = { _ in roles }
+        client.saveRole = { draft, position, bullets in
+            calls.log.append("save \(draft) \(position) " + bullets.map { "\($0.text):\($0.achievementIDs.joined(separator: ","))" }.joined(separator: "|"))
+        }
+        let job = DueJob.sample
+        return ApplicationModel(client: client, job: job, draft: draft)
+    }
+
+    @Test func replaceTakesTheOldSlotAndSendsTheFullList() async throws {
+        let model = recordingModel(lines: [1, 1])
+        await model.load()
+        let role = try #require(model.roles.value?.roles.first)
+
+        await model.replace(role.bullets[0], with: role.bank[0], in: role)
+
+        #expect(calls.log == ["save draft-1 p banked:bank-1|b:"])
+    }
+
+    @Test func addPutsTheBankBulletInTheFreeLines() async throws {
+        let model = recordingModel(lines: [1, 1])
+        await model.load()
+        let role = try #require(model.roles.value?.roles.first)
+
+        await model.add(role.bank[0], to: role)
+
+        #expect(calls.log == ["save draft-1 p b:|b:|banked:bank-1"])
+    }
+
+    @Test func removeAndMoveSendTheResultingOrder() async throws {
+        let model = recordingModel(lines: [1, 2])
+        await model.load()
+        let role = try #require(model.roles.value?.roles.first)
+
+        await model.remove(role.bullets[0], from: role)
+        await model.move(role.bullets[0], by: 1, in: role)
+
+        #expect(calls.log == ["save draft-1 p b:", "save draft-1 p b:|b:"])
+    }
+
+    @Test func removingTheLastBulletSendsNothing() async throws {
+        let model = recordingModel(lines: [1])
+        await model.load()
+        let role = try #require(model.roles.value?.roles.first)
+
+        await model.remove(role.bullets[0], from: role)
+
+        #expect(calls.log.isEmpty)
+        #expect(model.hasFailure)
+    }
+
+    @Test func sheetBudgetLabelsMatchTheRoleAfterTheEdit() throws {
+        let role = try #require(roles(budget: 3, lines: [2, 1]).roles.first)
+        let bigger = DraftRoles.Bullet(
+            slotID: "", achievementID: "x", text: "x", lines: 3, lean: nil, onSource: false, replacedFrom: nil)
+
+        let after = role.linesAfter(replacing: role.bullets[0], with: bigger)
+
+        #expect(role.budgetLabel(forLines: after) == "1 over")
+        #expect(role.budgetLabel(forLines: role.linesAfter(replacing: role.bullets[0], with: role.bank[0])) == "2/3")
+        #expect(role.fits(role.bank[0]) == false)
     }
 
     @Test func goldenRolesDecode() throws {
