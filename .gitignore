@@ -48,6 +48,7 @@ docs/plans/
 docs/prds/
 docs/prd-*.md
 worker.log
+internal/services/cvtailor/eval/local/
 
 # Local schema diagram (regenerate with python3 docs/diagrams/build.py)
 docs/diagrams/
