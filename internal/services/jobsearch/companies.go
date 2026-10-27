@@ -192,7 +192,7 @@ func (s *Service) applyCompanyKind(ctx context.Context, userID, companyID string
 	case err != nil:
 		return dto.Company{}, err
 	}
-	return s.GetCompany(ctx, userID, in.CompanyID)
+	return s.GetCompany(ctx, userID, companyID)
 }
 
 func (s *Service) SetCompaniesKind(ctx context.Context, _ string, in dto.SetCompaniesKindInput) (dto.CompaniesKindResult, error) {
