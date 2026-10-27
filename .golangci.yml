@@ -118,7 +118,7 @@ linters:
             - pkg: github.com/ollymarsters/job-scraper/internal/apperr
               desc: stores return their own sentinels; the service maps them to apperr kinds (ADR 0011)
         pgxpool-in-store-only:
-          files: ["$all", "!**/internal/services/*/store/**", "!**/internal/data/db/**", "!**/internal/pgtest/**", "!**/cmd/**", "!**/*_test.go"]
+          files: ["$all", "!**/internal/services/*/store/**", "!**/internal/data/db/**", "!**/internal/pgtest/**", "!**/cmd/**", "!**/internal/services/*/module.go", "!**/*_test.go"]
           deny:
             - pkg: github.com/jackc/pgx/v5/pgxpool
               desc: only stores and internal/data/db hold the pool; pgx.Tx stays legal in tx-scoped ports (ADR 0011)
@@ -167,6 +167,11 @@ linters:
           deny:
             - pkg: github.com/ollymarsters/job-scraper/internal/services/cvtailor/store
               desc: only the cvtailor context uses its store; call the cvtailor Module facade (ADR 0011)
+        notify-store:
+          files: ["$all", "!**/internal/services/notify/**"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/services/notify/store
+              desc: only the notify context uses its store; call the notify Module facade (ADR 0011)
   exclusions:
     paths:
       - frontend
@@ -181,6 +186,10 @@ linters:
         linters:
           - forbidigo
         text: 'os\.(Getenv|LookupEnv)|slog\.'
+      - path: ^internal/services/(notify|scoring)/
+        linters:
+          - forbidigo
+        text: 'slog\.'
       - path: ^internal/worker/discover/(sluglist|wellfound)/
         linters:
           - forbidigo

@@ -137,6 +137,20 @@ func (f *fakeAlerter) NotifyNewJob(_ context.Context, _ dto.Job, email string) e
 	return nil
 }
 
+type fakeNotifications struct {
+	users []string
+	err   error
+}
+
+func (f *fakeNotifications) NewJob(_ context.Context, userID string, _ dto.Job) error {
+	f.users = append(f.users, userID)
+	return f.err
+}
+
+func withNotifications(n scoring.Notifications) depsOpt {
+	return func(d *scoring.Deps) { d.Notifications = n }
+}
+
 type fakeProfiles struct{ emails map[string]string }
 
 func (f *fakeProfiles) GetProfile(_ context.Context, userID string) (dto.Profile, error) {
@@ -468,9 +482,13 @@ func TestRunTick(t *testing.T) {
 				if err := st.UpsertPushSubscription(t.Context(), "user-1", dto.PushSubscriptionInput{Endpoint: "https://push.example/a"}); err != nil {
 					t.Fatal(err)
 				}
-				alerter, pusher := &fakeAlerter{}, &fakePusher{}
+				alerter, pusher, notes := &fakeAlerter{}, &fakePusher{}, &fakeNotifications{err: errors.New("notify down")}
 
-				runTick(t, st, withAlerter(alerter), withPusher(pusher), withProfiles(&fakeProfiles{emails: map[string]string{"user-1": "user@example.com"}}))
+				runTick(t, st, withAlerter(alerter), withPusher(pusher), withNotifications(notes), withProfiles(&fakeProfiles{emails: map[string]string{"user-1": "user@example.com"}}))
+
+				if got := len(notes.users) == 1; got != tt.wantPush {
+					t.Errorf("notified users = %v, want alert %v", notes.users, tt.wantPush)
+				}
 
 				if got := len(pusher.msgs) == 1; got != tt.wantPush {
 					t.Errorf("pushed = %v, want %v", pusher.msgs, tt.wantPush)

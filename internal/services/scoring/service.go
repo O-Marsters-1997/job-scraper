@@ -87,18 +87,19 @@ type Store interface {
 }
 
 type Service struct {
-	store        Store
-	answerer     Answerer
-	credentials  Credentials
-	alerter      Alerter
-	pusher       PushSender
-	vapidKey     string
-	profiles     ProfileReader
-	candidates   Reconsiderer
-	extractor    Extractor
-	classifier   RecruiterClassifier
-	companyKinds CompanyKinds
-	tickInterval time.Duration
+	store         Store
+	answerer      Answerer
+	credentials   Credentials
+	alerter       Alerter
+	notifications Notifications
+	pusher        PushSender
+	vapidKey      string
+	profiles      ProfileReader
+	candidates    Reconsiderer
+	extractor     Extractor
+	classifier    RecruiterClassifier
+	companyKinds  CompanyKinds
+	tickInterval  time.Duration
 }
 
 func NewService(deps Deps) *Service {
@@ -110,8 +111,12 @@ func NewService(deps Deps) *Service {
 	if pusher == nil {
 		pusher = noopPusher{}
 	}
+	notifications := deps.Notifications
+	if notifications == nil {
+		notifications = noopNotifications{}
+	}
 	return &Service{
-		store: deps.Store, answerer: deps.Answerer, credentials: deps.Credentials, alerter: deps.Alerter,
+		store: deps.Store, answerer: deps.Answerer, credentials: deps.Credentials, alerter: deps.Alerter, notifications: notifications,
 		pusher: pusher, vapidKey: deps.VAPIDPublicKey,
 		profiles: deps.Profiles, candidates: deps.Candidates, extractor: deps.Extractor, tickInterval: tickInterval,
 		classifier: deps.Classifier, companyKinds: deps.CompanyKinds,
@@ -373,6 +378,9 @@ func (s *Service) notifyNewJob(ctx context.Context, job dto.Job, surviving []dto
 			continue
 		}
 		s.emailNewJob(ctx, job, sc.UserID)
+		if err := s.notifications.NewJob(ctx, sc.UserID, job); err != nil {
+			slog.ErrorContext(ctx, "new job notification failed", slog.String(logger.KeyUserID, sc.UserID), slog.Any(logger.KeyErr, err))
+		}
 		if err := s.pushToUser(ctx, sc.UserID, newJobPush(job, sc)); err != nil {
 			slog.ErrorContext(ctx, "new job push failed", slog.String(logger.KeyUserID, sc.UserID), slog.Any(logger.KeyErr, err))
 		}

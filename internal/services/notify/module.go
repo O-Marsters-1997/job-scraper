@@ -1,0 +1,57 @@
+package notify
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/services/notify/store"
+)
+
+// Ntfy configures phone delivery; a zero URL disables it.
+type Ntfy struct{ URL, Token string }
+
+type Module struct {
+	store Store
+	phone PhonePusher
+}
+
+// Deps are the collaborators Build wires into the Module; tests call Build
+// with fakes (ADR 0012). A nil Phone disables phone delivery.
+type Deps struct {
+	Store Store
+	Phone PhonePusher
+}
+
+func Build(deps Deps) *Module {
+	return &Module{store: deps.Store, phone: deps.Phone}
+}
+
+func New(pool *pgxpool.Pool, ntfy Ntfy) *Module {
+	deps := Deps{Store: store.New(pool)}
+	if ntfy.URL != "" {
+		deps.Phone = NewNtfyPusher(ntfy.URL, ntfy.Token)
+	}
+	return Build(deps)
+}
+
+// NewJob records a Notification for userID about job and sends it to the phone.
+func (m *Module) NewJob(ctx context.Context, userID string, job dto.Job) error {
+	title := "New job: " + job.Title
+	id, err := m.store.InsertNotification(ctx, userID, job.ID, title, job.CompanySlug)
+	if err != nil {
+		return fmt.Errorf("notify.NewJob: %w", err)
+	}
+	if m.phone == nil {
+		return nil
+	}
+	msg := dto.PushMessage{Title: title, Body: job.CompanySlug, URL: fmt.Sprintf("fasttrack://jobs/%s?n=%s", job.ID, id)}
+	if err := m.phone.Send(ctx, msg); err != nil {
+		slog.ErrorContext(ctx, "ntfy send failed", slog.String(logger.KeyUserID, userID), slog.Any(logger.KeyErr, err))
+	}
+	return nil
+}
