@@ -176,6 +176,10 @@ eval-scoring user:
 resolve-domains file:
     go run ./cmd/admin resolve-domains {{file}}
 
+[doc('record a new-job Notification for a real job and push it to ntfy, from inside the api container')]
+notify-test user job:
+    docker compose exec api ./admin notify-test {{user}} {{job}}
+
 # ── Seeds ─────────────────────────────────────────────────────────────────────
 
 # seed the scoring-options bank (idempotent; safe to rerun in any environment)

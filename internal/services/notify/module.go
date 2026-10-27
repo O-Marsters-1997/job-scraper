@@ -61,6 +61,14 @@ func (m *Module) NewJob(ctx context.Context, userID string, job dto.Job) error {
 	return nil
 }
 
+func (m *Module) NewJobByID(ctx context.Context, userID, jobID string) error {
+	summary, err := m.store.GetNotificationJob(ctx, userID, jobID)
+	if err != nil {
+		return fmt.Errorf("get notification job: %w", err)
+	}
+	return m.NewJob(ctx, userID, dto.Job{ID: jobID, Title: summary.Title})
+}
+
 func pushBody(job dto.NotificationJob) string {
 	var bandScore []string
 	if job.Band != "" {

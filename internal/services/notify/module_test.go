@@ -144,3 +144,18 @@ func TestModule_NewJob(t *testing.T) {
 		}
 	})
 }
+
+func TestModule_NewJobByID(t *testing.T) {
+	t.Parallel()
+	st, phone := &fakeStore{summary: dto.NotificationJob{Title: "Go Engineer", CompanyName: "Monzo"}}, &recordingPhone{}
+	if err := notify.Build(notify.Deps{Store: st, Phone: phone}).NewJobByID(t.Context(), "u1", "j1"); err != nil {
+		t.Fatalf("NewJobByID() = %v", err)
+	}
+	if diff := cmp.Diff([]string{"u1/j1"}, st.rows); diff != "" {
+		t.Errorf("rows (-want +got):\n%s", diff)
+	}
+	want := []dto.PushMessage{{Title: "New job: Go Engineer", Body: "Monzo", URL: "fasttrack://jobs/j1?n=n1"}}
+	if diff := cmp.Diff(want, phone.sent); diff != "" {
+		t.Errorf("sent (-want +got):\n%s", diff)
+	}
+}
