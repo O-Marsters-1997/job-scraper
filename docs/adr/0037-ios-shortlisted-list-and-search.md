@@ -14,7 +14,7 @@ in on the phone, and neither list can be searched.
 - **Due** holds chases due, open Tasks and CV drafts only. Jobs that only have an open `apply` Task leave Due.
 - **Shortlisted list.** A screen pushed from Due. It lists Shortlisted jobs with an open `apply` Task, no CV
   draft and no `finish` Task, highest score first.
-  - Entry is a "Not drafted · N ›" row at the foot of the Due notebook. The row also appears in the
+  - Entry is a "Shortlisted · N ›" row (originally "Not drafted") at the foot of the Due notebook. The row also appears in the
     "Nothing due" empty state, and is hidden when N is 0.
   - Each row offers **Draft CV** (the job moves to Due once the draft exists) and **Apply** (the
     apply-on-listing sheet Due already uses). Tapping the row opens Job detail.

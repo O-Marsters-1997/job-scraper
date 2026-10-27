@@ -20,7 +20,7 @@ struct ShortlistedRow: View {
                 .hairlineCard()
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Shortlisted,\(count)")
+            .accessibilityLabel("Shortlisted, \(count)")
         }
     }
 }
