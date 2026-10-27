@@ -11,6 +11,9 @@ final class ApplicationModel {
     private(set) var listing: Job?
     private(set) var pdfURL: URL?
     private(set) var templates: [CVTemplate] = []
+    private(set) var letters: [CoverLetter] = []
+    private(set) var requestingLetter = false
+    private(set) var letterError: String?
     private(set) var exit: Exit?
     private(set) var isOffline = false
     private(set) var failureMessage = ""
@@ -33,6 +36,7 @@ final class ApplicationModel {
             roles = .loaded(try await client.draftRoles(draft.id))
             listing = try? await client.job(job.id)
             templates = (try? await client.cvTemplates()) ?? []
+            letters = (try? await client.coverLetters(job.id)) ?? []
             await fetchPDF()
             isOffline = false
         } catch is CancellationError {
@@ -71,6 +75,22 @@ final class ApplicationModel {
         await attempt {
             try await client.setTaskDone(taskID, true)
             exit = .applied
+        }
+    }
+
+    func requestLetter() async {
+        guard !requestingLetter else { return }
+        requestingLetter = true
+        letterError = nil
+        defer { requestingLetter = false }
+        do {
+            letters.append(try await client.requestCoverLetter(job.id))
+            isOffline = false
+        } catch is CancellationError {
+            return
+        } catch {
+            noteOffline(error)
+            letterError = error.localizedDescription
         }
     }
 
