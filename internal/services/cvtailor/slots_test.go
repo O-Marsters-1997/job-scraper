@@ -371,7 +371,12 @@ func TestSaveDraftSlots(t *testing.T) {
 		}
 		e.run(t, tick{})
 		swapped := e.pos.Achievements[1]
-		replacement := dto.DraftPosition{PositionID: e.pos.ID, Bullets: []dto.DraftBullet{{Text: swapped.Text, AchievementIDs: []string{swapped.ID}}}}
+		replacement := dto.DraftPosition{PositionID: e.pos.ID, Bullets: []dto.DraftBullet{
+			{Text: swapped.Text, AchievementIDs: []string{swapped.ID}},
+			{Text: "Ran on-call", AchievementIDs: []string{}},
+			{Text: "Wrote docs", AchievementIDs: []string{}},
+			{Text: "Built and maintained the public APIs for the platform", AchievementIDs: []string{}},
+		}}
 
 		got, err := e.svc.SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{replacement}})
 		if err != nil {
@@ -381,7 +386,7 @@ func TestSaveDraftSlots(t *testing.T) {
 		if got.Outcome == nil || *got.Outcome != dto.OutcomeKept {
 			t.Errorf("SaveDraftSlots(kept).Outcome = %v, want still kept", got.Outcome)
 		}
-		if diff := cmp.Diff([]string{swapped.Text}, insertedText(t, e.drive)); diff != "" {
+		if diff := cmp.Diff([]string{"\nBuilt and maintained the public APIs for the platform", swapped.Text}, insertedText(t, e.drive)); diff != "" {
 			t.Errorf("inserted text mismatch (-want +got):\n%s", diff)
 		}
 		want := []dto.AchievementOutcome{
