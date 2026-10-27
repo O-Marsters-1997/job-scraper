@@ -142,7 +142,8 @@ struct ApplicationView: View {
             isOpen: open.contains(.cv), toggle: { toggle(.cv) }
         ) {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(model.roles.value?.roles ?? []) { ApplicationRoleGroup(role: $0, model: model) }
+                let roles = model.roles.value?.roles ?? []
+                ForEach(roles) { ApplicationRoleGroup(role: $0, model: model, startsOpen: $0.id == roles.first?.id) }
                 if !model.kept { keepFooter }
             }
         }
