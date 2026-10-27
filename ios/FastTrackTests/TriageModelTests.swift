@@ -163,6 +163,6 @@ private extension Job {
         Job(id: id, title: title, companyID: companyID, companySlug: companySlug, location: location,
             workArrangement: workArrangement, salaryRaw: salaryRaw, url: url, postedAt: postedAt,
             firstDiscoveredAt: firstDiscoveredAt, band: band, score: score, breakdown: breakdown,
-            description: description)
+            description: description, companyKind: companyKind)
     }
 }

@@ -71,6 +71,14 @@ struct BandRow: View {
             if let score = job.score {
                 Text(score, format: .number).font(.footnote.weight(.medium).monospacedDigit())
             }
+            if let badge = job.companyKind.badge {
+                Text(badge)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: .rect(cornerRadius: 5, style: .continuous))
+            }
             Spacer(minLength: 6)
             Text(job.age).font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
         }

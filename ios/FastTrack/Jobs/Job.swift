@@ -15,6 +15,7 @@ struct Job: Codable, Identifiable, Hashable {
     let score: Int?
     let breakdown: [ScoreRow]
     let description: String
+    let companyKind: CompanyKind
 
     var companyName: String { companySlug.replacing("-", with: " ").capitalized }
     var effectiveAge: Date { postedAt ?? firstDiscoveredAt }
@@ -34,6 +35,7 @@ struct Job: Codable, Identifiable, Hashable {
         case score = "SuitabilityScore"
         case breakdown = "Breakdown"
         case description = "Description"
+        case companyKind = "CompanyKind"
     }
 }
 
@@ -54,6 +56,7 @@ extension Job {
         score = try c.decodeIfPresent(Int.self, forKey: .score)
         breakdown = try c.decodeIfPresent([ScoreRow].self, forKey: .breakdown) ?? []
         description = try c.decode(String.self, forKey: .description)
+        companyKind = (try? c.decode(CompanyKind.self, forKey: .companyKind)) ?? .unclassified
     }
 }
 
@@ -76,6 +79,7 @@ extension Job {
             ScoreRow(key: "tech:go", label: "Go", effect: .meets),
             ScoreRow(key: "domain:fintech", label: "Fintech", effect: .misses),
         ],
-        description: "Own services end to end, from design through on-call."
+        description: "Own services end to end, from design through on-call.",
+        companyKind: .direct
     )
 }

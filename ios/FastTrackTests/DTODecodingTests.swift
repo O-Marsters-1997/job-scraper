@@ -23,8 +23,30 @@ struct DTODecodingTests {
         #expect(job.url == "https://example.com/jobs/1")
         #expect(job.band == .great)
         #expect(job.score == 92)
+        #expect(job.companyKind == .agency)
         #expect(job.breakdown.map(\.effect) == [.meets, .misses])
         #expect(job.breakdown.map(\.label) == ["Go", "Fintech"])
+    }
+
+    @Test(arguments: ["\"CompanyKind\": \"\"", "\"CompanyKind\": \"recruiter_ish\"", "\"Other\": 1"])
+    func unknownOrAbsentCompanyKindDecodesAsUnclassified(replacement: String) throws {
+        let original = try #require(String(data: fixture("job_page"), encoding: .utf8))
+        try #require(original.contains("\"CompanyKind\": \"agency\""))
+        let json = original.replacingOccurrences(of: "\"CompanyKind\": \"agency\"", with: replacement)
+        let job = try #require(JSONDecoder.api.decode(Page.self, from: Data(json.utf8)).items.first)
+        #expect(job.companyKind == .unclassified)
+    }
+
+    @Test(arguments: [(CompanyKind.agency, "Agency"), (.likelyAgency, "Maybe recruiter")])
+    func agencyKindsGetABadge(kind: CompanyKind, badge: String) {
+        #expect(kind.badge == badge)
+        #expect(kind.isAgency == true)
+    }
+
+    @Test(arguments: [CompanyKind.unclassified, .direct, .likelyDirect])
+    func otherKindsHaveNoBadge(kind: CompanyKind) {
+        #expect(kind.badge == nil)
+        #expect(kind.isAgency == false)
     }
 
     @Test func companyExclusionDecodes() throws {

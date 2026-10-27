@@ -54,6 +54,7 @@ func TestIOSFixtures(t *testing.T) {
 				ScrapedAt:        at,
 				SuitabilityScore: &score,
 				Band:             "Great",
+				CompanyKind:      dto.KindAgency,
 				Breakdown: []dto.ScoreRow{
 					{Key: "tech:go", Label: "Go", Stance: "want", Resolved: "yes", Effect: "meets"},
 					{Key: "domain:fintech", Label: "Fintech", Stance: "want", Resolved: "no", Effect: "misses"},
