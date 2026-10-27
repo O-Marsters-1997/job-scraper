@@ -215,6 +215,29 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("deleting a task removes only that task", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		gone := createTask(t, f, dto.CreateTaskInput{})
+		kept := createTask(t, f, dto.CreateTaskInput{})
+		if err := f.Store.DeleteTask(t.Context(), f.UserID, gone.ID); err != nil {
+			t.Fatalf("DeleteTask(%q) err = %v", gone.ID, err)
+		}
+		got := listTasks(t, f, dto.TaskPageOptions{Sort: dto.TaskSortCreated})
+		if diff := cmp.Diff([]string{kept.ID}, ids(got.Items)); diff != "" {
+			t.Errorf("ListTasks(after delete) ids mismatch (-want +got):\n%s", diff)
+		}
+		if err := f.Store.DeleteTask(t.Context(), f.UserID, gone.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteTask(already deleted) err = %v, want ErrNotFound", err)
+		}
+		if err := f.Store.DeleteTask(t.Context(), f.UserID, missingID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteTask(missing) err = %v, want ErrNotFound", err)
+		}
+		if err := f.Store.DeleteTask(t.Context(), f.OtherUserID, kept.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteTask(other user's) err = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("list returns open tasks newest first", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)

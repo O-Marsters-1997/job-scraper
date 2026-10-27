@@ -210,6 +210,25 @@ func (s *Store) UpdateTask(ctx context.Context, userID string, in dto.UpdateTask
 	return toTaskDTO(sqlc.PageTasksRow(row)), nil
 }
 
+func (s *Store) DeleteTask(ctx context.Context, userID, id string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	tid, err := data.UUID(id)
+	if err != nil {
+		return data.ErrNotFound
+	}
+	n, err := s.queries.DeleteTask(ctx, sqlc.DeleteTaskParams{ID: tid, UserID: uid})
+	if err != nil {
+		return data.QueryErr("DeleteTask", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) SetTaskDone(ctx context.Context, userID, id string, done bool, now time.Time) (dto.Task, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
