@@ -166,9 +166,8 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 	docID, err := m.copyTab(ctx, claim)
 	if lean != nil {
 		res := <-lean
-		if err == nil {
-			edits, err = res.edits, res.err
-		}
+		edits = res.edits
+		err = errors.Join(err, res.err)
 	}
 	if err != nil {
 		return docID, dto.DraftResult{}, err
@@ -272,8 +271,10 @@ func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, err
 		trim = append(trim, req)
 	}
 	if len(trim) > 0 {
-		defer stepTimer(ctx, claim.ID, "delete_tabs")()
-		if err := m.drive.BatchUpdate(ctx, claim.UserID, docID, trim); err != nil {
+		stop := stepTimer(ctx, claim.ID, "delete_tabs")
+		err := m.drive.BatchUpdate(ctx, claim.UserID, docID, trim)
+		stop()
+		if err != nil {
 			return docID, fmt.Errorf("remove other tabs: %w", err)
 		}
 	}
