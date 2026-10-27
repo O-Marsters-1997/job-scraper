@@ -93,7 +93,7 @@ final class DueModel {
         guard let taskID = job.applyTaskID else { return Task {} }
         if let task = job.tasks.first(where: { $0.id == taskID }) { return complete(task, in: job, title: "Marked applied") }
         let client = client
-        return run("Marked applied", job, job, restoreLocally: { $0 }) {
+        return run("Marked applied", job, job.withApplyTask(nil), restoreLocally: { $0.withApplyTask(taskID) }) {
             try await client.setTaskDone(taskID, true)
         } revert: {
             try await client.setTaskDone(taskID, false)
