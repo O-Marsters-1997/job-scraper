@@ -108,6 +108,19 @@ struct DueModelTests {
         #expect(model.jobs[0].tasks.map(\.id) == ["apply"])
     }
 
+    @Test func aShortlistedJobWithOnlyAnApplyTaskIsDueUntilMarkedApplied() async {
+        let model = await model([job("a", chase: nil, applyTaskID: "apply"), job("b", chase: nil, draft: .ready)])
+        #expect(model.dueJobs.map(\.id) == ["a", "b"])
+        #expect(model.jobs[0].showsApplyRow)
+
+        await model.markApplied(model.jobs[0]).value
+        #expect(model.dueJobs.map(\.id) == ["b"])
+        await model.undo().value
+
+        #expect(calls.log == ["setTaskDone apply true", "setTaskDone apply false"])
+        #expect(model.dueJobs.map(\.id) == ["a", "b"])
+    }
+
     @Test func markAppliedWithoutAnApplyTaskDoesNothing() async {
         let model = await model([job("a", chase: nil, draft: .ready)])
 

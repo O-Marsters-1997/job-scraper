@@ -40,6 +40,7 @@ struct DueJob: Decodable, Identifiable, Hashable {
     let draft: Draft?
 
     var isAtDesk: Bool { tasks.contains { $0.systemKey == "finish" } }
+    var showsApplyRow: Bool { applyTaskID != nil && draft == nil && !isAtDesk }
     var companyName: String { companySlug.replacing("-", with: " ").capitalized }
 
     enum CodingKeys: String, CodingKey {
@@ -75,6 +76,11 @@ extension DueJob {
     func withTasks(_ tasks: [Task]) -> DueJob {
         DueJob(jobID: jobID, title: title, companySlug: companySlug, band: band, score: score, applicationID: applicationID,
                chaseBy: chaseBy, applyTaskID: applyTaskID, tasks: tasks, draft: draft)
+    }
+
+    func withApplyTask(_ id: String?) -> DueJob {
+        DueJob(jobID: jobID, title: title, companySlug: companySlug, band: band, score: score, applicationID: applicationID,
+               chaseBy: chaseBy, applyTaskID: id, tasks: tasks, draft: draft)
     }
 
     static let sample = DueJob(
