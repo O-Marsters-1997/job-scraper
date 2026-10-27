@@ -14,6 +14,7 @@ import type {
 	HeadingMapping,
 	LayoutBlock,
 	LayoutRun,
+	ProfileRedraftInput,
 	SkillGroup,
 	SlotEdit,
 	SuggestDone,
@@ -337,6 +338,22 @@ export function keepDraft(id: string): Draft {
 export function discardDraft(id: string): Draft {
 	const entry = mockEntry(id);
 	entry.draft = { ...entry.draft, outcome: "discarded", draftDocUrl: null };
+	return entry.draft;
+}
+
+export const MOCK_REDRAFT_REJECTED =
+	"the redraft was rejected by the guardrails";
+
+export function redraftProfile(id: string, input: ProfileRedraftInput): Draft {
+	const entry = mockEntry(id);
+	const { content } = entry.draft;
+	if (!content) throw new Error(`mock draft ${id} is not ready`);
+	if (input.steer?.includes("reject")) throw new Error(MOCK_REDRAFT_REJECTED);
+	const steer = input.steer ? ` (${input.steer})` : "";
+	entry.draft = {
+		...entry.draft,
+		content: { ...content, profile: `Redrafted profile${steer}.` },
+	};
 	return entry.draft;
 }
 

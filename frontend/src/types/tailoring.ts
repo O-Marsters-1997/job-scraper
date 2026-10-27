@@ -199,6 +199,8 @@ export const draftLayoutSchema = z.object({
 export const draftRefSchema = z.object({ id: z.string() });
 
 export type SkillGroup = z.infer<typeof skillGroupSchema>;
+export type ProfileRedraftInput = { steer?: string };
+
 export type SlotEdit = {
 	slotId: string;
 	text: string;
