@@ -41,6 +41,7 @@ struct DueJob: Decodable, Identifiable, Hashable {
     let draft: Draft?
     var keptDraftID: String? = nil
 
+    var hasCV: Bool { draft != nil || keptDraftID != nil }
     var isAtDesk: Bool { tasks.contains { $0.systemKey == "finish" } }
     var showsApplyRow: Bool { applyTaskID != nil && draft == nil && keptDraftID == nil && !isAtDesk }
     var companyName: String { companySlug.replacing("-", with: " ").capitalized }

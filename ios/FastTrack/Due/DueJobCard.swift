@@ -22,6 +22,7 @@ struct DueJobCard: View {
     let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
     let openApplication: (DueJob) -> Void
+    @State private var confirmingDelete = false
 
     private var rows: [DueRow] {
         (model.hasChaseDue(job) ? [.chase(job)] : [])
@@ -46,6 +47,14 @@ struct DueJobCard: View {
             }
         }
         .hairlineCard()
+        .swipeToDelete {
+            if job.hasCV { confirmingDelete = true } else { Task { await model.delete(job) } }
+        }
+        .confirmationDialog("Delete this application?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Delete application", role: .destructive) { Task { await model.delete(job) } }
+        } message: {
+            Text("Its tailored CV goes with it.")
+        }
     }
 
     private var header: some View {
