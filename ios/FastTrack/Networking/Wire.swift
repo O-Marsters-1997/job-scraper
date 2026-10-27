@@ -71,6 +71,10 @@ struct UnexcludeInput: Encodable {
     let removeName: Bool
 }
 
+struct CompanyKindInput: Encodable {
+    let kind: CompanyKind
+}
+
 struct NoteInput: Encodable {
     let body: String
 }

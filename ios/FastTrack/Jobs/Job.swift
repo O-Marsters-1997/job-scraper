@@ -15,7 +15,7 @@ struct Job: Codable, Identifiable, Hashable {
     let score: Int?
     let breakdown: [ScoreRow]
     let description: String
-    let companyKind: CompanyKind
+    var companyKind: CompanyKind
 
     var companyName: String { companySlug.replacing("-", with: " ").capitalized }
     var effectiveAge: Date { postedAt ?? firstDiscoveredAt }

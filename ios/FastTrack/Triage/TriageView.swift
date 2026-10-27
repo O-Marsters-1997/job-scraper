@@ -169,6 +169,11 @@ struct TriageView: View {
                 Button("Shortlist and draft CV", systemImage: "doc.badge.plus") { decide(.shortlist(draftCV: true)) }
                 Button("Dismiss with reason…", systemImage: "text.badge.xmark") { showReasons = true }
                 Button("Add note…", systemImage: "note.text") { showNote = true }
+                if isAgency {
+                    Button("Not an agency", systemImage: "building.2") { decide(.reclassify(to: .direct)) }
+                } else {
+                    Button("This is an agency", systemImage: "person.2") { decide(.reclassify(to: .agency)) }
+                }
                 Button("Exclude company", systemImage: "nosign", role: .destructive) { decide(.excludeCompany) }
             } label: {
                 Image(systemName: "ellipsis")

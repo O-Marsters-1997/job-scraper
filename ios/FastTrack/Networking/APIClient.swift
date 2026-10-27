@@ -14,6 +14,8 @@ struct APIClient {
     var recordEvent: (_ event: EventInput) async throws -> Void
     var excludeCompany: (_ companyID: String) async throws -> CompanyExclusion
     var unexcludeCompany: (_ companyID: String, _ removeName: Bool) async throws -> Void
+    var setCompanyKind: (_ companyID: String, _ kind: CompanyKind) async throws -> Void
+    var undoCompanyKind: (_ companyID: String, _ previous: CompanyKind) async throws -> Void
     var note: (_ jobID: String) async throws -> JobNote
     var putNote: (_ jobID: String, _ body: String) async throws -> Void
     var due: () async throws -> [DueJob]
@@ -76,6 +78,12 @@ extension APIClient {
             },
             unexcludeCompany: { companyID, removeName in
                 try await http.post("companies/\(companyID)/exclusion/undo", body: UnexcludeInput(removeName: removeName))
+            },
+            setCompanyKind: { companyID, kind in
+                try await http.put("companies/\(companyID)/kind", body: CompanyKindInput(kind: kind))
+            },
+            undoCompanyKind: { companyID, previous in
+                try await http.post("companies/\(companyID)/kind/undo", body: CompanyKindInput(kind: previous))
             },
             note: { jobID in
                 try await http.get("jobs/\(jobID)/note")
@@ -167,6 +175,8 @@ extension APIClient {
             recordEvent: { _ in try respond(()) },
             excludeCompany: { _ in try respond(CompanyExclusion(name: "Monzo", added: true)) },
             unexcludeCompany: { _, _ in try respond(()) },
+            setCompanyKind: { _, _ in try respond(()) },
+            undoCompanyKind: { _, _ in try respond(()) },
             note: { jobID in try respond(JobNote(jobID: jobID, body: "")) },
             putNote: { _, _ in try respond(()) },
             due: { try respond(due) },

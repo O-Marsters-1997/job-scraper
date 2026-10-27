@@ -41,6 +41,7 @@ struct UndoBanner: View {
         case .dismiss: "Dismissed"
         case .skip: "Skipped"
         case .excludeCompany: "Excluded company"
+        case .reclassify(let kind): kind.isAgency ? "Marked as agency" : "Marked as direct"
         case .note: "Note added"
         }
     }

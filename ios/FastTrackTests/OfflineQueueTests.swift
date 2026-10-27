@@ -129,6 +129,30 @@ struct OfflineQueueTests {
         #expect(try store.loadQueue().isEmpty)
     }
 
+    @Test func offlineReclassifyQueuesAndReplays() async {
+        let store = OfflineStore.memory(cards: [.sample.with(id: "a"), .sample.with(id: "b")])
+        calls.offline = true
+        var client = client()
+        let calls = calls
+        client.setCompanyKind = { id, kind in
+            if calls.offline { throw URLError(.notConnectedToInternet) }
+            calls.log.append("set \(id) \(kind.rawValue)")
+        }
+        let model = TriageModel(client: client, store: store)
+        await model.load()
+
+        await model.decide(.reclassify(to: .agency)).value
+
+        #expect(model.queued.map(\.jobID) == ["a"])
+        #expect(model.queues[.agency]?.map(\.id) == ["a", "b"])
+        calls.offline = false
+
+        await model.load()
+
+        #expect(calls.log == ["set company-monzo agency"])
+        #expect(model.queued.isEmpty)
+    }
+
     @Test func reconnectingReplaysAndReportsTheNote() async {
         let store = OfflineStore.memory(cards: [.sample.with(id: "a"), .sample.with(id: "b")])
         calls.offline = true
