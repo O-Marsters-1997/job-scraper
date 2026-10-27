@@ -47,6 +47,10 @@ func (s *Store) ListDue(ctx context.Context, userID string) (dto.DueList, error)
 		if r.DraftID.Valid {
 			j.Draft = &dto.DueDraft{ID: r.DraftID.String(), State: dto.DraftState(r.DraftState), CVTitle: r.DraftCvTitle}
 		}
+		if r.KeptDraftID.Valid {
+			id := r.KeptDraftID.String()
+			j.KeptDraftID = &id
+		}
 		out.Jobs[i] = j
 	}
 	return out, nil
