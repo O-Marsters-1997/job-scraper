@@ -22,6 +22,7 @@ import {
 	type TaskListState,
 	taskPageQuery,
 	taskTypesQueryOptions,
+	useDeleteTask,
 	useSetTaskDone,
 	useTaskPages,
 	useTaskTypes,
@@ -102,6 +103,7 @@ function TasksPage() {
 		navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true }),
 	);
 	const setDone = useSetTaskDone();
+	const remove = useDeleteTask();
 	const [dialogOpen, setDialogOpen] = createSignal(false);
 	const [editing, setEditing] = createSignal<Task | undefined>();
 	const openDialog = (task?: Task) => {
@@ -250,6 +252,15 @@ function TasksPage() {
 												onClick={() => openDialog(task)}
 											>
 												Edit
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												aria-label={`Delete: ${taskHeadline(task)}`}
+												disabled={remove.isPending}
+												onClick={() => remove.mutate(task.ID)}
+											>
+												Delete
 											</Button>
 										</li>
 									)}

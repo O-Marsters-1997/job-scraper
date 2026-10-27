@@ -12,7 +12,6 @@ export function JobRowExpander(props: Props) {
 			<SuitabilityScoreValue
 				score={props.job.SuitabilityScore}
 				band={props.job.Band}
-				breakdown={props.job.Breakdown}
 				size="sm"
 			/>
 			<ScoreBreakdown job={props.job} />

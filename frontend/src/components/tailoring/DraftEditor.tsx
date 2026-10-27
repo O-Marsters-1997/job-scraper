@@ -14,6 +14,7 @@ import {
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { isSparse, maxCharsForFewerLines } from "@/lib/docLayout";
+import { htmlToText } from "@/lib/htmlText";
 import { loadedData } from "@/lib/queryData";
 import { roleBudget } from "@/lib/tailoring";
 import { cn } from "@/lib/utils";
@@ -141,7 +142,7 @@ export function DraftEditor(props: {
 			{
 				label: "Job description",
 				source: "jd",
-				text: job.data?.Description ?? "",
+				text: htmlToText(loadedData(job)?.Description ?? ""),
 			},
 			{ label: "Your note", source: "note", text: note.data?.Body ?? "" },
 			...(comments.data ?? []).map(

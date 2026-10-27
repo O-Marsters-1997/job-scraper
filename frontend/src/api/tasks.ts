@@ -117,6 +117,13 @@ export async function updateTask({
 	);
 }
 
+export async function deleteTask(id: string): Promise<void> {
+	return mocked(
+		(db) => db.deleteTask(id),
+		() => apiFetchVoid(`/tasks/${id}`, { method: "DELETE" }),
+	);
+}
+
 export async function setTaskDone(id: string, done: boolean): Promise<Task> {
 	return mocked(
 		(db) => db.setTaskDone(id, done),

@@ -229,6 +229,17 @@ func (f *FakeStore) UpdateTask(_ context.Context, userID string, in dto.UpdateTa
 	return t.Task, nil
 }
 
+func (f *FakeStore) DeleteTask(_ context.Context, userID, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.tasks[id]
+	if !ok || t.userID != userID {
+		return data.ErrNotFound
+	}
+	delete(f.tasks, id)
+	return nil
+}
+
 func (f *FakeStore) SetTaskDone(_ context.Context, userID, id string, done bool, now time.Time) (dto.Task, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

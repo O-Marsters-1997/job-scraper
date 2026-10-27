@@ -3,6 +3,7 @@ import { keys } from "../api/keys";
 import {
 	createTask,
 	createTaskType,
+	deleteTask,
 	deleteTaskType,
 	fetchTasks,
 	fetchTaskTypes,
@@ -105,6 +106,10 @@ export function useCreateTask() {
 
 export function useUpdateTask() {
 	return useInvalidatingMutation(updateTask, [keys.tasks.all]);
+}
+
+export function useDeleteTask() {
+	return useInvalidatingMutation(deleteTask, [keys.tasks.all]);
 }
 
 export function useSetTaskDone() {

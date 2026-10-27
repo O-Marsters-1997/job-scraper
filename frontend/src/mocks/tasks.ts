@@ -226,6 +226,10 @@ export function completeOpenApplyTasks(jobId: string): void {
 	);
 }
 
+export function deleteTask(id: string): void {
+	tasks = allTasks().filter((t) => t.ID !== id);
+}
+
 export function setTaskDone(id: string, done: boolean): Task {
 	failIfRequested("setTaskDone");
 	const prev = allTasks().find((t) => t.ID === id);

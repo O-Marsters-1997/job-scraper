@@ -39,6 +39,7 @@ type Store interface {
 	CreateTask(ctx context.Context, userID string, in dto.CreateTaskInput) (dto.Task, error)
 	UpdateTask(ctx context.Context, userID string, in dto.UpdateTaskInput, now time.Time) (dto.Task, error)
 	SetTaskDone(ctx context.Context, userID, id string, done bool, now time.Time) (dto.Task, error)
+	DeleteTask(ctx context.Context, userID, id string) error
 	SeedDefaultTaskTypes(ctx context.Context, tx pgx.Tx, userID string) error
 	CreateApplyTask(ctx context.Context, tx pgx.Tx, userID, jobID string) error
 	CompleteApplyTasks(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error
