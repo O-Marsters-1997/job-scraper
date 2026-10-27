@@ -20,7 +20,7 @@ import { roleBudget } from "@/lib/tailoring";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
 import type { Draft, DraftLayout } from "@/types/tailoring";
-import { createDraftEditor } from "../../hooks/useDraftEditor";
+import { createDraftEditor, PROFILE_SLOT } from "../../hooks/useDraftEditor";
 import { useExperience } from "../../hooks/useExperience";
 import { useJobComments } from "../../hooks/useJobComments";
 import { useJobNote } from "../../hooks/useJobNotes";
@@ -34,6 +34,7 @@ import {
 	useDraftLean,
 	useDraftRoles,
 	useExplainDraft,
+	useRedraftProfile,
 } from "../../hooks/useTailoring";
 import { AchievementsDrawer } from "./AchievementsDrawer";
 import { ChangesDiff } from "./ChangesDiff";
@@ -50,6 +51,7 @@ import type { JobTextBlock } from "./JobText";
 import { KeepControls, KeepNotices } from "./KeepFlow";
 import { MarginCards } from "./MarginCards";
 import { PrintPreview } from "./PrintPreview";
+import { ProfileCard } from "./ProfileCard";
 import { RolesDrawer } from "./RolesDrawer";
 import { SkillsPanel } from "./SkillsPanel";
 import { UnlinkedRoles } from "./UnlinkedRoles";
@@ -183,7 +185,40 @@ export function DraftEditor(props: {
 		ed.edited(slotId) ||
 		!!suggestions.get(slotId) ||
 		isSparse(metrics().fits[slotId]);
-	const cardKeys = createMemo(() => ed.cardKeys(needsCard));
+	const cardKeys = createMemo(() =>
+		ed.cardKeys(needsCard).filter((k) => k !== PROFILE_SLOT),
+	);
+
+	const redraft = useRedraftProfile(() => props.draft.id);
+	const [lastRedraft, setLastRedraft] = createSignal<{
+		from: string;
+		to: string;
+	}>();
+	const [profileTop, setProfileTop] = createSignal(0);
+	const baseProfile = () => props.draft.base?.profile ?? undefined;
+	const runRedraft = async (steer?: string) => {
+		setLastRedraft(undefined);
+		await ed.flush();
+		const from = ed.text(PROFILE_SLOT);
+		redraft.mutate(steer ? { steer } : {}, {
+			onSuccess: (saved) => {
+				const next = saved.content?.profile;
+				if (next == null || next === from) return;
+				ed.setText(PROFILE_SLOT, next);
+				setLastRedraft({ from, to: ed.text(PROFILE_SLOT) });
+			},
+		});
+	};
+	const revertProfile = () => {
+		const last = lastRedraft();
+		const undo = last && ed.text(PROFILE_SLOT) === last.to;
+		const to = undo ? last.from : baseProfile();
+		setLastRedraft(undefined);
+		redraft.reset();
+		if (to === undefined) return;
+		ed.setText(PROFILE_SLOT, to);
+		void ed.flush();
+	};
 
 	const activeSlot = () => {
 		const key = active();
@@ -361,6 +396,21 @@ export function DraftEditor(props: {
 			setWandTop(
 				line.getBoundingClientRect().top - root.getBoundingClientRect().top,
 			);
+	});
+	createEffect(() => {
+		const root = stage();
+		metrics();
+		scale();
+		ed.text(PROFILE_SLOT);
+		const rect = root
+			?.querySelector(`[data-slot-id="${PROFILE_SLOT}"]`)
+			?.getBoundingClientRect();
+		if (rect && root) {
+			const stageTop = root.getBoundingClientRect().top;
+			setProfileTop(
+				narrow() ? rect.bottom - stageTop + 6 : rect.top - stageTop,
+			);
+		}
 	});
 	onMount(() => {
 		const onKey = (e: KeyboardEvent) => {
@@ -611,6 +661,34 @@ export function DraftEditor(props: {
 												}
 											/>
 										)}
+									</Show>
+									<Show
+										when={
+											editable() &&
+											!!baseProfile() &&
+											(narrow() || (!rolePanel() && !rolesOpen()))
+										}
+									>
+										<div
+											class={cn(
+												"absolute top-0",
+												narrow()
+													? "inset-x-2 z-20"
+													: "left-[calc(100%+3rem)] w-80",
+											)}
+										>
+											<ProfileCard
+												base={baseProfile() ?? ""}
+												text={ed.text(PROFILE_SLOT)}
+												top={profileTop()}
+												pending={redraft.isPending}
+												{...(redraft.error && {
+													error: redraft.error.message,
+												})}
+												onRedraft={(steer) => void runRedraft(steer)}
+												onRevert={revertProfile}
+											/>
+										</div>
 									</Show>
 									<Show when={narrow()}>{marginCards(true)}</Show>
 								</div>

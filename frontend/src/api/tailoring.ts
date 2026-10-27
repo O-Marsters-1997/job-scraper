@@ -20,6 +20,7 @@ import {
 	experienceMatchSchema,
 	type HeadingMapping,
 	headingMappingSchema,
+	type ProfileRedraftInput,
 	type SkillGroup,
 	type SlotEdit,
 	type SuggestDone,
@@ -157,6 +158,24 @@ export async function saveDraftSlots(
 				draftSchema,
 				jsonInit("PUT", { positions, slots, skills, roles }),
 			),
+	);
+}
+
+export async function redraftProfile(
+	id: string,
+	input: ProfileRedraftInput,
+): Promise<Draft> {
+	return mocked(
+		(db) => db.redraftProfile(id, input),
+		() =>
+			apiFetch(
+				`/tailoring/drafts/${id}/profile/redraft`,
+				draftSchema,
+				jsonInit("POST", input),
+			).catch((err) => {
+				const message = err instanceof ApiError && bodyError(err);
+				throw message ? new Error(message) : err;
+			}),
 	);
 }
 
