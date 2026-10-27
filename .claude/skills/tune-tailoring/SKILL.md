@@ -6,7 +6,10 @@ description: Change the inline-suggestion prompts, checks or model safely, and a
 # CV tailoring
 
 Design and trade-offs: [ADR 0017](../../../docs/adr/0017-app-owned-drafts-google-rendered.md). A Draft is
-built without a model; the model only writes inline suggestions on one line at a time. Every suggestion,
+built without a model. A model only writes text when the user asks, either an inline suggestion on one line
+or a Profile Redraft. The redraft goes through `cvtailor/profiledraft`
+([ADR 0038](../../../docs/adr/0038-profile-redraft-by-model-tuned-on-attempts.md)), and the same
+before-and-after eval rule applies to it. Every suggestion,
 in production and in the eval, goes through `lineedit.Editor.Rewrite`
 (`internal/services/cvtailor/lineedit`), which owns the action table, `suggest.md`, the model, the
 checks and the length rules. `voice.md` stays in `cvedit` as `cvedit.Voice`. Prompts and checks are
