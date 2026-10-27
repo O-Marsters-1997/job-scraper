@@ -7,12 +7,26 @@ final class NotificationsModel {
     private(set) var loadState: LoadState<Void> = .idle
 
     private let client: APIClient
+    private let now: () -> Date
 
-    init(client: APIClient) {
+    init(client: APIClient, now: @escaping () -> Date = { .now }) {
         self.client = client
+        self.now = now
     }
 
     var badge: Int { notifications.filter(\.isUnread).count }
+
+    var groups: [(String, [AppNotification])] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now())
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today) ?? today
+        let newest = notifications.sorted { $0.createdAt > $1.createdAt }
+        return [
+            ("Today", newest.filter { $0.createdAt >= today }),
+            ("Yesterday", newest.filter { $0.createdAt >= yesterday && $0.createdAt < today }),
+            ("Earlier", newest.filter { $0.createdAt < yesterday }),
+        ].filter { !$0.1.isEmpty }
+    }
 
     func load() async {
         if notifications.isEmpty { loadState = .loading }
@@ -53,6 +67,8 @@ final class NotificationsModel {
 
 private extension AppNotification {
     func markedRead() -> AppNotification {
-        AppNotification(id: id, jobID: jobID, title: title, body: body, createdAt: createdAt, readAt: readAt ?? .now)
+        AppNotification(
+            id: id, kind: kind, jobID: jobID, title: title, body: body, job: job, createdAt: createdAt,
+            readAt: readAt ?? .now)
     }
 }

@@ -326,6 +326,28 @@ digits), on a 10% tint of the hue with 5pt corners. Used for Bands, chase state 
 - **Offline row**: under the nav bar, `wifi.slash` "Offline · 3 queued" in `.footnote` medium secondary. It's
   a status, not an alert.
 
+### Notifications
+*An activity feed of what's new, grouped Today / Yesterday / Earlier, newest first.*
+
+- **Header**: serif `.title` "Notifications" (as the Due date header), then "Unread (n)" or "All caught up" in
+  `.subheadline` medium on the left and a **Mark all as read** text button on the right, disabled at zero. No
+  nav title and no toolbar button.
+- **Row**:
+  - A 7pt Brand Violet dot in the margin while unread.
+  - A 40pt round avatar with the company initial in serif, and the kind's badge symbol on a Brand Violet disc
+    at its bottom-trailing corner.
+  - One sentence: the company and role in semibold around the kind's verb in secondary ("**Monzo** is hiring
+    for **Senior Go Engineer**").
+  - A facts line, location · salary, in `.subheadline` secondary with monospaced digits.
+  - A Band dot-label ("Great · 92") when the job is scored.
+  - The age in words underneath, first letter capitalised ("6 minutes ago", "Yesterday"), in `.footnote`
+    tertiary.
+- **Kinds**: each kind owns its verb and badge symbol. `new_match` reads "is hiring for" with `sparkle`. A
+  kind the app doesn't know shows `bell.fill`, the notification's title as the sentence and its body as the
+  facts line, so a new server kind still lists.
+- **Tap** opens Job detail and marks the row read. **Long press** opens the job description sheet with a
+  `.impact(weight: .medium)` haptic and never also opens detail. VoiceOver gets a "Preview job" action.
+
 ### Login
 *The one brand-panel moment, a native copy of the web front door's mobile layout* (`frontend/src/components/auth/`).
 
@@ -400,9 +422,10 @@ snoozing or marking applied on the Due list is undoable the same way.
 
 ## Navigation
 
-- **Tab bar** with two sections:
+- **Tab bar** with three sections:
   - **Triage** (`rectangle.stack`)
   - **Due** (`checklist`), badged with the chases due plus ready drafts. Open Tasks aren't counted.
+  - **Notifications** (`bell`), badged with the unread count. See Notifications above.
 - **Triage.** An inline title, because a large title would take height from the card. Undo sits on the
   leading side and **Skip** on the trailing side.
 - **Due.** An inline title "Due". The serif date header does the job of a large title. A native search field
