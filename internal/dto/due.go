@@ -13,16 +13,17 @@ type DueList struct {
 }
 
 type DueJob struct {
-	JobID         string    `json:"job_id"`
-	Title         string    `json:"title"`
-	CompanySlug   string    `json:"company_slug"`
-	Band          string    `json:"band"`
-	Score         *int      `json:"score"`
-	ApplicationID string    `json:"application_id"`
-	ChaseBy       *string   `json:"chase_by"` // YYYY-MM-DD
-	ApplyTaskID   *string   `json:"apply_task_id"`
-	Tasks         []DueTask `json:"tasks"`
-	Draft         *DueDraft `json:"draft"`
+	JobID         string      `json:"job_id"`
+	Title         string      `json:"title"`
+	CompanySlug   string      `json:"company_slug"`
+	CompanyKind   CompanyKind `json:"company_kind"`
+	Band          string      `json:"band"`
+	Score         *int        `json:"score"`
+	ApplicationID string      `json:"application_id"`
+	ChaseBy       *string     `json:"chase_by"` // YYYY-MM-DD
+	ApplyTaskID   *string     `json:"apply_task_id"`
+	Tasks         []DueTask   `json:"tasks"`
+	Draft         *DueDraft   `json:"draft"`
 }
 
 type DueTask struct {
