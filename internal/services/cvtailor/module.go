@@ -26,6 +26,7 @@ type Deps struct {
 	Editor Editor
 	Lines  *lineedit.Editor
 	Creds  Credentials
+	Log    *slog.Logger
 
 	Scaffolder Scaffolder
 }
@@ -39,10 +40,16 @@ type Module struct {
 	lines      *lineedit.Editor
 	creds      Credentials
 	scaffolder Scaffolder
+	log        *slog.Logger
 }
 
 func Build(deps Deps) *Module {
+	log := deps.Log
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
+	}
 	return &Module{
+		log:    log,
 		store:  deps.Store,
 		svc:    NewService(deps.Store, deps.Docs, deps.Asker, deps.Drive),
 		docs:   deps.Docs,
@@ -55,8 +62,8 @@ func Build(deps Deps) *Module {
 	}
 }
 
-func New(pool *pgxpool.Pool, docs Docs, asker Asker, creds Credentials) *Module {
-	return Build(Deps{Store: store.New(pool), Docs: docs, Drive: docs, Asker: asker, Editor: cvedit.NewClient(), Lines: lineedit.New(lineedit.NewOpenRouter()), Creds: creds, Scaffolder: letterwrite.NewClient()})
+func New(pool *pgxpool.Pool, docs Docs, asker Asker, creds Credentials, log *slog.Logger) *Module {
+	return Build(Deps{Store: store.New(pool), Docs: docs, Drive: docs, Asker: asker, Editor: cvedit.NewClient(), Lines: lineedit.New(lineedit.NewOpenRouter()), Creds: creds, Log: log, Scaffolder: letterwrite.NewClient()})
 }
 
 // Run generates pending Drafts until ctx is cancelled.

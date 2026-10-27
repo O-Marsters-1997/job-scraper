@@ -147,7 +147,7 @@ func (m *Module) fail(ctx context.Context, claim dto.DraftClaim, cause error, cl
 }
 
 func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dto.DraftResult, error) {
-	stop := stepTimer(ctx, claim.ID, "plan")
+	stop := m.stepTimer(ctx, claim.ID, "plan")
 	pl, err := m.svc.plan(ctx, claim, claim.DocID)
 	stop()
 	if err != nil {
@@ -158,7 +158,7 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 	if claim.Mode == dto.DraftModeGenerate {
 		lean = make(chan leanResult, 1)
 		go func() {
-			defer stepTimer(ctx, claim.ID, "replace_low_lean")()
+			defer m.stepTimer(ctx, claim.ID, "replace_low_lean")()
 			e, err := m.svc.replaceLowLean(ctx, claim, pl)
 			lean <- leanResult{edits: e, err: err}
 		}()
@@ -172,7 +172,7 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 	if err != nil {
 		return docID, dto.DraftResult{}, err
 	}
-	stop = stepTimer(ctx, claim.ID, "apply_edits")
+	stop = m.stepTimer(ctx, claim.ID, "apply_edits")
 	err = m.svc.applyEdits(ctx, claim.UserID, docID, pl, edits)
 	stop()
 	if err != nil {
@@ -196,10 +196,10 @@ type leanResult struct {
 	err   error
 }
 
-func stepTimer(ctx context.Context, draftID, step string) func() {
+func (m *Module) stepTimer(ctx context.Context, draftID, step string) func() {
 	start := time.Now()
 	return func() {
-		slog.InfoContext(ctx, "draft step", slog.String("draft_id", draftID), slog.String("step", step), slog.Int64("duration_ms", time.Since(start).Milliseconds()))
+		m.log.InfoContext(ctx, "draft step", slog.String("draft_id", draftID), slog.String("step", step), slog.Int64("duration_ms", time.Since(start).Milliseconds()))
 	}
 }
 
@@ -240,7 +240,7 @@ func toDraftFindings(findings []checks.Finding) []dto.DraftFinding {
 }
 
 func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, error) {
-	stop := stepTimer(ctx, claim.ID, "list_tabs")
+	stop := m.stepTimer(ctx, claim.ID, "list_tabs")
 	tabs, err := m.drive.ListTabs(ctx, claim.UserID, claim.DocID)
 	stop()
 	if err != nil {
@@ -249,7 +249,7 @@ func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, err
 	if !slices.ContainsFunc(tabs, func(t google.Tab) bool { return t.ID == claim.TabID }) {
 		return "", apperr.Unprocessable("the base CV tab must be a top-level tab")
 	}
-	stop = stepTimer(ctx, claim.ID, "copy_file")
+	stop = m.stepTimer(ctx, claim.ID, "copy_file")
 	docID, err := m.drive.CopyFile(ctx, claim.UserID, claim.DocID, "CV draft "+claim.ID[:8])
 	stop()
 	if err != nil {
@@ -271,7 +271,7 @@ func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, err
 		trim = append(trim, req)
 	}
 	if len(trim) > 0 {
-		stop := stepTimer(ctx, claim.ID, "delete_tabs")
+		stop := m.stepTimer(ctx, claim.ID, "delete_tabs")
 		err := m.drive.BatchUpdate(ctx, claim.UserID, docID, trim)
 		stop()
 		if err != nil {
