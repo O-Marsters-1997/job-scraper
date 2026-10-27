@@ -17,7 +17,7 @@ struct NotDraftedRow: View {
                 .padding(.horizontal, 14)
                 .frame(minHeight: 44)
                 .contentShape(.rect)
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color(.separator)))
+                .hairlineCard()
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Not drafted, \(count)")

@@ -45,22 +45,13 @@ struct DueJobCard: View {
                 .transition(.opacity.animation(.easeOut(duration: 0.12)))
             }
         }
-        .clipShape(.rect(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color(.separator)))
+        .hairlineCard()
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(job.companyName).font(.system(.title3, design: .serif))
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    if let band = job.band {
-                        Text(band.title).font(.caption.weight(.semibold)).foregroundStyle(band.colour)
-                    }
-                    if let score = job.score {
-                        Text(score, format: .number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    }
-                }
+                DueCardHeadline(job: job)
                 Spacer(minLength: 6)
                 Text(rows.count, format: .number).font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
                 Image(systemName: "chevron.right")
@@ -89,6 +80,22 @@ struct DueJobCard: View {
         case .failed: return ("Draft failed", .red)
         case .ready: return ("CV ready", .brandTint)
         default: return nil
+        }
+    }
+}
+
+struct DueCardHeadline: View {
+    let job: DueJob
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(job.companyName).font(.system(.title3, design: .serif))
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                if let band = job.band { DotLabel(text: band.title, hue: band.colour) }
+                if let score = job.score {
+                    Text(score, format: .number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }
+            }
         }
     }
 }
