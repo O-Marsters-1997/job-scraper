@@ -79,7 +79,11 @@ func (s *Service) fillSuggestionLines(ctx context.Context, userID string, q dto.
 	if err != nil {
 		return fmt.Errorf("parse CV tab: %w", err)
 	}
-	mappings, err := s.store.ListHeadingMappings(ctx, userID, q.DocID, q.TabID)
+	positions, err := s.store.ListPositions(ctx, userID)
+	if err != nil {
+		return err
+	}
+	mappings, err := s.linkedMappings(ctx, userID, q.DocID, q.TabID, ds, positions)
 	if err != nil {
 		return err
 	}
