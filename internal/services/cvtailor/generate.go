@@ -147,21 +147,35 @@ func (m *Module) fail(ctx context.Context, claim dto.DraftClaim, cause error, cl
 }
 
 func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dto.DraftResult, error) {
+	stop := m.stepTimer(ctx, claim.ID, "plan")
 	pl, err := m.svc.plan(ctx, claim, claim.DocID)
+	stop()
 	if err != nil {
 		return "", dto.DraftResult{}, err
 	}
 	edits := pl.keepAll()
+	var lean chan leanResult
 	if claim.Mode == dto.DraftModeGenerate {
-		if edits, err = m.svc.replaceLowLean(ctx, claim, pl); err != nil {
-			return "", dto.DraftResult{}, err
-		}
+		lean = make(chan leanResult, 1)
+		go func() {
+			defer m.stepTimer(ctx, claim.ID, "replace_low_lean")()
+			e, err := m.svc.replaceLowLean(ctx, claim, pl)
+			lean <- leanResult{edits: e, err: err}
+		}()
 	}
 	docID, err := m.copyTab(ctx, claim)
+	if lean != nil {
+		res := <-lean
+		edits = res.edits
+		err = errors.Join(err, res.err)
+	}
 	if err != nil {
 		return docID, dto.DraftResult{}, err
 	}
-	if err := m.svc.applyEdits(ctx, claim.UserID, docID, pl, edits); err != nil {
+	stop = m.stepTimer(ctx, claim.ID, "apply_edits")
+	err = m.svc.applyEdits(ctx, claim.UserID, docID, pl, edits)
+	stop()
+	if err != nil {
 		return docID, dto.DraftResult{}, err
 	}
 	editSet, err := json.Marshal(edits)
@@ -177,6 +191,18 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 	}, nil
 }
 
+type leanResult struct {
+	edits cvedit.EditSet
+	err   error
+}
+
+func (m *Module) stepTimer(ctx context.Context, draftID, step string) func() {
+	start := time.Now()
+	return func() {
+		m.log.InfoContext(ctx, "draft step", slog.String("draft_id", draftID), slog.String("step", step), slog.Int64("duration_ms", time.Since(start).Milliseconds()))
+	}
+}
+
 func (s *Service) replaceLowLean(ctx context.Context, claim dto.DraftClaim, pl plan) (cvedit.EditSet, error) {
 	bank, err := s.store.ListPositions(ctx, claim.UserID)
 	if err != nil {
@@ -186,11 +212,7 @@ func (s *Service) replaceLowLean(ctx context.Context, claim dto.DraftClaim, pl p
 	if err != nil {
 		return cvedit.EditSet{}, err
 	}
-	raw, err := s.docs.GetDocument(ctx, claim.UserID, claim.DocID, claim.TabID)
-	if err != nil {
-		return cvedit.EditSet{}, fmt.Errorf("load CV tab: %w", err)
-	}
-	lines, err := sourceLines(raw, pl)
+	lines, err := sourceLines(pl.raw, pl)
 	if err != nil {
 		return cvedit.EditSet{}, err
 	}
@@ -218,14 +240,18 @@ func toDraftFindings(findings []checks.Finding) []dto.DraftFinding {
 }
 
 func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, error) {
+	stop := m.stepTimer(ctx, claim.ID, "list_tabs")
 	tabs, err := m.drive.ListTabs(ctx, claim.UserID, claim.DocID)
+	stop()
 	if err != nil {
 		return "", fmt.Errorf("list tabs: %w", err)
 	}
 	if !slices.ContainsFunc(tabs, func(t google.Tab) bool { return t.ID == claim.TabID }) {
 		return "", apperr.Unprocessable("the base CV tab must be a top-level tab")
 	}
+	stop = m.stepTimer(ctx, claim.ID, "copy_file")
 	docID, err := m.drive.CopyFile(ctx, claim.UserID, claim.DocID, "CV draft "+claim.ID[:8])
+	stop()
 	if err != nil {
 		return "", fmt.Errorf("copy doc: %w", err)
 	}
@@ -245,7 +271,10 @@ func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, err
 		trim = append(trim, req)
 	}
 	if len(trim) > 0 {
-		if err := m.drive.BatchUpdate(ctx, claim.UserID, docID, trim); err != nil {
+		stop := m.stepTimer(ctx, claim.ID, "delete_tabs")
+		err := m.drive.BatchUpdate(ctx, claim.UserID, docID, trim)
+		stop()
+		if err != nil {
 			return docID, fmt.Errorf("remove other tabs: %w", err)
 		}
 	}
