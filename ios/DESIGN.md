@@ -405,7 +405,12 @@ snoozing or marking applied on the Due list is undoable the same way.
   - **Due** (`checklist`), badged with the chases due plus ready drafts. Open Tasks aren't counted.
 - **Triage.** An inline title, because a large title would take height from the card. Undo sits on the
   leading side and **Skip** on the trailing side.
-- **Due.** An inline title "Due". The serif date header does the job of a large title.
+- **Due.** An inline title "Due". The serif date header does the job of a large title. A native search field
+  filters the cards by job title and company. The page ends with a hairline "Not drafted · N ›" row (also under
+  "Nothing due", hidden at 0) that pushes the Shortlisted list.
+- **Shortlisted.** Pushed from Due. Shortlisted jobs with no CV draft, highest score first, as hairline cards
+  in the Due card style: company, Band and score, the role line, then **Draft CV** and **Apply** buttons.
+  Tapping the header opens Job detail. It has the same native search field.
 - **Job detail.** Pushed from a Due card's **Open job**. It has the band row, the serif company header, then
   the detail body, with a `ShareLink` in the toolbar and the back swipe intact.
 - **CV draft PDF.** **View PDF** opens the draft in `.quickLookPreview`, which brings sharing and Save to Files
