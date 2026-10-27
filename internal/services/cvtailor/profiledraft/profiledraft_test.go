@@ -81,15 +81,18 @@ func TestWriterRedraft(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Redraft error = %v", err)
 		}
-		if res.Text != "" || len(res.Attempts) != 2 {
-			t.Errorf("Redraft = %q with %d attempts, want empty with 2", res.Text, len(res.Attempts))
+		if res.Text != "" || len(res.Attempts) != 2 || len(m.prompts) != 2 {
+			t.Errorf("Redraft = %q with %d attempts and %d calls, want empty with 2 and 2", res.Text, len(res.Attempts), len(m.prompts))
 		}
 	})
 
 	t.Run("longer than the base is rejected", func(t *testing.T) {
 		t.Parallel()
 		m := &scriptedModel{replies: []string{strings.Repeat("Go engineer. ", 10), strings.Repeat("Go engineer. ", 10)}}
-		res, _ := profiledraft.New(m).Redraft(t.Context(), "key", input())
+		res, err := profiledraft.New(m).Redraft(t.Context(), "key", input())
+		if err != nil {
+			t.Fatalf("Redraft error = %v", err)
+		}
 		if res.Text != "" {
 			t.Errorf("Redraft text = %q, want empty", res.Text)
 		}

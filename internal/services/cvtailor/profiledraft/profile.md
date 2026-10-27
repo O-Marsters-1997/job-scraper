@@ -12,5 +12,6 @@ Rules:
 - Lead with what the job most needs that the person can honestly offer.
   Where the job and the profile use different words for the same thing, use
   the job's.
-- Do not use these words: leverage, spearheaded, synergy, passionate,
-  dynamic, results-driven, utilize, responsible for.
+- Do not use these words: leverage, spearhead, synergy, passionate,
+  results-driven, cutting-edge, utilize, delve, seamless, game-changing,
+  best-in-class, rockstar, ninja, go-getter.
