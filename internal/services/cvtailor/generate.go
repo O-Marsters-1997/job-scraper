@@ -186,7 +186,15 @@ func (s *Service) replaceLowLean(ctx context.Context, claim dto.DraftClaim, pl p
 	if err != nil {
 		return cvedit.EditSet{}, err
 	}
-	reps := leanRule{}.Replacements(bank, pl.baseContent().content(), answers)
+	raw, err := s.docs.GetDocument(ctx, claim.UserID, claim.DocID, claim.TabID)
+	if err != nil {
+		return cvedit.EditSet{}, fmt.Errorf("load CV tab: %w", err)
+	}
+	lines, err := sourceLines(raw, pl)
+	if err != nil {
+		return cvedit.EditSet{}, err
+	}
+	reps := leanRule{}.Replacements(RuleInput{Positions: bank, Content: pl.baseContent().content(), Answers: answers, Lines: lines})
 	return pl.withReplacements(bank, reps), nil
 }
 

@@ -126,6 +126,21 @@ func (s *Store) IsLetterTab(ctx context.Context, userID, docID, tabID string) (b
 	return ok, nil
 }
 
+func (s *Store) DefaultLetterTab(ctx context.Context, userID string) (docID, tabID string, ok bool, err error) {
+	uid, err := parseID(userID, ErrJobNotFound)
+	if err != nil {
+		return "", "", false, err
+	}
+	row, err := s.queries.DefaultLetterTab(ctx, uid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, fmt.Errorf("store.DefaultLetterTab: %w", err)
+	}
+	return row.DocID, row.TabID, true, nil
+}
+
 func (s *Store) JobBrief(ctx context.Context, jobID string) (dto.JobBrief, error) {
 	jid, err := parseID(jobID, ErrJobNotFound)
 	if err != nil {

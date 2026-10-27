@@ -26,6 +26,18 @@ func (f *FakeStore) TrackLetterTab(userID, docID, tabID string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.letterTabs[letterTab{userID, docID, tabID}] = true
+	f.letterTabOrder = append(f.letterTabOrder, letterTab{userID, docID, tabID})
+}
+
+func (f *FakeStore) DefaultLetterTab(_ context.Context, userID string) (string, string, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, lt := range f.letterTabOrder {
+		if lt.userID == userID {
+			return lt.docID, lt.tabID, true, nil
+		}
+	}
+	return "", "", false, nil
 }
 
 func (f *FakeStore) IsLetterTab(_ context.Context, userID, docID, tabID string) (bool, error) {

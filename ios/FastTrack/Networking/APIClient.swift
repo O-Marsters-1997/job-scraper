@@ -21,10 +21,18 @@ struct APIClient {
     var clearChase: (_ applicationID: String) async throws -> Void
     var logContact: (_ jobID: String, _ channel: ContactChannel, _ outcome: ContactOutcome) async throws -> RecruiterContact
     var setTaskDone: (_ taskID: String, _ done: Bool) async throws -> Void
+    var taskTypes: () async throws -> [TaskType]
+    var createTask: (_ typeID: String, _ jobID: String, _ notes: String) async throws -> Void
     var recruiterContacts: (_ jobID: String) async throws -> [RecruiterContact]
     var cvTemplates: () async throws -> [CVTemplate]
     var createDraft: (_ jobID: String, _ cv: CVTemplate) async throws -> DraftRef
     var draftPDF: (_ draftID: String) async throws -> URL
+    var draftRoles: (_ draftID: String) async throws -> DraftRoles
+    var saveRole: (_ draftID: String, _ positionID: String, _ bullets: [DraftBulletEdit]) async throws -> Void
+    var keepDraft: (_ draftID: String) async throws -> Void
+    var discardDraft: (_ draftID: String) async throws -> Void
+    var coverLetters: (_ jobID: String) async throws -> [CoverLetter]
+    var requestCoverLetter: (_ jobID: String) async throws -> CoverLetter
 }
 
 extension APIClient {
@@ -94,6 +102,12 @@ extension APIClient {
             setTaskDone: { taskID, done in
                 try await http.put("tasks/\(taskID)/done", body: TaskDoneInput(done: done))
             },
+            taskTypes: {
+                try await http.get("task-types")
+            },
+            createTask: { typeID, jobID, notes in
+                try await http.post("tasks", body: CreateTaskInput(typeID: typeID, jobID: jobID, notes: notes))
+            },
             recruiterContacts: { jobID in
                 try await http.get("jobs/\(jobID)/recruiter-contacts")
             },
@@ -107,6 +121,26 @@ extension APIClient {
                 let url = FileManager.default.temporaryDirectory.appending(path: "cv-\(draftID).pdf")
                 try await http.data("tailoring/drafts/\(draftID)/pdf").write(to: url)
                 return url
+            },
+            draftRoles: { draftID in
+                try await http.get("tailoring/drafts/\(draftID)/roles")
+            },
+            saveRole: { draftID, positionID, bullets in
+                try await http.put(
+                    "tailoring/drafts/\(draftID)/slots",
+                    body: DraftSlotsInput(positions: [DraftPositionEdit(positionID: positionID, bullets: bullets)]))
+            },
+            keepDraft: { draftID in
+                try await http.post("tailoring/drafts/\(draftID)/keep", body: EmptyBody())
+            },
+            discardDraft: { draftID in
+                try await http.post("tailoring/drafts/\(draftID)/discard", body: EmptyBody())
+            },
+            coverLetters: { jobID in
+                try await http.get("tailoring/jobs/\(jobID)/cover-letters")
+            },
+            requestCoverLetter: { jobID in
+                try await http.post("tailoring/jobs/\(jobID)/cover-letters", body: EmptyBody())
             }
         )
     }
@@ -140,10 +174,18 @@ extension APIClient {
                 try respond(RecruiterContact(id: "contact-\(jobID)", contactedOn: .now, channel: channel, outcome: outcome))
             },
             setTaskDone: { _, _ in try respond(()) },
+            taskTypes: { try respond([TaskType(id: "type-finish", name: "Finish application", systemKey: "finish")]) },
+            createTask: { _, _, _ in try respond(()) },
             recruiterContacts: { _ in try respond(contacts) },
             cvTemplates: { try respond([CVTemplate(docID: "doc", tabID: "tab", title: "Backend", isDefault: true)]) },
             createDraft: { _, _ in try respond(DraftRef(id: "draft-new")) },
-            draftPDF: { _ in try respond(FileManager.default.temporaryDirectory.appending(path: "cv-draft.pdf")) }
+            draftPDF: { _ in try respond(FileManager.default.temporaryDirectory.appending(path: "cv-draft.pdf")) },
+            draftRoles: { _ in try respond(.sample) },
+            saveRole: { _, _, _ in try respond(()) },
+            keepDraft: { _ in try respond(()) },
+            discardDraft: { _ in try respond(()) },
+            coverLetters: { _ in try respond([]) },
+            requestCoverLetter: { _ in try respond(CoverLetter(id: "letter-new", createdAt: .now, doneAt: nil)) }
         )
     }
 }

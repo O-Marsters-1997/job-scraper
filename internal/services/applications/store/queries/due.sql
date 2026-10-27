@@ -24,7 +24,7 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) ap ON TRUE
 LEFT JOIN LATERAL (
-    SELECT jsonb_agg(jsonb_build_object('id', t.id, 'type_name', tt.name, 'notes', COALESCE(t.notes, ''))
+    SELECT jsonb_agg(jsonb_build_object('id', t.id, 'type_name', tt.name, 'system_key', COALESCE(tt.system_key, ''), 'notes', COALESCE(t.notes, ''))
                      ORDER BY t.created_at, t.id) AS tasks
     FROM tasks t JOIN task_types tt ON tt.id = t.type_id
     WHERE t.user_id = a.user_id AND t.job_id = a.job_id

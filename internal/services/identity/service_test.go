@@ -202,8 +202,8 @@ func TestSignup(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(types) != 4 {
-			t.Errorf("seeded %d task types, want 4", len(types))
+		if len(types) != 5 {
+			t.Errorf("seeded %d task types, want 5", len(types))
 		}
 	})
 

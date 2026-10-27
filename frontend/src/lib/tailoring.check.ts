@@ -6,6 +6,7 @@ import {
 	lineWithIds,
 	moveItem,
 	reviewFindings,
+	roleBudget,
 } from "./tailoring";
 
 assert.ok(
@@ -41,6 +42,35 @@ assert.ok(
 assert.ok(
 	keptDraft([{ outcome: "discarded" }]) === undefined,
 	"a discarded draft is not kept",
+);
+
+const bullet = (lines: number) => ({
+	slotId: "s",
+	achievementId: null,
+	text: "",
+	lines,
+	lean: null,
+	state: null,
+	onSource: true,
+	replacedFrom: null,
+});
+const role = (budget: number, ...lines: number[]) => ({
+	positionId: "p",
+	employer: "",
+	title: "",
+	budget,
+	bullets: lines.map(bullet),
+	bank: [],
+});
+assert.deepEqual(
+	roleBudget(role(4, 2, 2)),
+	{ used: 4, budget: 4, over: 0 },
+	"a role at its budget is not over",
+);
+assert.deepEqual(
+	roleBudget(role(4, 3, 2)),
+	{ used: 5, budget: 4, over: 1 },
+	"a role past its budget reports how many lines over",
 );
 
 assert.deepEqual(

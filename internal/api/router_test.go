@@ -269,8 +269,8 @@ func TestIngestedJobCanBeAppliedToAndMovedThroughStatuses(t *testing.T) {
 	}
 
 	types := do[[]dto.TaskType](u, http.StatusOK, http.MethodGet, "/task-types", nil)
-	if len(types) != 4 {
-		t.Fatalf("GET /task-types = %+v, want the 4 seeded types", types)
+	if len(types) != 5 {
+		t.Fatalf("GET /task-types = %+v, want the 5 seeded types", types)
 	}
 
 	task := do[dto.Task](u, http.StatusCreated, http.MethodPost, "/tasks/", map[string]any{"type_id": types[0].ID, "job_id": res.JobID})

@@ -14,7 +14,36 @@ export const suggestionSchema = z.object({
 	score: z.number(),
 	state: z.enum(["fit", "low", "unclear"]),
 	preselected: z.boolean(),
+	lines: z.number(),
 });
+
+const roleBulletSchema = z.object({
+	slotId: z.string(),
+	achievementId: z.string().nullable(),
+	text: z.string(),
+	lines: z.number(),
+	lean: z.number().nullable(),
+	state: z.enum(["fit", "low", "unclear"]).nullable(),
+	onSource: z.boolean(),
+	replacedFrom: z.string().nullable(),
+});
+
+export const draftRolesSchema = z.object({
+	draftId: z.string(),
+	kept: z.boolean(),
+	spills: z.boolean(),
+	roles: z.array(
+		z.object({
+			positionId: z.string().nullable(),
+			employer: z.string(),
+			title: z.string(),
+			budget: z.number(),
+			bullets: z.array(roleBulletSchema),
+			bank: z.array(roleBulletSchema),
+		}),
+	),
+});
+export type DraftRoles = z.infer<typeof draftRolesSchema>;
 
 export const experienceMatchSchema = z.object({
 	score: z.number().nullable(),

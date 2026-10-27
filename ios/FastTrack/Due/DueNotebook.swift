@@ -4,6 +4,7 @@ struct DueNotebook: View {
     let model: DueModel
     let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
+    let openApplication: (DueJob) -> Void
     @State private var opened: Set<String>?
 
     var body: some View {
@@ -14,7 +15,8 @@ struct DueNotebook: View {
                 VStack(spacing: 10) {
                     ForEach(model.dueJobs) { job in
                         DueJobCard(job: job, model: model, isOpen: opened?.contains(job.id) ?? false,
-                                   toggle: { toggle(job) }, logContact: logContact, openJob: openJob)
+                                   toggle: { toggle(job) }, logContact: logContact, openJob: openJob,
+                                   openApplication: openApplication)
                             .transition(.opacity)
                     }
                 }

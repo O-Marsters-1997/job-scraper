@@ -10,9 +10,11 @@ import {
 	type DraftLayout,
 	type DraftPositionEdit,
 	type DraftRef,
+	type DraftRoles,
 	draftInsightsSchema,
 	draftLayoutSchema,
 	draftRefSchema,
+	draftRolesSchema,
 	draftSchema,
 	type ExperienceMatch,
 	experienceMatchSchema,
@@ -175,6 +177,13 @@ export async function fetchDraftLean(id: string): Promise<BulletLean[]> {
 	return mocked(
 		(db) => db.getDraftLean(),
 		() => apiFetch(`/tailoring/drafts/${id}/lean`, z.array(bulletLeanSchema)),
+	);
+}
+
+export async function fetchDraftRoles(id: string): Promise<DraftRoles> {
+	return mocked(
+		(db) => db.getDraftRoles(),
+		() => apiFetch(`/tailoring/drafts/${id}/roles`, draftRolesSchema),
 	);
 }
 

@@ -27,11 +27,18 @@ func TestIOSFixtures(t *testing.T) {
 			{
 				JobID: "job-1", Title: "Senior Go Engineer", CompanySlug: "monzo", Band: "great", Score: &score,
 				ApplicationID: "app-1", ChaseBy: &chaseBy, ApplyTaskID: &applyTaskID,
-				Tasks: []dto.DueTask{{ID: "task-1", TypeName: "Apply", Notes: "Tailor the CV"}},
+				Tasks: []dto.DueTask{
+					{ID: "task-1", TypeName: "Apply", SystemKey: dto.TaskTypeApply, Notes: "Tailor the CV"},
+					{ID: "task-2", TypeName: "Finish application", SystemKey: dto.TaskTypeFinish, Notes: "Needs a cover letter"},
+				},
 				Draft: &dto.DueDraft{ID: "draft-1", State: dto.DraftStateReady, CVTitle: "Backend"},
 			},
 			{JobID: "job-2", Title: "Backend Engineer", CompanySlug: "wise", ApplicationID: "app-2", Tasks: []dto.DueTask{}},
 		}},
+		"task_types": []dto.TaskType{
+			{ID: "type-1", Name: "Finish application", Colour: "#0f766e", SystemKey: dto.TaskTypeFinish, CreatedAt: at},
+			{ID: "type-2", Name: "Reach out", Colour: "#15803d", CreatedAt: at},
+		},
 		"recruiter_contact": dto.RecruiterContact{
 			ID: "contact-1", JobID: "job-1", ContactedOn: "2026-10-01",
 			Channel: dto.ChannelEmail, Outcome: dto.OutcomeNoReply, CreatedAt: at,

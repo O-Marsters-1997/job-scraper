@@ -703,7 +703,7 @@ CREATE TABLE IF NOT EXISTS task_types (
     name       TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 50),
     colour     TEXT        NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    system_key TEXT        CHECK (system_key IN ('apply')),
+    system_key TEXT        CHECK (system_key IN ('apply', 'finish')),
     UNIQUE (user_id, name)
 );
 

@@ -115,6 +115,30 @@ struct ContactInput: Encodable {
     }
 }
 
+struct TaskType: Decodable {
+    let id: String
+    let name: String
+    let systemKey: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id = "ID"
+        case name = "Name"
+        case systemKey = "SystemKey"
+    }
+}
+
+struct CreateTaskInput: Encodable {
+    let typeID: String
+    let jobID: String
+    let notes: String
+
+    enum CodingKeys: String, CodingKey {
+        case notes
+        case typeID = "type_id"
+        case jobID = "job_id"
+    }
+}
+
 struct TaskDoneInput: Encodable {
     let done: Bool
 }
@@ -149,6 +173,36 @@ struct DraftInput: Encodable {
         case docID = "docId"
         case tabID = "tabId"
     }
+}
+
+struct DraftBulletEdit: Encodable {
+    let text: String
+    let achievementIDs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case achievementIDs = "achievementIds"
+    }
+}
+
+struct DraftPositionEdit: Encodable {
+    let positionID: String
+    let bullets: [DraftBulletEdit]
+
+    enum CodingKeys: String, CodingKey {
+        case bullets
+        case positionID = "positionId"
+    }
+}
+
+struct DraftSlotsInput: Encodable {
+    let positions: [DraftPositionEdit]
+}
+
+struct CoverLetter: Decodable, Identifiable {
+    let id: String
+    let createdAt: Date
+    let doneAt: Date?
 }
 
 extension Date {

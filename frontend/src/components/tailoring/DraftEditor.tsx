@@ -15,6 +15,7 @@ import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { isSparse, maxCharsForFewerLines } from "@/lib/docLayout";
 import { loadedData } from "@/lib/queryData";
+import { roleBudget } from "@/lib/tailoring";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
 import type { Draft, DraftLayout } from "@/types/tailoring";
@@ -30,6 +31,7 @@ import {
 	useSuggestions as useAchievementBank,
 	useDraftInsights,
 	useDraftLean,
+	useDraftRoles,
 	useExplainDraft,
 } from "../../hooks/useTailoring";
 import { AchievementsDrawer } from "./AchievementsDrawer";
@@ -252,6 +254,16 @@ export function DraftEditor(props: {
 		bank: () => bank.data ?? [],
 		positions: () => rolePositions(),
 	});
+	const rolesQuery = useDraftRoles(
+		() => props.draft.id,
+		() => props.draft.status === "ready",
+	);
+	const budgetOf = (positionId: string) => {
+		const role = rolesQuery.data?.roles.find(
+			(r) => r.positionId === positionId,
+		);
+		return role && roleBudget(role);
+	};
 	const pageLines = (pt: number) =>
 		Math.round(pt / (metrics().bodyLinePt || DEFAULT_BODY_LINE_PT));
 	const [rolesOpen, setRolesOpen] = createSignal(false);
@@ -618,6 +630,7 @@ export function DraftEditor(props: {
 					picked={rolePicks.order()}
 					usedLines={pageLines(metrics().contentPt)}
 					budgetLines={pageLines(metrics().availablePt)}
+					budgetOf={budgetOf}
 					selected={selectedRole()}
 					onSelect={setSelectedRole}
 					onToggle={rolePicks.toggleRole}
@@ -638,6 +651,7 @@ export function DraftEditor(props: {
 							picked={rolePicks.picksFor(positionId())}
 							usedLines={pageLines(metrics().contentPt)}
 							budgetLines={pageLines(metrics().availablePt)}
+							roleBudget={budgetOf(positionId())}
 							selected={selectedPick()}
 							onSelect={setSelectedPick}
 							onToggle={(id) => rolePicks.toggle(positionId(), id)}

@@ -21,10 +21,11 @@ struct DueJobCard: View {
     let toggle: () -> Void
     let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
+    let openApplication: (DueJob) -> Void
 
     private var rows: [DueRow] {
         (model.hasChaseDue(job) ? [.chase(job)] : [])
-            + (job.draft.map { [.draft($0)] } ?? [])
+            + (job.isAtDesk ? [] : job.draft.map { [.draft($0)] } ?? [])
             + job.tasks.map(DueRow.task)
     }
 
@@ -37,7 +38,7 @@ struct DueJobCard: View {
                 VStack(spacing: 0) {
                     ForEach(rows) { row in
                         Divider()
-                        DueTaskRow(row: row, job: job, model: model, logContact: logContact, openJob: openJob)
+                        DueTaskRow(row: row, job: job, model: model, logContact: logContact, openJob: openJob, openApplication: openApplication)
                     }
                 }
                 .padding(.bottom, 4)
@@ -83,6 +84,7 @@ struct DueJobCard: View {
             let days = model.overdueDays(job)
             return days > 0 ? ("\(days)d overdue", .red) : ("Chase today", .orange)
         }
+        if job.isAtDesk { return ("At desk", .secondary) }
         switch job.draft?.state {
         case .failed: return ("Draft failed", .red)
         case .ready: return ("CV ready", .brandTint)

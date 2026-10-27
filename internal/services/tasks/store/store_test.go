@@ -69,7 +69,7 @@ func TestSeedDefaultTaskTypes(t *testing.T) {
 		commit bool
 		want   []string
 	}{
-		{name: "commit keeps the defaults", commit: true, want: []string{"Apply", "Follow up", "Prep", "Reach out"}},
+		{name: "commit keeps the defaults", commit: true, want: []string{"Apply", "Finish application", "Follow up", "Prep", "Reach out"}},
 		{name: "rollback discards the defaults", commit: false, want: []string{}},
 	}
 	for _, tt := range tests {

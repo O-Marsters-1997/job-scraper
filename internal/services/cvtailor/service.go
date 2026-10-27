@@ -51,6 +51,7 @@ type Store interface {
 	GetLetterSkeleton(ctx context.Context, userID string) (dto.LetterSkeleton, error)
 	SaveLetterSkeleton(ctx context.Context, userID string, in dto.LetterSkeleton) (dto.LetterSkeleton, error)
 	IsLetterTab(ctx context.Context, userID, docID, tabID string) (bool, error)
+	DefaultLetterTab(ctx context.Context, userID string) (docID, tabID string, ok bool, err error)
 	JobBrief(ctx context.Context, jobID string) (dto.JobBrief, error)
 	CreateCoverLetter(ctx context.Context, userID string, in dto.NewCoverLetter) (dto.CoverLetter, error)
 	ListJobCoverLetters(ctx context.Context, userID, jobID string) ([]dto.CoverLetter, error)

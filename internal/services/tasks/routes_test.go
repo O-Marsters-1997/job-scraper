@@ -34,8 +34,8 @@ func TestRoutesHappyPath(t *testing.T) {
 	}
 
 	types := handlerstest.Do[[]dto.TaskType](t, r, http.StatusOK, "GET /task-types/", "")
-	if len(types) != 4 {
-		t.Fatalf("got %d task types, want 4", len(types))
+	if len(types) != 5 {
+		t.Fatalf("got %d task types, want 5", len(types))
 	}
 	offer := handlerstest.Do[dto.TaskType](t, r, http.StatusCreated, "POST /task-types/", `{"name":"Offer","colour":"#15803d"}`)
 	handlerstest.Do[struct{}](t, r, http.StatusConflict, "POST /task-types/", `{"name":"Offer","colour":"#15803d"}`)
