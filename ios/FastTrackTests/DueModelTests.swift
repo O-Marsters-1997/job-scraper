@@ -2,6 +2,14 @@ import Foundation
 import Testing
 @testable import FastTrack
 
+private actor LoadCounter {
+    private(set) var value = 0
+    func next() -> Int {
+        defer { value += 1 }
+        return value
+    }
+}
+
 struct DueModelTests {
     private final class Calls {
         var log: [String] = []
@@ -53,6 +61,23 @@ struct DueModelTests {
         #expect(model.badge == 3)
         #expect(model.comingUp.map(\.id) == ["c"])
         #expect(model.dueJobs.map(\.id) == ["a", "b", "d", "e"])
+    }
+
+    @Test func refreshWhilePendingReloadsUntilDraftSettles() async {
+        let responses = [
+            [job("a", chase: nil, draft: .pending)], [job("a", chase: nil, draft: .pending)], [job("a", chase: nil, draft: .ready)],
+        ]
+        let loads = LoadCounter()
+        var client = APIClient.mock()
+        client.due = { responses[min(await loads.next(), responses.count - 1)] }
+        let model = DueModel(client: client)
+        await model.load()
+        #expect(model.hasPendingDraft)
+
+        await model.refreshWhilePending(every: .milliseconds(1))
+
+        #expect(!model.hasPendingDraft)
+        #expect(await loads.value == 3)
     }
 
     @Test func badgeIsHiddenWhenLoadFails() async {
