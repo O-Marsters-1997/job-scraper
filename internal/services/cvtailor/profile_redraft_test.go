@@ -17,6 +17,7 @@ import (
 )
 
 func TestRedraftProfileRoute(t *testing.T) {
+	t.Parallel()
 	const base = "Engineer who ships."
 	accepted := profiledraft.Attempt{Text: "Engineer who ships reliable Go services.", Steer: "calmer", PromptKey: "k", Model: "m", Cost: 0.01}
 	rejected := func(text string) profiledraft.Attempt {
@@ -40,6 +41,7 @@ func TestRedraftProfileRoute(t *testing.T) {
 	route := func(id string) string { return "POST /tailoring/drafts/" + id + "/profile/redraft" }
 
 	t.Run("an accepted redraft is saved and every Attempt recorded", func(t *testing.T) {
+		t.Parallel()
 		s := setup(t, profiledraft.Result{Text: accepted.Text, Attempts: []profiledraft.Attempt{rejected("Leverage it"), accepted}}, nil, apiKey)
 
 		got := handlerstest.Do[dto.Draft](t, s.router, http.StatusOK, route(s.id), `{"steer":"calmer"}`)
@@ -61,6 +63,7 @@ func TestRedraftProfileRoute(t *testing.T) {
 	})
 
 	t.Run("two rejected Attempts leave the Profile unchanged and are recorded", func(t *testing.T) {
+		t.Parallel()
 		s := setup(t, profiledraft.Result{Attempts: []profiledraft.Attempt{rejected("one"), rejected("two")}}, nil, apiKey)
 
 		w := handlerstest.Serve(t, s.router, route(s.id), `{}`)
@@ -77,6 +80,7 @@ func TestRedraftProfileRoute(t *testing.T) {
 	})
 
 	t.Run("a writer error is a 502", func(t *testing.T) {
+		t.Parallel()
 		s := setup(t, profiledraft.Result{}, errors.New("boom"), apiKey)
 
 		if w := handlerstest.Serve(t, s.router, route(s.id), `{}`); w.Code != http.StatusBadGateway {
@@ -85,6 +89,7 @@ func TestRedraftProfileRoute(t *testing.T) {
 	})
 
 	t.Run("no OpenRouter key is a 422", func(t *testing.T) {
+		t.Parallel()
 		s := setup(t, profiledraft.Result{}, nil, cvtailortest.NoKey{})
 
 		if w := handlerstest.Serve(t, s.router, route(s.id), `{}`); w.Code != http.StatusUnprocessableEntity {
@@ -97,6 +102,7 @@ func TestRedraftProfileRoute(t *testing.T) {
 		"over-long":  `{"steer":"` + strings.Repeat("a", 201) + `"}`,
 	} {
 		t.Run("a "+name+" steer is a 400", func(t *testing.T) {
+			t.Parallel()
 			s := setup(t, profiledraft.Result{}, nil, apiKey)
 
 			if w := handlerstest.Serve(t, s.router, route(s.id), steer); w.Code != http.StatusBadRequest {
@@ -106,6 +112,7 @@ func TestRedraftProfileRoute(t *testing.T) {
 	}
 
 	t.Run("a discarded Draft is a 409", func(t *testing.T) {
+		t.Parallel()
 		s := setup(t, profiledraft.Result{}, nil, apiKey)
 		handlerstest.Do[dto.Draft](t, s.router, http.StatusOK, "POST /tailoring/drafts/"+s.id+"/discard", "")
 
@@ -115,6 +122,7 @@ func TestRedraftProfileRoute(t *testing.T) {
 	})
 
 	t.Run("a Draft that is not ready is a 409", func(t *testing.T) {
+		t.Parallel()
 		s := setup(t, profiledraft.Result{}, nil, apiKey)
 		queued := s.e.queueOnOtherJob(t)
 

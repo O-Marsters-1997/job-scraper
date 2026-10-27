@@ -65,7 +65,7 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 	}
 
 	res, redraftErr := m.profile.Redraft(ctx, key, input)
-	slog.InfoContext(ctx, "profile redraft", slog.String("draft_id", draft.ID),
+	m.log.InfoContext(ctx, "profile redraft", slog.String("draft_id", draft.ID),
 		slog.Int("attempts", len(res.Attempts)), slog.Bool("accepted", res.Text != ""), slog.Any(logger.KeyErr, redraftErr))
 	if len(res.Attempts) > 0 {
 		if err := m.store.AddProfileAttempts(ctx, userID, draft.ID, toProfileAttempts(res.Attempts)); err != nil {
