@@ -77,8 +77,9 @@ function ApplicationsPage() {
 	const [chasedApps, setChasedApps] = createSignal<ApplicationWithDetails[]>(
 		[],
 	);
-	const [deletingApp, setDeletingApp] =
-		createSignal<ApplicationWithDetails | null>(null);
+	const [deletingApps, setDeletingApps] = createSignal<
+		ApplicationWithDetails[]
+	>([]);
 
 	const [addOpen, setAddOpen] = createSignal(false);
 	const [addedJob, setAddedJob] = createSignal<
@@ -122,6 +123,8 @@ function ApplicationsPage() {
 		);
 
 	const polishQueue = () => draftSelected().filter(polishable);
+	const selectedApps = () =>
+		(loadedData(query) ?? []).filter((a) => selection()[a.ID]);
 
 	const startTracking = (job: Pick<Job, "ID" | "Title">) => {
 		setEditingApp(null);
@@ -343,7 +346,7 @@ function ApplicationsPage() {
 												</button>
 												<button
 													type="button"
-													onClick={() => setDeletingApp(app)}
+													onClick={() => setDeletingApps([app])}
 													class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle"
 												>
 													Delete
@@ -408,6 +411,13 @@ function ApplicationsPage() {
 						>
 							Send complete ({completeApps(draftSelected()).length})
 						</Button>
+						<Button
+							variant="outline"
+							class="text-destructive-strong"
+							onClick={() => setDeletingApps(selectedApps())}
+						>
+							Delete ({selectedApps().length})
+						</Button>
 					</aside>
 				</Show>
 			</div>
@@ -432,8 +442,15 @@ function ApplicationsPage() {
 			/>
 
 			<DeleteApplicationDialog
-				app={deletingApp()}
-				onClose={() => setDeletingApp(null)}
+				apps={deletingApps()}
+				onClose={() => setDeletingApps([])}
+				onDeleted={(ids) =>
+					setSelection((sel) =>
+						Object.fromEntries(
+							Object.entries(sel).filter(([id]) => !ids.includes(id)),
+						),
+					)
+				}
 			/>
 		</div>
 	);

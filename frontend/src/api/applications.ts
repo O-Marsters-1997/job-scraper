@@ -81,9 +81,9 @@ export async function clearChase(id: string): Promise<void> {
 	);
 }
 
-export async function deleteApplication(id: string): Promise<void> {
+export async function deleteApplications(ids: string[]): Promise<void> {
 	return mocked(
-		(db) => db.deleteApplication(id),
-		() => apiFetchVoid(`/applications/${id}`, { method: "DELETE" }),
+		(db) => db.deleteApplications(ids),
+		() => apiFetchVoid("/applications/delete", jsonInit("POST", { ids })),
 	);
 }
