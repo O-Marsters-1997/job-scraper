@@ -213,6 +213,18 @@ type ProfileAttempt struct {
 	Cost      float64
 }
 
+type ProfileCapture struct {
+	DraftID        string
+	JobTitle       string
+	Company        string
+	JobDescription string
+	BaseProfile    string
+	FinalProfile   string
+	BankSkills     []string
+	Bank           []string
+	Attempts       []ProfileAttempt
+}
+
 type ProfileRedraftInput struct {
 	ID    string `json:"-" path:"id"`
 	Steer string `json:"steer"`

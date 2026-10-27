@@ -87,6 +87,10 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 	})
 }
 
+func (m *Module) ProfileCaptures(ctx context.Context, userID string) ([]dto.ProfileCapture, error) {
+	return m.store.ListProfileCaptures(ctx, userID)
+}
+
 func toProfileAttempts(in []profiledraft.Attempt) []dto.ProfileAttempt {
 	out := make([]dto.ProfileAttempt, len(in))
 	for i, a := range in {

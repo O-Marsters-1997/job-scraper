@@ -84,7 +84,7 @@ func (w *Writer) Redraft(ctx context.Context, apiKey string, in Input) (Result, 
 func userPrompt(in Input) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Job: %s at %s\n\nJob description:\n%s\n\nCurrent profile:\n%s\n\nSkills the person has:\n",
-		in.JobTitle, in.Company, jobText(in.JobDescription), in.Profile)
+		in.JobTitle, in.Company, JobText(in.JobDescription), in.Profile)
 	for _, s := range in.BankSkills {
 		fmt.Fprintf(&b, "- %s\n", s)
 	}
@@ -114,7 +114,7 @@ func rejection(text string, found []checks.Finding) string {
 	return strings.Join(msgs, "; ")
 }
 
-func jobText(html string) string {
+func JobText(html string) string {
 	text := html
 	if doc, err := goquery.NewDocumentFromReader(strings.NewReader(html)); err == nil {
 		text = strings.TrimSpace(doc.Text())
