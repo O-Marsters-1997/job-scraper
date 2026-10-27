@@ -204,6 +204,8 @@ export function healthLabel(row: SourceHealth): string {
 			return "Last run failed";
 		case "failing_streak":
 			return "Failing repeatedly";
+		case "transient_errors":
+			return "Timeouts or rate limiting";
 		case "retried":
 			return `${row.Retries} retried ${row.Retries === 1 ? "attempt" : "attempts"}`;
 		case "no_new":

@@ -216,6 +216,8 @@ func (q *Queries) InsertScrapeRunJobChanges(ctx context.Context, arg InsertScrap
 const listBoardHealthRuns = `-- name: ListBoardHealthRuns :many
 SELECT b.id AS board_id, c.name AS company_name, b.source,
        r.started_at, r.stop_reason,
+       COALESCE((SELECT e.message ~* 'timeout|rate limited|HTTP (429|5[0-9][0-9])\y'
+                 FROM scrape_run_errors e WHERE e.run_id = r.id ORDER BY e.id DESC LIMIT 1), FALSE)::bool AS transient,
        COALESCE(r.new_listings, 0)::int AS new_listings, COALESCE(r.elsewhere, 0)::int AS elsewhere,
        COALESCE(r.removed, 0)::int AS removed, COALESCE(r.retries, 0)::int AS retries
 FROM company_boards b
@@ -238,6 +240,7 @@ type ListBoardHealthRunsRow struct {
 	Source      string
 	StartedAt   pgtype.Timestamptz
 	StopReason  pgtype.Text
+	Transient   bool
 	NewListings int32
 	Elsewhere   int32
 	Removed     int32
@@ -259,6 +262,7 @@ func (q *Queries) ListBoardHealthRuns(ctx context.Context, userID pgtype.UUID) (
 			&i.Source,
 			&i.StartedAt,
 			&i.StopReason,
+			&i.Transient,
 			&i.NewListings,
 			&i.Elsewhere,
 			&i.Removed,
@@ -581,6 +585,8 @@ func (q *Queries) ListScrapeRuns(ctx context.Context, arg ListScrapeRunsParams) 
 const listSourceHealthRuns = `-- name: ListSourceHealthRuns :many
 SELECT t.id AS source_target_id, t.source, t.value AS target_value, t.filters AS target_filters,
        r.started_at, r.stop_reason,
+       COALESCE((SELECT e.message ~* 'timeout|rate limited|HTTP (429|5[0-9][0-9])\y'
+                 FROM scrape_run_errors e WHERE e.run_id = r.id ORDER BY e.id DESC LIMIT 1), FALSE)::bool AS transient,
        COALESCE(r.new_listings, 0)::int AS new_listings, COALESCE(r.elsewhere, 0)::int AS elsewhere,
        COALESCE(r.retries, 0)::int AS retries
 FROM source_targets t
@@ -602,6 +608,7 @@ type ListSourceHealthRunsRow struct {
 	TargetFilters  []byte
 	StartedAt      pgtype.Timestamptz
 	StopReason     pgtype.Text
+	Transient      bool
 	NewListings    int32
 	Elsewhere      int32
 	Retries        int32
@@ -623,6 +630,7 @@ func (q *Queries) ListSourceHealthRuns(ctx context.Context, userID pgtype.UUID) 
 			&i.TargetFilters,
 			&i.StartedAt,
 			&i.StopReason,
+			&i.Transient,
 			&i.NewListings,
 			&i.Elsewhere,
 			&i.Retries,

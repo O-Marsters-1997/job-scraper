@@ -233,6 +233,7 @@ export function getSourceHealth(): SourceHealth[] {
 			Status: status,
 			Reason: reason,
 			Recent: recent,
+			Transient: recent.map(() => false),
 			LastRunAt: last5.at(-1)?.StartedAt ?? null,
 			New: sum((r) => r.New),
 			New24h: n % 3,

@@ -152,6 +152,37 @@ func TestService_SourceHealth(t *testing.T) {
 		})
 	}
 
+	t.Run("transient failures", func(t *testing.T) {
+		t.Parallel()
+		f, ok := dto.OutcomeFailed, dto.OutcomeSucceeded
+		for _, tt := range []struct {
+			name      string
+			recent    []dto.ScrapeRunOutcome
+			transient []bool
+			status    dto.HealthStatus
+			reason    dto.HealthReason
+		}{
+			{"two transient failures are amber", []dto.ScrapeRunOutcome{ok, f, f}, []bool{false, true, true}, dto.HealthAmber, dto.ReasonTransient},
+			{"three transient failures in a row are red", []dto.ScrapeRunOutcome{ok, f, f, f}, []bool{false, true, true, true}, dto.HealthRed, dto.ReasonFailingStreak},
+			{"a hard failure last is red", []dto.ScrapeRunOutcome{f, f}, []bool{true, false}, dto.HealthRed, dto.ReasonLastFailed},
+			{"a transient failure followed by success is healthy", []dto.ScrapeRunOutcome{ok, f, ok}, []bool{false, true, false}, dto.HealthGreen, dto.ReasonOK},
+			{"a hard pair is red even when not last", []dto.ScrapeRunOutcome{f, f, ok}, []bool{false, false, false}, dto.HealthRed, dto.ReasonFailingStreak},
+			{"a transient failure beside a hard one is not a hard pair", []dto.ScrapeRunOutcome{f, f, ok}, []bool{false, true, false}, dto.HealthGreen, dto.ReasonOK},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				st := &healthStore{FakeStore: jobsearchtest.NewFakeStore(), rows: []dto.SourceHealth{{Recent: tt.recent, Transient: tt.transient, New: 1}}}
+				got, err := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring()).SourceHealth(t.Context(), userID)
+				if err != nil || len(got) != 1 {
+					t.Fatalf("SourceHealth() = %v, %v", got, err)
+				}
+				if got[0].Status != tt.status || got[0].Reason != tt.reason {
+					t.Errorf("SourceHealth() = %s/%s, want %s/%s", got[0].Status, got[0].Reason, tt.status, tt.reason)
+				}
+			})
+		}
+	})
+
 	t.Run("no searches is an empty list", func(t *testing.T) {
 		t.Parallel()
 		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())

@@ -83,6 +83,8 @@ ORDER BY run_id, id;
 -- name: ListSourceHealthRuns :many
 SELECT t.id AS source_target_id, t.source, t.value AS target_value, t.filters AS target_filters,
        r.started_at, r.stop_reason,
+       COALESCE((SELECT e.message ~* 'timeout|rate limited|HTTP (429|5[0-9][0-9])\y'
+                 FROM scrape_run_errors e WHERE e.run_id = r.id ORDER BY e.id DESC LIMIT 1), FALSE)::bool AS transient,
        COALESCE(r.new_listings, 0)::int AS new_listings, COALESCE(r.elsewhere, 0)::int AS elsewhere,
        COALESCE(r.retries, 0)::int AS retries
 FROM source_targets t
@@ -171,6 +173,8 @@ SELECT EXISTS (
 -- name: ListBoardHealthRuns :many
 SELECT b.id AS board_id, c.name AS company_name, b.source,
        r.started_at, r.stop_reason,
+       COALESCE((SELECT e.message ~* 'timeout|rate limited|HTTP (429|5[0-9][0-9])\y'
+                 FROM scrape_run_errors e WHERE e.run_id = r.id ORDER BY e.id DESC LIMIT 1), FALSE)::bool AS transient,
        COALESCE(r.new_listings, 0)::int AS new_listings, COALESCE(r.elsewhere, 0)::int AS elsewhere,
        COALESCE(r.removed, 0)::int AS removed, COALESCE(r.retries, 0)::int AS retries
 FROM company_boards b

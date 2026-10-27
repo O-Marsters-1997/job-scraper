@@ -357,6 +357,11 @@ func TestStore_ListSourceHealth(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+		if i == 5 {
+			if err := st.ScrapeRunAttemptFailed(ctx, run.RunID, 0, 1, "Get x: timeout awaiting response headers"); err != nil {
+				t.Fatal(err)
+			}
+		}
 		if err := st.FinishScrapeRun(ctx, run.RunID, stop); err != nil {
 			t.Fatal(err)
 		}
@@ -382,8 +387,11 @@ func TestStore_ListSourceHealth(t *testing.T) {
 	if diff := cmp.Diff(wantRecent, h.Recent); diff != "" {
 		t.Errorf("busy Recent (-want +got):\n%s", diff)
 	}
-	if h.New != 10 || h.Retries != 1 || h.LastRunAt == nil {
-		t.Errorf("busy = %+v, want New 10 over the last 5 finished runs, Retries 1 and a last run", h)
+	if diff := cmp.Diff([]bool{false, false, false, false, true}, h.Transient); diff != "" {
+		t.Errorf("busy Transient (-want +got):\n%s", diff)
+	}
+	if h.New != 10 || h.Retries != 2 || h.LastRunAt == nil {
+		t.Errorf("busy = %+v, want New 10 over the last 5 finished runs, Retries 2 and a last run", h)
 	}
 }
 

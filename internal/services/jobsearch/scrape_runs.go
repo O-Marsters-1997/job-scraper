@@ -216,8 +216,9 @@ func (m *Module) DeleteExpiredScrapeRuns(ctx context.Context) error {
 }
 
 const (
-	healthWindow  = 5
-	newJobsWindow = 24 * time.Hour
+	healthWindow    = 5
+	transientStreak = 3
+	newJobsWindow   = 24 * time.Hour
 )
 
 func (s *Service) SourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error) {
@@ -255,10 +256,14 @@ func classifyHealth(h dto.SourceHealth) (dto.HealthStatus, dto.HealthReason) {
 	switch {
 	case n == 0:
 		return dto.HealthGreen, dto.ReasonNoRuns
-	case h.Recent[n-1] == dto.OutcomeFailed:
+	case hardFailed(h, n-1):
 		return dto.HealthRed, dto.ReasonLastFailed
-	case hasFailedPair(h.Recent):
+	case hasHardFailedPair(h):
 		return dto.HealthRed, dto.ReasonFailingStreak
+	case transientTail(h) >= transientStreak:
+		return dto.HealthRed, dto.ReasonFailingStreak
+	case transientTail(h) > 0:
+		return dto.HealthAmber, dto.ReasonTransient
 	case h.Retries > 0:
 		return dto.HealthAmber, dto.ReasonRetried
 	case n == healthWindow && h.New == 0:
@@ -267,11 +272,27 @@ func classifyHealth(h dto.SourceHealth) (dto.HealthStatus, dto.HealthReason) {
 	return dto.HealthGreen, dto.ReasonOK
 }
 
-func hasFailedPair(recent []dto.ScrapeRunOutcome) bool {
-	for i := 1; i < len(recent); i++ {
-		if recent[i-1] == dto.OutcomeFailed && recent[i] == dto.OutcomeFailed {
+func transientFailed(h dto.SourceHealth, i int) bool {
+	return h.Recent[i] == dto.OutcomeFailed && i < len(h.Transient) && h.Transient[i]
+}
+
+func hardFailed(h dto.SourceHealth, i int) bool {
+	return h.Recent[i] == dto.OutcomeFailed && !transientFailed(h, i)
+}
+
+func hasHardFailedPair(h dto.SourceHealth) bool {
+	for i := 1; i < len(h.Recent); i++ {
+		if hardFailed(h, i-1) && hardFailed(h, i) {
 			return true
 		}
 	}
 	return false
+}
+
+func transientTail(h dto.SourceHealth) int {
+	n := 0
+	for i := len(h.Recent) - 1; i >= 0 && transientFailed(h, i); i-- {
+		n++
+	}
+	return n
 }
