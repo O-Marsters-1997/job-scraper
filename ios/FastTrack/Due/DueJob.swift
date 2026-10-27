@@ -42,6 +42,11 @@ struct DueJob: Decodable, Identifiable, Hashable {
     var isAtDesk: Bool { tasks.contains { $0.systemKey == "finish" } }
     var companyName: String { companySlug.replacing("-", with: " ").capitalized }
 
+    func matches(_ query: String) -> Bool {
+        let query = query.trimmingCharacters(in: .whitespaces)
+        return query.isEmpty || title.localizedStandardContains(query) || companyName.localizedStandardContains(query)
+    }
+
     enum CodingKeys: String, CodingKey {
         case title, band, score, tasks, draft
         case jobID = "job_id"

@@ -19,7 +19,11 @@ type roleLayout struct {
 }
 
 func (s *Service) roleLayout(ctx context.Context, claim dto.DraftClaim, ds docparse.DocStructure) (roleLayout, error) {
-	mappings, err := s.store.ListHeadingMappings(ctx, claim.UserID, claim.DocID, claim.TabID)
+	positions, err := s.store.ListPositions(ctx, claim.UserID)
+	if err != nil {
+		return roleLayout{}, err
+	}
+	mappings, err := s.linkedMappings(ctx, claim.UserID, claim.DocID, claim.TabID, ds, positions)
 	if err != nil {
 		return roleLayout{}, err
 	}

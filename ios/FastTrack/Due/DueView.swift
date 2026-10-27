@@ -5,6 +5,8 @@ struct DueView: View {
     @State private var contactFor: DueJob?
     @State private var openJobID: String?
     @State private var openApplication: DueJob?
+    @State private var query = ""
+    @State private var showingShortlisted = false
 
     var body: some View {
         NavigationStack {
@@ -17,7 +19,9 @@ struct DueView: View {
                             .disabled(model.undoStack.isEmpty)
                     }
                 }
+                .searchable(text: $query)
                 .navigationDestination(item: $openJobID) { JobDetailView(id: $0) }
+                .navigationDestination(isPresented: $showingShortlisted) { ShortlistedView(model: model) }
                 .navigationDestination(item: $openApplication) { job in
                     if let draft = job.draft {
                         ApplicationScreen(job: job, draft: draft, onFinished: { await model.load() })
@@ -57,12 +61,20 @@ struct DueView: View {
                 Button("Try again") { Task { await model.load() } }
             }
         case .loaded:
+            let jobs = model.dueJobs(matching: query)
             if model.dueJobs.isEmpty && model.comingUp.isEmpty {
-                ContentUnavailableView(
-                    "Nothing due", systemImage: "checkmark.circle",
-                    description: Text("Chases, open Tasks and ready CV drafts show up here."))
+                VStack {
+                    ContentUnavailableView(
+                        "Nothing due", systemImage: "checkmark.circle",
+                        description: Text("Chases, open Tasks and ready CV drafts show up here."))
+                    NotDraftedRow(count: model.shortlisted.count) { showingShortlisted = true }
+                        .padding(.horizontal, 16)
+                }
+            } else if jobs.isEmpty && !query.isEmpty {
+                ContentUnavailableView.search(text: query)
             } else {
-                DueNotebook(model: model, logContact: { contactFor = $0 }, openJob: { openJobID = $0.id },
+                DueNotebook(model: model, jobs: jobs, showShortlisted: { showingShortlisted = true },
+                            logContact: { contactFor = $0 }, openJob: { openJobID = $0.id },
                             openApplication: { openApplication = $0 })
             }
         }

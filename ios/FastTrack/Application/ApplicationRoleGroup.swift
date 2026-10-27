@@ -34,7 +34,7 @@ struct ApplicationRoleGroup: View {
                     }
                 }
             } else {
-                Text("Not linked to your bank, so it stays as it is on your CV.")
+                Text("Not linked to your bank. Link it on the web to tailor it.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 14)

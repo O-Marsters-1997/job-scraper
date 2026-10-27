@@ -65,7 +65,14 @@ struct ApplicationView: View {
         .sensoryFeedback(.success, trigger: model.kept) { _, now in now }
         .quickLookPreview($previewURL)
         .sheet(isPresented: $showingJob) { JobDescriptionSheet(job: model.listing) }
-        .sheet(isPresented: $applying) { ApplyOnListingSheet(model: model) }
+        .sheet(isPresented: $applying) {
+            ApplyOnListingSheet(
+                companyName: model.job.companyName, listing: model.listing, pdfURL: model.pdfURL, pdfName: model.pdfName
+            ) {
+                await model.markApplied()
+                return model.exit != nil
+            }
+        }
         .sheet(isPresented: $toDesk) { FinishAtDeskSheet(model: model) }
         .confirmationDialog("Discard this draft?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
             Button("Discard draft", role: .destructive) { Task { await model.discard() } }

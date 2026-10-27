@@ -45,7 +45,7 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 	if err != nil {
 		return plan{}, err
 	}
-	mappings, err := s.store.ListHeadingMappings(ctx, claim.UserID, claim.DocID, claim.TabID)
+	mappings, err := s.linkedMappings(ctx, claim.UserID, claim.DocID, claim.TabID, ds, bank)
 	if err != nil {
 		return plan{}, err
 	}

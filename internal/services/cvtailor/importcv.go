@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/docparse"
@@ -169,9 +171,11 @@ func (s *Service) addToExistingRoles(ctx context.Context, userID string, positio
 		return nil, nil, err
 	}
 	idOfRole := make(map[string]string, len(existing))
+	byID := make(map[string]dto.Position, len(existing))
 	have := make(map[string]map[string]bool, len(existing))
 	for _, p := range existing {
 		idOfRole[roleKey(p.Employer, p.Title)] = p.ID
+		byID[p.ID] = p
 		have[p.ID] = make(map[string]bool, len(p.Achievements))
 		for _, a := range p.Achievements {
 			have[p.ID][normalizeText(a.Text)] = true
@@ -181,6 +185,18 @@ func (s *Service) addToExistingRoles(ctx context.Context, userID string, positio
 	touched = map[string]bool{}
 	for _, p := range positions {
 		id, ok := idOfRole[roleKey(p.Employer, p.Title)]
+		if !ok {
+			if id, ok = repairableRole(existing, p); ok {
+				old := byID[id]
+				if _, err := s.store.UpdatePosition(ctx, userID, dto.PositionInput{
+					ID: id, Employer: p.Employer, Title: p.Title, StartDate: old.StartDate, EndDate: old.EndDate,
+				}); err != nil {
+					return nil, nil, err
+				}
+				idOfRole[roleKey(p.Employer, p.Title)] = id
+				touched[id] = true
+			}
+		}
 		if !ok {
 			fresh = append(fresh, p)
 			continue
@@ -198,6 +214,41 @@ func (s *Service) addToExistingRoles(ctx context.Context, userID string, positio
 		}
 	}
 	return fresh, touched, nil
+}
+
+func repairableRole(existing []dto.Position, in dto.ImportPosition) (string, bool) {
+	if in.StartDate == nil {
+		return "", false
+	}
+	want := words(in.Employer + " " + in.Title)
+	if len(want) == 0 {
+		return "", false
+	}
+	var id string
+	n := 0
+	for _, p := range existing {
+		if !sameDate(p.StartDate, in.StartDate) || !sameDate(p.EndDate, in.EndDate) {
+			continue
+		}
+		have := words(p.Employer + " " + p.Title)
+		if slices.ContainsFunc(want, func(w string) bool { return !slices.Contains(have, w) }) {
+			continue
+		}
+		id = p.ID
+		n++
+	}
+	return id, n == 1
+}
+
+func sameDate(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func words(s string) []string {
+	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 }
 
 func roleKey(employer, title string) string {
@@ -235,14 +286,25 @@ func parseHeading(text string) dto.ImportPosition {
 		text = text[:m[0]] + " " + text[m[1]:]
 	}
 	text = strings.Trim(strings.TrimSpace(text), "-–—|,() ")
+	title, rest, ok := cutAtFirstSep(text)
+	p.Title = title
+	if ok {
+		p.Employer, _, _ = cutAtFirstSep(rest)
+	}
+	return p
+}
+
+func cutAtFirstSep(text string) (before, after string, ok bool) {
+	at, width := -1, 0
 	for _, sep := range titleSeps {
-		if title, employer, ok := strings.Cut(text, sep); ok {
-			p.Title, p.Employer = strings.TrimSpace(title), strings.TrimSpace(employer)
-			return p
+		if i := strings.Index(text, sep); i >= 0 && (at < 0 || i < at) {
+			at, width = i, len(sep)
 		}
 	}
-	p.Title = text
-	return p
+	if at < 0 {
+		return text, "", false
+	}
+	return strings.TrimSpace(text[:at]), strings.TrimSpace(text[at+width:]), true
 }
 
 func parseDate(s string) *string {
