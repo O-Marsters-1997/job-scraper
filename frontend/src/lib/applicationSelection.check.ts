@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import type { ApplicationWithDetails } from "../types/application";
 import type { ApplicationStatus } from "../types/applicationStatus";
 import {
+	firstPolishable,
 	needsCv,
 	nextSelection,
 	selectedDraftApps,
@@ -59,3 +60,15 @@ assert.equal(
 	),
 	false,
 );
+
+const draft = (Status: "running" | "ready" | "failed") =>
+	({ ID: "d", Status, Outcome: null, LastError: "" }) as const;
+const queue = [
+	app("a", "s1", draft("ready")),
+	app("b", "s1", draft("running")),
+	app("c", "s1", draft("failed")),
+	app("d", "s1", draft("ready")),
+];
+assert.equal(firstPolishable(queue, 0, 1)?.ID, "d");
+assert.equal(firstPolishable(queue, 3, -1)?.ID, "a");
+assert.equal(firstPolishable(queue, 3, 1), undefined);

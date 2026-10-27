@@ -5,16 +5,28 @@ import { PageSkeleton } from "@/components/PageSkeleton";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { DraftEditor } from "@/components/tailoring/DraftEditor";
 import { PhoneDraftReview } from "@/components/tailoring/PhoneDraftReview";
+import { PolishDock } from "@/components/tailoring/PolishDock";
 import type { Draft } from "@/types/tailoring";
 import { LayoutUnsupportedError } from "../../api/tailoring";
 import { useDraft, useDraftLayout } from "../../hooks/useTailoring";
 
+type DraftSearch = {
+	queue?: string[];
+};
+
 export const Route = createFileRoute("/_auth/tailoring/drafts/$id")({
+	validateSearch: (raw: Record<string, unknown>): DraftSearch => {
+		const queue = Array.isArray(raw.queue)
+			? raw.queue.filter((id): id is string => typeof id === "string")
+			: [];
+		return queue.length > 0 ? { queue } : {};
+	},
 	component: DraftReviewPage,
 });
 
 function DraftReviewPage() {
 	const params = Route.useParams();
+	const search = Route.useSearch();
 	const draft = useDraft(() => params().id);
 
 	return (
@@ -24,6 +36,9 @@ function DraftReviewPage() {
 		>
 			{(d) => (
 				<>
+					<Show when={search().queue}>
+						{(queue) => <PolishDock queue={queue()} draftId={d().id} />}
+					</Show>
 					<div class="md:hidden">
 						<PhoneDraftReview draft={d()} />
 					</div>

@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import {
 	needsCv,
 	nextSelection,
+	polishable,
 	type Selection,
 	selectedDraftApps,
 } from "@/lib/applicationSelection";
@@ -118,6 +119,8 @@ function ApplicationsPage() {
 			selection(),
 			loadedData(statusesQuery) ?? [],
 		);
+
+	const polishQueue = () => draftSelected().filter(polishable);
 
 	const startTracking = (job: Pick<Job, "ID" | "Title">) => {
 		setEditingApp(null);
@@ -375,6 +378,19 @@ function ApplicationsPage() {
 							onClick={() => setCreateOpen(true)}
 						>
 							Create CV drafts ({draftSelected().filter(needsCv).length})
+						</Button>
+						<Button
+							variant="outline"
+							disabled={polishQueue().length === 0}
+							onClick={() =>
+								navigate({
+									to: "/tailoring/drafts/$id",
+									params: { id: polishQueue()[0]?.Draft?.ID ?? "" },
+									search: { queue: draftSelected().map((a) => a.ID) },
+								})
+							}
+						>
+							Polish in editor ({polishQueue().length})
 						</Button>
 					</aside>
 				</Show>

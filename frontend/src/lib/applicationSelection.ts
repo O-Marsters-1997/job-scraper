@@ -44,3 +44,22 @@ export function needsCv(app: ApplicationWithDetails): boolean {
 	const stage = cvStage(app.Draft);
 	return stage === "none" || stage === "failed";
 }
+
+export function polishable(app: ApplicationWithDetails): boolean {
+	const stage = cvStage(app.Draft);
+	return (
+		stage === "inProgress" || stage === "completing" || stage === "complete"
+	);
+}
+
+export function firstPolishable(
+	apps: ApplicationWithDetails[],
+	from: number,
+	step: 1 | -1,
+): ApplicationWithDetails | undefined {
+	for (let i = from + step; i >= 0 && i < apps.length; i += step) {
+		const app = apps[i];
+		if (app && polishable(app)) return app;
+	}
+	return undefined;
+}
