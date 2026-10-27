@@ -33,6 +33,8 @@ type BoardSpec struct {
 	// Gate, when set, spaces this spec's requests and stops them for as long as the host's
 	// 429 says.
 	Gate *Gate
+
+	RedirectRetires bool
 }
 
 const maxBoardPages = 200
@@ -52,7 +54,7 @@ var (
 
 func NewBoardSource(spec BoardSpec) *BoardSource {
 	return &BoardSource{
-		PaginatedBase: NewBase(Config{Name: spec.Name, Route: spec.Route, Header: spec.Header}),
+		PaginatedBase: NewBase(Config{Name: spec.Name, Route: spec.Route, Header: spec.Header, RedirectRetires: spec.RedirectRetires}),
 		spec:          spec,
 	}
 }

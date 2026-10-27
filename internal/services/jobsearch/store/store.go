@@ -1896,6 +1896,17 @@ func (s *Store) ClearBoardCheckPublished(ctx context.Context, id string) error {
 	return nil
 }
 
+func (s *Store) RetireBoard(ctx context.Context, id string) error {
+	boardID, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.RetireDuplicateBoard(ctx, boardID); err != nil {
+		return fmt.Errorf("store.RetireBoard: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error) {
 	rows, err := s.queries.ListActiveBoards(ctx)
 	if err != nil {

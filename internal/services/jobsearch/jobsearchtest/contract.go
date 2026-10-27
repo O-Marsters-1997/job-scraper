@@ -803,6 +803,37 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("a retired board is no longer due", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "gone-co", Name: "Gone Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		board, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", "gone-co")
+		if err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, c.ID, true, 60); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+		if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", "gone-co", "test", ""); err != nil {
+			t.Fatalf("VerifyCompanyBoard(...) = %v", err)
+		}
+		if err := st.RetireBoard(ctx, board.ID); err != nil {
+			t.Fatalf("RetireBoard(...) = %v", err)
+		}
+		due, err := st.ListDueBoards(ctx)
+		if err != nil || len(due) != 0 {
+			t.Errorf("ListDueBoards() = %v, %v, want none", due, err)
+		}
+		boards, err := st.ListCompanyBoards(ctx, c.ID)
+		if err != nil || len(boards) != 1 || boards[0].Status != dto.BoardRetired {
+			t.Errorf("ListCompanyBoards() = %+v, %v, want one retired board", boards, err)
+		}
+	})
+
 	t.Run("a published board check holds the board back until released", func(t *testing.T) {
 		t.Parallel()
 		st, userID := newStore(t)

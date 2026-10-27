@@ -22,6 +22,8 @@ func New(token string, gate *sources.Gate) *sources.BoardSource {
 		Parse:       parse,
 		Count:       sources.JSONArrayLen("offers"),
 		Gate:        gate,
+
+		RedirectRetires: true,
 	})
 }
 
