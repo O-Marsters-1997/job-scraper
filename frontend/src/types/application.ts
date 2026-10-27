@@ -1,4 +1,14 @@
 import { z } from "zod";
+import { draftOutcomeSchema, draftStatusSchema } from "./tailoring";
+
+const linkedDraftSchema = z.object({
+	ID: z.string(),
+	Status: draftStatusSchema,
+	Outcome: draftOutcomeSchema.nullable(),
+	LastError: z.string(),
+});
+
+export type LinkedDraft = z.infer<typeof linkedDraftSchema>;
 
 export const applicationSchema = z.object({
 	ID: z.string(),
@@ -22,6 +32,7 @@ export const applicationWithDetailsSchema = applicationSchema.extend({
 	JobClosedAt: z.string().nullable(),
 	StatusName: z.string(),
 	StatusColour: z.string(),
+	Draft: linkedDraftSchema.nullable(),
 });
 
 export type ApplicationWithDetails = z.infer<
