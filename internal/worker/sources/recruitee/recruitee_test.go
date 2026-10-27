@@ -37,6 +37,38 @@ func (r *refusingTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusTooManyRequests, Status: "429 Too Many Requests", Header: header, Body: io.NopCloser(strings.NewReader(`{"error":"rate_limit"}`))}, nil
 }
 
+type replyTransport func(*http.Request) *http.Response
+
+func (f replyTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req), nil }
+
+func TestPollBoard_Retirement(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		reply func(*http.Request) *http.Response
+		want  error
+	}{
+		{"a 404 is gone", func(req *http.Request) *http.Response {
+			return &http.Response{StatusCode: http.StatusNotFound, Status: "404 Not Found", Body: io.NopCloser(strings.NewReader("")), Request: req}
+		}, sources.ErrGone},
+		{"a redirect to another board is moved", func(req *http.Request) *http.Response {
+			moved := req.Clone(req.Context())
+			moved.URL.Host = "ballysintralotsa.recruitee.com"
+			return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"offers":[]}`)), Request: moved}
+		}, sources.ErrMoved},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			src := recruitee.New("intralot", noGap())
+			src.Client().Transport = replyTransport(tt.reply)
+			if _, err := src.PollBoard(t.Context()); !errors.Is(err, tt.want) {
+				t.Errorf("PollBoard() = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestPollBoard_RateLimitDefersLaterRequests(t *testing.T) {
 	gate := noGap()
 	tr := &refusingTransport{}

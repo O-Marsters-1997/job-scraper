@@ -1148,6 +1148,41 @@ func TestProcessRateLimit(t *testing.T) {
 		}
 	})
 
+	for name, cause := range map[string]error{
+		"a 404 board is retired, acked and fails its run":      fmt.Errorf("greenhouse: %w: status 404 Not Found", sources.ErrGone),
+		"a board redirected to another host is retired, acked": fmt.Errorf("recruitee: %w: redirected to other.recruitee.com", sources.ErrMoved),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			f := newFixture(t, http.StatusOK, "")
+			exporter := scraper.NewAPIExporter(f.ingest.server.URL, "token").WithInitialBackoff(0)
+			p := worker.NewProcessor(worker.Deps{
+				JS:     jobsearch.Build(jobsearchtest.NewDeps(f.store)),
+				Boards: scraper.NewBoardPoller(f.store, failingBoard{err: cause}, exporter),
+			})
+			company, err := f.store.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			board, err := f.store.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "acme")
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := f.target(t, "greenhouse")
+			task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: board.ID, Manual: true, TargetID: target.ID, RunID: target.RunID}
+			if err := p.Process(t.Context(), task); err != nil {
+				t.Fatalf("Process() = %v, want nil so the task is not retried", err)
+			}
+			if got := f.runStatus(t, target).RunStatus; got != "failed" {
+				t.Errorf("run status = %q, want failed", got)
+			}
+			boards, err := f.store.ListCompanyBoards(t.Context(), company.ID)
+			if err != nil || len(boards) != 1 || boards[0].Status != dto.BoardRetired {
+				t.Errorf("ListCompanyBoards() = %+v, %v, want one retired board", boards, err)
+			}
+		})
+	}
+
 	boards := []struct {
 		name      string
 		err       error
