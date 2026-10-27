@@ -170,7 +170,20 @@ func (s *Service) SetCompanyKind(ctx context.Context, userID string, in dto.SetC
 	if in.Kind != dto.KindAgency && in.Kind != dto.KindDirect {
 		return dto.Company{}, apperr.Invalid("kind must be agency or direct")
 	}
-	err := s.store.SetCompanyKind(ctx, in.CompanyID, in.Kind)
+	return s.applyCompanyKind(ctx, userID, in.CompanyID, in.Kind)
+}
+
+func (s *Service) UndoCompanyKind(ctx context.Context, userID string, in dto.UndoCompanyKindInput) (dto.Company, error) {
+	switch in.Kind {
+	case dto.KindUnclassified, dto.KindLikelyAgency, dto.KindLikelyDirect, dto.KindAgency, dto.KindDirect:
+	default:
+		return dto.Company{}, apperr.Invalid("unknown company kind")
+	}
+	return s.applyCompanyKind(ctx, userID, in.CompanyID, in.Kind)
+}
+
+func (s *Service) applyCompanyKind(ctx context.Context, userID, companyID string, kind dto.CompanyKind) (dto.Company, error) {
+	err := s.store.SetCompanyKind(ctx, companyID, kind)
 	switch {
 	case errors.Is(err, data.ErrNotFound):
 		return dto.Company{}, apperr.NotFound("company not found")

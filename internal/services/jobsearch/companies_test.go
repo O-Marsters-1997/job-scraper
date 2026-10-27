@@ -387,6 +387,46 @@ func TestSetCompanyKind(t *testing.T) {
 	})
 }
 
+func TestUndoCompanyKind(t *testing.T) {
+	t.Run("restores any kind after a user set one", func(t *testing.T) {
+		for _, kind := range []dto.CompanyKind{dto.KindUnclassified, dto.KindLikelyAgency, dto.KindLikelyDirect, dto.KindAgency, dto.KindDirect} {
+			t.Run(string(kind), func(t *testing.T) {
+				svc, st := newCompanyService(queuetest.NewRecorder())
+				company := seedAcme(t, st)
+				if _, err := svc.SetCompanyKind(t.Context(), userID, dto.SetCompanyKindInput{CompanyID: company.ID, Kind: dto.KindAgency}); err != nil {
+					t.Fatalf("SetCompanyKind() err = %v", err)
+				}
+				got, err := svc.UndoCompanyKind(t.Context(), userID, dto.UndoCompanyKindInput{CompanyID: company.ID, Kind: kind})
+				if err != nil || got.Kind != kind {
+					t.Fatalf("UndoCompanyKind(%q) = %+v, %v, want kind %q", kind, got, err, kind)
+				}
+			})
+		}
+	})
+
+	t.Run("rejects bad input", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			companyID func(id string) string
+			kind      dto.CompanyKind
+			wantKind  apperr.Kind
+		}{
+			{"unknown value", func(id string) string { return id }, "bogus", apperr.KindInvalid},
+			{"unknown company", func(string) string { return "missing" }, dto.KindDirect, apperr.KindNotFound},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				svc, st := newCompanyService(queuetest.NewRecorder())
+				company := seedAcme(t, st)
+				_, err := svc.UndoCompanyKind(t.Context(), userID, dto.UndoCompanyKindInput{CompanyID: tt.companyID(company.ID), Kind: tt.kind})
+				if !apperr.IsKind(err, tt.wantKind) {
+					t.Fatalf("UndoCompanyKind() err = %v, want kind %v", err, tt.wantKind)
+				}
+			})
+		}
+	})
+}
+
 func TestListCompanyBoards(t *testing.T) {
 	t.Run("returns not found for an unknown company", func(t *testing.T) {
 		svc, _ := newCompanyService(queuetest.NewRecorder())
