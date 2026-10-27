@@ -28,7 +28,7 @@ final class DueModel {
     }
 
     var dueJobs: [DueJob] { jobs.filter { hasChaseDue($0) || !$0.tasks.isEmpty || $0.draft != nil } }
-    var shortlisted: [DueJob] { jobs.filter(\.showsApplyRow).sorted { ($0.score ?? .min, $1.title) > ($1.score ?? .min, $0.title) } }
+    var shortlisted: [DueJob] { jobs.filter { $0.showsApplyRow }.sorted { ($0.score ?? .min, $1.title) > ($1.score ?? .min, $0.title) } }
 
     func dueJobs(matching query: String) -> [DueJob] { dueJobs.filter { $0.matches(query) } }
     func shortlisted(matching query: String) -> [DueJob] { shortlisted.filter { $0.matches(query) } }
@@ -93,7 +93,7 @@ final class DueModel {
         guard let taskID = job.applyTaskID else { return Task {} }
         if let task = job.tasks.first(where: { $0.id == taskID }) { return complete(task, in: job, title: "Marked applied") }
         let client = client
-        return run("Marked applied", job, job, restoreLocally: { $0 }) {
+        return run("Marked applied", job, job.withApplyTask(nil), restoreLocally: { $0.withApplyTask(taskID) }) {
             try await client.setTaskDone(taskID, true)
         } revert: {
             try await client.setTaskDone(taskID, false)
