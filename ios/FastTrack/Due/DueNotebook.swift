@@ -22,7 +22,7 @@ struct DueNotebook: View {
                             .transition(.opacity)
                     }
                 }
-                NotDraftedRow(count: model.shortlisted.count, action: showShortlisted)
+                ShortlistedRow(count: model.shortlistedCount, action: showShortlisted)
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)

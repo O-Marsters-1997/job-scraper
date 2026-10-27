@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct NotDraftedRow: View {
+struct ShortlistedRow: View {
     let count: Int
     let action: () -> Void
 
@@ -9,7 +9,7 @@ struct NotDraftedRow: View {
         if count > 0 {
             Button(action: action) {
                 HStack(spacing: 10) {
-                    Text("Not drafted").font(.subheadline)
+                    Text("Shortlisted").font(.subheadline)
                     Text(count, format: .number).font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
@@ -20,7 +20,7 @@ struct NotDraftedRow: View {
                 .hairlineCard()
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Not drafted, \(count)")
+            .accessibilityLabel("Shortlisted, \(count)")
         }
     }
 }

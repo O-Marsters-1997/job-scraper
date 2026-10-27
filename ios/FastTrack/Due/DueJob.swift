@@ -43,6 +43,8 @@ struct DueJob: Decodable, Identifiable, Hashable {
 
     var isAtDesk: Bool { tasks.contains { $0.systemKey == "finish" } }
     var showsApplyRow: Bool { applyTaskID != nil && draft == nil && keptDraftID == nil && !isAtDesk }
+    var isReadyToApply: Bool { applyTaskID != nil && draft == nil && keptDraftID != nil && !isAtDesk }
+    var keptDraft: Draft? { keptDraftID.map { Draft(id: $0, state: .ready, cvTitle: "Kept CV") } }
     var companyName: String { companySlug.replacing("-", with: " ").capitalized }
 
     func matches(_ query: String) -> Bool {

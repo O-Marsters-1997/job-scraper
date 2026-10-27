@@ -14,12 +14,17 @@ in on the phone, and neither list can be searched.
 - **Due** holds chases due, open Tasks and CV drafts only. Jobs that only have an open `apply` Task leave Due.
 - **Shortlisted list.** A screen pushed from Due. It lists Shortlisted jobs with an open `apply` Task, no CV
   draft and no `finish` Task, highest score first.
-  - Entry is a "Not drafted · N ›" row at the foot of the Due notebook. The row also appears in the
+  - Entry is a "Shortlisted · N ›" row (originally "Not drafted") at the foot of the Due notebook. The row also appears in the
     "Nothing due" empty state, and is hidden when N is 0.
   - Each row offers **Draft CV** (the job moves to Due once the draft exists) and **Apply** (the
     apply-on-listing sheet Due already uses). Tapping the row opens Job detail.
   - It is built from the due payload the app already loads. There is no new endpoint, and it is online
     only, like Due.
+- **Ready to apply** (added by #1444). The Shortlisted screen has a segmented control, **Not drafted** and
+  **Ready to apply**. Ready to apply lists jobs with an open `apply` Task, a kept CV (`kept_draft_id` in the
+  due payload) and no pending draft or `finish` Task, highest score first. Tapping one opens its
+  Application screen for the kept CV rather than Job detail, and the card has no Draft CV or Apply buttons.
+  The Due entry row is now "Shortlisted · N", counting both categories.
 - **Search.** Native `.searchable` on Due and on the Shortlisted list. It filters the loaded list locally
   by job title and company.
 - Still out of scope: browsing or searching all jobs, and a third tab.

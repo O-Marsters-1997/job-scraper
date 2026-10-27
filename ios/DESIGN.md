@@ -428,7 +428,7 @@ snoozing or marking applied on the Due list is undoable the same way.
 - **Triage.** An inline title, because a large title would take height from the card. Undo sits on the
   leading side and **Skip** on the trailing side.
 - **Due.** An inline title "Due". The serif date header does the job of a large title. A native search field
-  filters the cards by job title and company. The page ends with a hairline "Not drafted · N ›" row (also under
+  filters the cards by job title and company. The page ends with a hairline "Shortlisted · N ›" row (also under
   "Nothing due", hidden at 0) that pushes the Shortlisted list.
 - **Shortlisted.** Pushed from Due. Shortlisted jobs with no CV draft, highest score first, as hairline cards
   with the Due card header (company, Band dot-label, score, a trailing chevron, then the role line). Under a

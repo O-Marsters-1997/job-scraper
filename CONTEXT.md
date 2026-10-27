@@ -230,7 +230,7 @@ The iOS right swipe that tracks a Job, creating its Application in Draft and its
 _Avoid_: Save, like, favourite (favourites are Companies)
 
 **Shortlisted list**:
-The iOS screen, pushed from Due, of Shortlisted Jobs with an open Apply Task and no CV draft (ADR 0037).
+The iOS screen, pushed from Due, of Shortlisted Jobs with an open Apply Task, in two categories: **Not drafted** (no CV draft) and **Ready to apply** (a kept CV, not yet applied) (ADR 0037).
 _Avoid_: Backlog, pre-application list
 
 **Replay**:
