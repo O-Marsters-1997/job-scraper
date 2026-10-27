@@ -185,3 +185,26 @@ LEFT JOIN LATERAL (
 WHERE b.status = 'verified'
   AND EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = sqlc.arg('user_id') AND tc.company_id = b.company_id)
 ORDER BY b.id, r.started_at, r.id;
+
+-- name: ListRecentNewJobSnapshots :many
+SELECT r.source_target_id, r.board_id, (ch.snapshot->>'Title')::text AS title,
+       (ch.snapshot->>'Location')::text AS location, (ch.snapshot->>'CompanySlug')::text AS company_slug
+FROM scrape_run_job_changes ch
+JOIN scrape_runs r ON r.id = ch.run_id
+LEFT JOIN source_targets t ON t.id = r.source_target_id
+LEFT JOIN company_boards b ON b.id = r.board_id
+WHERE ch.change = 'new'
+  AND r.started_at >= sqlc.arg('since')::timestamptz
+  AND (t.user_id = sqlc.arg('user_id')
+       OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = sqlc.arg('user_id') AND tc.company_id = b.company_id))
+UNION ALL
+SELECT t.id, NULL::uuid, c.card_title, c.card_location, c.card_company
+FROM source_targets t
+JOIN candidate_discoveries d ON d.source_target_id = t.id
+JOIN job_candidates c ON c.id = d.candidate_id
+WHERE t.user_id = sqlc.arg('user_id')
+  AND c.first_seen_at >= sqlc.arg('since')::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM job_urls u WHERE u.normalized_url = c.normalized_url AND u.first_seen_at < c.first_seen_at)
+  AND EXISTS (SELECT 1 FROM scrape_runs r
+              WHERE r.source_target_id = t.id AND c.first_seen_at BETWEEN r.started_at AND COALESCE(r.finished_at, NOW()))
+LIMIT 50000;

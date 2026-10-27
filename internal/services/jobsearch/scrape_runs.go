@@ -12,6 +12,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/filter"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
@@ -214,15 +215,34 @@ func (m *Module) DeleteExpiredScrapeRuns(ctx context.Context) error {
 	return m.store.DeleteExpiredScrapeRuns(ctx)
 }
 
-const healthWindow = 5
+const (
+	healthWindow  = 5
+	newJobsWindow = 24 * time.Hour
+)
 
 func (s *Service) SourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error) {
 	rows, err := s.store.ListSourceHealth(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
+	cfg, err := s.configs.SearchConfig(ctx, userID)
+	if err != nil && !errors.Is(err, data.ErrNotFound) {
+		return nil, err
+	}
+	fresh, err := s.store.ListRecentNewJobs(ctx, userID, time.Now().Add(-newJobsWindow))
+	if err != nil {
+		return nil, err
+	}
+	type source struct{ target, board string }
+	passing := map[source]int{}
+	for _, j := range fresh {
+		if _, rejected := filter.Reject(j.Job, cfg); !rejected {
+			passing[source{j.TargetID, j.BoardID}]++
+		}
+	}
 	for i := range rows {
 		rows[i].Status, rows[i].Reason = classifyHealth(rows[i])
+		rows[i].New24h = passing[source{rows[i].TargetID, rows[i].BoardID}]
 	}
 	if rows == nil {
 		rows = []dto.SourceHealth{}

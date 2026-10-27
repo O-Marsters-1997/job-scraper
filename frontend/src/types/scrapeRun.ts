@@ -91,6 +91,7 @@ const sourceHealthSchema = z.object({
 	Recent: z.array(scrapeRunOutcomeSchema),
 	LastRunAt: z.string().nullable(),
 	New: z.number(),
+	New24h: z.number(),
 	Elsewhere: z.number(),
 	Removed: z.number(),
 	Retries: z.number(),

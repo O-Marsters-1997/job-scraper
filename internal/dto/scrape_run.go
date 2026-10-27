@@ -195,6 +195,11 @@ const (
 	ReasonOK            HealthReason = "ok"
 )
 
+type SourceNewJob struct {
+	TargetID, BoardID string
+	Job               Job
+}
+
 type SourceHealth struct {
 	Kind          ScrapeRunKind
 	TargetID      string
@@ -209,4 +214,5 @@ type SourceHealth struct {
 	LastRunAt     *time.Time
 
 	New, Elsewhere, Removed, Retries int
+	New24h                           int
 }
