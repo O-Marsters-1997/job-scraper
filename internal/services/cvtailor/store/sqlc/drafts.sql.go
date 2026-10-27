@@ -11,6 +11,41 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addProfileAttempt = `-- name: AddProfileAttempt :execrows
+INSERT INTO profile_attempts (draft_id, text, steer, rejection, prompt_key, model, cost, created_at)
+SELECT d.id, $1::text, $2::text, $3::text, $4::text, $5::text, $6::float8, clock_timestamp()
+FROM tailored_cvs d
+WHERE d.id = $7::uuid AND d.user_id = $8::uuid
+`
+
+type AddProfileAttemptParams struct {
+	Text      string
+	Steer     string
+	Rejection string
+	PromptKey string
+	Model     string
+	Cost      float64
+	DraftID   pgtype.UUID
+	UserID    pgtype.UUID
+}
+
+func (q *Queries) AddProfileAttempt(ctx context.Context, arg AddProfileAttemptParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addProfileAttempt,
+		arg.Text,
+		arg.Steer,
+		arg.Rejection,
+		arg.PromptKey,
+		arg.Model,
+		arg.Cost,
+		arg.DraftID,
+		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const claimDraft = `-- name: ClaimDraft :one
 WITH next AS (
     SELECT id FROM tailored_cvs

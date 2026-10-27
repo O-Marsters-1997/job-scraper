@@ -35,6 +35,7 @@ type Store interface {
 	SaveHeadingMappings(ctx context.Context, userID, docID, tabID string, mappings []dto.HeadingMapping) error
 	CreateDraft(ctx context.Context, userID string, in dto.DraftInput) (dto.Draft, error)
 	SetDraftInsights(ctx context.Context, userID, id string, insights json.RawMessage, forHash string) error
+	AddProfileAttempts(ctx context.Context, userID, draftID string, attempts []dto.ProfileAttempt) error
 	JobAnnotations(ctx context.Context, userID, jobID string) (dto.JobAnnotations, error)
 	GetDraft(ctx context.Context, userID, id string) (dto.Draft, error)
 	ListJobDrafts(ctx context.Context, userID, jobID string) ([]dto.Draft, error)

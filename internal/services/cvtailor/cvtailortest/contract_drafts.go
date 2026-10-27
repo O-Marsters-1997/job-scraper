@@ -52,6 +52,22 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("Profile Attempts are recorded only for the owner's Draft", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		d := create(t, f)
+		attempts := []dto.ProfileAttempt{{Text: "a", PromptKey: "k", Model: "m"}, {Text: "b", PromptKey: "k", Model: "m", Rejection: "no"}}
+		if err := f.Store.AddProfileAttempts(ctx, f.UserID, d.ID, attempts); err != nil {
+			t.Errorf("AddProfileAttempts(owner) err = %v, want nil", err)
+		}
+		if err := f.Store.AddProfileAttempts(ctx, f.Other, d.ID, attempts); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("AddProfileAttempts(other user) err = %v, want not found", err)
+		}
+		if err := f.Store.AddProfileAttempts(ctx, f.UserID, missingID, attempts); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("AddProfileAttempts(missing draft) err = %v, want not found", err)
+		}
+	})
+
 	t.Run("a Draft is claimed once and carries its request", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
