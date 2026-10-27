@@ -3,18 +3,15 @@ import Testing
 @testable import FastTrack
 
 struct DTODecodingTests {
-    private struct Page: Decodable {
-        let items: [Job]
-    }
-
     private func fixture(_ name: String) throws -> Data {
         let url = try #require(Bundle(for: BundleToken.self).url(forResource: name, withExtension: "json"))
         return try Data(contentsOf: url)
     }
 
     @Test func jobPageDecodes() throws {
-        let page = try JSONDecoder.api.decode(Page.self, from: fixture("job_page"))
+        let page = try JSONDecoder.api.decode(JobPage.self, from: fixture("job_page"))
 
+        #expect(page.total == 1)
         let job = try #require(page.items.first)
         #expect(job.id == "job-1")
         #expect(job.title == "Senior Go Engineer")
@@ -23,8 +20,30 @@ struct DTODecodingTests {
         #expect(job.url == "https://example.com/jobs/1")
         #expect(job.band == .great)
         #expect(job.score == 92)
+        #expect(job.companyKind == .agency)
         #expect(job.breakdown.map(\.effect) == [.meets, .misses])
         #expect(job.breakdown.map(\.label) == ["Go", "Fintech"])
+    }
+
+    @Test(arguments: ["\"CompanyKind\": \"\"", "\"CompanyKind\": \"recruiter_ish\"", "\"Other\": 1"])
+    func unknownOrAbsentCompanyKindDecodesAsUnclassified(replacement: String) throws {
+        let original = try #require(String(data: fixture("job_page"), encoding: .utf8))
+        try #require(original.contains("\"CompanyKind\": \"agency\""))
+        let json = original.replacingOccurrences(of: "\"CompanyKind\": \"agency\"", with: replacement)
+        let job = try #require(JSONDecoder.api.decode(JobPage.self, from: Data(json.utf8)).items.first)
+        #expect(job.companyKind == .unclassified)
+    }
+
+    @Test(arguments: [(CompanyKind.agency, "Agency"), (.likelyAgency, "Maybe recruiter")])
+    func agencyKindsGetABadge(kind: CompanyKind, badge: String) {
+        #expect(kind.badge == badge)
+        #expect(kind.isAgency == true)
+    }
+
+    @Test(arguments: [CompanyKind.unclassified, .direct, .likelyDirect])
+    func otherKindsHaveNoBadge(kind: CompanyKind) {
+        #expect(kind.badge == nil)
+        #expect(kind.isAgency == false)
     }
 
     @Test func companyExclusionDecodes() throws {
@@ -47,6 +66,7 @@ struct DTODecodingTests {
         let due = try #require(list.jobs.first)
         #expect(due.id == "job-1")
         #expect(due.band == .great)
+        #expect(due.companyKind == .agency)
         #expect(due.score == 92)
         #expect(due.applicationID == "app-1")
         #expect(due.chaseBy?.dayString == "2026-10-01")
@@ -55,6 +75,7 @@ struct DTODecodingTests {
         #expect(due.isAtDesk)
         #expect(due.draft?.state == .ready)
         let bare = try #require(list.jobs.last)
+        #expect(bare.companyKind == .unclassified)
         #expect(bare.band == nil)
         #expect(bare.score == nil)
         #expect(bare.chaseBy == nil)

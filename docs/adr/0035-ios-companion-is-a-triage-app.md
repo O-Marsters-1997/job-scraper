@@ -62,3 +62,11 @@ Nearly all of v1 reuses existing endpoints. The new backend work is the iOS clie
 golden fixtures. The Swift side gains models for Application, Task, Note, Recruiter contact, Draft, CV
 template and `Job.Description`, an HTML renderer and a local action queue. A screen outside this list
 needs a new decision, not a quiet addition.
+
+## Amendment (2026-10-27): Notifications tab
+
+The app gains a third tab, **Notifications**, the in-app record of the new-match alerts the server already
+pushes through ntfy (`GET /notifications`). It lists each notification
+with its job summary, badges the unread count, marks a row read when tapped (which opens Job detail) and
+offers "Mark all as read"; a long press previews the job description. It is a read-and-jump surface that
+feeds triage, not a new workflow, so native push (APNs) stays deferred as above.

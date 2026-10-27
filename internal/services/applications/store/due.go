@@ -25,6 +25,7 @@ func (s *Store) ListDue(ctx context.Context, userID string) (dto.DueList, error)
 			JobID:         r.JobID.String(),
 			Title:         r.JobTitle,
 			CompanySlug:   r.CompanySlug,
+			CompanyKind:   dto.CompanyKind(r.CompanyKind),
 			Band:          r.Band,
 			ApplicationID: r.ApplicationID.String(),
 		}

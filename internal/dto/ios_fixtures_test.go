@@ -25,7 +25,7 @@ func TestIOSFixtures(t *testing.T) {
 	fixtures := map[string]any{
 		"due_list": dto.DueList{Jobs: []dto.DueJob{
 			{
-				JobID: "job-1", Title: "Senior Go Engineer", CompanySlug: "monzo", Band: "great", Score: &score,
+				JobID: "job-1", Title: "Senior Go Engineer", CompanySlug: "monzo", CompanyKind: dto.KindAgency, Band: "great", Score: &score,
 				ApplicationID: "app-1", ChaseBy: &chaseBy, ApplyTaskID: &applyTaskID,
 				Tasks: []dto.DueTask{
 					{ID: "task-1", TypeName: "Apply", SystemKey: dto.TaskTypeApply, Notes: "Tailor the CV"},
@@ -33,7 +33,7 @@ func TestIOSFixtures(t *testing.T) {
 				},
 				Draft: &dto.DueDraft{ID: "draft-1", State: dto.DraftStateReady, CVTitle: "Backend"},
 			},
-			{JobID: "job-2", Title: "Backend Engineer", CompanySlug: "wise", ApplicationID: "app-2", Tasks: []dto.DueTask{}},
+			{JobID: "job-2", Title: "Backend Engineer", CompanySlug: "wise", CompanyKind: dto.KindUnclassified, ApplicationID: "app-2", Tasks: []dto.DueTask{}},
 		}},
 		"task_types": []dto.TaskType{
 			{ID: "type-1", Name: "Finish application", Colour: "#0f766e", SystemKey: dto.TaskTypeFinish, CreatedAt: at},
@@ -54,6 +54,7 @@ func TestIOSFixtures(t *testing.T) {
 				ScrapedAt:        at,
 				SuitabilityScore: &score,
 				Band:             "Great",
+				CompanyKind:      dto.KindAgency,
 				Breakdown: []dto.ScoreRow{
 					{Key: "tech:go", Label: "Go", Stance: "want", Resolved: "yes", Effect: "meets"},
 					{Key: "domain:fintech", Label: "Fintech", Stance: "want", Resolved: "no", Effect: "misses"},

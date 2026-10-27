@@ -5,10 +5,14 @@ enum TriageAction: Hashable {
     case dismiss(reasons: [GradeReason])
     case skip
     case excludeCompany
+    case reclassify(to: CompanyKind)
     case note(String)
 
     var keepsCard: Bool {
-        if case .note = self { true } else { false }
+        switch self {
+        case .note, .reclassify: true
+        case .shortlist, .dismiss, .skip, .excludeCompany: false
+        }
     }
 }
 
@@ -17,6 +21,7 @@ enum UndoReceipt: Hashable {
     case grade
     case seen
     case exclusion(companyID: String, removeName: Bool)
+    case reclassify(companyID: String, previous: CompanyKind)
     case note(previous: String)
 }
 

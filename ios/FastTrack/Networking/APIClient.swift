@@ -4,7 +4,7 @@ import SwiftUI
 struct APIClient {
     var restoreSession: () async throws -> Void
     var logIn: (_ username: String, _ password: String) async throws -> Void
-    var triageQueue: () async throws -> [Job]
+    var triageQueue: (_ stack: TriageStack) async throws -> JobPage
     var scoringBands: () async throws -> ScoringBands
     var job: (_ id: String) async throws -> Job
     var shortlist: (_ jobID: String) async throws -> Application
@@ -15,6 +15,8 @@ struct APIClient {
     var recordEvent: (_ event: EventInput) async throws -> Void
     var excludeCompany: (_ companyID: String) async throws -> CompanyExclusion
     var unexcludeCompany: (_ companyID: String, _ removeName: Bool) async throws -> Void
+    var setCompanyKind: (_ companyID: String, _ kind: CompanyKind) async throws -> Void
+    var undoCompanyKind: (_ companyID: String, _ previous: CompanyKind) async throws -> Void
     var note: (_ jobID: String) async throws -> JobNote
     var putNote: (_ jobID: String, _ body: String) async throws -> Void
     var due: () async throws -> [DueJob]
@@ -34,6 +36,9 @@ struct APIClient {
     var discardDraft: (_ draftID: String) async throws -> Void
     var coverLetters: (_ jobID: String) async throws -> [CoverLetter]
     var requestCoverLetter: (_ jobID: String) async throws -> CoverLetter
+    var notifications: () async throws -> [AppNotification]
+    var markNotificationRead: (_ id: String) async throws -> Void
+    var markAllNotificationsRead: () async throws -> Void
 }
 
 extension APIClient {
@@ -48,9 +53,8 @@ extension APIClient {
             logIn: { username, password in
                 let _: Me = try await http.post("auth/login", body: Credentials(username: username, password: password))
             },
-            triageQueue: {
-                let page: JobPage = try await http.get("jobs/triage")
-                return page.items
+            triageQueue: { stack in
+                try await http.get("jobs/triage", query: [URLQueryItem(name: "poster", value: stack.rawValue)])
             },
             scoringBands: {
                 try await http.get("scoring-config")
@@ -81,6 +85,12 @@ extension APIClient {
             },
             unexcludeCompany: { companyID, removeName in
                 try await http.post("companies/\(companyID)/exclusion/undo", body: UnexcludeInput(removeName: removeName))
+            },
+            setCompanyKind: { companyID, kind in
+                try await http.put("companies/\(companyID)/kind", body: CompanyKindInput(kind: kind))
+            },
+            undoCompanyKind: { companyID, previous in
+                try await http.post("companies/\(companyID)/kind/undo", body: CompanyKindInput(kind: previous))
             },
             note: { jobID in
                 try await http.get("jobs/\(jobID)/note")
@@ -145,13 +155,22 @@ extension APIClient {
             },
             requestCoverLetter: { jobID in
                 try await http.post("tailoring/jobs/\(jobID)/cover-letters", body: EmptyBody())
+            },
+            notifications: {
+                try await http.get("notifications")
+            },
+            markNotificationRead: { id in
+                try await http.post("notifications/\(id)/read", body: EmptyBody())
+            },
+            markAllNotificationsRead: {
+                try await http.post("notifications/read-all", body: EmptyBody())
             }
         )
     }
 }
 
 extension APIClient {
-    static func mock(jobs: [Job] = [.sample], due: [DueJob] = [], contacts: [RecruiterContact] = [], failure: APIError? = nil) -> APIClient {
+    static func mock(jobs: [Job] = [.sample], due: [DueJob] = [], contacts: [RecruiterContact] = [], notifications: [AppNotification] = [], failure: APIError? = nil) -> APIClient {
         func respond<T>(_ value: T) throws -> T {
             if let failure { throw failure }
             return value
@@ -159,7 +178,10 @@ extension APIClient {
         return APIClient(
             restoreSession: { try respond(()) },
             logIn: { _, _ in try respond(()) },
-            triageQueue: { try respond(jobs) },
+            triageQueue: { stack in
+                let items = jobs.filter { $0.stack == stack }
+                return try respond(JobPage(items: items, total: items.count))
+            },
             scoringBands: { try respond(ScoringBands(bands: .init(great: 80, good: 65, fair: 45), fittedAt: nil)) },
             job: { id in try respond(jobs.first { $0.id == id } ?? .sample) },
             shortlist: { jobID in try respond(Application(id: "application-\(jobID)", jobID: jobID)) },
@@ -170,6 +192,8 @@ extension APIClient {
             recordEvent: { _ in try respond(()) },
             excludeCompany: { _ in try respond(CompanyExclusion(name: "Monzo", added: true)) },
             unexcludeCompany: { _, _ in try respond(()) },
+            setCompanyKind: { _, _ in try respond(()) },
+            undoCompanyKind: { _, _ in try respond(()) },
             note: { jobID in try respond(JobNote(jobID: jobID, body: "")) },
             putNote: { _, _ in try respond(()) },
             due: { try respond(due) },
@@ -190,7 +214,10 @@ extension APIClient {
             keepDraft: { _ in try respond(()) },
             discardDraft: { _ in try respond(()) },
             coverLetters: { _ in try respond([]) },
-            requestCoverLetter: { _ in try respond(CoverLetter(id: "letter-new", createdAt: .now, doneAt: nil)) }
+            requestCoverLetter: { _ in try respond(CoverLetter(id: "letter-new", createdAt: .now, doneAt: nil)) },
+            notifications: { try respond(notifications) },
+            markNotificationRead: { _ in try respond(()) },
+            markAllNotificationsRead: { try respond(()) }
         )
     }
 }

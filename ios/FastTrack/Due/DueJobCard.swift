@@ -96,6 +96,7 @@ struct DueCardHeadline: View {
                     Text(score, format: .number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
             }
+            CompanyKindBadge(kind: job.companyKind)
         }
     }
 }

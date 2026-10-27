@@ -94,6 +94,42 @@ func TestList(t *testing.T) {
 	})
 }
 
+func TestTriageQueue(t *testing.T) {
+	t.Parallel()
+
+	svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
+
+	t.Run("accepts the poster values", func(t *testing.T) {
+		t.Parallel()
+		for _, poster := range []string{"", "direct", "agency"} {
+			if _, err := svc.TriageQueue(t.Context(), userID, dto.TriageQuery{Poster: poster}); err != nil {
+				t.Errorf("TriageQueue(poster=%q) err = %v", poster, err)
+			}
+		}
+	})
+
+	t.Run("reports the stack's unseen total", func(t *testing.T) {
+		t.Parallel()
+		page, err := svc.TriageQueue(t.Context(), userID, dto.TriageQuery{Poster: "agency"})
+		if err != nil {
+			t.Fatalf("TriageQueue(agency) err = %v", err)
+		}
+		if page.Total == nil {
+			t.Error("TriageQueue(agency) total = nil, want the unseen count")
+		}
+	})
+
+	t.Run("rejects any other poster", func(t *testing.T) {
+		t.Parallel()
+		for _, poster := range []string{"all", "recruiter"} {
+			_, err := svc.TriageQueue(t.Context(), userID, dto.TriageQuery{Poster: poster})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("TriageQueue(poster=%q) err = %v, want kind %v", poster, err, apperr.KindInvalid)
+			}
+		}
+	})
+}
+
 func TestGet(t *testing.T) {
 	t.Run("missing job is not found", func(t *testing.T) {
 		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())

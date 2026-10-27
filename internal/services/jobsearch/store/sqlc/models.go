@@ -501,6 +501,17 @@ type LetterSkeleton struct {
 	UpdatedAt  pgtype.Timestamptz
 }
 
+type Notification struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	JobID     pgtype.UUID
+	Title     string
+	Body      string
+	CreatedAt pgtype.Timestamptz
+	ReadAt    pgtype.Timestamptz
+	Kind      string
+}
+
 type NotificationDigest struct {
 	ID       pgtype.UUID
 	SentAt   pgtype.Timestamptz
@@ -529,6 +540,18 @@ type Position struct {
 	SortOrder int32
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+}
+
+type ProfileAttempt struct {
+	ID        pgtype.UUID
+	DraftID   pgtype.UUID
+	Text      string
+	Steer     string
+	Rejection string
+	PromptKey string
+	Model     string
+	Cost      pgtype.Numeric
+	CreatedAt pgtype.Timestamptz
 }
 
 type PushSubscription struct {

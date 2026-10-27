@@ -27,14 +27,18 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 	return s.page(ctx, userID, options)
 }
 
-func (s *Service) TriageQueue(ctx context.Context, userID string) (dto.JobPage, error) {
+func (s *Service) TriageQueue(ctx context.Context, userID string, q dto.TriageQuery) (dto.JobPage, error) {
+	poster, err := oneOf(q.Poster, "poster", string(dto.PosterDirect), string(dto.PosterAgency), string(dto.PosterDirect))
+	if err != nil {
+		return dto.JobPage{}, err
+	}
 	return s.page(ctx, userID, dto.JobPageOptions{
+		Poster:        dto.Poster(poster),
 		Limit:         defaultJobPageSize,
 		Sort:          dto.JobSortRelevant,
 		ScoredOnly:    true,
 		Seen:          "unseen",
 		NoApplication: true,
-		SkipTotal:     true,
 	})
 }
 

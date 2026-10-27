@@ -284,6 +284,14 @@ _Avoid_: Keywords, tech stack
 A technology or skill in the user's Experience Bank, with a free-text category, kept in the user's own order. Names are unique per user, ignoring case.
 _Avoid_: Tag, keyword, tech option — not the seeded scoring options
 
+**Profile Redraft**:
+A model-written rewrite of a Draft's Profile for its Job, made from the base Profile, the Job's description and the user's Bank Skill names. Made only when the user asks, optionally with a steer, and never as part of generating the Draft. A redraft that breaks the guardrails is never shown; the Profile stays as it was.
+_Avoid_: Summary, description tailoring, Profile suggestion (a suggestion is an inline edit of one line)
+
+**Profile Attempt**:
+One Profile Redraft as generated, with its steer and whether the guardrails rejected it. A kept Draft's Attempts, set against its final Profile, are what Profile generation is tuned against.
+_Avoid_: Sample, version
+
 ## Relationships
 
 - A **User** owns at most one **Google Link** and many **Tracked Docs**

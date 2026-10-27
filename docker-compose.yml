@@ -87,6 +87,21 @@ services:
       timeout: 5s
       retries: 5
 
+  ntfy:
+    image: binwiederhier/ntfy
+    command: serve
+    restart: unless-stopped
+    environment:
+      NTFY_BASE_URL: ${NTFY_BASE_URL}
+      NTFY_UPSTREAM_BASE_URL: https://ntfy.sh
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+    ports:
+      - "8090:80"
+    volumes:
+      - ntfy_data:/var/lib/ntfy
+
   alloy:
     image: grafana/alloy:v1.19.2
     restart: unless-stopped
@@ -108,3 +123,4 @@ volumes:
   db_data:
   rabbitmq_data:
   alloy_data:
+  ntfy_data:

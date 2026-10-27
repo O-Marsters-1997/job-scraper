@@ -251,6 +251,19 @@ CREATE TABLE achievement_outcomes (
 );
 CREATE INDEX achievement_outcomes_achievement_idx ON achievement_outcomes (achievement_id);
 
+CREATE TABLE profile_attempts (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    draft_id   UUID NOT NULL REFERENCES tailored_cvs(id) ON DELETE CASCADE,
+    text       TEXT NOT NULL,
+    steer      TEXT NOT NULL DEFAULT '',
+    rejection  TEXT NOT NULL DEFAULT '',
+    prompt_key TEXT NOT NULL,
+    model      TEXT NOT NULL,
+    cost       NUMERIC(10, 6) NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX profile_attempts_draft_id_created_at_idx ON profile_attempts (draft_id, created_at);
+
 CREATE TABLE IF NOT EXISTS job_scores (
     id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id               UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -725,3 +738,17 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX tasks_user_open_idx ON tasks (user_id, created_at DESC) WHERE completed_at IS NULL;
 CREATE INDEX tasks_job_idx ON tasks (job_id) WHERE job_id IS NOT NULL;
 CREATE INDEX tasks_type_idx ON tasks (type_id);
+
+CREATE TABLE notifications (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id     UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    title      TEXT        NOT NULL,
+    body       TEXT        NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    read_at    TIMESTAMPTZ,
+    kind       TEXT        NOT NULL DEFAULT 'new_match' CONSTRAINT notifications_kind_check CHECK (kind IN ('new_match'))
+);
+
+CREATE INDEX notifications_user_created ON notifications (user_id, created_at DESC);
+CREATE INDEX notifications_job_idx ON notifications (job_id);

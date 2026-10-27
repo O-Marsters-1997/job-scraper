@@ -50,6 +50,87 @@ func TestJobBrief(t *testing.T) {
 	}
 }
 
+func TestAddProfileAttempts(t *testing.T) {
+	t.Parallel()
+	st, pool, uid := newStore(t)
+	ctx := t.Context()
+	d, err := st.CreateDraft(ctx, uid, dto.DraftInput{JobID: pgtest.InsertJob(t, pool, "Role", "fp-1"), DocID: "doc", TabID: "t.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempts := []dto.ProfileAttempt{
+		{Text: "first", Steer: "calmer", Rejection: "banned word", PromptKey: "k", Model: "m", Cost: 0.012345},
+		{Text: "second", PromptKey: "k", Model: "m"},
+	}
+
+	if err := st.AddProfileAttempts(ctx, uid, d.ID, attempts); err != nil {
+		t.Fatal(err)
+	}
+
+	var got []dto.ProfileAttempt
+	rows, err := pool.Query(ctx, `SELECT text, steer, rejection, prompt_key, model, cost::float8 FROM profile_attempts WHERE draft_id = $1 ORDER BY created_at`, d.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var a dto.ProfileAttempt
+		if err := rows.Scan(&a.Text, &a.Steer, &a.Rejection, &a.PromptKey, &a.Model, &a.Cost); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, a)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(attempts, got); diff != "" {
+		t.Errorf("stored Attempts (-want +got):\n%s", diff)
+	}
+
+	if _, err := pool.Exec(ctx, `DELETE FROM tailored_cvs WHERE id = $1`, d.ID); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM profile_attempts WHERE draft_id = $1`, d.ID).Scan(&left); err != nil || left != 0 {
+		t.Errorf("Attempts left after deleting the Draft = %d, %v, want 0", left, err)
+	}
+}
+
+func TestListProfileCaptures(t *testing.T) {
+	t.Parallel()
+	st, pool, uid := newStore(t)
+	ctx := t.Context()
+	jobID := pgtest.InsertJob(t, pool, "Backend Engineer", "fp-1")
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET description = '<p>Build <b>things</b></p>' WHERE id = $1`, jobID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateDraft(ctx, uid, dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0"}); err != nil {
+		t.Fatal(err)
+	}
+	c, err := st.ClaimDraft(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := dto.DraftResult{EditSet: json.RawMessage(`{"positions":[]}`), BaseContent: json.RawMessage(`{"profile":"base"}`), DraftDocID: "copy"}
+	if err := st.CompleteDraft(ctx, c, res); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddProfileAttempts(ctx, uid, c.ID, []dto.ProfileAttempt{{Text: "a", PromptKey: "k", Model: "m"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetDraftOutcome(ctx, uid, c.ID, dto.OutcomeKept); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := st.ListProfileCaptures(ctx, uid)
+
+	if err != nil || len(got) != 1 {
+		t.Fatalf("ListProfileCaptures() = %+v, %v, want one capture", got, err)
+	}
+	if got[0].JobTitle != "Backend Engineer" || got[0].Company != "acme" || got[0].JobDescription != "Build things" {
+		t.Errorf("capture job = %q at %q: %q, want the Job's title, company and stripped description", got[0].JobTitle, got[0].Company, got[0].JobDescription)
+	}
+}
+
 func newStore(t *testing.T) (*store.Store, *pgxpool.Pool, string) {
 	t.Helper()
 	pool := pgtest.New(t)

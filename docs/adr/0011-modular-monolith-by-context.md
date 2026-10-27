@@ -4,7 +4,8 @@ A single shared DB handle that every service can use gives no locality and no da
 
 - **Contexts.**
   - `jobsearch` decides what to fetch: jobs, job URLs, companies, boards, poll state, candidates and Relevance, harvest runs, source targets with their run state, tracked companies, and the fetch cache (ADR 0016).
-  - `scoring` decides how well a job fits: search config, options, answers, scores, `effect_outbox`, Jev and notify. The answer-effect loop is `scoring.Run(ctx)`.
+  - `scoring` decides how well a job fits: search config, options, answers, scores, `effect_outbox` and Jev. It decides who is alerted and hands each User to `notify` through the `scoring.Notifications` port. The answer-effect loop is `scoring.Run(ctx)`.
+  - `notify`: Notifications and ntfy delivery. It owns `notifications` and imports no context; the email and Web Push senders in the package stay as they are.
   - `applications`: applications, statuses, recruiter contacts and Job Notes. It owns `applications`, `application_statuses`, `recruiter_contacts` and `job_notes`.
   - `tasks`: Tasks and Task types. It owns `tasks` and `task_types` and SELECT-joins `jobs` for each Task's title, company and posted date.
   - `events`: the generic `events` log (ADR 0026). It owns `events` and exports `RecordApplicationCreated` and `RecordApplicationStatusChanged`, transaction-scoped ports that `applications` calls in the same transaction. It takes a `ScoreSnapshotter` from scoring so job events carry the score at event time.

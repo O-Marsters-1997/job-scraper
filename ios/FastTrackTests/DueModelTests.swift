@@ -28,7 +28,7 @@ struct DueModelTests {
         score: Int? = 90, title: String? = nil
     ) -> DueJob {
         DueJob(
-            jobID: id, title: title ?? "Role \(id)", companySlug: "co-\(id)", band: .great, score: score, applicationID: "app-\(id)",
+            jobID: id, title: title ?? "Role \(id)", companySlug: "co-\(id)", companyKind: .direct, band: .great, score: score, applicationID: "app-\(id)",
             chaseBy: chase.map(day), applyTaskID: applyTaskID,
             tasks: tasks.map { DueJob.Task(id: $0, typeName: "Reach out", systemKey: nil, notes: "") },
             draft: draft.map { DueJob.Draft(id: "d-\(id)", state: $0, cvTitle: "CV") })
@@ -149,7 +149,7 @@ struct DueModelTests {
 
     @Test func shortlistedExcludesDraftedAndAtDeskJobsAndSortsByScoreDescending() async {
         let atDesk = DueJob(
-            jobID: "desk", title: "Role desk", companySlug: "co-desk", band: .great, score: 99, applicationID: "app-desk",
+            jobID: "desk", title: "Role desk", companySlug: "co-desk", companyKind: .direct, band: .great, score: 99, applicationID: "app-desk",
             chaseBy: nil, applyTaskID: "apply-desk",
             tasks: [DueJob.Task(id: "f", typeName: "Finish application", systemKey: "finish", notes: "")], draft: nil)
         let model = await model([
@@ -170,7 +170,7 @@ struct DueModelTests {
         let model = await model([
             job("a", chase: nil, applyTaskID: "x", score: 90, title: "Senior Go Engineer"),
             DueJob(
-                jobID: "b", title: "Go Developer", companySlug: "monzo", band: .great, score: 80, applicationID: "app-b",
+                jobID: "b", title: "Go Developer", companySlug: "monzo", companyKind: .direct, band: .great, score: 80, applicationID: "app-b",
                 chaseBy: nil, applyTaskID: "x", tasks: [], draft: nil),
             job("c", chase: nil, draft: .ready, title: "Senior Go Engineer"),
         ])

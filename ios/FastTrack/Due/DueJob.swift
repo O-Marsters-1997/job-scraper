@@ -31,6 +31,7 @@ struct DueJob: Decodable, Identifiable, Hashable {
     let jobID: String
     let title: String
     let companySlug: String
+    let companyKind: CompanyKind
     let band: Band?
     let score: Int?
     let applicationID: String
@@ -52,6 +53,7 @@ struct DueJob: Decodable, Identifiable, Hashable {
         case title, band, score, tasks, draft
         case jobID = "job_id"
         case companySlug = "company_slug"
+        case companyKind = "company_kind"
         case applicationID = "application_id"
         case chaseBy = "chase_by"
         case applyTaskID = "apply_task_id"
@@ -64,6 +66,7 @@ extension DueJob {
         jobID = try c.decode(String.self, forKey: .jobID)
         title = try c.decode(String.self, forKey: .title)
         companySlug = try c.decode(String.self, forKey: .companySlug)
+        companyKind = (try? c.decode(CompanyKind.self, forKey: .companyKind)) ?? .unclassified
         band = Band(rawValue: try c.decode(String.self, forKey: .band).lowercased())
         score = try c.decodeIfPresent(Int.self, forKey: .score)
         applicationID = try c.decode(String.self, forKey: .applicationID)
@@ -74,22 +77,25 @@ extension DueJob {
     }
 
     func chasing(by date: Date?) -> DueJob {
-        DueJob(jobID: jobID, title: title, companySlug: companySlug, band: band, score: score, applicationID: applicationID,
+        DueJob(jobID: jobID, title: title, companySlug: companySlug, companyKind: companyKind, band: band, score: score,
+               applicationID: applicationID,
                chaseBy: date, applyTaskID: applyTaskID, tasks: tasks, draft: draft)
     }
 
     func withTasks(_ tasks: [Task]) -> DueJob {
-        DueJob(jobID: jobID, title: title, companySlug: companySlug, band: band, score: score, applicationID: applicationID,
+        DueJob(jobID: jobID, title: title, companySlug: companySlug, companyKind: companyKind, band: band, score: score,
+               applicationID: applicationID,
                chaseBy: chaseBy, applyTaskID: applyTaskID, tasks: tasks, draft: draft)
     }
 
     func withApplyTask(_ id: String?) -> DueJob {
-        DueJob(jobID: jobID, title: title, companySlug: companySlug, band: band, score: score, applicationID: applicationID,
+        DueJob(jobID: jobID, title: title, companySlug: companySlug, companyKind: companyKind, band: band, score: score,
+               applicationID: applicationID,
                chaseBy: chaseBy, applyTaskID: id, tasks: tasks, draft: draft)
     }
 
     static let sample = DueJob(
-        jobID: "sample", title: "Senior Go Engineer", companySlug: "monzo", band: .great, score: 92,
+        jobID: "sample", title: "Senior Go Engineer", companySlug: "monzo", companyKind: .direct, band: .great, score: 92,
         applicationID: "application-sample", chaseBy: Calendar.current.date(byAdding: .day, value: -2, to: .now),
         applyTaskID: nil, tasks: [Task(id: "task-1", typeName: "Reach out", systemKey: nil, notes: "")],
         draft: Draft(id: "draft-1", state: .ready, cvTitle: "Backend")

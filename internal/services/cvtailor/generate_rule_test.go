@@ -168,18 +168,20 @@ func TestLeanRule_Replacements(t *testing.T) {
 
 func TestPlan_withReplacements(t *testing.T) {
 	t.Parallel()
-	pl := plan{positions: []planned{{
-		Position: cvedit.Position{ID: "p1", SlotTexts: []string{"one", "two", "three"}},
-		slotIDs:  []string{"s0", "s1", "s2"},
-		texts:    map[string]string{},
-	}}}
+	newPlan := func() plan {
+		return plan{positions: []planned{{
+			Position: cvedit.Position{ID: "p1", SlotTexts: []string{"one", "two", "three"}},
+			slotIDs:  []string{"s0", "s1", "s2"},
+			texts:    map[string]string{},
+		}}}
+	}
 	bank := []dto.Position{{ID: "p1", Achievements: []dto.Achievement{
 		{ID: "a", Text: "A"}, {ID: "b", Text: "B"}, {ID: "c", Text: "C"}, {ID: "d", Text: "D"},
 	}}}
 
 	t.Run("kept bullets keep their slots and split extras follow the replaced slot", func(t *testing.T) {
 		t.Parallel()
-		got := pl.withReplacements(bank, []Replacement{{PositionID: "p1", SlotIndex: 1, AchievementIDs: []string{"a", "b"}}}).Positions[0]
+		got := newPlan().withReplacements(bank, []Replacement{{PositionID: "p1", SlotIndex: 1, AchievementIDs: []string{"a", "b"}}}).Positions[0]
 		wantBullets := []cvedit.Bullet{
 			{Keep: true, Text: "one", SlotID: "s0"},
 			{Text: "A", AchievementIDs: []string{"a"}, SlotID: "s1"},
@@ -200,7 +202,7 @@ func TestPlan_withReplacements(t *testing.T) {
 			{PositionID: "p1", SlotIndex: AppendSlot, AchievementIDs: []string{"c"}},
 			{PositionID: "p1", SlotIndex: AppendSlot, AchievementIDs: []string{"d"}},
 		}
-		got := pl.withReplacements(bank, reps).Positions[0].Added
+		got := newPlan().withReplacements(bank, reps).Positions[0].Added
 		want := []cvedit.AddedBullet{
 			{SlotID: "new-p1-0", After: "s2", Text: "C", AchievementIDs: []string{"c"}},
 			{SlotID: "new-p1-1", After: "new-p1-0", Text: "D", AchievementIDs: []string{"d"}},
