@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { draftOutcomeSchema, draftStatusSchema } from "./tailoring";
 
-export const linkedDraftSchema = z.object({
+const linkedDraftSchema = z.object({
 	ID: z.string(),
 	Status: draftStatusSchema,
 	Outcome: draftOutcomeSchema.nullable(),
