@@ -5,7 +5,7 @@ export const taskTypeSchema = z.object({
 	ID: z.string(),
 	Name: z.string(),
 	Colour: z.string(),
-	SystemKey: z.enum(["apply", ""]),
+	SystemKey: z.enum(["apply", "finish", ""]),
 	TaskCount: z.number().int(),
 	CreatedAt: z.string(),
 });
@@ -14,7 +14,7 @@ export const taskSchema = z.object({
 	TypeID: z.string(),
 	TypeName: z.string(),
 	TypeColour: z.string(),
-	TypeSystemKey: z.enum(["apply", ""]),
+	TypeSystemKey: z.enum(["apply", "finish", ""]),
 	JobID: z.string().nullable(),
 	JobTitle: z.string(),
 	JobCompanySlug: z.string(),

@@ -11,6 +11,8 @@ struct ApplicationScreen: View {
         Group {
             if let model {
                 ApplicationView(model: model, onFinished: onFinished)
+            } else {
+                Color.clear
             }
         }
         .onAppear {
