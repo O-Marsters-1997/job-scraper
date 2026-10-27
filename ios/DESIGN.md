@@ -124,9 +124,9 @@ One violet accent over system neutrals, with the Band palette carrying meaning.
 
 ### Secondary
 - **Band palette** (`band-great`, `band-good`, `band-fair`, `band-poor`, from `frontend/src/lib/band.ts`):
-  the words and meanings are unchanged from the web. On the Triage card and in job detail, a Band shows as a
-  dot-label (the dot in the Band hue, the word in `.primary`), so Fair amber never has to pass 4.5:1 as text.
-  The Due card header still colours the Band word; see Open.
+  the words and meanings are unchanged from the web. Everywhere a Band appears (Triage card, job detail, Due
+  and Shortlisted cards) it shows as a dot-label: the dot in the Band hue, the word in `.primary`, so Fair
+  amber never has to pass 4.5:1 as text. The Band word is never coloured.
 - **Breakdown palette** (`matched`, `missing`, from `frontend/src/lib/scoreColour.ts`): only the breakdown
   row symbols use these.
 
@@ -296,8 +296,8 @@ digits), on a 10% tint of the hue with 5pt corners. Used for Bands, chase state 
 *One collapsible card per job.*
 
 - **Header** (a button, 14pt padding, 6pt between its lines):
-  - Line 1: the company in serif `.title3`, then Band (caption semibold, Band hue) and score (caption,
-    secondary) 10pt after the name. On the trailing side, the to-do count and a chevron that rotates 90° when
+  - Line 1: the company in serif `.title3`, then the Band dot-label and score (caption, secondary) 10pt
+    after the name. On the trailing side, the to-do count and a chevron that rotates 90° when
     open.
   - Line 2: the role in `.footnote` secondary, with a dot-label for the most urgent item on the trailing side.
     It fades out while the card is open.
@@ -409,8 +409,9 @@ snoozing or marking applied on the Due list is undoable the same way.
   filters the cards by job title and company. The page ends with a hairline "Not drafted · N ›" row (also under
   "Nothing due", hidden at 0) that pushes the Shortlisted list.
 - **Shortlisted.** Pushed from Due. Shortlisted jobs with no CV draft, highest score first, as hairline cards
-  in the Due card style: company, Band and score, the role line, then **Draft CV** and **Apply** buttons.
-  Tapping the header opens Job detail. It has the same native search field.
+  with the Due card header (company, Band dot-label, score, a trailing chevron, then the role line). Under a
+  divider sit two 36pt circular actions, each with its word: **Draft CV** (Brand Violet fill, white glyph,
+  a spinner while it queues) and **Apply** (outlined like `···`). Tapping the header opens Job detail. It has the same native search field.
 - **Job detail.** Pushed from a Due card's **Open job**. It has the band row, the serif company header, then
   the detail body, with a `ShareLink` in the toolbar and the back swipe intact.
 - **CV draft PDF.** **View PDF** opens the draft in `.quickLookPreview`, which brings sharing and Save to Files
@@ -481,6 +482,4 @@ This extends PRODUCT.md's AA baseline:
 - Whether 4 seconds is long enough to reach Undo while on the move.
 - Whether the Triage card should hug its content instead of filling the page. The prototype fills it, which
   leaves white space under the three breakdown rows.
-- The Due card header colours the Band word (caption semibold in the Band hue), which breaks The Dot, Not
-  the Word Rule for Fair. Either make it a dot-label too, or accept it because the score sits beside it.
 - Not yet verified: large Dynamic Type sizes across the app (the login was checked at AX3 and in dark).
