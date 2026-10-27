@@ -3,14 +3,27 @@ import SwiftUI
 struct ApplicationRoleGroup: View {
     let role: DraftRoles.Role
     let model: ApplicationModel
+    @State private var isOpen: Bool
     @State private var showBank = false
     @State private var adding: DraftRoles.Bullet?
     @State private var replacing: DraftRoles.Bullet?
 
+    init(role: DraftRoles.Role, model: ApplicationModel, startsOpen: Bool) {
+        self.role = role
+        self.model = model
+        _isOpen = State(initialValue: startsOpen)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-            if role.isLinked {
+            Button {
+                withAnimation(.snappy(duration: 0.22)) { isOpen.toggle() }
+            } label: {
+                header
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
+            if isOpen, role.isLinked {
                 ForEach(role.bullets) { bullet in
                     ApplicationBulletRow(
                         bullet: bullet,
@@ -33,7 +46,7 @@ struct ApplicationRoleGroup: View {
                         }
                     }
                 }
-            } else {
+            } else if isOpen {
                 Text("Not linked to your bank. Link it on the web to tailor it.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -57,10 +70,16 @@ struct ApplicationRoleGroup: View {
                     Text("\(role.used)/\(role.budget) lines").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
             }
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color(.tertiaryLabel))
+                .rotationEffect(.degrees(isOpen ? 90 : 0))
         }
         .padding(.horizontal, 14)
         .padding(.top, 16)
         .padding(.bottom, 6)
+        .frame(minHeight: 44)
+        .contentShape(.rect)
         .accessibilityElement(children: .combine)
     }
 
