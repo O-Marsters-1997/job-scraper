@@ -80,7 +80,37 @@ func TestService_ListScrapeRuns(t *testing.T) {
 
 type healthStore struct {
 	*jobsearchtest.FakeStore
-	rows []dto.SourceHealth
+	rows  []dto.SourceHealth
+	fresh []dto.SourceNewJob
+}
+
+func (s *healthStore) ListRecentNewJobs(context.Context, string, time.Time) ([]dto.SourceNewJob, error) {
+	return s.fresh, nil
+}
+
+func TestService_SourceHealth_New24h(t *testing.T) {
+	t.Parallel()
+	scoring := jobsearchtest.NewNoopScoring()
+	scoring.SeedSearchConfig(dto.SearchConfig{UserID: userID, ExcludedTitleKeywords: []string{"manager"}})
+	st := &healthStore{
+		FakeStore: jobsearchtest.NewFakeStore(),
+		rows:      []dto.SourceHealth{{TargetID: "t1"}, {Kind: dto.ScrapeRunBoard, BoardID: "b1"}, {TargetID: "t2"}},
+		fresh: []dto.SourceNewJob{
+			{TargetID: "t1", Job: dto.Job{Title: "Go Engineer"}},
+			{TargetID: "t1", Job: dto.Job{Title: "Engineering Manager"}},
+			{BoardID: "b1", Job: dto.Job{Title: "Go Engineer"}},
+			{BoardID: "b1", Job: dto.Job{Title: "Rust Engineer"}},
+		},
+	}
+	got, err := jobsearch.NewService(st, nil, scoring).SourceHealth(t.Context(), userID)
+	if err != nil || len(got) != 3 {
+		t.Fatalf("SourceHealth() = %v, %v, want three rows", got, err)
+	}
+	for i, want := range []int{1, 2, 0} {
+		if got[i].New24h != want {
+			t.Errorf("SourceHealth()[%d].New24h = %d, want %d", i, got[i].New24h, want)
+		}
+	}
 }
 
 func (s *healthStore) ListSourceHealth(context.Context, string) ([]dto.SourceHealth, error) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -329,6 +330,30 @@ func scrapeRunOutcome(finished bool, stop dto.StopReason, retries int) dto.Scrap
 	default:
 		return dto.OutcomeSucceeded
 	}
+}
+
+func (s *Store) ListRecentNewJobs(ctx context.Context, userID string, since time.Time) ([]dto.SourceNewJob, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, ErrInvalidID
+	}
+	rows, err := s.queries.ListRecentNewJobSnapshots(ctx, sqlc.ListRecentNewJobSnapshotsParams{
+		Since: pgtype.Timestamptz{Time: since, Valid: true}, UserID: uid,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListRecentNewJobs: %w", err)
+	}
+	out := make([]dto.SourceNewJob, len(rows))
+	for i, r := range rows {
+		out[i] = dto.SourceNewJob{Job: dto.Job{Title: r.Title, Location: r.Location, CompanySlug: r.CompanySlug}}
+		if r.SourceTargetID.Valid {
+			out[i].TargetID = r.SourceTargetID.String()
+		}
+		if r.BoardID.Valid {
+			out[i].BoardID = r.BoardID.String()
+		}
+	}
+	return out, nil
 }
 
 func (s *Store) ListSourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error) {

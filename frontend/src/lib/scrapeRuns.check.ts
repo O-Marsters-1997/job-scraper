@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import type { ScrapeRun, SourceHealth } from "@/types/scrapeRun";
 import {
 	activeFilterCount,
+	byNew24h,
 	clearFilters,
 	customRangeError,
 	formatDuration,
@@ -53,6 +54,7 @@ const health = (
 	Recent: [],
 	LastRunAt,
 	New: 0,
+	New24h: 0,
 	Elsewhere: 0,
 	Removed: 0,
 	Retries: 2,
@@ -72,6 +74,19 @@ assert.deepEqual(
 	],
 );
 assert.equal(split.healthy.length, 1);
+const withNew = [
+	{ ...health("green", null), New24h: 1 },
+	{ ...health("red", null), New24h: 0 },
+	{ ...health("amber", null), New24h: 5 },
+];
+assert.deepEqual(
+	byNew24h(withNew, { onlyNew: false, sortByNew: true }).map((r) => r.New24h),
+	[5, 1, 0],
+);
+assert.deepEqual(
+	byNew24h(withNew, { onlyNew: true, sortByNew: false }).map((r) => r.New24h),
+	[1, 5],
+);
 assert.equal(
 	healthLabel({ ...health("amber", null), Reason: "retried", Retries: 1 }),
 	"1 retried attempt",
