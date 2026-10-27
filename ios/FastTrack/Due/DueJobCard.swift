@@ -22,6 +22,7 @@ struct DueJobCard: View {
     let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
     let openApplication: (DueJob) -> Void
+    @State private var confirmingDelete = false
 
     private var rows: [DueRow] {
         (model.hasChaseDue(job) ? [.chase(job)] : [])
@@ -46,6 +47,18 @@ struct DueJobCard: View {
             }
         }
         .hairlineCard()
+        .swipeToDelete {
+            if job.hasCV { confirmingDelete = true } else { delete() }
+        }
+        .confirmationDialog("Delete this application?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Delete application", role: .destructive, action: delete)
+        } message: {
+            Text("This can't be undone.")
+        }
+    }
+
+    private func delete() {
+        Task { await model.delete(job) }
     }
 
     private var header: some View {

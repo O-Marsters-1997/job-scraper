@@ -113,6 +113,17 @@ final class DueModel {
         }
     }
 
+    func delete(_ job: DueJob) async {
+        let before = jobs
+        jobs.removeAll { $0.id == job.id }
+        do {
+            try await client.deleteApplication(job.applicationID)
+        } catch {
+            jobs = before
+            fail(error)
+        }
+    }
+
     func retryDraft(_ job: DueJob) async {
         do {
             guard let cv = try await client.cvTemplates().first(where: \.isDefault) else {
