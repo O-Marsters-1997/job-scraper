@@ -54,6 +54,7 @@ import {
 	useSetTaskDone,
 } from "@/hooks/useTasks";
 import { checklistState, linkedDraft } from "@/lib/applicationChecklist";
+import { runNeighbour } from "@/lib/applicationSelection";
 import { formatChaseDate } from "@/lib/chase";
 import { dayKey, formatDate } from "@/lib/datetime";
 import { queryClient } from "@/lib/queryClient";
@@ -69,7 +70,17 @@ import { CommentableDescription } from "./-jobs-detail/CommentableDescription";
 import { JobNotesCard } from "./-jobs-detail/JobNotesCard";
 import { workStyle } from "./-jobs-detail/workStyle";
 
+function parseApplicationSearch(search: Record<string, unknown>): {
+	run?: string[];
+} {
+	const run = Array.isArray(search.run)
+		? search.run.filter((id): id is string => typeof id === "string")
+		: [];
+	return run.length > 0 ? { run } : {};
+}
+
 export const Route = createFileRoute("/_auth/applications_/$id")({
+	validateSearch: parseApplicationSearch,
 	loader: async ({ params }) => {
 		const apps = await queryClient.ensureQueryData(applicationsQueryOptions());
 		const jobId = apps.find((a) => a.ID === params.id)?.JobID;
@@ -186,6 +197,7 @@ function ApplyRow(props: {
 	company: string;
 	done: boolean;
 	onAsk: () => void;
+	onApplied?: (() => void) | undefined;
 }) {
 	const statuses = useApplicationStatuses();
 	const update = useUpdateApplication();
@@ -209,7 +221,12 @@ function ApplyRow(props: {
 				id: props.app.ID,
 				data: { status_id: applied.ID, applied_at: dayKey(new Date()) },
 			},
-			{ onSuccess: () => setAsking(false) },
+			{
+				onSuccess: () => {
+					setAsking(false);
+					props.onApplied?.();
+				},
+			},
 		);
 	};
 
@@ -423,6 +440,7 @@ function CvRowBody(props: {
 function ChecklistTab(props: {
 	app: ApplicationWithDetails;
 	onAddStep: () => void;
+	onApplied?: () => void;
 }) {
 	const statuses = useApplicationStatuses();
 	const drafts = useJobDrafts(() => props.app.JobID);
@@ -513,6 +531,7 @@ function ChecklistTab(props: {
 						company={titleCase(props.app.JobCompanySlug)}
 						done={state().apply === "done"}
 						onAsk={() => setOpen(["apply"])}
+						onApplied={props.onApplied}
 					/>
 					<ChecklistRow
 						value="chase"
@@ -568,8 +587,58 @@ function ChecklistTab(props: {
 	);
 }
 
+function RunBar(props: {
+	run: string[];
+	id: string;
+	onGo: (id: string | undefined) => void;
+}) {
+	const back = () => runNeighbour(props.run, props.id, -1);
+	const next = () => runNeighbour(props.run, props.id, 1);
+	return (
+		<div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm">
+			<span class="font-mono text-xs tabular-nums text-muted">
+				Send run {props.run.indexOf(props.id) + 1} of {props.run.length}
+			</span>
+			<div class="ml-auto flex items-center gap-1">
+				<Button
+					variant="ghost"
+					size="sm"
+					disabled={!back()}
+					onClick={() => props.onGo(back())}
+				>
+					‹ Back
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
+					disabled={!next()}
+					onClick={() => props.onGo(next())}
+				>
+					Skip ›
+				</Button>
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={() => props.onGo(undefined)}
+				>
+					End run
+				</Button>
+			</div>
+		</div>
+	);
+}
+
 function ApplicationDetailPage() {
 	const params = Route.useParams();
+	const search = Route.useSearch();
+	const navigate = useNavigate();
+	const goRun = (run: string[], id: string | undefined) =>
+		void (id
+			? navigate({ to: "/applications/$id", params: { id }, search: { run } })
+			: navigate({
+					to: "/applications",
+					search: { status: undefined, chase: undefined },
+				}));
 	const query = useApplications();
 	const [tab, setTab] = createSignal("checklist");
 	const [taskOpen, setTaskOpen] = createSignal(false);
@@ -595,6 +664,15 @@ function ApplicationDetailPage() {
 		>
 			{(app) => (
 				<div class="px-4 py-6 md:px-7">
+					<Show when={search().run?.includes(app().ID) && search().run}>
+						{(run) => (
+							<RunBar
+								run={run()}
+								id={app().ID}
+								onGo={(id) => goRun(run(), id)}
+							/>
+						)}
+					</Show>
 					<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
 						<div class="min-w-0">
 							<h1 class="text-lg font-bold tracking-tight text-foreground">
@@ -649,7 +727,17 @@ function ApplicationDetailPage() {
 								<TabsTrigger value="notes">Notes</TabsTrigger>
 							</TabsList>
 							<TabsContent value="checklist">
-								<ChecklistTab app={app()} onAddStep={() => setTaskOpen(true)} />
+								<Show when={app().ID} keyed>
+									<ChecklistTab
+										app={app()}
+										onAddStep={() => setTaskOpen(true)}
+										onApplied={() => {
+											const run = search().run;
+											if (run?.includes(app().ID))
+												goRun(run, runNeighbour(run, app().ID, 1));
+										}}
+									/>
+								</Show>
 							</TabsContent>
 							<TabsContent value="description">
 								<Card>
