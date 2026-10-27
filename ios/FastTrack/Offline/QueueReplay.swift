@@ -15,6 +15,10 @@ extension APIClient {
         case .excludeCompany(let companyID):
             let exclusion = try await excludeCompany(companyID)
             return .exclusion(companyID: companyID, removeName: exclusion.added)
+        case .reclassify(let companyID, let kind):
+            let previous = try await job(jobID).companyKind
+            try await setCompanyKind(companyID, kind)
+            return .reclassify(companyID: companyID, previous: previous)
         case .note(let body):
             let previous = try await note(jobID).body
             try await putNote(jobID, body)
@@ -35,6 +39,8 @@ extension APIClient {
             try await setSeen([jobID], false)
         case .exclusion(let companyID, let removeName):
             try await unexcludeCompany(companyID, removeName)
+        case .reclassify(let companyID, let previous):
+            try await undoCompanyKind(companyID, previous)
         case .note(let previous):
             try await putNote(jobID, previous)
         case nil:

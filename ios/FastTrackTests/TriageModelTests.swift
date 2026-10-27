@@ -51,6 +51,33 @@ struct TriageModelTests {
         #expect(model.queues[.direct]?.map(\.id) == ["a", "b"])
     }
 
+    @Test func reclassifyMovesTheCompanysCardsAndUndoRestoresTheExactKind() async {
+        var client = APIClient.mock(jobs: [Job.sample.with(id: "a", kind: .likelyDirect), Job.sample.with(id: "b", kind: .likelyDirect)])
+        let calls = calls
+        client.setCompanyKind = { id, kind in calls.log.append("set \(id) \(kind.rawValue)") }
+        client.undoCompanyKind = { id, previous in calls.log.append("undo \(id) \(previous.rawValue)") }
+        client.job = { _ in Job.sample.with(id: "a", kind: .likelyDirect) }
+        let model = TriageModel(client: client)
+        await model.load()
+
+        await model.decide(.reclassify(to: .agency)).value
+
+        #expect(model.queues[.direct]?.isEmpty == true)
+        #expect(model.queues[.agency]?.map(\.id) == ["a", "b"])
+        #expect(model.queues[.agency]?.allSatisfy { $0.companyKind == .agency } == true)
+        #expect(model.unseen[.direct] == 0)
+        #expect(model.unseen[.agency] == 2)
+
+        model.stack = .agency
+        await model.undo().value
+
+        #expect(calls.log == ["set company-monzo agency", "undo company-monzo likely_direct"])
+        #expect(model.stack == .direct)
+        #expect(model.queues[.direct]?.map(\.companyKind) == [.likelyDirect, .likelyDirect])
+        #expect(model.queues[.agency]?.isEmpty == true)
+        #expect(model.unseen[.direct] == 2)
+    }
+
     @Test func noteKeepsTheCardAndUndoPutsThePreviousBodyBack() async {
         let model = await model()
 
