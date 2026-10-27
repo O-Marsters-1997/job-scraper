@@ -334,6 +334,33 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("delete many removes only the caller's applications", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		mine := createApp(t, f, dto.CreateApplicationInput{})
+		theirs, err := f.Store.CreateApplication(t.Context(), f.OtherUserID, dto.CreateApplicationInput{JobID: f.JobID})
+		if err != nil {
+			t.Fatalf("CreateApplication(other user) err = %v", err)
+		}
+		if err := f.Store.DeleteApplications(t.Context(), f.UserID, []string{mine.ID, theirs.ID}); err != nil {
+			t.Fatalf("DeleteApplications(...) err = %v", err)
+		}
+		got, err := f.Store.ListApplications(t.Context(), f.UserID, dto.ApplicationsQuery{})
+		if err != nil {
+			t.Fatalf("ListApplications(...) err = %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("ListApplications after delete = %+v, want empty", got)
+		}
+		left, err := f.Store.ListApplications(t.Context(), f.OtherUserID, dto.ApplicationsQuery{})
+		if err != nil {
+			t.Fatalf("ListApplications(other user) err = %v", err)
+		}
+		if len(left) != 1 || left[0].ID != theirs.ID {
+			t.Errorf("other user's applications = %+v, want only %s", left, theirs.ID)
+		}
+	})
+
 	t.Run("get applications for jobs keys by job id", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)

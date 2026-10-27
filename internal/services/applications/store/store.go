@@ -279,6 +279,21 @@ func (s *Store) DeleteApplication(ctx context.Context, userID, id string) error 
 	return nil
 }
 
+func (s *Store) DeleteApplications(ctx context.Context, userID string, ids []string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	aids, err := data.UUIDs(ids)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.DeleteApplications(ctx, sqlc.DeleteApplicationsParams{UserID: uid, Ids: aids}); err != nil {
+		return fmt.Errorf("store.DeleteApplications: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {

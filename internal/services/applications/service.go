@@ -18,6 +18,7 @@ type Store interface {
 	SetChase(ctx context.Context, userID, id string, chaseBy time.Time) (dto.Application, error)
 	ClearChase(ctx context.Context, userID, id string) error
 	DeleteApplication(ctx context.Context, userID, id string) error
+	DeleteApplications(ctx context.Context, userID string, ids []string) error
 	GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error)
 	ListDue(ctx context.Context, userID string) (dto.DueList, error)
 
@@ -69,6 +70,13 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateApplic
 
 func (s *Service) List(ctx context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error) {
 	return s.store.ListApplications(ctx, userID, q)
+}
+
+func (s *Service) DeleteApplications(ctx context.Context, userID string, in dto.DeleteApplicationsInput) (struct{}, error) {
+	if len(in.IDs) == 0 {
+		return struct{}{}, apperr.Invalid("ids are required")
+	}
+	return struct{}{}, s.store.DeleteApplications(ctx, userID, in.IDs)
 }
 
 func (s *Service) SetChase(ctx context.Context, userID string, in dto.ChaseInput) (dto.Application, error) {

@@ -18,6 +18,10 @@ type UpdateApplicationInput struct {
 	AppliedAt  *string `json:"applied_at"`
 }
 
+type DeleteApplicationsInput struct {
+	IDs []string `json:"ids"`
+}
+
 type ApplicationsQuery struct {
 	StatusID string `json:"status_id"`
 	Chase    bool   `json:"chase,string"`

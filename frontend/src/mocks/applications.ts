@@ -133,8 +133,8 @@ export function clearChase(id: string): void {
 	);
 }
 
-export function deleteApplication(id: string): void {
-	applications = applications.filter((a) => a.ID !== id);
+export function deleteApplications(ids: string[]): void {
+	applications = applications.filter((a) => !ids.includes(a.ID));
 }
 
 export function createStatus(
