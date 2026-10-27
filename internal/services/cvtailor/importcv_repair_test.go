@@ -10,6 +10,7 @@ import (
 )
 
 func TestPreviewImportSplitsTitleEmployerAndDropsLocation(t *testing.T) {
+	t.Parallel()
 	docs := cvtailortest.Docs{TabJSON: tabJSON(t,
 		head("Software Engineer, Eucalyptus – London  Jan 2026 – Jul 2026"), bullet("a"),
 		head("Software Engineer | Eucalyptus | London  Jan 2026 – Jul 2026"), bullet("b"),
@@ -23,8 +24,8 @@ func TestPreviewImportSplitsTitleEmployerAndDropsLocation(t *testing.T) {
 	}
 
 	want := []dto.ImportPosition{
-		{Employer: "Eucalyptus", Title: "Software Engineer", StartDate: ptr("2026-01-01"), EndDate: ptr("2026-07-01"), Achievements: []string{"a"}},
-		{Employer: "Eucalyptus", Title: "Software Engineer", StartDate: ptr("2026-01-01"), EndDate: ptr("2026-07-01"), Achievements: []string{"b"}},
+		{Employer: "Eucalyptus", Title: "Software Engineer", StartDate: new("2026-01-01"), EndDate: new("2026-07-01"), Achievements: []string{"a"}},
+		{Employer: "Eucalyptus", Title: "Software Engineer", StartDate: new("2026-01-01"), EndDate: new("2026-07-01"), Achievements: []string{"b"}},
 		{Employer: "Acme", Title: "Engineer", Achievements: []string{"c"}},
 	}
 	if diff := cmp.Diff(want, got.Positions); diff != "" {
@@ -33,13 +34,15 @@ func TestPreviewImportSplitsTitleEmployerAndDropsLocation(t *testing.T) {
 }
 
 func TestImportPositionsRepairsMisparsedPositions(t *testing.T) {
+	t.Parallel()
 	imp := dto.ImportPosition{
-		Employer: "Eucalyptus", Title: "Software Engineer", StartDate: ptr("2026-01-01"), EndDate: ptr("2026-07-01"),
+		Employer: "Eucalyptus", Title: "Software Engineer", StartDate: new("2026-01-01"), EndDate: new("2026-07-01"),
 		Achievements: []string{"old", "new"},
 	}
-	bad := dto.PositionInput{Employer: "London", Title: "Software Engineer, Eucalyptus", StartDate: ptr("2026-01-01"), EndDate: ptr("2026-07-01")}
+	bad := dto.PositionInput{Employer: "London", Title: "Software Engineer, Eucalyptus", StartDate: new("2026-01-01"), EndDate: new("2026-07-01")}
 
 	t.Run("single match is updated in place", func(t *testing.T) {
+		t.Parallel()
 		svc, st := newService(t, nil, nil)
 		p, err := st.CreatePosition(t.Context(), userID, bad)
 		if err != nil {
@@ -63,12 +66,13 @@ func TestImportPositionsRepairsMisparsedPositions(t *testing.T) {
 	})
 
 	t.Run("different dates create a fresh position", func(t *testing.T) {
+		t.Parallel()
 		svc, st := newService(t, nil, nil)
 		if _, err := st.CreatePosition(t.Context(), userID, bad); err != nil {
 			t.Fatal(err)
 		}
 		later := imp
-		later.EndDate = ptr("2026-08-01")
+		later.EndDate = new("2026-08-01")
 
 		if _, err := svc.ImportPositions(t.Context(), userID, dto.ImportInput{Positions: []dto.ImportPosition{later}}); err != nil {
 			t.Fatal(err)
@@ -84,6 +88,7 @@ func TestImportPositionsRepairsMisparsedPositions(t *testing.T) {
 	})
 
 	t.Run("ambiguous or absent match creates a fresh position", func(t *testing.T) {
+		t.Parallel()
 		svc, st := newService(t, nil, nil)
 		if _, err := st.CreatePosition(t.Context(), userID, bad); err != nil {
 			t.Fatal(err)
