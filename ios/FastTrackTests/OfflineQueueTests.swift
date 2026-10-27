@@ -27,9 +27,10 @@ struct OfflineQueueTests {
             if calls.offline { throw URLError(.notConnectedToInternet) }
             calls.log.append("setSeen \(ids) \(seen)")
         }
-        client.triageQueue = {
+        client.triageQueue = { stack in
             if calls.offline { throw URLError(.notConnectedToInternet) }
-            return [.sample.with(id: "a"), .sample.with(id: "b")]
+            let items = stack == .direct ? [Job.sample.with(id: "a"), .sample.with(id: "b")] : []
+            return JobPage(items: items, total: items.count)
         }
         return client
     }
@@ -151,12 +152,14 @@ struct OfflineQueueTests {
         let dismiss = action(.dismiss(reasons: [.tech]), job: "a", at: 5)
 
         try store.saveQueue([dismiss])
-        try store.saveCards([.sample])
+        try store.saveCards([.sample], .direct)
+        try store.saveCards([.sample.with(id: "agency-job")], .agency)
 
         let queue = try store.loadQueue()
         #expect(queue.map(\.id) == [dismiss.id])
         #expect(queue.first?.queuedAt == dismiss.queuedAt)
-        let cards = try store.loadCards()
+        #expect(try store.loadCards(.agency).map(\.id) == ["agency-job"])
+        let cards = try store.loadCards(.direct)
         #expect(cards.map(\.id) == ["sample"])
         #expect(cards.first?.band == .great)
         #expect(cards.first?.breakdown == Job.sample.breakdown)

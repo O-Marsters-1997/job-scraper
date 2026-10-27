@@ -47,6 +47,7 @@ struct SeenInput: Encodable {
 
 struct JobPage: Decodable {
     let items: [Job]
+    let total: Int?
 }
 
 struct CompanyExclusion: Decodable {

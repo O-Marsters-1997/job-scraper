@@ -3,18 +3,15 @@ import Testing
 @testable import FastTrack
 
 struct DTODecodingTests {
-    private struct Page: Decodable {
-        let items: [Job]
-    }
-
     private func fixture(_ name: String) throws -> Data {
         let url = try #require(Bundle(for: BundleToken.self).url(forResource: name, withExtension: "json"))
         return try Data(contentsOf: url)
     }
 
     @Test func jobPageDecodes() throws {
-        let page = try JSONDecoder.api.decode(Page.self, from: fixture("job_page"))
+        let page = try JSONDecoder.api.decode(JobPage.self, from: fixture("job_page"))
 
+        #expect(page.total == 1)
         let job = try #require(page.items.first)
         #expect(job.id == "job-1")
         #expect(job.title == "Senior Go Engineer")
@@ -33,7 +30,7 @@ struct DTODecodingTests {
         let original = try #require(String(data: fixture("job_page"), encoding: .utf8))
         try #require(original.contains("\"CompanyKind\": \"agency\""))
         let json = original.replacingOccurrences(of: "\"CompanyKind\": \"agency\"", with: replacement)
-        let job = try #require(JSONDecoder.api.decode(Page.self, from: Data(json.utf8)).items.first)
+        let job = try #require(JSONDecoder.api.decode(JobPage.self, from: Data(json.utf8)).items.first)
         #expect(job.companyKind == .unclassified)
     }
 

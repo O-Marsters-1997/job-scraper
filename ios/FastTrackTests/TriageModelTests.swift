@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import FastTrack
 
@@ -47,7 +48,7 @@ struct TriageModelTests {
         await model.undo().value
 
         #expect(calls.log == ["exclude company-monzo", "unexclude company-monzo true"])
-        #expect(model.queue.map(\.id) == ["a", "b"])
+        #expect(model.queues[.direct]?.map(\.id) == ["a", "b"])
     }
 
     @Test func noteKeepsTheCardAndUndoPutsThePreviousBodyBack() async {
@@ -58,7 +59,7 @@ struct TriageModelTests {
         await model.undo().value
 
         #expect(calls.log == ["putNote a new", "putNote a old"])
-        #expect(model.queue.map(\.id) == ["a", "b"])
+        #expect(model.queues[.direct]?.map(\.id) == ["a", "b"])
     }
 
     @Test func shortlistThenUndoDeletesTheApplication() async throws {
@@ -156,13 +157,76 @@ struct TriageModelTests {
         #expect(model.undoStack.isEmpty)
         #expect(model.hasFailure)
     }
+
+    private func detourModel(store: OfflineStore = .memory()) async -> TriageModel {
+        var client = APIClient.mock()
+        client.triageQueue = { stack in
+            let items = switch stack {
+            case .direct: [Job.sample.with(id: "d1")]
+            case .agency: [Job.sample.with(id: "g1", kind: .agency), .sample.with(id: "g2", kind: .likelyAgency)]
+            }
+            return JobPage(items: items, total: stack == .agency ? 7 : 1)
+        }
+        client.dismiss = { _, _ in }
+        client.recordEvent = { _ in }
+        let model = TriageModel(client: client, store: store)
+        await model.load()
+        return model
+    }
+
+    @Test func opensOnDirectWithTheAgencyStacksUnseenCount() async {
+        let model = await detourModel()
+
+        #expect(model.stack == .direct)
+        #expect(model.current?.id == "d1")
+        #expect(model.unseen[.agency] == 7)
+        #expect(model.unseen[.direct] == 1)
+    }
+
+    @Test func switchingStackServesThatStacksCards() async {
+        let model = await detourModel()
+
+        model.stack = .agency
+
+        #expect(model.current?.id == "g1")
+        #expect(model.upcoming.map(\.id) == ["g2"])
+    }
+
+    @Test func decidingOnAgencyDecrementsItsCountAndUndoRestoresIt() async {
+        let model = await detourModel()
+        model.stack = .agency
+
+        await model.decide(.dismiss(reasons: [])).value
+        #expect(model.current?.id == "g2")
+        #expect(model.unseen[.agency] == 6)
+        await model.undo().value
+
+        #expect(model.current?.id == "g1")
+        #expect(model.unseen[.agency] == 7)
+        #expect(model.queues[.direct]?.map(\.id) == ["d1"])
+    }
+
+    @Test func offlineEachStackServesItsOwnCache() async throws {
+        let store = OfflineStore.memory(cards: [.sample.with(id: "d1")])
+        try store.saveCards([.sample.with(id: "g1", kind: .agency)], .agency)
+        var client = APIClient.mock()
+        client.triageQueue = { _ in throw URLError(.notConnectedToInternet) }
+        let model = TriageModel(client: client, store: store)
+
+        await model.load()
+
+        #expect(model.current?.id == "d1")
+        model.stack = .agency
+        #expect(model.current?.id == "g1")
+        #expect(model.unseen[.agency] == 1)
+    }
 }
 
 private extension Job {
-    func with(id: String) -> Job {
+    func with(id: String, kind: CompanyKind? = nil) -> Job {
         Job(id: id, title: title, companyID: companyID, companySlug: companySlug, location: location,
             workArrangement: workArrangement, salaryRaw: salaryRaw, url: url, postedAt: postedAt,
             firstDiscoveredAt: firstDiscoveredAt, band: band, score: score, breakdown: breakdown,
-            description: description, companyKind: companyKind)
+            description: description, companyKind: kind ?? companyKind)
     }
 }
