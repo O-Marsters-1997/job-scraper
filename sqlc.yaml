@@ -64,3 +64,11 @@ sql:
         package: *package
         out: "internal/services/tasks/store/sqlc"
         sql_package: *sql_package
+  - engine: *engine
+    queries: "internal/services/notify/store/queries"
+    schema: *schema
+    gen:
+      go:
+        package: *package
+        out: "internal/services/notify/store/sqlc"
+        sql_package: *sql_package

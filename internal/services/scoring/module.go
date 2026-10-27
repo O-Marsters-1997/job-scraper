@@ -23,6 +23,10 @@ type noopAlerter struct{}
 
 func (noopAlerter) NotifyNewJob(context.Context, dto.Job, string) error { return nil }
 
+type noopNotifications struct{}
+
+func (noopNotifications) NewJob(context.Context, string, dto.Job) error { return nil }
+
 type noopPusher struct{}
 
 func (noopPusher) Send(context.Context, dto.PushSubscriptionInput, dto.PushMessage) error {
@@ -38,11 +42,12 @@ type Module struct {
 // builds the real ones and calls Build. Tests call Build directly with
 // fakes (ADR 0012).
 type Deps struct {
-	Store       Store
-	Answerer    Answerer
-	Credentials Credentials
-	Alerter     Alerter
-	Pusher      PushSender
+	Store         Store
+	Answerer      Answerer
+	Credentials   Credentials
+	Alerter       Alerter
+	Notifications Notifications
+	Pusher        PushSender
 	// VAPIDPublicKey empty means Web Push is not configured.
 	VAPIDPublicKey string
 	Profiles       ProfileReader
@@ -66,7 +71,7 @@ func (v VAPID) configured() bool { return v.PublicKey != "" && v.PrivateKey != "
 // New wires the scoring context: its own store, the answer-effect loop and
 // Search Config orchestration. notifyAPIKey empty disables new-job email
 // alerts (dev default).
-func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates Reconsiderer, companyKinds CompanyKinds, notifyAPIKey, notifyFrom string, vapid VAPID) *Module {
+func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates Reconsiderer, companyKinds CompanyKinds, notifications Notifications, notifyAPIKey, notifyFrom string, vapid VAPID) *Module {
 	st := store.New(pool)
 
 	var alerter Alerter = noopAlerter{}
@@ -82,7 +87,7 @@ func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, ca
 	jevClient := jev.NewClient()
 	return Build(Deps{
 		Store: st, Pusher: pusher, VAPIDPublicKey: vapid.PublicKey, Answerer: jevClient, Credentials: credentials,
-		Alerter: alerter, Profiles: profiles, Candidates: candidates, Extractor: extract.NewClient(),
+		Alerter: alerter, Notifications: notifications, Profiles: profiles, Candidates: candidates, Extractor: extract.NewClient(),
 		Classifier: jevClient, CompanyKinds: companyKinds,
 	})
 }

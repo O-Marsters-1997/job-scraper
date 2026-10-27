@@ -35,6 +35,9 @@ struct APIClient {
     var discardDraft: (_ draftID: String) async throws -> Void
     var coverLetters: (_ jobID: String) async throws -> [CoverLetter]
     var requestCoverLetter: (_ jobID: String) async throws -> CoverLetter
+    var notifications: () async throws -> [AppNotification]
+    var markNotificationRead: (_ id: String) async throws -> Void
+    var markAllNotificationsRead: () async throws -> Void
 }
 
 extension APIClient {
@@ -148,13 +151,22 @@ extension APIClient {
             },
             requestCoverLetter: { jobID in
                 try await http.post("tailoring/jobs/\(jobID)/cover-letters", body: EmptyBody())
+            },
+            notifications: {
+                try await http.get("notifications")
+            },
+            markNotificationRead: { id in
+                try await http.post("notifications/\(id)/read", body: EmptyBody())
+            },
+            markAllNotificationsRead: {
+                try await http.post("notifications/read-all", body: EmptyBody())
             }
         )
     }
 }
 
 extension APIClient {
-    static func mock(jobs: [Job] = [.sample], due: [DueJob] = [], contacts: [RecruiterContact] = [], failure: APIError? = nil) -> APIClient {
+    static func mock(jobs: [Job] = [.sample], due: [DueJob] = [], contacts: [RecruiterContact] = [], notifications: [AppNotification] = [], failure: APIError? = nil) -> APIClient {
         func respond<T>(_ value: T) throws -> T {
             if let failure { throw failure }
             return value
@@ -197,7 +209,10 @@ extension APIClient {
             keepDraft: { _ in try respond(()) },
             discardDraft: { _ in try respond(()) },
             coverLetters: { _ in try respond([]) },
-            requestCoverLetter: { _ in try respond(CoverLetter(id: "letter-new", createdAt: .now, doneAt: nil)) }
+            requestCoverLetter: { _ in try respond(CoverLetter(id: "letter-new", createdAt: .now, doneAt: nil)) },
+            notifications: { try respond(notifications) },
+            markNotificationRead: { _ in try respond(()) },
+            markAllNotificationsRead: { try respond(()) }
         )
     }
 }

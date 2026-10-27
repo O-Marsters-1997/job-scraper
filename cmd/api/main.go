@@ -28,6 +28,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
+	"github.com/ollymarsters/job-scraper/internal/services/notify"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/services/tasks"
@@ -103,7 +104,8 @@ func run(ctx context.Context) error {
 		proxyQuota = jobsearch.NewDecodoQuota(&http.Client{Timeout: 10 * time.Second}, jobsearch.DecodoSubscriptionsURL, key)
 	}
 	js := jobsearch.New(pool, q, scoringFacade, proxyQuota, maxTargets, slog.Default())
-	scoringModule := scoring.New(pool, idm, idm, js, js, os.Getenv("RESEND_API_KEY"), notifyFrom,
+	notifyModule := notify.New(pool, notify.Ntfy{URL: os.Getenv("NTFY_URL"), Token: os.Getenv("NTFY_TOKEN")})
+	scoringModule := scoring.New(pool, idm, idm, js, js, notifyModule, os.Getenv("RESEND_API_KEY"), notifyFrom,
 		scoring.VAPID{PublicKey: os.Getenv("VAPID_PUBLIC_KEY"), PrivateKey: os.Getenv("VAPID_PRIVATE_KEY"), Subject: os.Getenv("VAPID_SUBJECT")})
 
 	reg := prometheus.NewRegistry()
@@ -118,7 +120,7 @@ func run(ctx context.Context) error {
 	cvTemplates := cvtemplates.New(pool, idm.DocsClient())
 	cvtailorModule := cvtailor.New(pool, idm.DocsClient(), scoringModule, idm, slog.Default())
 
-	router, err := api.NewRouter(idm, js, apps, taskModule, cvTemplates, scoringModule, cvtailorModule, eventsModule)
+	router, err := api.NewRouter(idm, js, apps, taskModule, cvTemplates, scoringModule, cvtailorModule, eventsModule, notifyModule)
 	if err != nil {
 		return fmt.Errorf("build router: %w", err)
 	}
