@@ -15,10 +15,14 @@ func toNotificationDTO(r sqlc.ListNotificationsRow) dto.Notification {
 		JobID: r.JobID.String(),
 		Title: r.Title,
 		Body:  r.Body,
-		Job: toNotificationJobDTO(sqlc.GetNotificationJobRow{
-			Title: r.JobTitle, CompanyName: r.CompanyName, Location: r.Location, SalaryRaw: r.SalaryRaw,
-			Band: r.Band, SuitabilityScore: r.SuitabilityScore,
-		}),
+		Job: dto.NotificationJob{
+			Title:       r.JobTitle,
+			CompanyName: r.CompanyName,
+			Location:    r.Location,
+			SalaryRaw:   r.SalaryRaw,
+			Band:        r.Band,
+			Score:       intPtr(r.SuitabilityScore),
+		},
 		CreatedAt: r.CreatedAt.Time,
 		ReadAt:    data.TimePtr(r.ReadAt),
 	}
