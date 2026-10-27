@@ -217,4 +217,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test iOS models against dto fixtures
         working-directory: ios
-        run: xcodebuild test -scheme FastTrack -destination 'platform=iOS Simulator,name=iPhone 17'
+        run: |
+          xcrun simctl list devices available
+          udid=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
+          xcodebuild test -scheme FastTrack -destination "platform=iOS Simulator,id=$udid"

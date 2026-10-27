@@ -25,19 +25,11 @@ type Preferences struct {
 	Scoring *ScoringParams `json:"scoring,omitempty"`
 }
 
-// BandCuts are the minimum scores for Great, Good and Fair; Poor is below Fair.
-type BandCuts struct {
-	Great int `json:"great"`
-	Good  int `json:"good"`
-	Fair  int `json:"fair"`
-}
-
 // ScoringParams are a user's fitted overrides of the default dimension
-// weights and Band cut-offs. GradeCount is the number of Grades at the last
-// fit attempt, accepted or not.
+// weights. GradeCount is the number of Grades at the last fit attempt,
+// accepted or not.
 type ScoringParams struct {
 	Weights    map[Dimension]float64 `json:"weights,omitempty"`
-	Bands      *BandCuts             `json:"bands,omitempty"`
 	FittedAt   time.Time             `json:"fittedAt"`
 	GradeCount int                   `json:"gradeCount"`
 }

@@ -15,15 +15,12 @@ import (
 )
 
 const (
-	minBandGrades   = 30
 	minWeightLabels = 50
-	refitEvery      = 15
 	cvFolds         = 5
 	fitIterations   = 1500
 	fitRate         = 0.5
 	fitPenalty      = 0.003
 	minFittedWeight = 0.1
-	bandStep        = 5
 )
 
 type fitLabel struct {
@@ -46,31 +43,19 @@ func (s *Service) Fit(ctx context.Context, userID string) (string, error) {
 	if cfg.UserID == "" {
 		return "", apperr.Invalid("set scoring preferences before fitting")
 	}
-	if len(pool.grades) < minBandGrades {
-		return fmt.Sprintf("%d grades, need %d: defaults apply\n", len(pool.grades), minBandGrades), nil
-	}
-
-	gradeOf := make(map[string]string, len(pool.grades))
-	for _, g := range pool.grades {
-		gradeOf[g.JobID] = g.Grade
-	}
 	jobs := make([]preparedJob, len(pool.inputs))
 	var labels []fitLabel
-	var graded []int
 	for i, in := range pool.inputs {
 		jobs[i] = prepareJob(cfg, in.Job, pool.bank.byID, in.Answers, in.Corrections, in.Favourite)
 		if l, ok := pool.labels[in.Job.ID]; ok {
 			labels = append(labels, fitLabel{job: i, positive: l.positive})
-		}
-		if _, ok := gradeOf[in.Job.ID]; ok {
-			graded = append(graded, i)
 		}
 	}
 
 	next := dto.ScoringParams{FittedAt: time.Now().UTC(), GradeCount: len(pool.grades)}
 	champion := cfg.Preferences.Scoring
 	if champion != nil {
-		next.Weights, next.Bands = champion.Weights, champion.Bands
+		next.Weights = champion.Weights
 	}
 	var report strings.Builder
 
@@ -99,16 +84,6 @@ func (s *Service) Fit(ctx context.Context, userID string) (string, error) {
 			verdict, got.medianRankPct, want.medianRankPct, got.concordance, want.concordance)
 	}
 
-	scores := make([]int, len(graded))
-	grades := make([]string, len(graded))
-	for i, j := range graded {
-		scores[i], _, _ = jobs[j].compute(&next)
-		grades[i] = gradeOf[pool.inputs[j].Job.ID]
-	}
-	cuts := calibrateBands(scores, grades)
-	next.Bands = &cuts
-	fmt.Fprintf(&report, "Bands: Great from %d, Good from %d, Fair from %d\n", cuts.Great, cuts.Good, cuts.Fair)
-
 	cfg.Preferences.Scoring = &next
 	if _, err := s.store.UpsertSearchConfig(ctx, cfg); err != nil {
 		return "", fmt.Errorf("scoring.Fit: save params: %w", err)
@@ -117,32 +92,6 @@ func (s *Service) Fit(ctx context.Context, userID string) (string, error) {
 		return "", fmt.Errorf("scoring.Fit: recompute: %w", err)
 	}
 	return report.String(), nil
-}
-
-func (s *Service) refitIfDue(ctx context.Context, userID string) {
-	if err := s.fitIfDue(ctx, userID); err != nil {
-		slog.ErrorContext(ctx, "scoring refit failed", slog.String(logger.KeyUserID, userID), slog.Any(logger.KeyErr, err))
-	}
-}
-
-func (s *Service) fitIfDue(ctx context.Context, userID string) error {
-	grades, err := s.store.ListGrades(ctx, userID)
-	if err != nil || len(grades) < minBandGrades {
-		return err
-	}
-	cfg, err := s.searchConfigOrDefault(ctx, userID)
-	if err != nil || cfg.UserID == "" {
-		return err
-	}
-	fitted := 0
-	if cfg.Preferences.Scoring != nil {
-		fitted = cfg.Preferences.Scoring.GradeCount
-	}
-	if len(grades)-fitted < refitEvery {
-		return nil
-	}
-	_, err = s.Fit(ctx, userID)
-	return err
 }
 
 func (p preparedJob) features() []float64 {
@@ -255,43 +204,4 @@ func crossValidate(jobs []preparedJob, labels []fitLabel, train func([]fitLabel)
 		}
 	}
 	return fitMetrics{medianRankPct: median(rankPcts), concordance: concordance(positives, negatives)}
-}
-
-func calibrateBands(scores []int, grades []string) dto.BandCuts {
-	best, bestHits, bestDist := defaultBands, -1, math.MaxInt
-	for fair := bandStep; fair <= 100; fair += bandStep {
-		for good := fair + bandStep; good <= 100; good += bandStep {
-			for great := good + bandStep; great <= 100; great += bandStep {
-				cuts := dto.BandCuts{Great: great, Good: good, Fair: fair}
-				hits := 0
-				for i, sc := range scores {
-					if bandAgrees(grades[i], bandFor(sc, cuts)) {
-						hits++
-					}
-				}
-				dist := absInt(great-defaultBands.Great) + absInt(good-defaultBands.Good) + absInt(fair-defaultBands.Fair)
-				if hits > bestHits || hits == bestHits && dist < bestDist {
-					best, bestHits, bestDist = cuts, hits, dist
-				}
-			}
-		}
-	}
-	return best
-}
-
-func bandAgrees(grade, band string) bool {
-	switch grade {
-	case "great":
-		return band == "great"
-	case "ok":
-		return band == "good" || band == "fair"
-	}
-	return band == "poor"
-}
-
-func absInt(n int) int {
-	if n < 0 {
-		return -n
-	}
-	return n
 }

@@ -61,7 +61,8 @@ func alternating(i int) string {
 }
 
 func TestFit(t *testing.T) {
-	t.Run("fewer than 30 grades calibrates nothing", func(t *testing.T) {
+	t.Run("too few labels leaves the default weights", func(t *testing.T) {
+		t.Parallel()
 		st := fitFixture(t, 40, nil)
 		svc := newService(t, st)
 		gradeJobs(t, svc, 0, 29, alternating)
@@ -72,11 +73,11 @@ func TestFit(t *testing.T) {
 		}
 
 		cfg, _ := st.GetSearchConfig(t.Context(), fitUser)
-		if cfg.Preferences.Scoring != nil {
-			t.Errorf("Scoring = %+v, want nil so the defaults apply", cfg.Preferences.Scoring)
+		if cfg.Preferences.Scoring == nil || cfg.Preferences.Scoring.Weights != nil {
+			t.Errorf("Scoring = %+v, want no fitted weights", cfg.Preferences.Scoring)
 		}
-		if !strings.Contains(report, "defaults apply") {
-			t.Errorf("Fit() = %q, want it to say the defaults apply", report)
+		if !strings.Contains(report, "Weights unchanged") {
+			t.Errorf("Fit() = %q, want it to say the weights are unchanged", report)
 		}
 	})
 
@@ -112,28 +113,18 @@ func TestFit(t *testing.T) {
 		}
 	})
 
-	t.Run("grading refits at 30 and again only after 15 more", func(t *testing.T) {
+	t.Run("grading never refits", func(t *testing.T) {
+		t.Parallel()
 		st := fitFixture(t, 60, nil)
 		svc := newService(t, st)
-		fittedAt := func() int {
-			cfg, _ := st.GetSearchConfig(t.Context(), fitUser)
-			if cfg.Preferences.Scoring == nil {
-				return 0
-			}
-			return cfg.Preferences.Scoring.GradeCount
-		}
 
-		gradeJobs(t, svc, 0, 30, alternating)
-		if got := fittedAt(); got != 30 {
-			t.Fatalf("GradeCount after 30 grades = %d, want 30", got)
+		gradeJobs(t, svc, 0, 60, alternating)
+		cfg, err := st.GetSearchConfig(t.Context(), fitUser)
+		if err != nil {
+			t.Fatalf("GetSearchConfig() err = %v", err)
 		}
-		gradeJobs(t, svc, 30, 44, alternating)
-		if got := fittedAt(); got != 30 {
-			t.Errorf("GradeCount after 44 grades = %d, want 30 (no refit yet)", got)
-		}
-		gradeJobs(t, svc, 44, 45, alternating)
-		if got := fittedAt(); got != 45 {
-			t.Errorf("GradeCount after 45 grades = %d, want 45", got)
+		if cfg.Preferences.Scoring != nil {
+			t.Errorf("Scoring after 60 grades = %+v, want nil", cfg.Preferences.Scoring)
 		}
 	})
 
