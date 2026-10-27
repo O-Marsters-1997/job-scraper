@@ -6,6 +6,7 @@ final class TriageModel {
     static let cacheSize = 50
 
     private(set) var queue: [Job] = []
+    private(set) var scoring: ScoringBands?
     private(set) var loadState: LoadState<Void> = .idle
     private(set) var undoStack: [TriageDecision] = []
     private(set) var banner: TriageDecision?
@@ -76,6 +77,7 @@ final class TriageModel {
             let decision = TriageDecision(id: id, job: job, action: action, receipt: receipt)
             undoStack.append(decision)
             if action != .skip { banner = decision }
+            if case .dismiss = action { await reloadIfRefitted() }
         }
     }
 
@@ -179,7 +181,13 @@ final class TriageModel {
     private func reloadQueue() async throws {
         let decided = Set(undoStack.filter { !$0.action.keepsCard }.map(\.job.id))
         queue = try await client.triageQueue().filter { !decided.contains($0.id) }
+        scoring = try? await client.scoringBands()
         persistCards()
+    }
+
+    private func reloadIfRefitted() async {
+        guard !isOffline, let latest = try? await client.scoringBands(), latest.fittedAt != scoring?.fittedAt else { return }
+        try? await reloadQueue()
     }
 
     private func persistCards() {

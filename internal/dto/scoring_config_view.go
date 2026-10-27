@@ -14,4 +14,6 @@ type ScoringConfigView struct {
 	UpdatedAt             time.Time   `json:"updatedAt"`
 	BackfillQueued        int64       `json:"backfillQueued"`
 	DroppedOptionIDs      []string    `json:"droppedOptionIds,omitempty"`
+	Bands                 BandCuts    `json:"bands"`
+	FittedAt              *time.Time  `json:"fittedAt,omitempty"`
 }
