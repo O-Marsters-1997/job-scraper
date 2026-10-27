@@ -12,6 +12,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/filter"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
@@ -221,8 +222,23 @@ func (s *Service) SourceHealth(ctx context.Context, userID string) ([]dto.Source
 	if err != nil {
 		return nil, err
 	}
+	cfg, err := s.configs.SearchConfig(ctx, userID)
+	if err != nil && !errors.Is(err, data.ErrNotFound) {
+		return nil, err
+	}
+	fresh, err := s.store.ListRecentNewJobs(ctx, userID, time.Now().Add(-24*time.Hour))
+	if err != nil {
+		return nil, err
+	}
+	passing := map[string]int{}
+	for _, j := range fresh {
+		if _, rejected := filter.Reject(j.Job, cfg); !rejected {
+			passing[j.TargetID+j.BoardID]++
+		}
+	}
 	for i := range rows {
 		rows[i].Status, rows[i].Reason = classifyHealth(rows[i])
+		rows[i].New24h = passing[rows[i].TargetID+rows[i].BoardID]
 	}
 	if rows == nil {
 		rows = []dto.SourceHealth{}

@@ -185,3 +185,16 @@ LEFT JOIN LATERAL (
 WHERE b.status = 'verified'
   AND EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = sqlc.arg('user_id') AND tc.company_id = b.company_id)
 ORDER BY b.id, r.started_at, r.id;
+
+-- name: ListRecentNewJobSnapshots :many
+SELECT r.source_target_id, r.board_id, (ch.snapshot->>'Title')::text AS title,
+       (ch.snapshot->>'Location')::text AS location, (ch.snapshot->>'CompanySlug')::text AS company_slug
+FROM scrape_run_job_changes ch
+JOIN scrape_runs r ON r.id = ch.run_id
+LEFT JOIN source_targets t ON t.id = r.source_target_id
+LEFT JOIN company_boards b ON b.id = r.board_id
+WHERE ch.change = 'new'
+  AND r.started_at >= sqlc.arg('since')::timestamptz
+  AND (t.user_id = sqlc.arg('user_id')
+       OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = sqlc.arg('user_id') AND tc.company_id = b.company_id))
+LIMIT 50000;

@@ -3,7 +3,7 @@ import { createSignal, For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { SourceBadge } from "@/components/SourceBadge";
 import { Button } from "@/components/ui/button";
-import { healthLabel, splitHealth } from "@/lib/scrapeRuns";
+import { byNew24h, healthLabel, splitHealth } from "@/lib/scrapeRuns";
 import { searchTitle } from "@/lib/searchTargets";
 import { cn } from "@/lib/utils";
 import type { ScrapeRunOutcome, SourceHealth } from "@/types/scrapeRun";
@@ -28,7 +28,7 @@ const OUTCOME_BAR: Record<ScrapeRunOutcome, string> = {
 };
 
 const GRID =
-	"grid grid-cols-[minmax(0,1fr)_11rem_5rem_8rem_3.5rem_5.5rem_4rem] items-center gap-x-3";
+	"grid grid-cols-[minmax(0,1fr)_11rem_5rem_8rem_3.5rem_5rem_5.5rem_4rem] items-center gap-x-3";
 
 function Total(props: { value: number; class?: string }) {
 	return (
@@ -108,6 +108,7 @@ function HealthRow(props: {
 					</Show>
 				</span>
 				<Total value={props.row.New} class="font-semibold" />
+				<Total value={props.row.New24h} class="font-semibold" />
 				<Total value={props.row.Elsewhere} />
 				<Total
 					value={props.row.Retries}
@@ -125,7 +126,13 @@ export function SourcesHealth(props: {
 	onSelect: (targetId: string) => void;
 }) {
 	const [showHealthy, setShowHealthy] = createSignal(false);
+	const [onlyNew, setOnlyNew] = createSignal(false);
+	const [sortByNew, setSortByNew] = createSignal(false);
 	const groups = () => splitHealth(props.rows);
+	const flat = () =>
+		onlyNew() || sortByNew()
+			? byNew24h(props.rows, { onlyNew: onlyNew(), sortByNew: sortByNew() })
+			: undefined;
 	const renderRow = (row: SourceHealth) => (
 		<HealthRow
 			row={row}
@@ -147,6 +154,24 @@ export function SourcesHealth(props: {
 					</p>
 				}
 			>
+				<div class="mb-2 flex gap-2">
+					<Button
+						variant={onlyNew() ? "secondary" : "outline"}
+						size="sm"
+						aria-pressed={onlyNew()}
+						onClick={() => setOnlyNew((v) => !v)}
+					>
+						Has new (24h)
+					</Button>
+					<Button
+						variant={sortByNew() ? "secondary" : "outline"}
+						size="sm"
+						aria-pressed={sortByNew()}
+						onClick={() => setSortByNew((v) => !v)}
+					>
+						Sort by New (24h)
+					</Button>
+				</div>
 				<div class="overflow-hidden rounded-xl border border-border bg-surface">
 					<div
 						class={cn(
@@ -159,16 +184,37 @@ export function SourcesHealth(props: {
 						<span>Last 5</span>
 						<span>Last run</span>
 						<span class="text-right">New</span>
+						<span class="text-right">New 24h</span>
 						<span class="text-right">Elsewhere</span>
 						<span class="text-right">Retries</span>
 					</div>
 					<ul>
-						<For each={groups().attention}>{renderRow}</For>
-						<Show when={showHealthy()}>
-							<For each={groups().healthy}>{renderRow}</For>
+						<Show
+							when={flat()}
+							fallback={
+								<>
+									<For each={groups().attention}>{renderRow}</For>
+									<Show when={showHealthy()}>
+										<For each={groups().healthy}>{renderRow}</For>
+									</Show>
+								</>
+							}
+						>
+							{(rows) => (
+								<For
+									each={rows()}
+									fallback={
+										<li class="px-4 py-3 text-sm text-muted">
+											No sources with new jobs in the last 24 hours.
+										</li>
+									}
+								>
+									{renderRow}
+								</For>
+							)}
 						</Show>
 					</ul>
-					<Show when={groups().healthy.length > 0}>
+					<Show when={!flat() && groups().healthy.length > 0}>
 						<div class="flex justify-center border-t border-border py-1.5">
 							<Button
 								variant="ghost"
@@ -188,8 +234,9 @@ export function SourcesHealth(props: {
 					</Show>
 				</div>
 				<p class="mt-2 text-xs text-muted">
-					Totals cover each source's last 5 runs. Select a row to filter the run
-					log.
+					Totals cover each source's last 5 runs. New 24h counts jobs first
+					found in the last 24 hours that pass your filters. Select a row to
+					filter the run log.
 				</p>
 			</Show>
 		</section>

@@ -235,6 +235,7 @@ export function getSourceHealth(): SourceHealth[] {
 			Recent: recent,
 			LastRunAt: last5.at(-1)?.StartedAt ?? null,
 			New: sum((r) => r.New),
+			New24h: n % 3,
 			Elsewhere: sum((r) => r.Elsewhere),
 			Removed: 0,
 			Retries: retries,

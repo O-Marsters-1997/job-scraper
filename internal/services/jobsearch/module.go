@@ -112,6 +112,7 @@ type Store interface {
 	ListScrapeRuns(ctx context.Context, userID string, opts dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error)
 	ListScrapeRunJobSnapshots(ctx context.Context, userID, runID string) ([]dto.ScrapeRunJobSnapshot, error)
 	ListSourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error)
+	ListRecentNewJobs(ctx context.Context, userID string, since time.Time) ([]dto.SourceNewJob, error)
 	ScrapeRunSummary(ctx context.Context, userID string, opts dto.ScrapeRunSummaryOptions) (dto.ScrapeRunSummary, error)
 	MarkBoardUKJobsSeen(ctx context.Context, source, token string) error
 	RecordDiscoverMiss(ctx context.Context, source, token string) error

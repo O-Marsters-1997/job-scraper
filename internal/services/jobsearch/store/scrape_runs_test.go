@@ -387,6 +387,40 @@ func TestStore_ListSourceHealth(t *testing.T) {
 	}
 }
 
+func TestStore_ListRecentNewJobs(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newUserStore(t)
+	ctx := t.Context()
+	mine := createTarget(t, st, userID, "linkedin", "mine")
+	theirs := createTarget(t, st, pgtest.InsertUser(t, pool), "linkedin", "theirs")
+	seed := func(target dto.SourceTarget, title string, age time.Duration) {
+		t.Helper()
+		run := startRun(t, st, target.ID)
+		if _, err := pool.Exec(ctx, "UPDATE scrape_runs SET started_at = NOW() - $2::float8 * INTERVAL '1 second' WHERE id = $1::uuid", run.RunID, age.Seconds()); err != nil {
+			t.Fatal(err)
+		}
+		_, err := pool.Exec(ctx, `WITH j AS (
+			INSERT INTO jobs (title, location, url, company_slug, source) VALUES ($2, 'London', 'https://x.test/' || $2 || $3, 'acme', 'linkedin') RETURNING id)
+			INSERT INTO scrape_run_job_changes (run_id, job_id, change, snapshot)
+			SELECT $1::uuid, j.id, 'new', jsonb_build_object('Title', $2::text, 'Location', 'London', 'CompanySlug', 'acme') FROM j`, run.RunID, title, target.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	seed(mine, "recent", time.Hour)
+	seed(mine, "old", 48*time.Hour)
+	seed(theirs, "other user", time.Hour)
+
+	got, err := st.ListRecentNewJobs(ctx, userID, time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []dto.SourceNewJob{{TargetID: mine.ID, Job: dto.Job{Title: "recent", Location: "London", CompanySlug: "acme"}}}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ListRecentNewJobs() (-want +got):\n%s", diff)
+	}
+}
+
 func TestStore_BoardRuns(t *testing.T) {
 	t.Parallel()
 	env := verifiedBoardFixture(t)

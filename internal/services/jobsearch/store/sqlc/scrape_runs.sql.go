@@ -274,6 +274,59 @@ func (q *Queries) ListBoardHealthRuns(ctx context.Context, userID pgtype.UUID) (
 	return items, nil
 }
 
+const listRecentNewJobSnapshots = `-- name: ListRecentNewJobSnapshots :many
+SELECT r.source_target_id, r.board_id, (ch.snapshot->>'Title')::text AS title,
+       (ch.snapshot->>'Location')::text AS location, (ch.snapshot->>'CompanySlug')::text AS company_slug
+FROM scrape_run_job_changes ch
+JOIN scrape_runs r ON r.id = ch.run_id
+LEFT JOIN source_targets t ON t.id = r.source_target_id
+LEFT JOIN company_boards b ON b.id = r.board_id
+WHERE ch.change = 'new'
+  AND r.started_at >= $1::timestamptz
+  AND (t.user_id = $2
+       OR EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.user_id = $2 AND tc.company_id = b.company_id))
+LIMIT 50000
+`
+
+type ListRecentNewJobSnapshotsParams struct {
+	Since  pgtype.Timestamptz
+	UserID pgtype.UUID
+}
+
+type ListRecentNewJobSnapshotsRow struct {
+	SourceTargetID pgtype.UUID
+	BoardID        pgtype.UUID
+	Title          string
+	Location       string
+	CompanySlug    string
+}
+
+func (q *Queries) ListRecentNewJobSnapshots(ctx context.Context, arg ListRecentNewJobSnapshotsParams) ([]ListRecentNewJobSnapshotsRow, error) {
+	rows, err := q.db.Query(ctx, listRecentNewJobSnapshots, arg.Since, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecentNewJobSnapshotsRow
+	for rows.Next() {
+		var i ListRecentNewJobSnapshotsRow
+		if err := rows.Scan(
+			&i.SourceTargetID,
+			&i.BoardID,
+			&i.Title,
+			&i.Location,
+			&i.CompanySlug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScrapeRunErrors = `-- name: ListScrapeRunErrors :many
 SELECT run_id, page, attempt, message, at
 FROM scrape_run_errors
