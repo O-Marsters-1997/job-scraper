@@ -47,8 +47,8 @@ func (s *Service) IngestJobs(ctx context.Context, jobs []dto.Job) ([]IngestResul
 			results[idx] = IngestResult{Status: "rejected", Reason: "invalid job identity"}
 			continue
 		}
-		if companyID := s.upsertCompany(ctx, job); job.CompanyID == "" {
-			job.CompanyID = companyID
+		if job.CompanyID == "" {
+			job.CompanyID = s.upsertCompany(ctx, job)
 		}
 		saved, status, err := s.store.SaveCanonical(ctx, job)
 		if err != nil {
