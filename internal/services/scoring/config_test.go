@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -43,10 +44,16 @@ func TestGet(t *testing.T) {
 		RequiredLocations:     []string{},
 		RequiredTitleKeywords: []string{},
 		MaxJobAgeDays:         7,
+		Bands:                 dto.BandCuts{Great: 80, Good: 65, Fair: 45},
 	}
 	saved := empty
 	saved.NotifyThreshold = 5
 	saved.MaxJobAgeDays = 30
+	fittedAt := time.Date(2026, 10, 26, 17, 48, 0, 0, time.UTC)
+	fittedCuts := dto.BandCuts{Great: 60, Good: 55, Fair: 45}
+	fitted := saved
+	fitted.Bands = fittedCuts
+	fitted.FittedAt = &fittedAt
 
 	tests := []struct {
 		name string
@@ -55,6 +62,10 @@ func TestGet(t *testing.T) {
 	}{
 		{"returns empty config when none saved", nil, empty},
 		{"returns saved config", &dto.SearchConfig{UserID: "user-1", NotifyThreshold: 5, MaxJobAgeDays: 30}, saved},
+		{"returns the fitted band cuts and fit time", &dto.SearchConfig{
+			UserID: "user-1", NotifyThreshold: 5, MaxJobAgeDays: 30,
+			Preferences: dto.Preferences{Scoring: &dto.ScoringParams{Bands: &fittedCuts, FittedAt: fittedAt}},
+		}, fitted},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -98,7 +98,7 @@ struct TriageView: View {
             ZStack(alignment: .bottom) {
                 DeckEdges(count: model.upcoming.count)
                     .opacity(isExpanded ? 0 : 1)
-                TriageCard(job: job, isExpanded: isExpanded) { toggle(job) }
+                TriageCard(job: job, bandReason: job.bandReason(model.scoring), isExpanded: isExpanded) { toggle(job) }
                     .overlay { decisionWash }
                     .swipeToDecide(allowsUp: !isExpanded, onProgress: { progress = $0 }) { direction in
                         switch direction {

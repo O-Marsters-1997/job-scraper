@@ -5,6 +5,7 @@ struct APIClient {
     var restoreSession: () async throws -> Void
     var logIn: (_ username: String, _ password: String) async throws -> Void
     var triageQueue: () async throws -> [Job]
+    var scoringBands: () async throws -> ScoringBands
     var job: (_ id: String) async throws -> Job
     var shortlist: (_ jobID: String) async throws -> Application
     var deleteApplication: (_ id: String) async throws -> Void
@@ -50,6 +51,9 @@ extension APIClient {
             triageQueue: {
                 let page: JobPage = try await http.get("jobs/triage")
                 return page.items
+            },
+            scoringBands: {
+                try await http.get("scoring-config")
             },
             job: { id in
                 try await http.get("jobs/\(id)")
@@ -156,6 +160,7 @@ extension APIClient {
             restoreSession: { try respond(()) },
             logIn: { _, _ in try respond(()) },
             triageQueue: { try respond(jobs) },
+            scoringBands: { try respond(ScoringBands(bands: .init(great: 80, good: 65, fair: 45), fittedAt: nil)) },
             job: { id in try respond(jobs.first { $0.id == id } ?? .sample) },
             shortlist: { jobID in try respond(Application(id: "application-\(jobID)", jobID: jobID)) },
             deleteApplication: { _ in try respond(()) },
