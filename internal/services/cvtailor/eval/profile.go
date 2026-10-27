@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -32,21 +33,23 @@ func ProfileFixtures(localDir string) ([]ProfileFixture, error) {
 	if err != nil {
 		return nil, err
 	}
-	matches, err := filepath.Glob(filepath.Join(localDir, "*.json"))
+	local := os.DirFS(localDir)
+	matches, err := fs.Glob(local, "*.json")
 	if err != nil {
 		return nil, fmt.Errorf("list %s: %w", localDir, err)
 	}
 	for _, m := range matches {
-		raw, err := os.ReadFile(m)
+		path := filepath.Join(localDir, m)
+		raw, err := fs.ReadFile(local, m)
 		if err != nil {
-			return nil, fmt.Errorf("read local fixture %s: %w", m, err)
+			return nil, fmt.Errorf("read local fixture %s: %w", path, err)
 		}
 		var f ProfileFixture
 		if err := json.Unmarshal(raw, &f); err != nil {
-			return nil, fmt.Errorf("local fixture %s: %w", m, err)
+			return nil, fmt.Errorf("local fixture %s: %w", path, err)
 		}
 		if f.Name == "" {
-			f.Name = strings.TrimSuffix(filepath.Base(m), ".json")
+			f.Name = strings.TrimSuffix(m, ".json")
 		}
 		out = append(out, f)
 	}
