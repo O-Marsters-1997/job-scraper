@@ -68,6 +68,51 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("Profile captures are the owner's kept Drafts with Attempts, final from the edits or the base", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		kept := create(t, f)
+		if err := f.Store.CompleteDraft(ctx, claim(t, f), dto.DraftResult{EditSet: json.RawMessage(`{"positions":[],"profile":"edited"}`), BaseContent: json.RawMessage(`{"profile":"base"}`), DraftDocID: "doc-copy"}); err != nil {
+			t.Fatal(err)
+		}
+		first, second := dto.ProfileAttempt{Text: "a", PromptKey: "k", Model: "m"}, dto.ProfileAttempt{Text: "b", PromptKey: "k", Model: "m", Rejection: "no"}
+		if err := f.Store.AddProfileAttempts(ctx, f.UserID, kept.ID, []dto.ProfileAttempt{first, second}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, kept.ID, dto.OutcomeKept); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := f.Store.ListProfileCaptures(ctx, f.UserID)
+		if err != nil || len(got) != 1 {
+			t.Fatalf("ListProfileCaptures() = %+v, %v, want one capture", got, err)
+		}
+		if got[0].DraftID != kept.ID || got[0].BaseProfile != "base" || got[0].FinalProfile != "edited" {
+			t.Errorf("capture = %+v, want kept Draft with base and edited profiles", got[0])
+		}
+		if diff := cmp.Diff([]dto.ProfileAttempt{first, second}, got[0].Attempts); diff != "" {
+			t.Errorf("capture Attempts oldest first (-want +got):\n%s", diff)
+		}
+
+		if err := f.Store.SetDraftEdits(ctx, f.UserID, kept.ID, json.RawMessage(`{"positions":[]}`), nil, []string{}); err != nil {
+			t.Fatal(err)
+		}
+		got, err = f.Store.ListProfileCaptures(ctx, f.UserID)
+		if err != nil || len(got) != 1 || got[0].FinalProfile != "base" {
+			t.Errorf("ListProfileCaptures() with no profile edit = %+v, %v, want final = base", got, err)
+		}
+
+		if other, err := f.Store.ListProfileCaptures(ctx, f.Other); err != nil || len(other) != 0 {
+			t.Errorf("ListProfileCaptures(other user) = %+v, %v, want none", other, err)
+		}
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, kept.ID, dto.OutcomeDiscarded); err != nil {
+			t.Fatal(err)
+		}
+		if gone, err := f.Store.ListProfileCaptures(ctx, f.UserID); err != nil || len(gone) != 0 {
+			t.Errorf("ListProfileCaptures() after discard = %+v, %v, want none", gone, err)
+		}
+	})
+
 	t.Run("a Draft is claimed once and carries its request", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)

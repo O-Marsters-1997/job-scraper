@@ -102,3 +102,19 @@ INSERT INTO profile_attempts (draft_id, text, steer, rejection, prompt_key, mode
 SELECT d.id, @text::text, @steer::text, @rejection::text, @prompt_key::text, @model::text, @cost::float8, clock_timestamp()
 FROM tailored_cvs d
 WHERE d.id = @draft_id::uuid AND d.user_id = @user_id::uuid;
+
+-- name: ListProfileCaptureDrafts :many
+SELECT d.id, d.base_content, d.edit_set, j.title AS job_title,
+    COALESCE(c.name, j.company_slug)::text AS company, j.description AS job_description
+FROM tailored_cvs d
+JOIN jobs j ON j.id = d.job_id
+LEFT JOIN companies c ON c.id = j.company_id
+WHERE d.user_id = $1 AND d.outcome = 'kept'
+  AND EXISTS (SELECT 1 FROM profile_attempts a WHERE a.draft_id = d.id)
+ORDER BY d.created_at, d.id;
+
+-- name: ListProfileAttempts :many
+SELECT draft_id, text, steer, rejection, prompt_key, model, cost::float8 AS cost
+FROM profile_attempts
+WHERE draft_id = ANY($1::uuid[])
+ORDER BY draft_id, created_at, id;

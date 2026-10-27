@@ -10,6 +10,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/profiledraft"
 )
 
 var (
@@ -316,6 +317,49 @@ func (f *FakeStore) ProfileAttempts(draftID string) []dto.ProfileAttempt {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return slices.Clone(f.attempts[draftID])
+}
+
+func (f *FakeStore) ListProfileCaptures(_ context.Context, userID string) ([]dto.ProfileCapture, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var skills, bank []string
+	for _, s := range f.ownedSkills(userID) {
+		skills = append(skills, s.Name)
+	}
+	for _, p := range f.ownedPositions(userID) {
+		for _, a := range f.view(p).Achievements {
+			bank = append(bank, a.Text)
+		}
+	}
+	var kept []*draft
+	for _, d := range f.drafts {
+		if d.userID == userID && d.Outcome != nil && *d.Outcome == dto.OutcomeKept && len(f.attempts[d.ID]) > 0 {
+			kept = append(kept, d)
+		}
+	}
+	slices.SortFunc(kept, func(a, b *draft) int {
+		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
+			return c
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	out := []dto.ProfileCapture{}
+	for _, d := range kept {
+		var base, edits dto.DraftContent
+		if json.Unmarshal(d.BaseContent, &base) != nil || base.Profile == nil {
+			continue
+		}
+		final := *base.Profile
+		if json.Unmarshal(d.EditSet, &edits) == nil && edits.Profile != nil {
+			final = *edits.Profile
+		}
+		job := f.jobs[d.JobID]
+		out = append(out, dto.ProfileCapture{
+			DraftID: d.ID, JobTitle: job.Title, Company: job.CompanySlug, JobDescription: profiledraft.JobText(job.Description),
+			BaseProfile: *base.Profile, FinalProfile: final, BankSkills: skills, Bank: bank, Attempts: slices.Clone(f.attempts[d.ID]),
+		})
+	}
+	return out, nil
 }
 
 func (f *FakeStore) AddProfileAttempts(_ context.Context, userID, draftID string, attempts []dto.ProfileAttempt) error {
