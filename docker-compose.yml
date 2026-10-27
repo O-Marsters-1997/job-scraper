@@ -98,7 +98,7 @@ services:
       NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
       NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
     ports:
-      - "8090:80"
+      - "127.0.0.1:8090:80"
     volumes:
       - ntfy_data:/var/lib/ntfy
 
