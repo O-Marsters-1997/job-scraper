@@ -289,7 +289,10 @@ func runNotifyTest(args []string) {
 	ntfyURL := os.Getenv("NTFY_URL")
 
 	ctx := context.Background()
-	pool := connectDB(ctx)
+	pool, err := db.Connect(ctx)
+	if err != nil {
+		fatal("db connect", err)
+	}
 	defer pool.Close()
 
 	userID, err := identity.NewFacade(pool, nil).UserIDByUsername(ctx, username)
