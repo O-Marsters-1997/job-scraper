@@ -41,7 +41,6 @@ func (s *Service) SetGrade(ctx context.Context, userID string, in dto.GradeInput
 	if err != nil {
 		return dto.Grade{}, err
 	}
-	s.refitIfDue(ctx, userID)
 	return saved, nil
 }
 
