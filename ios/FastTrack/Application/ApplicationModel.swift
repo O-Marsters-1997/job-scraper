@@ -16,6 +16,7 @@ final class ApplicationModel {
     private(set) var letterError: String?
     private(set) var exit: Exit?
     private(set) var isOffline = false
+    private(set) var keeping = false
     private(set) var failureMessage = ""
     var hasFailure = false
 
@@ -28,7 +29,7 @@ final class ApplicationModel {
     }
 
     var kept: Bool { roles.value?.kept ?? false }
-    var canKeep: Bool { !isOffline && (roles.value?.canKeep ?? false) }
+    var canKeep: Bool { !isOffline && !keeping && (roles.value?.canKeep ?? false) }
     var pdfName: String { "olly-marsters-\(job.companySlug).pdf" }
 
     func load() async {
@@ -47,10 +48,18 @@ final class ApplicationModel {
         }
     }
 
-    func keep() async {
+    func keep(pollEvery interval: Duration = .seconds(2)) async {
+        keeping = true
+        defer { keeping = false }
         await attempt {
             try await client.keepDraft(draft.id)
+            var status = try await client.draftStatus(draft.id)
+            while status.isKeeping {
+                try await Task.sleep(for: interval)
+                status = try await client.draftStatus(draft.id)
+            }
             roles = .loaded(try await client.draftRoles(draft.id))
+            if !kept { fail(status.lastError.isEmpty ? "Keeping the CV failed." : "Keeping the CV failed: \(status.lastError)") }
         }
     }
 
