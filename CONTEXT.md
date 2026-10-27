@@ -229,6 +229,10 @@ _Avoid_: Inbox, feed — and keep distinct from Review state, which is about Tra
 The iOS right swipe that tracks a Job, creating its Application in Draft and its Apply Task.
 _Avoid_: Save, like, favourite (favourites are Companies)
 
+**Shortlisted list**:
+The iOS screen, pushed from Due, of Shortlisted Jobs with an open Apply Task and no CV draft (ADR 0037).
+_Avoid_: Backlog, pre-application list
+
 **Replay**:
 A report of where a User's labelled Jobs rank under their current Picks, re-scored from cached Answers
 without calling Jev. Positives are Grade `great`/`ok`, an application or a kept tailored CV; negatives
