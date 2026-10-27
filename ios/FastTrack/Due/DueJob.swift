@@ -39,9 +39,10 @@ struct DueJob: Decodable, Identifiable, Hashable {
     let applyTaskID: String?
     let tasks: [Task]
     let draft: Draft?
+    var keptDraftID: String? = nil
 
     var isAtDesk: Bool { tasks.contains { $0.systemKey == "finish" } }
-    var showsApplyRow: Bool { applyTaskID != nil && draft == nil && !isAtDesk }
+    var showsApplyRow: Bool { applyTaskID != nil && draft == nil && keptDraftID == nil && !isAtDesk }
     var companyName: String { companySlug.replacing("-", with: " ").capitalized }
 
     func matches(_ query: String) -> Bool {
@@ -57,6 +58,7 @@ struct DueJob: Decodable, Identifiable, Hashable {
         case applicationID = "application_id"
         case chaseBy = "chase_by"
         case applyTaskID = "apply_task_id"
+        case keptDraftID = "kept_draft_id"
     }
 }
 
@@ -74,24 +76,25 @@ extension DueJob {
         applyTaskID = try c.decodeIfPresent(String.self, forKey: .applyTaskID)
         tasks = try c.decode([Task].self, forKey: .tasks)
         draft = try c.decodeIfPresent(Draft.self, forKey: .draft)
+        keptDraftID = try c.decodeIfPresent(String.self, forKey: .keptDraftID)
     }
 
     func chasing(by date: Date?) -> DueJob {
         DueJob(jobID: jobID, title: title, companySlug: companySlug, companyKind: companyKind, band: band, score: score,
                applicationID: applicationID,
-               chaseBy: date, applyTaskID: applyTaskID, tasks: tasks, draft: draft)
+               chaseBy: date, applyTaskID: applyTaskID, tasks: tasks, draft: draft, keptDraftID: keptDraftID)
     }
 
     func withTasks(_ tasks: [Task]) -> DueJob {
         DueJob(jobID: jobID, title: title, companySlug: companySlug, companyKind: companyKind, band: band, score: score,
                applicationID: applicationID,
-               chaseBy: chaseBy, applyTaskID: applyTaskID, tasks: tasks, draft: draft)
+               chaseBy: chaseBy, applyTaskID: applyTaskID, tasks: tasks, draft: draft, keptDraftID: keptDraftID)
     }
 
     func withApplyTask(_ id: String?) -> DueJob {
         DueJob(jobID: jobID, title: title, companySlug: companySlug, companyKind: companyKind, band: band, score: score,
                applicationID: applicationID,
-               chaseBy: chaseBy, applyTaskID: id, tasks: tasks, draft: draft)
+               chaseBy: chaseBy, applyTaskID: id, tasks: tasks, draft: draft, keptDraftID: keptDraftID)
     }
 
     static let sample = DueJob(

@@ -28,7 +28,8 @@
         "id": "draft-1",
         "state": "ready",
         "cv_title": "Backend"
-      }
+      },
+      "kept_draft_id": "draft-0"
     },
     {
       "job_id": "job-2",
@@ -41,7 +42,8 @@
       "chase_by": null,
       "apply_task_id": null,
       "tasks": [],
-      "draft": null
+      "draft": null,
+      "kept_draft_id": null
     }
   ]
 }
