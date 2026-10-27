@@ -667,7 +667,9 @@ export function DraftEditor(props: {
 										when={
 											editable() &&
 											!!baseProfile() &&
-											(narrow() || (!rolePanel() && !rolesOpen()))
+											(narrow()
+												? active() === PROFILE_SLOT
+												: !rolePanel() && !rolesOpen())
 										}
 									>
 										<div
