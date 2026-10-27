@@ -48,13 +48,17 @@ struct DueJobCard: View {
         }
         .hairlineCard()
         .swipeToDelete {
-            if job.hasCV { confirmingDelete = true } else { Task { await model.delete(job) } }
+            if job.hasCV { confirmingDelete = true } else { delete() }
         }
         .confirmationDialog("Delete this application?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-            Button("Delete application", role: .destructive) { Task { await model.delete(job) } }
+            Button("Delete application", role: .destructive, action: delete)
         } message: {
-            Text("Its tailored CV goes with it.")
+            Text("This can't be undone.")
         }
+    }
+
+    private func delete() {
+        Task { await model.delete(job) }
     }
 
     private var header: some View {

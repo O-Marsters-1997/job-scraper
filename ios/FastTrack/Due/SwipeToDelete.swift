@@ -12,7 +12,7 @@ struct SwipeToDelete: ViewModifier {
             .offset(x: offset)
             .background(alignment: .trailing) {
                 Button(role: .destructive) {
-                    withAnimation(.snappy) {
+                    withAnimation(.snappy(duration: 0.22)) {
                         offset = 0
                         isRevealed = false
                     }
@@ -24,7 +24,7 @@ struct SwipeToDelete: ViewModifier {
                         .frame(width: revealWidth)
                         .frame(maxHeight: .infinity)
                 }
-                .background(.red, in: .rect(cornerRadius: 12, style: .continuous))
+                .background(.red, in: .rect(cornerRadius: 14, style: .continuous))
                 .opacity(offset < 0 ? 1 : 0)
                 .accessibilityHidden(true)
             }
@@ -40,7 +40,7 @@ struct SwipeToDelete: ViewModifier {
                 offset = min(0, max(-revealWidth * 1.3, start + value.translation.width))
             }
             .onEnded { _ in
-                withAnimation(.snappy) {
+                withAnimation(.snappy(duration: 0.22)) {
                     isRevealed = offset < -revealWidth / 2
                     offset = isRevealed ? -revealWidth : 0
                 }
