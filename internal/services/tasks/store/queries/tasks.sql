@@ -111,6 +111,9 @@ JOIN task_types tt ON tt.id = t.type_id
 LEFT JOIN jobs j ON j.id = t.job_id
 LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id;
 
+-- name: DeleteTask :execrows
+DELETE FROM tasks WHERE id = $1 AND user_id = $2;
+
 -- name: UpdateTask :one
 WITH updated AS (
     UPDATE tasks

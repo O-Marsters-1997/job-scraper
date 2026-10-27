@@ -18,9 +18,9 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	tasks.Build(tasks.Deps{Store: taskstest.NewFakeStore()}).Routes(r)
 
 	handlerstest.RequiresAuth(t, r, "GET /task-types/", "POST /task-types/", "PATCH /task-types/{id}", "DELETE /task-types/{id}",
-		"GET /tasks/", "POST /tasks/", "PATCH /tasks/{id}", "PUT /tasks/{id}/done")
+		"GET /tasks/", "POST /tasks/", "PATCH /tasks/{id}", "DELETE /tasks/{id}", "PUT /tasks/{id}/done")
 	handlerstest.RejectsMalformedBody(t, r, "POST /task-types/", "PATCH /task-types/{id}", "POST /tasks/", "PATCH /tasks/{id}", "PUT /tasks/{id}/done")
-	handlerstest.RejectsBadPathID(t, r, "DELETE /task-types/{id}", "PUT /tasks/{id}/done")
+	handlerstest.RejectsBadPathID(t, r, "DELETE /task-types/{id}", "DELETE /tasks/{id}", "PUT /tasks/{id}/done")
 }
 
 func TestRoutesHappyPath(t *testing.T) {
@@ -80,5 +80,11 @@ func TestRoutesHappyPath(t *testing.T) {
 	}
 	if got := handlerstest.Do[dto.TaskPage](t, r, http.StatusOK, "GET /tasks/?done=true", ""); got.Total != 1 {
 		t.Fatalf("done page = %+v, want one task", got)
+	}
+
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /tasks/"+created.ID, "")
+	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "DELETE /tasks/"+created.ID, "")
+	if got := handlerstest.Do[dto.TaskPage](t, r, http.StatusOK, "GET /tasks/?done=true", ""); got.Total != 0 {
+		t.Fatalf("done page after delete = %+v, want empty", got)
 	}
 }
