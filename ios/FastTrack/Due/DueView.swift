@@ -20,7 +20,7 @@ struct DueView: View {
                             .disabled(model.undoStack.isEmpty)
                     }
                 }
-                .searchable(text: $query)
+                .clearingSearchable(text: $query)
                 .navigationDestination(item: $openJobID) { JobDetailView(id: $0) }
                 .navigationDestination(isPresented: $showingShortlisted) { ShortlistedView(model: model) }
                 .navigationDestination(item: $openApplication) { job in

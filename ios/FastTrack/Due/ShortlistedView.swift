@@ -33,7 +33,7 @@ struct ShortlistedView: View {
         .background(Color(.systemBackground))
         .navigationTitle("Shortlisted")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query)
+        .clearingSearchable(text: $query)
         .navigationDestination(item: $openJobID) { JobDetailView(id: $0) }
         .sheet(item: $applying) { job in
             ShortlistedApplySheet(job: job) {
