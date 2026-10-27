@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MainTabs: View {
-    private enum Tab { case triage, due }
+    private enum Tab { case triage, due, prototype }
 
     @State private var tab = Tab.triage
     @State private var due: DueModel
@@ -30,6 +30,11 @@ struct MainTabs: View {
                 .tabItem { Label("Due", systemImage: "checklist") }
                 .badge(due.badge)
                 .tag(Tab.due)
+            #if DEBUG
+            AgencyStackPrototype()
+                .tabItem { Label("Prototype", systemImage: "flask") }
+                .tag(Tab.prototype)
+            #endif
         }
         .onChange(of: path) { if !path.isEmpty { tab = .triage } }
         .task { await due.load() }

@@ -201,7 +201,7 @@ private struct DetourVariant: View {
     }
 }
 
-private struct AgencyStackPrototype: View {
+struct AgencyStackPrototype: View {
     @State private var variant = 0
     private let names = ["A — Segmented control", "B — Title menu", "C — Agency detour"]
 
