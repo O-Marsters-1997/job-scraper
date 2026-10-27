@@ -54,7 +54,7 @@ export const headingMappingSchema = z.object({
 	positionId: z.string().nullable(),
 });
 
-const draftStatusSchema = z.enum([
+export const draftStatusSchema = z.enum([
 	"pending",
 	"running",
 	"keeping",
@@ -65,7 +65,7 @@ const draftStatusSchema = z.enum([
 const draftModeSchema = z.enum(["as_is", "generate"]);
 type DraftMode = z.infer<typeof draftModeSchema>;
 
-const draftOutcomeSchema = z.enum(["kept", "discarded"]);
+export const draftOutcomeSchema = z.enum(["kept", "discarded"]);
 
 const draftFindingSchema = z.object({
 	check: z.string(),

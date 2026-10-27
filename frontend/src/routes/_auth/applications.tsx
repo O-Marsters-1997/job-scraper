@@ -11,6 +11,7 @@ import { ToggleChip } from "@/components/ToggleChip";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatChaseDate, isChaseOverdue } from "@/lib/chase";
+import { CV_STAGE_LABEL, cvStage } from "@/lib/cvStage";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -230,6 +231,17 @@ function ApplicationsPage() {
 												colour={statusColour(app)}
 											/>
 										</Show>
+										<span
+											class={cn(
+												"shrink-0 text-xs",
+												cvStage(app.Draft) === "failed"
+													? "text-destructive-strong"
+													: "text-muted",
+											)}
+											title={app.Draft?.LastError || undefined}
+										>
+											{CV_STAGE_LABEL[cvStage(app.Draft)]}
+										</span>
 										<Show when={app.AppliedAt}>
 											<span class="shrink-0 font-mono text-xs tabular-nums text-faint">
 												{app.AppliedAt}

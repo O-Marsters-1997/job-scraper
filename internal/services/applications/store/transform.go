@@ -39,6 +39,22 @@ func toApplicationDTO(a sqlc.Application) dto.Application {
 	}
 }
 
+func toLinkedDraft(r sqlc.ListApplicationsRow) *dto.LinkedDraft {
+	if !r.DraftID.Valid {
+		return nil
+	}
+	var outcome *string
+	if r.DraftOutcome.Valid {
+		outcome = &r.DraftOutcome.String
+	}
+	return &dto.LinkedDraft{
+		ID:        r.DraftID.String(),
+		Status:    r.DraftStatus,
+		Outcome:   outcome,
+		LastError: r.DraftLastError,
+	}
+}
+
 func toApplicationWithDetailsDTO(r sqlc.ListApplicationsRow) dto.ApplicationWithDetails {
 	return dto.ApplicationWithDetails{
 		ID:             r.ID.String(),
@@ -57,6 +73,7 @@ func toApplicationWithDetailsDTO(r sqlc.ListApplicationsRow) dto.ApplicationWith
 		CreatedAt:      r.CreatedAt.Time,
 		UpdatedAt:      r.UpdatedAt.Time,
 		ChaseBy:        fromOptionalDate(r.ChaseBy),
+		Draft:          toLinkedDraft(r),
 	}
 }
 

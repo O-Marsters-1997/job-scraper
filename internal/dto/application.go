@@ -72,6 +72,14 @@ type ApplicationWithDetails struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	ChaseBy        *time.Time
+	Draft          *LinkedDraft
+}
+
+type LinkedDraft struct {
+	ID        string
+	Status    string
+	Outcome   *string
+	LastError string
 }
 
 type JobApplicationSummary struct {

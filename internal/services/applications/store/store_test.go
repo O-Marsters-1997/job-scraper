@@ -123,6 +123,62 @@ func TestListApplicationsReportsClosedJob(t *testing.T) {
 	}
 }
 
+func TestListApplicationsLinksDraft(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+
+	insertDraft := func(jobID, status string, outcome *string, lastError string) string {
+		t.Helper()
+		var id string
+		err := pool.QueryRow(t.Context(), `
+			INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, status, outcome, last_error)
+			VALUES ($1, $2, 'doc', 'tab', '{}', $3, $4, $5) RETURNING id`,
+			userID, jobID, status, outcome, lastError).Scan(&id)
+		if err != nil {
+			t.Fatalf("insert draft: %v", err)
+		}
+		return id
+	}
+	kept, discarded := "kept", "discarded"
+
+	keptBeatsLive := pgtest.InsertJob(t, pool, "Kept", "Kept")
+	wantKept := insertDraft(keptBeatsLive, "ready", &kept, "")
+	insertDraft(keptBeatsLive, "running", nil, "")
+
+	onlyDiscarded := pgtest.InsertJob(t, pool, "Discarded", "Discarded")
+	insertDraft(onlyDiscarded, "ready", &discarded, "")
+
+	failedLive := pgtest.InsertJob(t, pool, "Failed", "Failed")
+	insertDraft(failedLive, "ready", &discarded, "")
+	wantFailed := insertDraft(failedLive, "failed", nil, "boom")
+
+	noDraft := pgtest.InsertJob(t, pool, "None", "None")
+
+	for _, jobID := range []string{keptBeatsLive, onlyDiscarded, failedLive, noDraft} {
+		if _, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: jobID}); err != nil {
+			t.Fatalf("CreateApplication(%s) err = %v", jobID, err)
+		}
+	}
+
+	rows, err := st.ListApplications(t.Context(), userID, dto.ApplicationsQuery{})
+	if err != nil {
+		t.Fatalf("ListApplications err = %v", err)
+	}
+	got := map[string]*dto.LinkedDraft{}
+	for _, a := range rows {
+		got[a.JobID] = a.Draft
+	}
+	want := map[string]*dto.LinkedDraft{
+		keptBeatsLive: {ID: wantKept, Status: "ready", Outcome: &kept},
+		onlyDiscarded: nil,
+		failedLive:    {ID: wantFailed, Status: "failed", LastError: "boom"},
+		noDraft:       nil,
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ListApplications drafts mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestSeedDefaultStatuses(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
