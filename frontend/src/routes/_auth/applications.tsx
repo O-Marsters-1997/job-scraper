@@ -11,6 +11,7 @@ import { ToggleChip } from "@/components/ToggleChip";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
+	completeApps,
 	needsCv,
 	nextSelection,
 	type Selection,
@@ -375,6 +376,21 @@ function ApplicationsPage() {
 							onClick={() => setCreateOpen(true)}
 						>
 							Create CV drafts ({draftSelected().filter(needsCv).length})
+						</Button>
+						<Button
+							disabled={completeApps(draftSelected()).length === 0}
+							onClick={() => {
+								const run = completeApps(draftSelected()).map((a) => a.ID);
+								const [first] = run;
+								if (first)
+									void navigate({
+										to: "/applications/$id",
+										params: { id: first },
+										search: { run },
+									});
+							}}
+						>
+							Send complete ({completeApps(draftSelected()).length})
 						</Button>
 					</aside>
 				</Show>
