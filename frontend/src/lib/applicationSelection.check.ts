@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import type { ApplicationWithDetails } from "../types/application";
 import type { ApplicationStatus } from "../types/applicationStatus";
 import {
+	completeApps,
 	needsCv,
 	nextSelection,
+	runNeighbour,
 	selectedDraftApps,
 } from "./applicationSelection";
 
@@ -59,3 +61,17 @@ assert.equal(
 	),
 	false,
 );
+
+assert.deepEqual(
+	completeApps([
+		app("a", "s1"),
+		app("b", "s1", { Outcome: "kept", Status: "ready" } as never),
+	]).map((a) => a.ID),
+	["b"],
+);
+
+assert.equal(runNeighbour(["a", "b", "c"], "b", 1), "c");
+assert.equal(runNeighbour(["a", "b", "c"], "b", -1), "a");
+assert.equal(runNeighbour(["a", "b", "c"], "c", 1), undefined);
+assert.equal(runNeighbour(["a", "b", "c"], "a", -1), undefined);
+assert.equal(runNeighbour(["a", "b", "c"], "x", 1), undefined);

@@ -44,3 +44,18 @@ export function needsCv(app: ApplicationWithDetails): boolean {
 	const stage = cvStage(app.Draft);
 	return stage === "none" || stage === "failed";
 }
+
+export function completeApps(
+	apps: ApplicationWithDetails[],
+): ApplicationWithDetails[] {
+	return apps.filter((a) => cvStage(a.Draft) === "complete");
+}
+
+export function runNeighbour(
+	run: string[],
+	id: string,
+	step: 1 | -1,
+): string | undefined {
+	const i = run.indexOf(id);
+	return i === -1 ? undefined : run[i + step];
+}
