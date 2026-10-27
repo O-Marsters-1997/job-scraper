@@ -1,21 +1,25 @@
 import SwiftUI
 
 struct ApplyOnListingSheet: View {
-    let model: ApplicationModel
+    let companyName: String
+    let listing: Job?
+    let pdfURL: URL?
+    let pdfName: String
+    let markApplied: () async -> Bool
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
     @State private var openedListing = false
     @State private var askApplied = false
 
-    private var listingURL: URL? { model.listing.flatMap { URL(string: $0.url) } }
+    private var listingURL: URL? { listing.flatMap { URL(string: $0.url) } }
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    if let pdf = model.pdfURL {
-                        ShareLink(item: pdf) { step(1, "Send your CV", detail: model.pdfName, systemImage: "square.and.arrow.up") }
+                    if let pdfURL {
+                        ShareLink(item: pdfURL) { step(1, "Send your CV", detail: pdfName, systemImage: "square.and.arrow.up") }
                     }
                     Button {
                         guard let listingURL else { return }
@@ -29,7 +33,7 @@ struct ApplyOnListingSheet: View {
                     Text("Save the PDF to Files or hand it to the form, then apply on the listing. We'll ask when you're back.")
                 }
             }
-            .navigationTitle("Apply to \(model.job.companyName)")
+            .navigationTitle("Apply to \(companyName)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
@@ -37,11 +41,10 @@ struct ApplyOnListingSheet: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active, openedListing { askApplied = true }
             }
-            .alert("Did you apply to \(model.job.companyName)?", isPresented: $askApplied) {
+            .alert("Did you apply to \(companyName)?", isPresented: $askApplied) {
                 Button("Yes, applied") {
                     Task {
-                        await model.markApplied()
-                        if model.exit != nil { dismiss() }
+                        if await markApplied() { dismiss() }
                     }
                 }
                 Button("Not yet", role: .cancel) { openedListing = false }

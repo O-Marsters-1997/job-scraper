@@ -16,10 +16,11 @@ struct DueModelTests {
     }
 
     private func job(
-        _ id: String, chase: Int?, tasks: [String] = [], draft: DueJob.DraftState? = nil, applyTaskID: String? = nil
+        _ id: String, chase: Int?, tasks: [String] = [], draft: DueJob.DraftState? = nil, applyTaskID: String? = nil,
+        score: Int? = 90, title: String? = nil
     ) -> DueJob {
         DueJob(
-            jobID: id, title: "Role \(id)", companySlug: "co-\(id)", band: .great, score: 90, applicationID: "app-\(id)",
+            jobID: id, title: title ?? "Role \(id)", companySlug: "co-\(id)", band: .great, score: score, applicationID: "app-\(id)",
             chaseBy: chase.map(day), applyTaskID: applyTaskID,
             tasks: tasks.map { DueJob.Task(id: $0, typeName: "Reach out", systemKey: nil, notes: "") },
             draft: draft.map { DueJob.Draft(id: "d-\(id)", state: $0, cvTitle: "CV") })
@@ -108,17 +109,49 @@ struct DueModelTests {
         #expect(model.jobs[0].tasks.map(\.id) == ["apply"])
     }
 
-    @Test func aShortlistedJobWithOnlyAnApplyTaskIsDueUntilMarkedApplied() async {
+    @Test func aJobWithOnlyAnApplyTaskIsShortlistedNotDue() async {
         let model = await model([job("a", chase: nil, applyTaskID: "apply"), job("b", chase: nil, draft: .ready)])
-        #expect(model.dueJobs.map(\.id) == ["a", "b"])
-        #expect(model.jobs[0].showsApplyRow)
+        #expect(model.dueJobs.map(\.id) == ["b"])
+        #expect(model.shortlisted.map(\.id) == ["a"])
 
         await model.markApplied(model.jobs[0]).value
-        #expect(model.dueJobs.map(\.id) == ["b"])
+        #expect(model.shortlisted.isEmpty)
         await model.undo().value
 
         #expect(calls.log == ["setTaskDone apply true", "setTaskDone apply false"])
-        #expect(model.dueJobs.map(\.id) == ["a", "b"])
+        #expect(model.shortlisted.map(\.id) == ["a"])
+    }
+
+    @Test func shortlistedExcludesDraftedAndAtDeskJobsAndSortsByScoreDescending() async {
+        let atDesk = DueJob(
+            jobID: "desk", title: "Role desk", companySlug: "co-desk", band: .great, score: 99, applicationID: "app-desk",
+            chaseBy: nil, applyTaskID: "apply-desk",
+            tasks: [DueJob.Task(id: "f", typeName: "Finish application", systemKey: "finish", notes: "")], draft: nil)
+        let model = await model([
+            job("low", chase: nil, applyTaskID: "x", score: 60), job("none", chase: nil, applyTaskID: "x", score: nil),
+            job("high", chase: nil, applyTaskID: "x", score: 95), job("drafted", chase: nil, draft: .ready, applyTaskID: "x"),
+            job("noTask", chase: nil), atDesk,
+        ])
+
+        #expect(model.shortlisted.map(\.id) == ["high", "low", "none"])
+        #expect(model.dueJobs.map(\.id) == ["drafted", "desk"])
+    }
+
+    @Test(arguments: [
+        ("engineer", ["a"], ["c"]), ("MONZO", ["b"], []), ("  go ", ["a", "b"], ["c"]), ("", ["a", "b"], ["c"]),
+        ("zzz", [], []),
+    ] as [(String, [String], [String])])
+    func searchMatchesTitleAndCompanyOnBothLists(query: String, shortlisted: [String], due: [String]) async {
+        let model = await model([
+            job("a", chase: nil, applyTaskID: "x", score: 90, title: "Senior Go Engineer"),
+            DueJob(
+                jobID: "b", title: "Go Developer", companySlug: "monzo", band: .great, score: 80, applicationID: "app-b",
+                chaseBy: nil, applyTaskID: "x", tasks: [], draft: nil),
+            job("c", chase: nil, draft: .ready, title: "Senior Go Engineer"),
+        ])
+
+        #expect(model.shortlisted(matching: query).map(\.id) == shortlisted)
+        #expect(model.dueJobs(matching: query).map(\.id) == due)
     }
 
     @Test func markAppliedWithoutAnApplyTaskDoesNothing() async {

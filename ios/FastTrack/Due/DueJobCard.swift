@@ -4,11 +4,9 @@ enum DueRow: Identifiable {
     case chase(DueJob)
     case draft(DueJob.Draft)
     case task(DueJob.Task)
-    case apply(DueJob)
 
     var id: String {
         switch self {
-        case .apply(let job): "apply-\(job.id)"
         case .chase(let job): "chase-\(job.id)"
         case .draft(let draft): "draft-\(draft.id)"
         case .task(let task): "task-\(task.id)"
@@ -28,7 +26,6 @@ struct DueJobCard: View {
     private var rows: [DueRow] {
         (model.hasChaseDue(job) ? [.chase(job)] : [])
             + (job.isAtDesk ? [] : job.draft.map { [.draft($0)] } ?? [])
-            + (job.showsApplyRow ? [.apply(job)] : [])
             + job.tasks.map(DueRow.task)
     }
 

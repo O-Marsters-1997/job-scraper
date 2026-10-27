@@ -2,6 +2,8 @@ import SwiftUI
 
 struct DueNotebook: View {
     let model: DueModel
+    let jobs: [DueJob]
+    let showShortlisted: () -> Void
     let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
     let openApplication: (DueJob) -> Void
@@ -13,13 +15,14 @@ struct DueNotebook: View {
                 header
                 if !model.comingUp.isEmpty { upcoming }
                 VStack(spacing: 10) {
-                    ForEach(model.dueJobs) { job in
+                    ForEach(jobs) { job in
                         DueJobCard(job: job, model: model, isOpen: opened?.contains(job.id) ?? false,
                                    toggle: { toggle(job) }, logContact: logContact, openJob: openJob,
                                    openApplication: openApplication)
                             .transition(.opacity)
                     }
                 }
+                NotDraftedRow(count: model.shortlisted.count, action: showShortlisted)
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -28,7 +31,7 @@ struct DueNotebook: View {
         }
         .background(Color(.systemBackground))
         .onAppear {
-            if opened == nil { opened = Set(model.dueJobs.prefix(1).map(\.id)) }
+            if opened == nil { opened = Set(jobs.prefix(1).map(\.id)) }
         }
     }
 
