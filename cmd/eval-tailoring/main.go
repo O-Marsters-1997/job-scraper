@@ -16,6 +16,7 @@ func main() {
 	runs := flag.Int("runs", 1, "runs per fixture")
 	only := flag.String("fixture", "", "run only fixtures whose name contains this")
 	suite := flag.String("suite", "suggest", "suggest or profile")
+	local := flag.String("local", "internal/services/cvtailor/eval/local/profile", "directory of local profile fixtures")
 	flag.Parse()
 
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
@@ -29,7 +30,7 @@ func main() {
 	case "suggest":
 		report, err = runSuggest(apiKey, lineedit.New(model), *only, *runs)
 	case "profile":
-		report, err = runProfile(apiKey, profiledraft.New(model), *only, *runs)
+		report, err = runProfile(apiKey, profiledraft.New(model), *local, *only, *runs)
 	default:
 		fail("unknown suite " + *suite)
 	}
@@ -63,8 +64,8 @@ func runSuggest(apiKey string, editor *lineedit.Editor, only string, runs int) (
 	return eval.SuggestReport(outcomes), nil
 }
 
-func runProfile(apiKey string, w *profiledraft.Writer, only string, runs int) (string, error) {
-	fixtures, err := eval.ProfileFixtures()
+func runProfile(apiKey string, w *profiledraft.Writer, local, only string, runs int) (string, error) {
+	fixtures, err := eval.ProfileFixtures(local)
 	if err != nil {
 		return "", err
 	}

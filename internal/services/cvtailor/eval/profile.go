@@ -2,8 +2,11 @@ package eval
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -21,21 +24,46 @@ type ProfileFixture struct {
 	Company        string
 	JobDescription string
 	Steer          string
+	Final          string
 }
 
-func ProfileFixtures() ([]ProfileFixture, error) {
-	return loadFixtures("fixtures/profile", func(f *ProfileFixture) *string { return &f.Name })
+func ProfileFixtures(localDir string) ([]ProfileFixture, error) {
+	out, err := loadFixtures("fixtures/profile", func(f *ProfileFixture) *string { return &f.Name })
+	if err != nil {
+		return nil, err
+	}
+	matches, err := filepath.Glob(filepath.Join(localDir, "*.json"))
+	if err != nil {
+		return nil, fmt.Errorf("list %s: %w", localDir, err)
+	}
+	for _, m := range matches {
+		raw, err := os.ReadFile(m)
+		if err != nil {
+			return nil, fmt.Errorf("read local fixture %s: %w", m, err)
+		}
+		var f ProfileFixture
+		if err := json.Unmarshal(raw, &f); err != nil {
+			return nil, fmt.Errorf("local fixture %s: %w", m, err)
+		}
+		if f.Name == "" {
+			f.Name = strings.TrimSuffix(filepath.Base(m), ".json")
+		}
+		out = append(out, f)
+	}
+	return out, nil
 }
 
 type ProfileOutcome struct {
-	Fixture   string
-	Output    string
-	Attempts  int
-	Findings  []checks.Finding
-	Rejection string
-	Cost      float64
-	Model     string
-	PromptKey string
+	Fixture    string
+	Output     string
+	Final      string
+	Attempts   int
+	Findings   []checks.Finding
+	Rejection  string
+	Cost       float64
+	Model      string
+	PromptKey  string
+	EditBurden *float64
 }
 
 func (o ProfileOutcome) Passed() bool {
@@ -59,6 +87,10 @@ func RunProfile(ctx context.Context, w *profiledraft.Writer, apiKey string, f Pr
 			out.Output = last.Text
 		}
 	}
+	if f.Final != "" {
+		b := EditBurden(out.Output, f.Final)
+		out.Final, out.EditBurden = f.Final, &b
+	}
 	if err != nil {
 		return out, fmt.Errorf("profile fixture %s: %w", f.Name, err)
 	}
@@ -72,11 +104,15 @@ func ProfileReport(outcomes []ProfileOutcome) string {
 		model = outcomes[0].Model
 	}
 	fmt.Fprintf(&b, "profile model=%s runs=%d\n\n", model, len(outcomes))
-	passed, cost := 0, 0.0
+	passed, cost, burdenSum, burdened := 0, 0.0, 0.0, 0
 	perFixture := map[string][2]int{}
 	keys := map[string]string{}
 	for _, o := range outcomes {
 		cost += o.Cost
+		if o.EditBurden != nil {
+			burdenSum += *o.EditBurden
+			burdened++
+		}
 		keys[o.Fixture] = o.PromptKey
 		c := perFixture[o.Fixture]
 		c[1]++
@@ -90,6 +126,14 @@ func ProfileReport(outcomes []ProfileOutcome) string {
 	for _, name := range slices.Sorted(maps.Keys(perFixture)) {
 		c := perFixture[name]
 		fmt.Fprintf(&b, "%s: %s prompt_key=%s\n", name, rate(c[0], c[1]), keys[name])
+	}
+	if burdened > 0 {
+		fmt.Fprintf(&b, "mean edit burden %.2f over %d\n", burdenSum/float64(burdened), burdened)
+	}
+	for _, o := range outcomes {
+		if o.EditBurden != nil {
+			fmt.Fprintf(&b, "\nBURDEN %s: %.2f\n  output: %q\n  final:  %q\n", o.Fixture, *o.EditBurden, o.Output, o.Final)
+		}
 	}
 	for _, o := range outcomes {
 		if o.Passed() {
