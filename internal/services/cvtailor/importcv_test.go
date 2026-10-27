@@ -63,7 +63,7 @@ func TestPreviewImportParsesHeadingsAndFlagsExistingEmployers(t *testing.T) {
 
 	want := dto.ImportPreview{Positions: []dto.ImportPosition{
 		{Employer: "Acme Ltd", Title: "Senior Engineer", StartDate: ptr("2021-01-01"), Achievements: []string{"Cut latency.", "Mentored four."}, EmployerExists: true},
-		{Employer: "Widgets Inc | sometime back then", Title: "Analyst", Achievements: []string{"Built reports."}},
+		{Employer: "Widgets Inc", Title: "Analyst", Achievements: []string{"Built reports."}},
 	}, Skills: []dto.ImportSkill{}}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("PreviewImport() (-want +got):\n%s", diff)
