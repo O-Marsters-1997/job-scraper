@@ -11,6 +11,46 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getNotificationJob = `-- name: GetNotificationJob :one
+SELECT j.title,
+    COALESCE(c.name, j.company_slug)::text AS company_name,
+    j.location, j.salary_raw,
+    COALESCE(s.band, '')::text AS band,
+    s.suitability_score
+FROM jobs j
+LEFT JOIN companies c ON c.id = j.company_id
+LEFT JOIN job_scores s ON s.job_id = j.id AND s.user_id = $1
+WHERE j.id = $2
+`
+
+type GetNotificationJobParams struct {
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+}
+
+type GetNotificationJobRow struct {
+	Title            string
+	CompanyName      string
+	Location         string
+	SalaryRaw        string
+	Band             string
+	SuitabilityScore pgtype.Int4
+}
+
+func (q *Queries) GetNotificationJob(ctx context.Context, arg GetNotificationJobParams) (GetNotificationJobRow, error) {
+	row := q.db.QueryRow(ctx, getNotificationJob, arg.UserID, arg.JobID)
+	var i GetNotificationJobRow
+	err := row.Scan(
+		&i.Title,
+		&i.CompanyName,
+		&i.Location,
+		&i.SalaryRaw,
+		&i.Band,
+		&i.SuitabilityScore,
+	)
+	return i, err
+}
+
 const insertNotification = `-- name: InsertNotification :one
 INSERT INTO notifications (user_id, job_id, title, body)
 VALUES ($1, $2, $3, $4)
@@ -37,20 +77,35 @@ func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotification
 }
 
 const listNotifications = `-- name: ListNotifications :many
-SELECT id, job_id, title, body, created_at, read_at
-FROM notifications
-WHERE user_id = $1
-ORDER BY (read_at IS NOT NULL), created_at DESC
+SELECT n.id, n.kind, n.job_id, n.title, n.body, n.created_at, n.read_at,
+    j.title AS job_title,
+    COALESCE(c.name, j.company_slug)::text AS company_name,
+    j.location, j.salary_raw,
+    COALESCE(s.band, '')::text AS band,
+    s.suitability_score
+FROM notifications n
+JOIN jobs j ON j.id = n.job_id
+LEFT JOIN companies c ON c.id = j.company_id
+LEFT JOIN job_scores s ON s.job_id = n.job_id AND s.user_id = n.user_id
+WHERE n.user_id = $1
+ORDER BY (n.read_at IS NOT NULL), n.created_at DESC
 LIMIT 50
 `
 
 type ListNotificationsRow struct {
-	ID        pgtype.UUID
-	JobID     pgtype.UUID
-	Title     string
-	Body      string
-	CreatedAt pgtype.Timestamptz
-	ReadAt    pgtype.Timestamptz
+	ID               pgtype.UUID
+	Kind             string
+	JobID            pgtype.UUID
+	Title            string
+	Body             string
+	CreatedAt        pgtype.Timestamptz
+	ReadAt           pgtype.Timestamptz
+	JobTitle         string
+	CompanyName      string
+	Location         string
+	SalaryRaw        string
+	Band             string
+	SuitabilityScore pgtype.Int4
 }
 
 func (q *Queries) ListNotifications(ctx context.Context, userID pgtype.UUID) ([]ListNotificationsRow, error) {
@@ -64,11 +119,18 @@ func (q *Queries) ListNotifications(ctx context.Context, userID pgtype.UUID) ([]
 		var i ListNotificationsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.Kind,
 			&i.JobID,
 			&i.Title,
 			&i.Body,
 			&i.CreatedAt,
 			&i.ReadAt,
+			&i.JobTitle,
+			&i.CompanyName,
+			&i.Location,
+			&i.SalaryRaw,
+			&i.Band,
+			&i.SuitabilityScore,
 		); err != nil {
 			return nil, err
 		}

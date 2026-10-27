@@ -509,6 +509,7 @@ type Notification struct {
 	Body      string
 	CreatedAt pgtype.Timestamptz
 	ReadAt    pgtype.Timestamptz
+	Kind      string
 }
 
 type NotificationDigest struct {

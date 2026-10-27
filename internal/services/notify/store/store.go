@@ -49,16 +49,25 @@ func (s *Store) ListNotifications(ctx context.Context, userID string) ([]dto.Not
 	}
 	out := make([]dto.Notification, len(rows))
 	for i, r := range rows {
-		out[i] = dto.Notification{
-			ID:        r.ID.String(),
-			JobID:     r.JobID.String(),
-			Title:     r.Title,
-			Body:      r.Body,
-			CreatedAt: r.CreatedAt.Time,
-			ReadAt:    data.TimePtr(r.ReadAt),
-		}
+		out[i] = toNotificationDTO(r)
 	}
 	return out, nil
+}
+
+func (s *Store) GetNotificationJob(ctx context.Context, userID, jobID string) (dto.NotificationJob, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.NotificationJob{}, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return dto.NotificationJob{}, err
+	}
+	row, err := s.queries.GetNotificationJob(ctx, sqlc.GetNotificationJobParams{UserID: uid, JobID: jid})
+	if err != nil {
+		return dto.NotificationJob{}, data.QueryErr("GetNotificationJob", err)
+	}
+	return toNotificationJobDTO(row), nil
 }
 
 // MarkNotificationRead sets read_at on the user's own unread Notification; anything else is a no-op.
