@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -19,11 +20,14 @@ const questionPrefix = "Would this job value a candidate who: "
 type fakeAsker struct {
 	answers map[string]dto.Answer
 	err     error
+	mu      sync.Mutex
 	asked   []string
 }
 
 func (f *fakeAsker) Ask(_ context.Context, _, _ string, questions []string) (map[string]dto.Answer, error) {
+	f.mu.Lock()
 	f.asked = append(f.asked, questions...)
+	f.mu.Unlock()
 	if f.err != nil {
 		return nil, f.err
 	}
