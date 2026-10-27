@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"slices"
 	"strings"
 	"sync"
@@ -19,6 +21,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/openrouter"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
@@ -97,6 +100,12 @@ type failingAnswerer struct{}
 
 func (f *failingAnswerer) Answer(context.Context, string, dto.Job, []string) (map[string]dto.Answer, dto.Usage, error) {
 	return nil, dto.Usage{}, errors.New("jev boom")
+}
+
+type errAnswerer struct{ err error }
+
+func (e errAnswerer) Answer(context.Context, string, dto.Job, []string) (map[string]dto.Answer, dto.Usage, error) {
+	return nil, dto.Usage{}, e.err
 }
 
 type panicOnceAnswerer struct {
@@ -1282,6 +1291,27 @@ func TestAsk(t *testing.T) {
 		ae, ok := errors.AsType[*apperr.Error](err)
 		if !ok || ae.Kind() != apperr.KindUnprocessable {
 			t.Fatalf("Ask(...) err = %v, want an unprocessable apperr", err)
+		}
+	})
+
+	t.Run("an OpenRouter refusal is unprocessable, other failures are not", func(t *testing.T) {
+		for _, tt := range []struct {
+			name string
+			err  error
+			want bool
+		}{
+			{"402", fmt.Errorf("jev: %w", &openrouter.StatusError{Code: http.StatusPaymentRequired}), true},
+			{"500", &openrouter.StatusError{Code: http.StatusInternalServerError}, false},
+			{"plain", errors.New("boom"), false},
+		} {
+			st := newFakeStore()
+			st.SeedJob(job, nil)
+			svc := newService(t, st, withAnswerer(errAnswerer{tt.err}), withKey("sk-or-test"))
+			_, err := svc.Ask(ctx, "user-1", job.ID, []string{"Is it remote?"})
+			ae, ok := errors.AsType[*apperr.Error](err)
+			if got := ok && ae.Kind() == apperr.KindUnprocessable; got != tt.want {
+				t.Errorf("%s: Ask err = %v, unprocessable = %v, want %v", tt.name, err, got, tt.want)
+			}
 		}
 	})
 
