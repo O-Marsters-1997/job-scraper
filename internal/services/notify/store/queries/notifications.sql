@@ -3,7 +3,6 @@ INSERT INTO notifications (user_id, job_id, title, body)
 VALUES (sqlc.arg(user_id), sqlc.arg(job_id), sqlc.arg(title), sqlc.arg(body))
 RETURNING id;
 
-
 -- name: ListNotifications :many
 SELECT id, job_id, title, body, created_at, read_at
 FROM notifications
