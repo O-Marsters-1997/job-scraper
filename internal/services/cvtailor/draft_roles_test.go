@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -83,6 +84,33 @@ func TestService_DraftRoles(t *testing.T) {
 		want := []string{extra.Text, e.pos.Achievements[1].Text}
 		if diff := cmp.Diff(want, texts); diff != "" {
 			t.Errorf("bank texts (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a reworded heading with no saved link auto-links to its one position and saves it", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		const reworded = "Engineer at Acme Ltd"
+		docs := cvtailortest.Docs{TabJSON: tabJSON(t, head(reworded), bullet("Built and maintained the public APIs for the platform"), bullet("Ran on-call"), bullet("Wrote docs"))}
+		id := e.readyWith(t, tick{docs: docs}, e.citedEdit("Cut p99 latency"))
+		svc := cvtailor.NewService(e.store, docs, e.asker, e.drive)
+
+		got, err := svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+		if err != nil {
+			t.Fatalf("DraftRoles() error = %v", err)
+		}
+
+		if len(got.Roles) != 1 || got.Roles[0].PositionID == nil || *got.Roles[0].PositionID != e.pos.ID {
+			t.Errorf("DraftRoles() roles = %+v, want one role for %s", got.Roles, e.pos.ID)
+		}
+		saved, err := e.store.ListHeadingMappings(t.Context(), userID, docID, tabID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.ContainsFunc(saved, func(m dto.HeadingMapping) bool {
+			return m.HeadingText == reworded && m.PositionID != nil && *m.PositionID == e.pos.ID
+		}) {
+			t.Errorf("saved mappings = %+v, want %q linked to %s", saved, reworded, e.pos.ID)
 		}
 	})
 

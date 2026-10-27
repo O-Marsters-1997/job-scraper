@@ -70,11 +70,11 @@ func (s *Service) DraftRoles(ctx context.Context, userID string, q dto.DraftQuer
 	if err != nil {
 		return dto.DraftRoles{}, fmt.Errorf("parse CV tab: %w", err)
 	}
-	mappings, err := s.store.ListHeadingMappings(ctx, userID, draft.BaseDocID, draft.BaseTabID)
+	bank, err := s.store.ListPositions(ctx, userID)
 	if err != nil {
 		return dto.DraftRoles{}, err
 	}
-	bank, err := s.store.ListPositions(ctx, userID)
+	mappings, err := s.linkedMappings(ctx, userID, draft.BaseDocID, draft.BaseTabID, ds, bank)
 	if err != nil {
 		return dto.DraftRoles{}, err
 	}
