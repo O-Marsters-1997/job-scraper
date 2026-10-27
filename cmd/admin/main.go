@@ -16,6 +16,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
+	"github.com/ollymarsters/job-scraper/internal/services/notify"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/tasks"
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
@@ -35,6 +36,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "       admin scoring fit <username>")
 	fmt.Fprintln(os.Stderr, "       admin profile-attempts export <username>")
 	fmt.Fprintln(os.Stderr, "       admin resolve-domains <file>")
+	fmt.Fprintln(os.Stderr, "       admin notify-test <username> <job-id>")
 	os.Exit(1)
 }
 
@@ -64,6 +66,8 @@ func main() {
 		runProfileAttempts(os.Args[2:])
 	case "resolve-domains":
 		runResolveDomains(os.Args[2:])
+	case "notify-test":
+		runNotifyTest(os.Args[2:])
 	default:
 		usage()
 	}
@@ -275,6 +279,31 @@ func runScoring(args []string) {
 		fatal(args[0], err)
 	}
 	fmt.Print(report)
+}
+
+func runNotifyTest(args []string) {
+	if len(args) != 2 {
+		usage()
+	}
+	username, jobID := args[0], args[1]
+	ntfyURL := os.Getenv("NTFY_URL")
+
+	ctx := context.Background()
+	pool := connectDB(ctx)
+	defer pool.Close()
+
+	userID, err := identity.NewFacade(pool, nil).UserIDByUsername(ctx, username)
+	if err != nil {
+		fatal("find user", err)
+	}
+	if err := notify.New(pool, notify.Ntfy{URL: ntfyURL, Token: os.Getenv("NTFY_TOKEN")}).NewJobByID(ctx, userID, jobID); err != nil {
+		fatal("notify", err)
+	}
+	if ntfyURL == "" {
+		fmt.Println("Notification recorded; NTFY_URL is empty, so nothing was sent to the phone")
+		return
+	}
+	fmt.Println("Notification recorded and sent to ntfy")
 }
 
 func fatal(what string, err error) {
