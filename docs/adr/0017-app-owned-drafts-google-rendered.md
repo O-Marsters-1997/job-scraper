@@ -4,6 +4,9 @@ Amended by [ADR 0019](0019-in-app-page-edits-google-renders-record.md): the in-a
 surface and an instant estimate. Google stays the renderer of record. The "Rejected: our own renderer"
 paragraph and the first consequence below are superseded.
 
+Amended by [ADR 0038](0038-kept-drafts-stay-editable.md): keep now names the render-cache Doc
+(`kept_as = 'doc'`) rather than building a child Tab, and a kept Draft stays editable.
+
 ## Context
 
 ADR 0002 makes a CV a Google Docs Tab rendered by Drive's PDF export, because only Google's export

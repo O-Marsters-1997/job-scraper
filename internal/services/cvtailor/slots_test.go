@@ -362,6 +362,42 @@ func TestSaveDraftSlots(t *testing.T) {
 		}
 	})
 
+	t.Run("editing a kept draft writes its Doc and re-records its outcomes", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		e.run(t, tick{})
+		swapped := e.pos.Achievements[1]
+		replacement := dto.DraftPosition{PositionID: e.pos.ID, Bullets: []dto.DraftBullet{
+			{Text: swapped.Text, AchievementIDs: []string{swapped.ID}},
+			{Text: "Ran on-call", AchievementIDs: []string{}},
+			{Text: "Wrote docs", AchievementIDs: []string{}},
+			{Text: "Built and maintained the public APIs for the platform", AchievementIDs: []string{}},
+		}}
+
+		got, err := e.svc.SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{replacement}})
+		if err != nil {
+			t.Fatalf("SaveDraftSlots(kept) error = %v", err)
+		}
+
+		if got.Outcome == nil || *got.Outcome != dto.OutcomeKept {
+			t.Errorf("SaveDraftSlots(kept).Outcome = %v, want still kept", got.Outcome)
+		}
+		if diff := cmp.Diff([]string{"\nBuilt and maintained the public APIs for the platform", swapped.Text}, insertedText(t, e.drive)); diff != "" {
+			t.Errorf("inserted text mismatch (-want +got):\n%s", diff)
+		}
+		want := []dto.AchievementOutcome{
+			{AchievementID: e.pos.Achievements[0].ID},
+			{AchievementID: swapped.ID, InFinalCV: true},
+		}
+		if diff := cmp.Diff(want, e.store.AchievementOutcomes(id)); diff != "" {
+			t.Errorf("outcomes (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("another user's draft is not found", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]

@@ -257,6 +257,17 @@ func (f *FakeStore) CompleteKeep(_ context.Context, claim dto.DraftClaim, outcom
 	return nil
 }
 
+func (f *FakeStore) ReplaceAchievementOutcomes(_ context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.drafts[claim.ID]
+	if !ok || d.userID != claim.UserID {
+		return errDraftNotFound
+	}
+	f.outcomes[d.ID] = slices.Clone(outcomes)
+	return nil
+}
+
 func (f *FakeStore) FailKeep(_ context.Context, claim dto.DraftClaim, failure dto.DraftFailure) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

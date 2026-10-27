@@ -266,6 +266,18 @@ func TestCompleteKeepRecordsAchievementOutcomes(t *testing.T) {
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("achievement_outcomes mismatch (-want +got):\n%s", diff)
 	}
+
+	edited := []dto.AchievementOutcome{{AchievementID: unseen.ID, InFinalCV: true}}
+	if err := st.ReplaceAchievementOutcomes(ctx, claim, edited); err != nil {
+		t.Fatalf("ReplaceAchievementOutcomes() err = %v", err)
+	}
+	var inFinal bool
+	if err := pool.QueryRow(ctx, `SELECT in_final_cv FROM achievement_outcomes WHERE draft_id = $1 AND achievement_id = $2`, d.ID, unseen.ID).Scan(&inFinal); err != nil {
+		t.Fatal(err)
+	}
+	if n := countOutcomes(); n != 1 || !inFinal {
+		t.Errorf("outcomes after ReplaceAchievementOutcomes = %d (in final %v), want only the edited one", n, inFinal)
+	}
 }
 
 func TestListPositionsAchievementStats(t *testing.T) {

@@ -59,7 +59,7 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 		}
 	}
 
-	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: chosen, Roles: roles, Mode: draft.Mode}
+	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, JobID: draft.JobID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: chosen, Roles: roles, Mode: draft.Mode}
 	basePlan, err := s.plan(ctx, claim, claim.DocID)
 	if err != nil {
 		return dto.Draft{}, err
@@ -133,6 +133,15 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	findings := toDraftFindings(checks.Run(checked))
 	if err := s.store.SetDraftEdits(ctx, userID, draft.ID, editSet, findings, citedAchievements(bank, edits, draft.AchievementIDs)); err != nil {
 		return dto.Draft{}, err
+	}
+	if outcome(draft) == dto.OutcomeKept {
+		outcomes, err := s.keepOutcomes(ctx, claim)
+		if err != nil {
+			return dto.Draft{}, fmt.Errorf("compute outcomes: %w", err)
+		}
+		if err := s.store.ReplaceAchievementOutcomes(ctx, claim, outcomes); err != nil {
+			return dto.Draft{}, err
+		}
 	}
 	return s.GetDraft(ctx, userID, dto.DraftQuery{ID: draft.ID})
 }
