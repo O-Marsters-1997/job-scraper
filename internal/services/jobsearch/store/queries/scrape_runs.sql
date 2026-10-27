@@ -204,6 +204,7 @@ JOIN candidate_discoveries d ON d.source_target_id = t.id
 JOIN job_candidates c ON c.id = d.candidate_id
 WHERE t.user_id = sqlc.arg('user_id')
   AND c.first_seen_at >= sqlc.arg('since')::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM job_urls u WHERE u.normalized_url = c.normalized_url AND u.first_seen_at < c.first_seen_at)
   AND EXISTS (SELECT 1 FROM scrape_runs r
               WHERE r.source_target_id = t.id AND c.first_seen_at BETWEEN r.started_at AND COALESCE(r.finished_at, NOW()))
 LIMIT 50000;

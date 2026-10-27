@@ -411,6 +411,13 @@ func TestStore_ListRecentNewJobs(t *testing.T) {
 	seed(mine, "old run", 48*time.Hour, 47*time.Hour)
 	seed(mine, "seen before the run", time.Hour, 5*time.Hour)
 	seed(theirs, "other user", time.Hour, 55*time.Minute)
+	seed(mine, "already a job", time.Hour, 55*time.Minute)
+	if _, err := pool.Exec(ctx, `WITH j AS (
+		INSERT INTO jobs (title, url, company_slug, source) VALUES ('already a job', 'https://x.test/job', 'acme', 'greenhouse') RETURNING id)
+		INSERT INTO job_urls (job_id, normalized_url, source, first_seen_at)
+		SELECT j.id, 'https://x.test/already a job' || $1::text, 'greenhouse', NOW() - INTERVAL '3 days' FROM j`, mine.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	got, err := st.ListRecentNewJobs(ctx, userID, time.Now().Add(-24*time.Hour))
 	if err != nil {
