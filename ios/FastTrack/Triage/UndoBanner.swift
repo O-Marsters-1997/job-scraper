@@ -3,8 +3,10 @@ import SwiftUI
 struct UndoBanner: View {
     let decision: TriageDecision?
     let onUndo: () -> Void
+    let isPaused: Bool
     let onExpire: (UUID) -> Void
     let onDraftCV: (TriageDecision) -> Void
+    let onWhy: (TriageDecision) -> Void
 
     var body: some View {
         if let decision {
@@ -19,6 +21,11 @@ struct UndoBanner: View {
                         .font(.footnote.weight(.semibold))
                         .frame(minHeight: 44)
                 }
+                if case .dismiss(let reasons) = decision.action, reasons.isEmpty {
+                    Button("Why?") { onWhy(decision) }
+                        .font(.footnote.weight(.semibold))
+                        .frame(minHeight: 44)
+                }
                 Button("Undo", action: onUndo)
                     .font(.footnote.weight(.semibold))
                     .frame(minHeight: 44)
@@ -28,7 +35,8 @@ struct UndoBanner: View {
             .hairlineCard()
             .padding(.horizontal)
             .transition(.move(edge: .bottom).combined(with: .opacity))
-            .task(id: decision.id) {
+            .task(id: isPaused ? nil : decision.id) {
+                guard !isPaused else { return }
                 try? await Task.sleep(for: .seconds(4))
                 withAnimation { onExpire(decision.id) }
             }
