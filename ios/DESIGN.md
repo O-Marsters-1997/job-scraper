@@ -127,6 +127,10 @@ One violet accent over system neutrals, with the Band palette carrying meaning.
   the words and meanings are unchanged from the web. Everywhere a Band appears (Triage card, job detail, Due
   and Shortlisted cards) it shows as a dot-label: the dot in the Band hue, the word in `.primary`, so Fair
   amber never has to pass 4.5:1 as text. The Band word is never coloured.
+- **Company kind badge** ("Agency", "Maybe recruiter"): a quiet `.secondary` caption pill on `.quaternary`, never
+  coloured. On a Due or Shortlisted card the serif company name takes its own line, so a long name wraps
+  instead of squeezing the chips; the Band dot-label, score and badge sit beneath it, and drop to one per
+  line when they don't fit (largest Dynamic Type). The badge never wraps or truncates.
 - **Breakdown palette** (`matched`, `missing`, from `frontend/src/lib/scoreColour.ts`): only the breakdown
   row symbols use these.
 

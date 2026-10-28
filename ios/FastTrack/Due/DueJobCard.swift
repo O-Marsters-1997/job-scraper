@@ -101,15 +101,22 @@ struct DueCardHeadline: View {
     let job: DueJob
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(job.companyName).font(.system(.title3, design: .serif))
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                if let band = job.band { DotLabel(text: band.title, hue: band.colour) }
-                if let score = job.score {
-                    Text(score, format: .number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            if job.band != nil || job.score != nil || job.companyKind.badge != nil {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) { chips }
+                    VStack(alignment: .leading, spacing: 4) { chips }
                 }
             }
-            CompanyKindBadge(kind: job.companyKind)
         }
+    }
+
+    @ViewBuilder private var chips: some View {
+        if let band = job.band { DotLabel(text: band.title, hue: band.colour) }
+        if let score = job.score {
+            Text(score, format: .number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+        }
+        CompanyKindBadge(kind: job.companyKind).lineLimit(1).fixedSize()
     }
 }
