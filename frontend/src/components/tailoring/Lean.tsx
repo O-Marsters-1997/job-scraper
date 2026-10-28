@@ -8,6 +8,8 @@ const TONE = {
 	low: "text-destructive-strong",
 } as const;
 
+export const fitPercent = (score: number) => `${Math.round((score + 1) * 50)}%`;
+
 export function Tone(props: {
 	state: keyof typeof TONE | null;
 	children: JSX.Element;
@@ -20,21 +22,21 @@ export function Tone(props: {
 }
 
 export function Lean(props: { lean: BulletLean }) {
+	const label = () =>
+		props.lean.state && props.lean.lean !== null
+			? `${props.lean.state} ${fitPercent(props.lean.lean)}`
+			: null;
 	return (
 		<span
 			data-testid="lean"
 			role="img"
-			aria-label={
-				props.lean.state
-					? `Lean: ${props.lean.state}`
-					: "Not in your Experience Bank"
-			}
+			aria-label={label() ? `Lean: ${label()}` : "Not in your Experience Bank"}
 			class={cn(
 				"pointer-events-none absolute top-0 left-[calc(100%+6pt)] font-mono text-2xs",
 				props.lean.state ? TONE[props.lean.state] : "text-faint",
 			)}
 		>
-			{props.lean.state ?? "—"}
+			{label() ?? "—"}
 		</span>
 	);
 }
