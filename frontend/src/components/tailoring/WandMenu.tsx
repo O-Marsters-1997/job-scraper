@@ -63,6 +63,27 @@ function AskForm(props: {
 	);
 }
 
+const WAND_BUTTON =
+	"pointer-events-auto grid size-8 place-items-center rounded-full bg-surface text-accent-text shadow-md ring-1 ring-border transition-[transform,background-color] duration-150 ease-out hover:scale-110 hover:bg-accent-subtle animate-in fade-in zoom-in-90";
+const WAND_ROW =
+	"pointer-events-none absolute right-2 z-20 flex w-[min(20rem,calc(100%-1rem))] justify-end";
+
+export function RedraftWand(props: { top: number; onRedraft: () => void }) {
+	return (
+		<div class={WAND_ROW} style={{ top: `${props.top}px` }}>
+			<button
+				type="button"
+				aria-label="Redraft profile"
+				title="Redraft profile"
+				class={WAND_BUTTON}
+				onClick={() => props.onRedraft()}
+			>
+				<Icon name="wand" size={15} />
+			</button>
+		</div>
+	);
+}
+
 export function WandMenu(props: {
 	top: number;
 	canFit: boolean;
@@ -72,10 +93,7 @@ export function WandMenu(props: {
 	onAction: (action: SuggestAction, prompt?: string, quote?: string) => void;
 }) {
 	return (
-		<div
-			class="pointer-events-none absolute right-2 z-20 flex w-[min(20rem,calc(100%-1rem))] justify-end"
-			style={{ top: `${props.top}px` }}
-		>
+		<div class={WAND_ROW} style={{ top: `${props.top}px` }}>
 			<Show
 				when={props.askOpen}
 				fallback={
@@ -83,7 +101,7 @@ export function WandMenu(props: {
 						<DropdownMenuTrigger
 							aria-label="Edit with Haiku"
 							title="Edit with Haiku (⌘K)"
-							class="pointer-events-auto grid size-8 place-items-center rounded-full bg-surface text-accent-text shadow-md ring-1 ring-border transition-[transform,background-color] duration-150 ease-out hover:scale-110 hover:bg-accent-subtle animate-in fade-in zoom-in-90"
+							class={WAND_BUTTON}
 						>
 							<Icon name="wand" size={15} />
 						</DropdownMenuTrigger>
