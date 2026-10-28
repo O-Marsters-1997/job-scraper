@@ -81,7 +81,7 @@ struct DraftRoles: Decodable {
 }
 
 extension DraftRoles.Role {
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         positionID = try c.decodeIfPresent(String.self, forKey: .positionID)
         employer = try c.decode(String.self, forKey: .employer)
