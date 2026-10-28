@@ -319,8 +319,9 @@ digits), on a 10% tint of the hue with 5pt corners. Used for Bands, chase state 
 
 ### Banners
 - **Undo banner**: above the tab bar, `systemBackground` with a hairline at 14pt corners. It shows the action
-  in `.footnote` semibold and the job in secondary, with **Draft CV** after a Shortlist and **Undo**. It lasts
-  4 seconds, and a new action replaces it.
+  in `.footnote` semibold and the job in secondary, with **Draft CV** after a Shortlist, **Why?** after a
+  Dismiss (opens the reason sheet with a Save button) and **Undo**. It lasts 4 seconds, paused while the
+  sheet is open, and a new action replaces it.
 - **Sync note**: the same treatment as a capsule ("5 synced, 1 skipped (job removed)"), with no undo.
 - **Offline row**: under the nav bar, `wifi.slash` "Offline · 3 queued" in `.footnote` medium secondary. It's
   a status, not an alert.

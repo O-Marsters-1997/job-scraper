@@ -37,7 +37,7 @@ struct UndoBanner: View {
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .task(id: isPaused ? nil : decision.id) {
                 guard !isPaused else { return }
-                try? await Task.sleep(for: .seconds(4))
+                do { try await Task.sleep(for: .seconds(4)) } catch { return }
                 withAnimation { onExpire(decision.id) }
             }
         }
