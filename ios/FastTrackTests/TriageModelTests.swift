@@ -247,6 +247,46 @@ struct TriageModelTests {
         #expect(model.current?.id == "g1")
         #expect(model.unseen[.agency] == 1)
     }
+
+    @Test func whyReSavesTheDismissWithReasonsAndClosesTheBanner() async throws {
+        let model = await model()
+        await model.decide(.dismiss(reasons: [])).value
+        let decision = try #require(model.banner)
+
+        await model.setReasons([.companySize], for: decision).value
+
+        #expect(calls.log.filter { $0.hasPrefix("dismiss") } == ["dismiss a []", "dismiss a [\"company_size\"]"])
+        #expect(model.banner == nil)
+    }
+
+    @Test func whyWithNoReasonsLeavesThePlainDismiss() async throws {
+        let model = await model()
+        await model.decide(.dismiss(reasons: [])).value
+        let decision = try #require(model.banner)
+
+        await model.setReasons([], for: decision).value
+
+        #expect(calls.log.filter { $0.hasPrefix("dismiss") } == ["dismiss a []"])
+    }
+
+    @Test func whyWhileOfflineRewritesTheQueuedDismiss() async throws {
+        let store = OfflineStore.memory(cards: [.sample.with(id: "a")])
+        var client = APIClient.mock()
+        client.triageQueue = { _ in throw URLError(.notConnectedToInternet) }
+        let model = TriageModel(client: client, store: store)
+        await model.load()
+        await model.decide(.dismiss(reasons: [])).value
+        let decision = try #require(model.banner)
+
+        await model.setReasons([.companySize], for: decision).value
+
+        #expect(model.queued.count == 1)
+        guard case .dismiss(let reasons) = model.queued[0].kind else {
+            Issue.record("queued action is not a dismiss")
+            return
+        }
+        #expect(reasons == [.companySize])
+    }
 }
 
 private extension Job {

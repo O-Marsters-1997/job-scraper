@@ -122,6 +122,28 @@ final class TriageModel {
         if banner?.id == id { banner = nil }
     }
 
+    @discardableResult
+    func setReasons(_ reasons: [GradeReason], for decision: TriageDecision) -> Task<Void, Never> {
+        guard case .dismiss = decision.action, !reasons.isEmpty else { return Task {} }
+        dismissBanner(decision.id)
+        let kind = QueuedAction.Kind.dismiss(reasons: reasons)
+        if let index = queued.firstIndex(where: { $0.id == decision.id }) {
+            queued[index] = QueuedAction(id: decision.id, jobID: decision.job.id, kind: kind, queuedAt: queued[index].queuedAt)
+            persistQueue()
+            return Task {}
+        }
+        return Task {
+            do {
+                guard !isOffline else { throw URLError(.notConnectedToInternet) }
+                try await client.dismiss(decision.job.id, reasons)
+            } catch where cannotReach(error) {
+                enqueue(QueuedAction(id: UUID(), jobID: decision.job.id, kind: kind, queuedAt: .now), after: error)
+            } catch {
+                fail(error)
+            }
+        }
+    }
+
     func clearSyncNote() {
         syncNote = nil
     }

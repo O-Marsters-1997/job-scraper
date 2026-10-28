@@ -5,6 +5,7 @@ struct TriageView: View {
     @State private var progress: CGFloat = 0
     @State private var expandedID: Job.ID?
     @State private var showReasons = false
+    @State private var whyDecision: TriageDecision?
     @State private var showNote = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -56,11 +57,16 @@ struct TriageView: View {
                 if model.sessionExpired { session.expire() }
             }
             .safeAreaInset(edge: .bottom, spacing: 8) {
-                UndoBanner(decision: model.banner, onUndo: undo, onExpire: model.dismissBanner, onDraftCV: { model.draftCV($0) })
+                UndoBanner(
+                    decision: model.banner, onUndo: undo, isPaused: whyDecision != nil, onExpire: model.dismissBanner,
+                    onDraftCV: { model.draftCV($0) }, onWhy: { whyDecision = $0 })
                     .animation(.snappy, value: model.banner)
             }
             .sheet(isPresented: $showReasons) {
                 DismissReasonSheet { decide(.dismiss(reasons: $0)) }
+            }
+            .sheet(item: $whyDecision) { decision in
+                DismissReasonSheet(confirmTitle: "Save") { model.setReasons($0, for: decision) }
             }
             .sheet(isPresented: $showNote) {
                 NoteSheet(load: model.currentNote) { decide(.note($0)) }
