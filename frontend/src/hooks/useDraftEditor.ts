@@ -212,6 +212,10 @@ export function createDraftEditor(
 			),
 		);
 		rekey(result, sent);
+		for (const { positionId } of sent.filter((s) => s.bullets.length === 0)) {
+			const [placeholder] = edits[positionId]?.slots ?? [];
+			if (placeholder) setSaved(placeholder, "");
+		}
 		setGoogleSaved(true);
 		queryClient.setQueryData(keys.tailoring.draft(id), result);
 		void queryClient.invalidateQueries({
