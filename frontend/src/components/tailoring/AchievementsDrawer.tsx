@@ -6,6 +6,7 @@ import { SkeletonList } from "@/components/ui/skeleton";
 import type { RoleBudgetValue } from "@/lib/tailoring";
 import type { Suggestion } from "@/types/tailoring";
 import { Drawer, LineBudget, RoleBudget } from "./Drawer";
+import { fitPercent } from "./Lean";
 import { PickList, type PickListProps } from "./PickList";
 
 const HINT =
@@ -86,7 +87,7 @@ export function AchievementsDrawer(
 						})),
 						...props.bank.map((s) => ({
 							id: s.achievementId,
-							meta: `${Math.round((s.score + 1) * 50)}%`,
+							meta: fitPercent(s.score),
 							body: (
 								<>
 									{s.text}
