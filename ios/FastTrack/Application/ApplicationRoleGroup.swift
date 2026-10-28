@@ -34,7 +34,6 @@ struct ApplicationRoleGroup: View {
                         move: { offset in Task { await model.move(bullet, by: offset, in: role) } },
                         remove: { Task { await model.remove(bullet, from: role) } }
                     )
-                    .draggable(bullet.text)
                     .dropDestination(for: String.self) { texts, _ in
                         guard let dragged = role.bullets.first(where: { $0.text == texts.first }) else { return false }
                         Task { await model.move(dragged, onto: bullet, in: role) }
@@ -158,6 +157,19 @@ struct ApplicationBulletRow: View {
     let remove: () -> Void
 
     var body: some View {
+        HStack(spacing: 0) {
+            menu
+            Image(systemName: "line.3.horizontal")
+                .font(.footnote)
+                .foregroundStyle(Color(.tertiaryLabel))
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
+                .draggable(bullet.text)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var menu: some View {
         Menu {
             Button("Replace with…", systemImage: "arrow.left.arrow.right", action: replace)
             if !isFirst { Button("Move up", systemImage: "arrow.up") { move(-1) } }
@@ -170,7 +182,7 @@ struct ApplicationBulletRow: View {
             content.frame(minHeight: 44).contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Shows replace, move and leave out actions. Touch and hold to drag.")
+        .accessibilityHint("Shows replace, move and leave out actions.")
     }
 
     private var content: some View {
