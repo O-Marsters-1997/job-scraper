@@ -24,7 +24,7 @@ struct DueView: View {
                 .navigationDestination(item: $openJobID) { JobDetailView(id: $0) }
                 .navigationDestination(isPresented: $showingShortlisted) { ShortlistedView(model: model) }
                 .navigationDestination(item: $openApplication) { job in
-                    if let draft = job.draft {
+                    if let draft = job.dueDraft {
                         ApplicationScreen(job: job, draft: draft, onFinished: { await model.load() })
                     }
                 }

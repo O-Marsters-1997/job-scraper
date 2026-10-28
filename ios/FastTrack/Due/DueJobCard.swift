@@ -26,7 +26,7 @@ struct DueJobCard: View {
 
     private var rows: [DueRow] {
         (model.hasChaseDue(job) ? [.chase(job)] : [])
-            + (job.isAtDesk ? [] : job.draft.map { [.draft($0)] } ?? [])
+            + (job.isAtDesk ? [] : job.dueDraft.map { [.draft($0)] } ?? [])
             + job.tasks.map(DueRow.task)
     }
 
@@ -89,7 +89,7 @@ struct DueJobCard: View {
             return days > 0 ? ("\(days)d overdue", .red) : ("Chase today", .orange)
         }
         if job.isAtDesk { return ("At desk", .secondary) }
-        switch job.draft?.state {
+        switch job.dueDraft?.state {
         case .failed: return ("Draft failed", .red)
         case .ready: return ("CV ready", .brandTint)
         default: return nil

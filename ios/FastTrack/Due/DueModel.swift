@@ -27,13 +27,10 @@ final class DueModel {
         self.now = now
     }
 
-    var dueJobs: [DueJob] { jobs.filter { hasChaseDue($0) || !$0.tasks.isEmpty || $0.draft != nil } }
+    var dueJobs: [DueJob] { jobs.filter { hasChaseDue($0) || !$0.tasks.isEmpty || $0.draft != nil || $0.isReadyToApply } }
     var shortlisted: [DueJob] { jobs.filter { $0.showsApplyRow }.sorted { ($0.score ?? .min, $1.title) > ($1.score ?? .min, $0.title) } }
+    var shortlistedCount: Int { shortlisted.count }
 
-    var readyToApply: [DueJob] { jobs.filter { $0.isReadyToApply }.sorted { ($0.score ?? .min, $1.title) > ($1.score ?? .min, $0.title) } }
-    var shortlistedCount: Int { shortlisted.count + readyToApply.count }
-
-    func readyToApply(matching query: String) -> [DueJob] { readyToApply.filter { $0.matches(query) } }
     func dueJobs(matching query: String) -> [DueJob] { dueJobs.filter { $0.matches(query) } }
     func shortlisted(matching query: String) -> [DueJob] { shortlisted.filter { $0.matches(query) } }
     var comingUp: [DueJob] { jobs.filter { $0.chaseBy != nil && !hasChaseDue($0) }.sorted { ($0.chaseBy ?? .distantFuture) < ($1.chaseBy ?? .distantFuture) } }
