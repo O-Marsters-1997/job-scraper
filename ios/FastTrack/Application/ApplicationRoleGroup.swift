@@ -3,28 +3,55 @@ import SwiftUI
 struct ApplicationRoleGroup: View {
     let role: DraftRoles.Role
     let model: ApplicationModel
+    @State private var isOpen: Bool
     @State private var showBank = false
     @State private var adding: DraftRoles.Bullet?
     @State private var replacing: DraftRoles.Bullet?
 
+    init(role: DraftRoles.Role, model: ApplicationModel, startsOpen: Bool) {
+        self.role = role
+        self.model = model
+        _isOpen = State(initialValue: startsOpen)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-            if role.isLinked {
+            Button {
+                withAnimation(.snappy(duration: 0.22)) { isOpen.toggle() }
+            } label: {
+                header
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
+            if isOpen, role.isLinked {
                 ForEach(role.bullets) { bullet in
                     ApplicationBulletRow(
                         bullet: bullet,
                         isFirst: bullet.id == role.bullets.first?.id,
                         isLast: bullet.id == role.bullets.last?.id,
                         isOnlyOne: role.bullets.count == 1,
-                        editable: !model.kept,
                         replace: { replacing = bullet },
                         move: { offset in Task { await model.move(bullet, by: offset, in: role) } },
                         remove: { Task { await model.remove(bullet, from: role) } }
                     )
+                    .draggable(bullet.text)
+                    .dropDestination(for: String.self) { texts, _ in
+                        guard let dragged = role.bullets.first(where: { $0.text == texts.first }) else { return false }
+                        Task { await model.move(dragged, onto: bullet, in: role) }
+                        return true
+                    }
                     Divider().padding(.leading, 42)
                 }
-                if !model.kept, !role.bank.isEmpty {
+                if !role.excluded.isEmpty {
+                    Text("Left out").font(.caption).foregroundStyle(.secondary)
+                        .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 2)
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(role.excluded) { bullet in
+                        ApplicationBankRow(bullet: bullet, symbol: "plus", hint: "Put it back in the CV") { putBack(bullet) }
+                        Divider().padding(.leading, 42)
+                    }
+                }
+                if !role.bank.isEmpty {
                     bankToggle
                     if showBank {
                         ForEach(role.rankedBank) { bullet in
@@ -33,7 +60,7 @@ struct ApplicationRoleGroup: View {
                         }
                     }
                 }
-            } else {
+            } else if isOpen {
                 Text("Not linked to your bank. Link it on the web to tailor it.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -43,6 +70,14 @@ struct ApplicationRoleGroup: View {
         }
         .sheet(item: $adding) { ApplicationInPlaceOfSheet(role: role, candidate: $0, model: model) }
         .sheet(item: $replacing) { ApplicationSwapInSheet(role: role, old: $0, model: model) }
+    }
+
+    private func putBack(_ bullet: DraftRoles.Bullet) {
+        if role.fits(bullet) {
+            Task { await model.add(bullet, to: role) }
+        } else {
+            adding = bullet
+        }
     }
 
     private var header: some View {
@@ -57,10 +92,16 @@ struct ApplicationRoleGroup: View {
                     Text("\(role.used)/\(role.budget) lines").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
             }
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color(.tertiaryLabel))
+                .rotationEffect(.degrees(isOpen ? 90 : 0))
         }
         .padding(.horizontal, 14)
         .padding(.top, 16)
         .padding(.bottom, 6)
+        .frame(minHeight: 44)
+        .contentShape(.rect)
         .accessibilityElement(children: .combine)
     }
 
@@ -112,29 +153,24 @@ struct ApplicationBulletRow: View {
     let isFirst: Bool
     let isLast: Bool
     let isOnlyOne: Bool
-    let editable: Bool
     let replace: () -> Void
     let move: (Int) -> Void
     let remove: () -> Void
 
     var body: some View {
-        if editable {
-            Menu {
-                Button("Replace with…", systemImage: "arrow.left.arrow.right", action: replace)
-                if !isFirst { Button("Move up", systemImage: "arrow.up") { move(-1) } }
-                if !isLast { Button("Move down", systemImage: "arrow.down") { move(1) } }
-                if !isOnlyOne {
-                    Divider()
-                    Button("Remove", systemImage: "minus.circle", role: .destructive, action: remove)
-                }
-            } label: {
-                content.frame(minHeight: 44).contentShape(.rect)
+        Menu {
+            Button("Replace with…", systemImage: "arrow.left.arrow.right", action: replace)
+            if !isFirst { Button("Move up", systemImage: "arrow.up") { move(-1) } }
+            if !isLast { Button("Move down", systemImage: "arrow.down") { move(1) } }
+            if !isOnlyOne {
+                Divider()
+                Button(bullet.onSource ? "Leave out" : "Remove", systemImage: "minus.circle", role: .destructive, action: remove)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint("Shows replace, move and remove actions")
-        } else {
-            content
+        } label: {
+            content.frame(minHeight: 44).contentShape(.rect)
         }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows replace, move and leave out actions. Touch and hold to drag.")
     }
 
     private var content: some View {
@@ -160,12 +196,14 @@ struct ApplicationBulletRow: View {
 
 struct ApplicationBankRow: View {
     let bullet: DraftRoles.Bullet
+    var symbol = "arrow.left.arrow.right"
+    var hint = "Choose what it replaces"
     let choose: () -> Void
 
     var body: some View {
         Button(action: choose) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "arrow.left.arrow.right")
+                Image(systemName: symbol)
                     .font(.caption)
                     .foregroundStyle(Color(.tertiaryLabel))
                     .frame(width: 18, height: 18)
@@ -181,6 +219,6 @@ struct ApplicationBankRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Choose what it replaces")
+        .accessibilityHint(hint)
     }
 }

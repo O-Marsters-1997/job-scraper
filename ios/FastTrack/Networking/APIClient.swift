@@ -5,6 +5,7 @@ struct APIClient {
     var restoreSession: () async throws -> Void
     var logIn: (_ username: String, _ password: String) async throws -> Void
     var triageQueue: (_ stack: TriageStack) async throws -> JobPage
+    var scoringBands: () async throws -> ScoringBands
     var job: (_ id: String) async throws -> Job
     var shortlist: (_ jobID: String) async throws -> Application
     var deleteApplication: (_ id: String) async throws -> Void
@@ -32,6 +33,7 @@ struct APIClient {
     var draftRoles: (_ draftID: String) async throws -> DraftRoles
     var saveRole: (_ draftID: String, _ positionID: String, _ bullets: [DraftBulletEdit]) async throws -> Void
     var keepDraft: (_ draftID: String) async throws -> Void
+    var draftStatus: (_ draftID: String) async throws -> DraftStatus
     var discardDraft: (_ draftID: String) async throws -> Void
     var coverLetters: (_ jobID: String) async throws -> [CoverLetter]
     var requestCoverLetter: (_ jobID: String) async throws -> CoverLetter
@@ -54,6 +56,9 @@ extension APIClient {
             },
             triageQueue: { stack in
                 try await http.get("jobs/triage", query: [URLQueryItem(name: "poster", value: stack.rawValue)])
+            },
+            scoringBands: {
+                try await http.get("scoring-config")
             },
             job: { id in
                 try await http.get("jobs/\(id)")
@@ -143,6 +148,9 @@ extension APIClient {
             keepDraft: { draftID in
                 try await http.post("tailoring/drafts/\(draftID)/keep", body: EmptyBody())
             },
+            draftStatus: { draftID in
+                try await http.get("tailoring/drafts/\(draftID)")
+            },
             discardDraft: { draftID in
                 try await http.post("tailoring/drafts/\(draftID)/discard", body: EmptyBody())
             },
@@ -178,6 +186,7 @@ extension APIClient {
                 let items = jobs.filter { $0.stack == stack }
                 return try respond(JobPage(items: items, total: items.count))
             },
+            scoringBands: { try respond(ScoringBands(bands: .init(great: 80, good: 65, fair: 45))) },
             job: { id in try respond(jobs.first { $0.id == id } ?? .sample) },
             shortlist: { jobID in try respond(Application(id: "application-\(jobID)", jobID: jobID)) },
             deleteApplication: { _ in try respond(()) },
@@ -207,6 +216,7 @@ extension APIClient {
             draftRoles: { _ in try respond(.sample) },
             saveRole: { _, _, _ in try respond(()) },
             keepDraft: { _ in try respond(()) },
+            draftStatus: { _ in try respond(DraftStatus(status: "ready", lastError: "")) },
             discardDraft: { _ in try respond(()) },
             coverLetters: { _ in try respond([]) },
             requestCoverLetter: { _ in try respond(CoverLetter(id: "letter-new", createdAt: .now, doneAt: nil)) },

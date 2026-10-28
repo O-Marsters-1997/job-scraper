@@ -231,6 +231,7 @@ func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 		NotifyThreshold:       cfg.NotifyThreshold,
 		MaxJobAgeDays:         cfg.MaxJobAgeDays,
 		UpdatedAt:             cfg.UpdatedAt,
+		Bands:                 dto.BandCuts{Great: greatFrom, Good: goodFrom, Fair: fairFrom},
 	}
 }
 

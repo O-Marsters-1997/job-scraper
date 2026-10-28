@@ -24,6 +24,7 @@ type DueJob struct {
 	ApplyTaskID   *string     `json:"apply_task_id"`
 	Tasks         []DueTask   `json:"tasks"`
 	Draft         *DueDraft   `json:"draft"`
+	KeptDraftID   *string     `json:"kept_draft_id"`
 }
 
 type DueTask struct {

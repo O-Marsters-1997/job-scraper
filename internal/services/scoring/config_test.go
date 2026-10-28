@@ -43,6 +43,7 @@ func TestGet(t *testing.T) {
 		RequiredLocations:     []string{},
 		RequiredTitleKeywords: []string{},
 		MaxJobAgeDays:         7,
+		Bands:                 dto.BandCuts{Great: 80, Good: 65, Fair: 45},
 	}
 	saved := empty
 	saved.NotifyThreshold = 5

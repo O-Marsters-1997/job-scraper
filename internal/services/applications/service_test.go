@@ -82,6 +82,18 @@ func TestCreateErrors(t *testing.T) {
 	}
 }
 
+func TestDeleteApplications(t *testing.T) {
+	t.Parallel()
+	t.Run("requires ids", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		_, err := svc.DeleteApplications(t.Context(), userID, dto.DeleteApplicationsInput{})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("DeleteApplications(no ids) err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+}
+
 func TestUpdate(t *testing.T) {
 	svc, st := newService(t)
 	created, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: "job-1"})

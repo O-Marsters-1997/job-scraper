@@ -12,7 +12,8 @@ SELECT
     COALESCE(ot.tasks, '[]'::jsonb)::jsonb AS tasks,
     d.id           AS draft_id,
     COALESCE(d.state, '')::text    AS draft_state,
-    COALESCE(d.cv_title, '')::text AS draft_cv_title
+    COALESCE(d.cv_title, '')::text AS draft_cv_title,
+    k.id           AS kept_draft_id
 FROM applications a
 JOIN jobs j ON j.id = a.job_id
 LEFT JOIN companies co ON co.id = j.company_id
@@ -49,6 +50,14 @@ LEFT JOIN LATERAL (
     ORDER BY c.created_at DESC
     LIMIT 1
 ) d ON TRUE
+LEFT JOIN LATERAL (
+    SELECT c.id
+    FROM tailored_cvs c
+    WHERE c.user_id = a.user_id AND c.job_id = a.job_id
+      AND c.outcome = 'kept' AND ap.id IS NOT NULL
+    ORDER BY c.created_at DESC
+    LIMIT 1
+) k ON TRUE
 WHERE a.user_id = $1
   AND (a.chase_by IS NOT NULL OR ap.id IS NOT NULL OR ot.tasks IS NOT NULL OR d.id IS NOT NULL)
 ORDER BY a.chase_by ASC NULLS LAST, j.title, a.id

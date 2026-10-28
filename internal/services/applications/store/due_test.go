@@ -200,20 +200,41 @@ func TestStore_ListDue(t *testing.T) {
 		}
 	})
 
-	t.Run("kept and discarded drafts never appear", func(t *testing.T) {
+	t.Run("a kept draft surfaces as the kept draft id, not the draft", func(t *testing.T) {
 		t.Parallel()
 		st, pool, userID := newStore(t)
-		jobID, _ := trackJob(t, pool, userID, "Decided", "2026-03-04")
+		jobID, _ := trackJob(t, pool, userID, "Decided", "")
 		addTask(t, pool, userID, taskType(t, pool, userID, "Apply", "apply"), jobID, "")
-		addDraft(t, pool, userID, jobID, "ready", "kept")
+		keptID := addDraft(t, pool, userID, jobID, "ready", "kept")
 		addDraft(t, pool, userID, jobID, "ready", "discarded")
 
 		got, err := st.ListDue(t.Context(), userID)
 		if err != nil {
 			t.Fatalf("ListDue err = %v", err)
 		}
-		if len(got.Jobs) != 1 || got.Jobs[0].Draft != nil {
-			t.Errorf("ListDue = %+v, want one job with no draft", got.Jobs)
+		if len(got.Jobs) != 1 {
+			t.Fatalf("ListDue jobs = %d, want 1", len(got.Jobs))
+		}
+		j := got.Jobs[0]
+		if j.Draft != nil || j.KeptDraftID == nil || *j.KeptDraftID != keptID {
+			t.Errorf("Draft/KeptDraftID = %+v/%v, want nil/%s", j.Draft, j.KeptDraftID, keptID)
+		}
+	})
+
+	t.Run("ticking the apply task drops the kept draft id", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID := newStore(t)
+		jobID, _ := trackJob(t, pool, userID, "Applied", "2026-03-04")
+		applyID := addTask(t, pool, userID, taskType(t, pool, userID, "Apply", "apply"), jobID, "")
+		addDraft(t, pool, userID, jobID, "ready", "kept")
+		exec(t, pool, `UPDATE tasks SET completed_at = NOW() WHERE id = $1`, applyID)
+
+		got, err := st.ListDue(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("ListDue err = %v", err)
+		}
+		if len(got.Jobs) != 1 || got.Jobs[0].KeptDraftID != nil {
+			t.Errorf("ListDue = %+v, want one job with no kept draft id", got.Jobs)
 		}
 	})
 

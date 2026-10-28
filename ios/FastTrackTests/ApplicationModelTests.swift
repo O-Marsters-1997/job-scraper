@@ -34,7 +34,7 @@ struct ApplicationModelTests {
 
     private func roles(budget: Int, lines: [Int], spills: Bool = false, kept: Bool = false) -> DraftRoles {
         let bullets = lines.enumerated().map {
-            DraftRoles.Bullet(slotID: "s\($0.offset)", achievementID: nil, text: "b", lines: $0.element, lean: nil, onSource: true, replacedFrom: nil)
+            DraftRoles.Bullet(slotID: "s\($0.offset)", achievementID: nil, text: "b\($0.offset)", lines: $0.element, lean: nil, onSource: true, replacedFrom: nil)
         }
         let bank = DraftRoles.Bullet(
             slotID: "", achievementID: "bank-1", text: "banked", lines: 1, lean: 0.4, onSource: false, replacedFrom: nil)
@@ -61,7 +61,7 @@ struct ApplicationModelTests {
 
         await model.replace(role.bullets[0], with: role.bank[0], in: role)
 
-        #expect(calls.log == ["save draft-1 p banked:bank-1|b:"])
+        #expect(calls.log == ["save draft-1 p banked:bank-1|b1:"])
     }
 
     @Test func addPutsTheBankBulletInTheFreeLines() async throws {
@@ -71,7 +71,7 @@ struct ApplicationModelTests {
 
         await model.add(role.bank[0], to: role)
 
-        #expect(calls.log == ["save draft-1 p b:|b:|banked:bank-1"])
+        #expect(calls.log == ["save draft-1 p b0:|b1:|banked:bank-1"])
     }
 
     @Test func removeAndMoveSendTheResultingOrder() async throws {
@@ -82,7 +82,30 @@ struct ApplicationModelTests {
         await model.remove(role.bullets[0], from: role)
         await model.move(role.bullets[0], by: 1, in: role)
 
-        #expect(calls.log == ["save draft-1 p b:", "save draft-1 p b:|b:"])
+        #expect(calls.log == ["save draft-1 p b1:", "save draft-1 p b1:|b0:"])
+    }
+
+    @Test func droppingABulletOntoAnotherTakesItsPlace() async throws {
+        let model = recordingModel(lines: [1, 1, 1])
+        await model.load()
+        let role = try #require(model.roles.value?.roles.first)
+
+        await model.move(role.bullets[2], onto: role.bullets[0], in: role)
+        await model.move(role.bullets[0], onto: role.bullets[0], in: role)
+
+        #expect(calls.log == ["save draft-1 p b2:|b0:|b1:", "save draft-1 p b0:|b1:|b2:"])
+    }
+
+    @Test func overlappingSavesAllReachTheServer() async throws {
+        let model = recordingModel(lines: [1, 1, 1])
+        await model.load()
+        let role = try #require(model.roles.value?.roles.first)
+
+        async let first: Void = model.move(role.bullets[0], onto: role.bullets[2], in: role)
+        async let second: Void = model.remove(role.bullets[1], from: role)
+        _ = await (first, second)
+
+        #expect(Set(calls.log) == ["save draft-1 p b1:|b2:|b0:", "save draft-1 p b0:|b2:"])
     }
 
     @Test func removingTheLastBulletSendsNothing() async throws {
@@ -123,6 +146,7 @@ struct ApplicationModelTests {
         #expect(bullet.onSource == false)
         #expect(bullet.replacedFrom == "Built and maintained the public APIs for the platform")
         #expect(bullet.fitPercent == 75)
+        #expect(role.excluded.map(\.text) == ["Ran on-call", "Wrote docs"])
     }
 
     @Test(arguments: [
@@ -206,6 +230,37 @@ struct ApplicationModelTests {
         #expect(model.hasFailure == false)
     }
 
+    @Test func keepPollsUntilTheDraftSettles() async {
+        var client = APIClient.mock()
+        let statuses = Statuses(["keeping", "keeping", "ready"])
+        client.draftRoles = { _ in DraftRoles(draftID: "draft-1", kept: statuses.polls >= 3, spills: false, roles: []) }
+        client.draftStatus = { _ in DraftStatus(status: statuses.next(), lastError: "") }
+        let model = ApplicationModel(client: client, job: .sample, draft: draft)
+        await model.load()
+
+        await model.keep(pollEvery: .milliseconds(1))
+
+        #expect(statuses.polls == 3)
+        #expect(model.kept)
+        #expect(model.keeping == false)
+        #expect(model.hasFailure == false)
+    }
+
+    @Test func failedKeepSurfacesTheErrorAndReenablesKeep() async {
+        var client = APIClient.mock()
+        client.draftRoles = { _ in DraftRoles(draftID: "draft-1", kept: false, spills: false, roles: []) }
+        client.draftStatus = { _ in DraftStatus(status: "failed", lastError: "boom") }
+        let model = ApplicationModel(client: client, job: .sample, draft: draft)
+        await model.load()
+
+        await model.keep(pollEvery: .milliseconds(1))
+
+        #expect(model.kept == false)
+        #expect(model.hasFailure)
+        #expect(model.failureMessage == "Keeping the CV failed: boom")
+        #expect(model.keeping == false)
+    }
+
     @Test func offlineFailureDisablesActions() async {
         var client = APIClient.mock()
         client.keepDraft = { _ in throw URLError(.notConnectedToInternet) }
@@ -218,6 +273,18 @@ struct ApplicationModelTests {
 
         #expect(model.isOffline)
         #expect(model.canKeep == false)
+    }
+}
+
+private final class Statuses: @unchecked Sendable {
+    private var remaining: [String]
+    private(set) var polls = 0
+
+    init(_ statuses: [String]) { remaining = statuses }
+
+    func next() -> String {
+        polls += 1
+        return remaining.count > 1 ? remaining.removeFirst() : remaining[0]
     }
 }
 

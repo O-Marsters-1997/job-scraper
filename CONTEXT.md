@@ -230,7 +230,7 @@ The iOS right swipe that tracks a Job, creating its Application in Draft and its
 _Avoid_: Save, like, favourite (favourites are Companies)
 
 **Shortlisted list**:
-The iOS screen, pushed from Due, of Shortlisted Jobs with an open Apply Task and no CV draft (ADR 0037).
+The iOS screen, pushed from Due, of Shortlisted Jobs with an open Apply Task, in two categories: **Not drafted** (no CV draft) and **Ready to apply** (a kept CV, not yet applied) (ADR 0037).
 _Avoid_: Backlog, pre-application list
 
 **Replay**:
@@ -269,7 +269,7 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 ### CV tailoring
 
 **Draft**:
-A CV tailored for one Job from a base CV, edited and reviewed in the app until the user keeps or discards it. Its content is owned by the app; once kept it becomes a Tab nested under its base CV and can no longer be edited in the app.
+A CV tailored for one Job from a base CV, edited and reviewed in the app until the user keeps or discards it. Its content is owned by the app; once kept it becomes a named Doc (`kept_as = 'doc'`) and stays editable, while a discarded Draft is read-only ([ADR 0038](docs/adr/0038-kept-drafts-stay-editable.md)).
 _Avoid_: Tailored CV, copy, version
 
 **Profile**:

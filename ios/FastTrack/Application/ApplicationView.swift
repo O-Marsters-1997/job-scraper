@@ -13,6 +13,7 @@ struct ApplicationView: View {
     @State private var showingJob = false
     @State private var confirmingDiscard = false
     @State private var previewURL: URL?
+    @State private var keepRequested = false
 
     var body: some View {
         ScrollView {
@@ -61,6 +62,11 @@ struct ApplicationView: View {
                 await onFinished()
                 dismiss()
             }
+        }
+        .task(id: keepRequested) {
+            guard keepRequested else { return }
+            await model.keep()
+            keepRequested = false
         }
         .sensoryFeedback(.success, trigger: model.kept) { _, now in now }
         .quickLookPreview($previewURL)
@@ -142,7 +148,9 @@ struct ApplicationView: View {
             isOpen: open.contains(.cv), toggle: { toggle(.cv) }
         ) {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(model.roles.value?.roles ?? []) { ApplicationRoleGroup(role: $0, model: model) }
+                let roles = model.roles.value?.roles ?? []
+                ForEach(roles) { ApplicationRoleGroup(role: $0, model: model, startsOpen: $0.id == roles.first?.id) }
+                    .disabled(model.keeping)
                 if !model.kept { keepFooter }
             }
         }
@@ -151,9 +159,13 @@ struct ApplicationView: View {
     private var keepFooter: some View {
         VStack(spacing: 8) {
             Button {
-                Task { await model.keep() }
+                keepRequested = true
             } label: {
-                Text("Keep CV").frame(maxWidth: .infinity)
+                HStack(spacing: 8) {
+                    if model.keeping { ProgressView() }
+                    Text(model.keeping ? "Keeping…" : "Keep CV")
+                }
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.roundedRectangle(radius: 12))

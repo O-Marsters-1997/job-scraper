@@ -76,6 +76,17 @@ func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInpu
 	return toDraft(row)
 }
 
+func claimIDs(claim dto.DraftClaim) (id, uid, jid pgtype.UUID, err error) {
+	if id, err = parseID(claim.ID, ErrDraftNotFound); err != nil {
+		return id, uid, jid, err
+	}
+	if uid, err = parseID(claim.UserID, ErrDraftNotFound); err != nil {
+		return id, uid, jid, err
+	}
+	jid, err = parseID(claim.JobID, ErrJobNotFound)
+	return id, uid, jid, err
+}
+
 func achievementOutcomeParams(draftID, userID, jobID pgtype.UUID, outcomes []dto.AchievementOutcome) ([]sqlc.InsertAchievementOutcomesParams, error) {
 	params := make([]sqlc.InsertAchievementOutcomesParams, len(outcomes))
 	for i, o := range outcomes {
@@ -267,15 +278,7 @@ func (s *Store) QueueKeep(ctx context.Context, userID, id string) (dto.Draft, er
 // CompleteKeep marks the claimed Draft kept as a Doc. A stale claim is
 // ErrDraftNotFound; a second kept Draft of the Job is ErrKeptDraftExists.
 func (s *Store) CompleteKeep(ctx context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error {
-	id, err := parseID(claim.ID, ErrDraftNotFound)
-	if err != nil {
-		return err
-	}
-	uid, err := parseID(claim.UserID, ErrDraftNotFound)
-	if err != nil {
-		return err
-	}
-	jid, err := parseID(claim.JobID, ErrJobNotFound)
+	id, uid, jid, err := claimIDs(claim)
 	if err != nil {
 		return err
 	}
@@ -296,6 +299,26 @@ func (s *Store) CompleteKeep(ctx context.Context, claim dto.DraftClaim, outcomes
 		}
 		if _, err := q.InsertAchievementOutcomes(ctx, params); err != nil {
 			return fmt.Errorf("store.CompleteKeep: outcomes: %w", err)
+		}
+		return nil
+	})
+}
+
+func (s *Store) ReplaceAchievementOutcomes(ctx context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error {
+	id, uid, jid, err := claimIDs(claim)
+	if err != nil {
+		return err
+	}
+	params, err := achievementOutcomeParams(id, uid, jid, outcomes)
+	if err != nil {
+		return fmt.Errorf("store.ReplaceAchievementOutcomes: %w", err)
+	}
+	return s.inTx(ctx, func(q *sqlc.Queries) error {
+		if err := q.DeleteAchievementOutcomes(ctx, sqlc.DeleteAchievementOutcomesParams{DraftID: id, UserID: uid}); err != nil {
+			return fmt.Errorf("store.ReplaceAchievementOutcomes: %w", err)
+		}
+		if _, err := q.InsertAchievementOutcomes(ctx, params); err != nil {
+			return fmt.Errorf("store.ReplaceAchievementOutcomes: %w", err)
 		}
 		return nil
 	})

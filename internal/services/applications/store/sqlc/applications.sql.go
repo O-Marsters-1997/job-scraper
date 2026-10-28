@@ -90,6 +90,21 @@ func (q *Queries) DeleteApplication(ctx context.Context, arg DeleteApplicationPa
 	return err
 }
 
+const deleteApplications = `-- name: DeleteApplications :exec
+DELETE FROM applications
+WHERE user_id = $1 AND id = ANY($2::uuid[])
+`
+
+type DeleteApplicationsParams struct {
+	UserID pgtype.UUID
+	Ids    []pgtype.UUID
+}
+
+func (q *Queries) DeleteApplications(ctx context.Context, arg DeleteApplicationsParams) error {
+	_, err := q.db.Exec(ctx, deleteApplications, arg.UserID, arg.Ids)
+	return err
+}
+
 const getApplicationState = `-- name: GetApplicationState :one
 SELECT job_id, status_id FROM applications
 WHERE id = $1 AND user_id = $2

@@ -73,6 +73,10 @@ WHERE id = $1 AND user_id = $2;
 DELETE FROM applications
 WHERE id = $1 AND user_id = $2;
 
+-- name: DeleteApplications :exec
+DELETE FROM applications
+WHERE user_id = sqlc.arg(user_id) AND id = ANY(sqlc.arg(ids)::uuid[]);
+
 -- name: GetApplicationsForJobs :many
 SELECT
     a.job_id,

@@ -20,7 +20,7 @@ struct DueView: View {
                             .disabled(model.undoStack.isEmpty)
                     }
                 }
-                .searchable(text: $query)
+                .clearingSearchable(text: $query)
                 .navigationDestination(item: $openJobID) { JobDetailView(id: $0) }
                 .navigationDestination(isPresented: $showingShortlisted) { ShortlistedView(model: model) }
                 .navigationDestination(item: $openApplication) { job in
@@ -72,7 +72,7 @@ struct DueView: View {
                     ContentUnavailableView(
                         "Nothing due", systemImage: "checkmark.circle",
                         description: Text("Chases, open Tasks and ready CV drafts show up here."))
-                    NotDraftedRow(count: model.shortlisted.count) { showingShortlisted = true }
+                    ShortlistedRow(count: model.shortlistedCount) { showingShortlisted = true }
                         .padding(.horizontal, 16)
                 }
             } else if jobs.isEmpty && !query.isEmpty {

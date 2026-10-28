@@ -205,6 +205,17 @@ func (f *FakeStore) DeleteApplication(_ context.Context, _, id string) error {
 	return nil
 }
 
+func (f *FakeStore) DeleteApplications(_ context.Context, userID string, ids []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, id := range ids {
+		if f.apps[id].UserID == userID {
+			delete(f.apps, id)
+		}
+	}
+	return nil
+}
+
 func (f *FakeStore) GetApplicationsForJobs(_ context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

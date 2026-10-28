@@ -16,10 +16,12 @@ final class ApplicationModel {
     private(set) var letterError: String?
     private(set) var exit: Exit?
     private(set) var isOffline = false
+    private(set) var keeping = false
     private(set) var failureMessage = ""
     var hasFailure = false
 
     private let client: APIClient
+    private var lastSave: Task<Void, Never>?
 
     init(client: APIClient, job: DueJob, draft: DueJob.Draft) {
         self.client = client
@@ -28,7 +30,7 @@ final class ApplicationModel {
     }
 
     var kept: Bool { roles.value?.kept ?? false }
-    var canKeep: Bool { !isOffline && (roles.value?.canKeep ?? false) }
+    var canKeep: Bool { !isOffline && !keeping && (roles.value?.canKeep ?? false) }
     var pdfName: String { "olly-marsters-\(job.companySlug).pdf" }
 
     func load() async {
@@ -47,27 +49,39 @@ final class ApplicationModel {
         }
     }
 
-    func keep() async {
+    func keep(pollEvery interval: Duration = .seconds(2)) async {
+        keeping = true
+        defer { keeping = false }
         await attempt {
             try await client.keepDraft(draft.id)
+            var status = try await client.draftStatus(draft.id)
+            while status.isKeeping {
+                try await Task.sleep(for: interval)
+                status = try await client.draftStatus(draft.id)
+            }
             roles = .loaded(try await client.draftRoles(draft.id))
+            if !kept { fail(status.lastError.isEmpty ? "Keeping the CV failed." : "Keeping the CV failed: \(status.lastError)") }
         }
     }
 
     func replace(_ old: DraftRoles.Bullet, with new: DraftRoles.Bullet, in role: DraftRoles.Role) async {
-        await save(role, role.replacing(old, with: new))
+        await save(role) { $0.replacing(old, with: new) }
     }
 
     func add(_ new: DraftRoles.Bullet, to role: DraftRoles.Role) async {
-        await save(role, role.adding(new))
+        await save(role) { $0.adding(new) }
     }
 
     func remove(_ old: DraftRoles.Bullet, from role: DraftRoles.Role) async {
-        await save(role, role.removing(old))
+        await save(role) { $0.removing(old) }
     }
 
     func move(_ bullet: DraftRoles.Bullet, by offset: Int, in role: DraftRoles.Role) async {
-        await save(role, role.moving(bullet, by: offset))
+        await save(role) { $0.moving(bullet, by: offset) }
+    }
+
+    func move(_ bullet: DraftRoles.Bullet, onto target: DraftRoles.Bullet, in role: DraftRoles.Role) async {
+        await save(role) { $0.moving(bullet, onto: target) }
     }
 
     func markApplied() async {
@@ -119,13 +133,26 @@ final class ApplicationModel {
         }
     }
 
-    private func save(_ role: DraftRoles.Role, _ bullets: [DraftRoles.Bullet]) async {
-        guard let positionID = role.positionID else { return }
+    private func save(_ role: DraftRoles.Role, _ change: @escaping (DraftRoles.Role) -> [DraftRoles.Bullet]) async {
+        let previous = lastSave
+        let task = Task {
+            await previous?.value
+            await write(role, change)
+        }
+        lastSave = task
+        await task.value
+    }
+
+    private func write(_ stale: DraftRoles.Role, _ change: (DraftRoles.Role) -> [DraftRoles.Bullet]) async {
+        guard let positionID = stale.positionID else { return }
+        let role = roles.value?.roles.first { $0.id == stale.id } ?? stale
+        let bullets = change(role)
         guard !bullets.isEmpty else { return fail("A role needs at least one bullet.") }
         let edits = bullets.map { DraftBulletEdit(text: $0.text, achievementIDs: $0.achievementID.map { [$0] } ?? []) }
         await attempt {
             try await client.saveRole(draft.id, positionID, edits)
             roles = .loaded(try await client.draftRoles(draft.id))
+            await fetchPDF()
         }
     }
 

@@ -6,7 +6,7 @@ import {
 import {
 	clearChase,
 	createApplication,
-	deleteApplication,
+	deleteApplications,
 	fetchApplications,
 	setChase,
 	updateApplication,
@@ -58,8 +58,8 @@ export function useUpdateApplication() {
 	);
 }
 
-export function useDeleteApplication() {
-	return useInvalidatingMutation(deleteApplication, [
+export function useDeleteApplications() {
+	return useInvalidatingMutation(deleteApplications, [
 		keys.applications.all,
 		keys.jobs.all,
 	]);

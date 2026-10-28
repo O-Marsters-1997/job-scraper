@@ -162,6 +162,23 @@ struct DueModelTests {
         #expect(model.dueJobs.map(\.id) == ["drafted", "desk"])
     }
 
+    @Test func readyToApplyHoldsKeptUnappliedJobsAndLeavesNotDrafted() async throws {
+        func kept(_ id: String, apply: String?, score: Int) -> DueJob {
+            DueJob(
+                jobID: id, title: "Role \(id)", companySlug: "co-\(id)", companyKind: .direct, band: .great, score: score, applicationID: "app-\(id)",
+                chaseBy: nil, applyTaskID: apply, tasks: [], draft: nil, keptDraftID: "kept-\(id)")
+        }
+        let model = await model([
+            kept("low", apply: "x", score: 60), kept("high", apply: "x", score: 95), kept("applied", apply: nil, score: 99),
+            job("plain", chase: nil, applyTaskID: "x"),
+        ])
+
+        #expect(model.readyToApply.map(\.id) == ["high", "low"])
+        #expect(try #require(model.readyToApply.first).keptDraft?.id == "kept-high")
+        #expect(model.shortlisted.map(\.id) == ["plain"])
+        #expect(model.shortlistedCount == 3)
+    }
+
     @Test(arguments: [
         ("engineer", ["a"], ["c"]), ("MONZO", ["b"], []), ("  go ", ["a", "b"], ["c"]), ("", ["a", "b"], ["c"]),
         ("zzz", [], []),
@@ -177,6 +194,31 @@ struct DueModelTests {
 
         #expect(model.shortlisted(matching: query).map(\.id) == shortlisted)
         #expect(model.dueJobs(matching: query).map(\.id) == due)
+    }
+
+    @Test func deleteRemovesTheApplicationAndRestoresItOnFailure() async {
+        var client = APIClient.mock(due: [job("a", chase: 0), job("b", chase: 0)])
+        let calls = calls
+        client.deleteApplication = { id in
+            calls.log.append("delete \(id)")
+            if id == "app-b" { throw APIError.status(500) }
+        }
+        let model = DueModel(client: client, now: { [today] in today.addingTimeInterval(3_600) })
+        await model.load()
+        await model.delete(model.jobs[0])
+        #expect(model.jobs.map(\.id) == ["b"])
+        await model.delete(model.jobs[0])
+        #expect(model.jobs.map(\.id) == ["b"])
+        #expect(model.hasFailure == true)
+        #expect(calls.log == ["delete app-a", "delete app-b"])
+    }
+
+    @Test func hasCVCountsDraftsAndKeptDrafts() {
+        var kept = job("k", chase: 0)
+        kept.keptDraftID = "x"
+        #expect(job("d", chase: 0, draft: .ready).hasCV == true)
+        #expect(kept.hasCV == true)
+        #expect(job("n", chase: 0).hasCV == false)
     }
 
     @Test func markAppliedWithoutAnApplyTaskDoesNothing() async {

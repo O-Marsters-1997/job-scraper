@@ -22,6 +22,7 @@ struct DueJobCard: View {
     let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
     let openApplication: (DueJob) -> Void
+    @State private var confirmingDelete = false
 
     private var rows: [DueRow] {
         (model.hasChaseDue(job) ? [.chase(job)] : [])
@@ -45,23 +46,25 @@ struct DueJobCard: View {
                 .transition(.opacity.animation(.easeOut(duration: 0.12)))
             }
         }
-        .clipShape(.rect(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color(.separator)))
+        .hairlineCard()
+        .swipeToDelete {
+            if job.hasCV { confirmingDelete = true } else { delete() }
+        }
+        .confirmationDialog("Delete this application?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Delete application", role: .destructive, action: delete)
+        } message: {
+            Text("This can't be undone.")
+        }
+    }
+
+    private func delete() {
+        Task { await model.delete(job) }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(job.companyName).font(.system(.title3, design: .serif))
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    if let band = job.band {
-                        Text(band.title).font(.caption.weight(.semibold)).foregroundStyle(band.colour)
-                    }
-                    if let score = job.score {
-                        Text(score, format: .number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    }
-                }
-                CompanyKindBadge(kind: job.companyKind)
+                DueCardHeadline(job: job)
                 Spacer(minLength: 6)
                 Text(rows.count, format: .number).font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
                 Image(systemName: "chevron.right")
@@ -90,6 +93,23 @@ struct DueJobCard: View {
         case .failed: return ("Draft failed", .red)
         case .ready: return ("CV ready", .brandTint)
         default: return nil
+        }
+    }
+}
+
+struct DueCardHeadline: View {
+    let job: DueJob
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(job.companyName).font(.system(.title3, design: .serif))
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                if let band = job.band { DotLabel(text: band.title, hue: band.colour) }
+                if let score = job.score {
+                    Text(score, format: .number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }
+            }
+            CompanyKindBadge(kind: job.companyKind)
         }
     }
 }

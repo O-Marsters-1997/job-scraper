@@ -229,3 +229,27 @@ test.describe("Applications", () => {
 		expect(unhandled).toEqual([]);
 	});
 });
+
+test.describe("Applications list", () => {
+	test("deleting the selection removes every selected application", async ({
+		page,
+	}) => {
+		await page.goto("/applications");
+		const boxes = page.getByRole("checkbox", { name: /^Select / });
+		await boxes.first().waitFor();
+		const before = await boxes.count();
+		await boxes.nth(0).check();
+		await boxes.nth(1).check();
+
+		await page.getByRole("button", { name: "Delete (2)" }).click();
+		const dialog = page.getByRole("dialog");
+		await expect(
+			dialog.getByRole("heading", { name: "Delete 2 applications?" }),
+		).toBeVisible();
+		await dialog.getByRole("button", { name: "Delete 2 applications" }).click();
+
+		await expect(dialog).toBeHidden();
+		await expect(boxes).toHaveCount(before - 2);
+		await expect(page.getByRole("button", { name: /^Delete \(/ })).toBeHidden();
+	});
+});

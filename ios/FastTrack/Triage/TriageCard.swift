@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TriageCard: View {
     let job: Job
+    let bandReason: String?
     let isExpanded: Bool
     let toggle: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -18,6 +19,11 @@ struct TriageCard: View {
             if isExpanded {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
+                        if let bandReason {
+                            Text(bandReason)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                         MetaLines(job: job, limitsTitle: false)
                         JobDetailBody(job: job)
                     }

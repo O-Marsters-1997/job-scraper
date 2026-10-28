@@ -8,24 +8,30 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
-import { useDeleteApplication } from "../../../hooks/useApplications";
+import { useDeleteApplications } from "../../../hooks/useApplications";
 import type { ApplicationWithDetails } from "../../../types/application";
 
 export function DeleteApplicationDialog(props: {
-	app: ApplicationWithDetails | null;
+	apps: ApplicationWithDetails[];
 	onClose: () => void;
+	onDeleted: (ids: string[]) => void;
 }) {
-	const deleteMutation = useDeleteApplication();
+	const deleteMutation = useDeleteApplications();
+	const many = () => props.apps.length > 1;
+	const count = () => `${props.apps.length} applications`;
+	const label = () => (many() ? count() : "application");
 
 	const deleteForm = useFormSubmit(async () => {
-		if (!props.app) return;
-		await deleteMutation.mutateAsync(props.app.ID);
+		const ids = props.apps.map((a) => a.ID);
+		if (ids.length === 0) return;
+		await deleteMutation.mutateAsync(ids);
+		props.onDeleted(ids);
 		props.onClose();
 	});
 
 	return (
 		<Dialog
-			open={props.app !== null}
+			open={props.apps.length > 0}
 			onOpenChange={(open) => {
 				if (open) return;
 				props.onClose();
@@ -34,13 +40,14 @@ export function DeleteApplicationDialog(props: {
 		>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Delete application?</DialogTitle>
+					<DialogTitle>Delete {label()}?</DialogTitle>
 					<p class="text-sm text-muted">
 						This removes tracking for{" "}
 						<span class="font-medium text-foreground">
-							{props.app?.JobTitle}
+							{many() ? count() : props.apps[0]?.JobTitle}
 						</span>
-						. The job stays on your Jobs list. This can't be undone.
+						. {many() ? "The jobs stay" : "The job stays"} on your Jobs list.
+						This can't be undone.
 					</p>
 				</DialogHeader>
 				<form onSubmit={deleteForm.submit} class="flex flex-col gap-4">
@@ -54,7 +61,7 @@ export function DeleteApplicationDialog(props: {
 							variant="destructive"
 							loading={deleteForm.pending()}
 						>
-							Delete application
+							Delete {label()}
 						</Button>
 					</DialogFooter>
 				</form>

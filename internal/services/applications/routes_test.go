@@ -32,6 +32,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"POST /applications/",
 		"PATCH /applications/{id}",
 		"DELETE /applications/{id}",
+		"POST /applications/delete",
 		"PUT /applications/{id}/chase",
 		"DELETE /applications/{id}/chase",
 		"GET /applications/for-jobs",
@@ -44,7 +45,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	)
 	handlerstest.RejectsMalformedBody(t, r,
 		"POST /application-statuses/", "PATCH /application-statuses/{id}",
-		"POST /applications/", "PATCH /applications/{id}", "PUT /applications/{id}/chase",
+		"POST /applications/", "PATCH /applications/{id}", "POST /applications/delete", "PUT /applications/{id}/chase",
 		"POST /jobs/{id}/recruiter-contacts", "PUT /jobs/{id}/note",
 		"POST /jobs/{id}/comments", "PATCH /comments/{id}",
 	)
@@ -148,5 +149,11 @@ func TestRoutesHappyPaths(t *testing.T) {
 	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "DELETE /comments/"+comment.ID, "")
 
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /applications/"+app.ID, "")
+	other := handlerstest.Do[dto.Application](t, r, http.StatusCreated,
+		"POST /applications/", `{"job_id":"job-2","status_id":"`+status.ID+`"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /applications/delete", `{"ids":["`+other.ID+`"]}`)
+	if got := handlerstest.Do[[]dto.ApplicationWithDetails](t, r, http.StatusOK, "GET /applications/", ""); len(got) != 0 {
+		t.Fatalf("after bulk delete listed %d applications, want 0", len(got))
+	}
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /application-statuses/"+status.ID, "")
 }

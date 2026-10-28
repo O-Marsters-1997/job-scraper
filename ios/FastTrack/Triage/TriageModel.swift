@@ -8,6 +8,7 @@ final class TriageModel {
     var stack: TriageStack = .direct
     private(set) var queues: [TriageStack: [Job]] = [:]
     private(set) var unseen: [TriageStack: Int] = [:]
+    private(set) var scoring: ScoringBands?
     private(set) var loadState: LoadState<Void> = .idle
     private(set) var undoStack: [TriageDecision] = []
     private(set) var banner: TriageDecision?
@@ -81,8 +82,7 @@ final class TriageModel {
             persistCards()
             let decision = TriageDecision(id: id, job: job, action: action, receipt: receipt)
             undoStack.append(decision)
-            if action != .skip { banner = decision }
-        }
+            if action != .skip { banner = decision }        }
     }
 
     @discardableResult
@@ -184,6 +184,7 @@ final class TriageModel {
 
     private func reloadQueue() async throws {
         let decided = Set(undoStack.filter { !$0.action.keepsCard }.map(\.job.id))
+        scoring = try? await client.scoringBands()
         var pages: [TriageStack: JobPage] = [:]
         for stack in TriageStack.allCases { pages[stack] = try await client.triageQueue(stack) }
         for (stack, page) in pages {

@@ -59,7 +59,8 @@ function Review(props: {
 			`cv-${job.data?.CompanySlug ?? "draft"}.pdf`,
 		),
 	);
-	const open = () => props.draft.status === "ready" && !props.draft.outcome;
+	const open = () =>
+		props.draft.status === "ready" && props.draft.outcome !== "discarded";
 
 	return (
 		<>
