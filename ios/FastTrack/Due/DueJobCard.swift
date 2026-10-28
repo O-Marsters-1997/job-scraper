@@ -47,9 +47,11 @@ struct DueJobCard: View {
             }
         }
         .hairlineCard()
-        .swipeToDelete {
-            if job.hasCV { confirmingDelete = true } else { delete() }
-        }
+        .iconSwipeActions([
+            .deleteApplication {
+                if job.hasCV { confirmingDelete = true } else { delete() }
+            }
+        ])
         .confirmationDialog("Delete this application?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete application", role: .destructive, action: delete)
         } message: {

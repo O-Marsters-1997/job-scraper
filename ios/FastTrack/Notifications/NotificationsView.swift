@@ -6,6 +6,7 @@ struct NotificationsView: View {
     @State private var openJobID: String?
     @State private var preview: AppNotification?
     @State private var suppressedTap: String?
+    @State private var actionsJob: Job?
 
     var body: some View {
         NavigationStack {
@@ -16,6 +17,12 @@ struct NotificationsView: View {
                     JobPreviewSheet(id: $0.jobID, model: model, onDecided: onDecided)
                 }
                 .sensoryFeedback(.impact(weight: .medium), trigger: preview) { _, new in new != nil }
+                .notificationJobActions(job: $actionsJob, model: model)
+                .alert("Couldn't do that", isPresented: Bindable(model).hasFailure) {
+                    Button("OK") {}
+                } message: {
+                    Text(model.failureMessage ?? "")
+                }
         }
     }
 
@@ -86,6 +93,14 @@ struct NotificationsView: View {
                 }
             )
             .accessibilityAction(named: "Preview job") { preview = notification }
+            .iconSwipeActions([
+                SwipeAction(title: "More", systemImage: "ellipsis") {
+                    Task { actionsJob = await model.job(notification.jobID) }
+                },
+                SwipeAction(title: "Delete notification", systemImage: "trash", isDestructive: true) {
+                    Task { await model.delete(notification.id) }
+                },
+            ])
     }
 
     private func open(_ notification: AppNotification) {

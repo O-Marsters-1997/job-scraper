@@ -242,6 +242,24 @@ func TestStore_Notifications(t *testing.T) {
 		}
 	})
 
+	t.Run("delete removes only the user's own notification", func(t *testing.T) {
+		t.Parallel()
+		alice, bob := pgtest.InsertUser(t, pool), pgtest.InsertUser(t, pool)
+		mine, theirs := insert(alice, "a"), insert(bob, "b")
+		if err := st.DeleteNotification(ctx, alice, theirs); err != nil {
+			t.Fatalf("DeleteNotification() = %v", err)
+		}
+		if got := titles(bob); len(got) != 1 {
+			t.Errorf("bob titles after alice deleted his = %v, want 1 row", got)
+		}
+		if err := st.DeleteNotification(ctx, alice, mine); err != nil {
+			t.Fatalf("DeleteNotification() = %v", err)
+		}
+		if got := titles(alice); len(got) != 0 {
+			t.Errorf("alice titles after delete = %v, want none", got)
+		}
+	})
+
 	t.Run("read-all marks only the user's rows", func(t *testing.T) {
 		t.Parallel()
 		erin := pgtest.InsertUser(t, pool)

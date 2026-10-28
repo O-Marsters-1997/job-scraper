@@ -97,3 +97,19 @@ func (s *Store) MarkAllNotificationsRead(ctx context.Context, userID string) err
 	}
 	return nil
 }
+
+// DeleteNotification removes the user's own Notification; anything else is a no-op.
+func (s *Store) DeleteNotification(ctx context.Context, userID, notificationID string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	nid, err := data.UUID(notificationID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.DeleteNotification(ctx, sqlc.DeleteNotificationParams{ID: nid, UserID: uid}); err != nil {
+		return fmt.Errorf("store.DeleteNotification: %w", err)
+	}
+	return nil
+}

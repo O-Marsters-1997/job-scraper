@@ -40,6 +40,7 @@ struct APIClient {
     var notifications: () async throws -> [AppNotification]
     var markNotificationRead: (_ id: String) async throws -> Void
     var markAllNotificationsRead: () async throws -> Void
+    var deleteNotification: (_ id: String) async throws -> Void
 }
 
 extension APIClient {
@@ -168,6 +169,9 @@ extension APIClient {
             },
             markAllNotificationsRead: {
                 try await http.post("notifications/read-all", body: EmptyBody())
+            },
+            deleteNotification: { id in
+                try await http.delete("notifications/\(id)")
             }
         )
     }
@@ -222,7 +226,8 @@ extension APIClient {
             requestCoverLetter: { _ in try respond(CoverLetter(id: "letter-new", createdAt: .now, doneAt: nil)) },
             notifications: { try respond(notifications) },
             markNotificationRead: { _ in try respond(()) },
-            markAllNotificationsRead: { try respond(()) }
+            markAllNotificationsRead: { try respond(()) },
+            deleteNotification: { _ in try respond(()) }
         )
     }
 }
