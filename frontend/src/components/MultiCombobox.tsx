@@ -37,6 +37,7 @@ export function MultiCombobox(props: {
 	options: ComboOption[];
 	value: string[];
 	onChange: (ids: string[]) => void;
+	onReorder?: (from: number, to: number) => void;
 	hint?: string;
 	placeholder?: string;
 	chipClass?: string;
@@ -44,6 +45,19 @@ export function MultiCombobox(props: {
 	onSearch?: (query: string) => void;
 }) {
 	const [query, setQuery] = createSignal("");
+	const [dragFrom, setDragFrom] = createSignal<number>();
+	const nudge = (e: KeyboardEvent, i: number) => {
+		if (!props.onReorder || !e.altKey) return;
+		const to =
+			e.key === "ArrowLeft" ? i - 1 : e.key === "ArrowRight" ? i + 1 : i;
+		if (to === i || to < 0 || to >= props.value.length) return;
+		e.preventDefault();
+		const chips = (e.currentTarget as HTMLElement).closest(".field");
+		props.onReorder(i, to);
+		queueMicrotask(() =>
+			chips?.querySelectorAll<HTMLElement>("[data-chip]")[to]?.focus(),
+		);
+	};
 	const known = createMemo(
 		() => new Map(props.options.map((o) => [o.id, o] as const)),
 	);
@@ -120,15 +134,44 @@ export function MultiCombobox(props: {
 				{(state) => (
 					<>
 						<Icon name="search" size={14} class="shrink-0 text-faint" />
-						<For each={state.selectedOptions()}>
-							{(o) => (
+						<For each={selected()}>
+							{(o, i) => (
 								<span
 									class={cn(
 										"inline-flex h-6 items-center gap-0.5 rounded-full border pr-0.5 pl-2.5 text-xs font-medium",
 										props.chipClass,
 									)}
 								>
-									{o.label}
+									<button
+										type="button"
+										data-chip
+										tabindex={props.onReorder ? 0 : -1}
+										draggable={props.onReorder ? true : undefined}
+										title={
+											props.onReorder
+												? "Drag to reorder, or Alt+Arrow keys"
+												: undefined
+										}
+										onPointerDown={(e) =>
+											!props.onReorder && e.preventDefault()
+										}
+										onDragStart={() => setDragFrom(i())}
+										onDragOver={(e) =>
+											dragFrom() !== undefined && e.preventDefault()
+										}
+										onDrop={(e) => {
+											e.preventDefault();
+											const from = dragFrom();
+											setDragFrom(undefined);
+											if (from !== undefined && from !== i())
+												props.onReorder?.(from, i());
+										}}
+										onDragEnd={() => setDragFrom(undefined)}
+										onKeyDown={(e) => nudge(e, i())}
+										class="cursor-default rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+									>
+										{o.label}
+									</button>
 									<button
 										type="button"
 										aria-label={`Remove ${o.label}`}
