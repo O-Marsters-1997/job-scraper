@@ -25,7 +25,11 @@ const (
 
 var pickStrength = map[string]float64{"nice": 1, "ok": 0.5}
 
-var defaultBands = dto.BandCuts{Great: 80, Good: 65, Fair: 45}
+const (
+	greatFrom = 80
+	goodFrom  = 65
+	fairFrom  = 45
+)
 
 func weightFor(p *dto.ScoringParams, dim dto.Dimension) float64 {
 	if p != nil {
@@ -34,13 +38,6 @@ func weightFor(p *dto.ScoringParams, dim dto.Dimension) float64 {
 		}
 	}
 	return dimensionSpecs[dim].Weight
-}
-
-func bandsFor(p *dto.ScoringParams) dto.BandCuts {
-	if p != nil && p.Bands != nil {
-		return *p.Bands
-	}
-	return defaultBands
 }
 
 type evaluatedPick struct {
@@ -220,7 +217,7 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 	if blocked {
 		score = 0
 	}
-	return score, bandFor(score, bandsFor(params)), rows
+	return score, bandFor(score), rows
 }
 
 type dimensionCoverage struct {
@@ -305,13 +302,13 @@ func favouriteLift(score int) int {
 	return max(score, int(math.Round(100/(1+math.Exp(-logit)))))
 }
 
-func bandFor(score int, cuts dto.BandCuts) string {
+func bandFor(score int) string {
 	switch {
-	case score >= cuts.Great:
+	case score >= greatFrom:
 		return "great"
-	case score >= cuts.Good:
+	case score >= goodFrom:
 		return "good"
-	case score >= cuts.Fair:
+	case score >= fairFrom:
 		return "fair"
 	}
 	return "poor"

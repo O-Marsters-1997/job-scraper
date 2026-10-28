@@ -77,24 +77,6 @@ func TestExportFeedback_Outdated(t *testing.T) {
 	assertGolden(t, "testdata/feedback_pack_outdated.golden.md", included)
 }
 
-func TestExportFeedback_FittedBands(t *testing.T) {
-	t.Parallel()
-	const userID = "user-1"
-	st := newFakeStore()
-	seedScoredJob(st, userID, "tech:go")
-	cfg := picking(userID, "tech:go")
-	cfg.Preferences.Scoring = &dto.ScoringParams{Bands: &dto.BandCuts{Great: 60, Good: 55, Fair: 45}}
-	st.SeedSearchConfig(cfg)
-
-	got, err := scoring.Build(newDeps(t, st)).ExportFeedback(t.Context(), userID, false)
-	if err != nil {
-		t.Fatalf("ExportFeedback() err = %v", err)
-	}
-	if want := "- Bands (fitted): Great from 60, Good from 55, Fair from 45, Poor below."; !strings.Contains(got, want) {
-		t.Errorf("ExportFeedback() = %q, want it to contain %q", got, want)
-	}
-}
-
 func assertGolden(t *testing.T, golden, got string) {
 	t.Helper()
 	if *update {
