@@ -344,7 +344,9 @@ export function DraftEditor(props: {
 		setBankWanted(true);
 		setRolesOpen(true);
 	};
+	const [roleFromList, setRoleFromList] = createSignal(false);
 	const openRole = (positionId: string) => {
+		setRoleFromList(rolesOpen());
 		closeRoles();
 		setSelectedPick(undefined);
 		setBankWanted(true);
@@ -770,6 +772,7 @@ export function DraftEditor(props: {
 							carried={rolePicks.carriedFor(positionId())}
 							onEmpty={() => rolePicks.empty(positionId())}
 							onReset={() => rolePicks.reset(positionId())}
+							onBackToRoles={roleFromList() ? openRoles : undefined}
 							onClose={closeRole}
 						/>
 					);
