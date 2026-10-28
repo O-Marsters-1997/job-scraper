@@ -13,6 +13,7 @@ type Store interface {
 	GetNotificationJob(ctx context.Context, userID, jobID string) (dto.NotificationJob, error)
 	MarkNotificationRead(ctx context.Context, userID, notificationID string) error
 	MarkAllNotificationsRead(ctx context.Context, userID string) error
+	DeleteNotification(ctx context.Context, userID, notificationID string) error
 }
 
 // PhonePusher delivers one Notification to the phone; msg.URL is the Notification link.

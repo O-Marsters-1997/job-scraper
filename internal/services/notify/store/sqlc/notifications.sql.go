@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deleteNotification = `-- name: DeleteNotification :exec
+DELETE FROM notifications
+WHERE id = $1 AND user_id = $2
+`
+
+type DeleteNotificationParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error {
+	_, err := q.db.Exec(ctx, deleteNotification, arg.ID, arg.UserID)
+	return err
+}
+
 const getNotificationJob = `-- name: GetNotificationJob :one
 SELECT j.title,
     COALESCE(c.name, j.company_slug)::text AS company_name,

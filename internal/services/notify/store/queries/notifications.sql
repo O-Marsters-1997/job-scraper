@@ -36,3 +36,7 @@ WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND read_at IS NULL;
 -- name: MarkAllNotificationsRead :exec
 UPDATE notifications SET read_at = NOW()
 WHERE user_id = sqlc.arg(user_id) AND read_at IS NULL;
+
+-- name: DeleteNotification :exec
+DELETE FROM notifications
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
