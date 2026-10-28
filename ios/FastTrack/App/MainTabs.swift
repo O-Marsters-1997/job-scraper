@@ -36,7 +36,10 @@ struct MainTabs: View {
                 .tabItem { Label("Due", systemImage: "checklist") }
                 .badge(due.badge)
                 .tag(Tab.due)
-            NotificationsView(model: notifications, onDecided: { triageRefresh += 1 })
+            NotificationsView(model: notifications, onDecided: {
+                triageRefresh += 1
+                Task { await due.load() }
+            })
                 .tabItem { Label("Notifications", systemImage: "bell") }
                 .badge(notifications.badge)
                 .tag(Tab.notifications)

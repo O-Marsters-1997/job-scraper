@@ -189,7 +189,7 @@ private struct JobPreviewSheet: View {
     var body: some View {
         Group {
             if loaded {
-                JobDescriptionSheet(job: job, actions: job.map { AnyView(menu(for: $0)) })
+                JobDescriptionSheet(job: job, actions: job.map { menu(for: $0) })
             } else {
                 ProgressView()
                     .presentationDetents([.fraction(0.45), .large])
@@ -221,7 +221,11 @@ private struct JobPreviewSheet: View {
             do {
                 try await model.decide(action, on: job)
                 onDecided()
-                if !action.keepsCard { dismiss() }
+                if !action.keepsCard {
+                    dismiss()
+                } else if case .reclassify = action {
+                    self.job = try? await client.job(id)
+                }
             } catch {
                 failed = true
             }

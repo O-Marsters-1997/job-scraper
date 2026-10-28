@@ -1,15 +1,24 @@
 import SwiftUI
 
-struct JobDescriptionSheet: View {
+struct JobDescriptionSheet<Actions: View>: View {
     let job: Job?
-    var actions: AnyView?
+    let actions: Actions?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 if let job {
                     VStack(alignment: .leading, spacing: 20) {
-                        MetaLines(job: job, limitsTitle: false)
+                        HStack(alignment: .firstTextBaseline) {
+                            MetaLines(job: job, limitsTitle: false)
+                            if let actions {
+                                Menu { actions } label: {
+                                    Label("Job actions", systemImage: "ellipsis")
+                                        .labelStyle(.iconOnly)
+                                        .font(.title3)
+                                }
+                            }
+                        }
                         JobDetailBody(job: job)
                     }
                     .padding(16)
@@ -20,15 +29,14 @@ struct JobDescriptionSheet: View {
             }
             .navigationTitle("Job")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if let actions {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu { actions } label: { Label("Job actions", systemImage: "ellipsis") }
-                    }
-                }
-            }
         }
         .presentationDetents([.fraction(0.45), .large])
         .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.45)))
+    }
+}
+
+extension JobDescriptionSheet where Actions == EmptyView {
+    init(job: Job?) {
+        self.init(job: job, actions: nil)
     }
 }
