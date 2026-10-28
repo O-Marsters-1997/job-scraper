@@ -162,7 +162,7 @@ struct DueModelTests {
         #expect(model.dueJobs.map(\.id) == ["drafted", "desk"])
     }
 
-    @Test func readyToApplyHoldsKeptUnappliedJobsAndLeavesNotDrafted() async throws {
+    @Test func keptUnappliedJobsAreDueAndLeaveShortlisted() async throws {
         func kept(_ id: String, apply: String?, score: Int) -> DueJob {
             DueJob(
                 jobID: id, title: "Role \(id)", companySlug: "co-\(id)", companyKind: .direct, band: .great, score: score, applicationID: "app-\(id)",
@@ -173,10 +173,11 @@ struct DueModelTests {
             job("plain", chase: nil, applyTaskID: "x"),
         ])
 
-        #expect(model.readyToApply.map(\.id) == ["high", "low"])
-        #expect(try #require(model.readyToApply.first).keptDraft?.id == "kept-high")
+        #expect(Set(model.dueJobs.map(\.id)) == ["high", "low"])
+        #expect(try #require(model.dueJobs.first { $0.id == "high" }).dueDraft?.id == "kept-high")
         #expect(model.shortlisted.map(\.id) == ["plain"])
-        #expect(model.shortlistedCount == 3)
+        #expect(model.shortlistedCount == 1)
+        #expect(model.readyDrafts == 2)
     }
 
     @Test(arguments: [
