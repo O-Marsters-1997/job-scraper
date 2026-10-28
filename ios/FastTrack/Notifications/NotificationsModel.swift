@@ -54,6 +54,20 @@ final class NotificationsModel {
         }
     }
 
+    func decide(_ action: TriageAction, on job: Job) async throws {
+        _ = try await client.perform(action.kind(on: job), jobID: job.id)
+        if case .shortlist(draftCV: true) = action,
+            let cv = try? await client.cvTemplates().first(where: \.isDefault)
+        {
+            _ = try? await client.createDraft(job.id, cv)
+        }
+        await load()
+    }
+
+    func note(for job: Job) async throws -> String {
+        try await client.note(job.id).body
+    }
+
     func markAllRead() async {
         let previous = notifications
         notifications = notifications.map { $0.markedRead() }

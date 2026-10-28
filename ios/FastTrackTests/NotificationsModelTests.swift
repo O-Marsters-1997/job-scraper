@@ -6,6 +6,8 @@ struct NotificationsModelTests {
     private final class Calls {
         var read: [String] = []
         var readAll = 0
+        var excluded: [String] = []
+        var loads = 0
     }
 
     private let today = Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_790_000_000))
@@ -82,6 +84,28 @@ struct NotificationsModelTests {
         #expect(model.groups.map { $0.1.map(\.id) } == [
             ["today-late", "today-start"], ["yesterday-end", "yesterday-start"], ["earlier"],
         ])
+    }
+
+    @Test func decideSendsActionForTheJobAndReloads() async throws {
+        let calls = Calls()
+        var client = APIClient.mock(notifications: [item("1")])
+        client.excludeCompany = { companyID in
+            calls.excluded.append(companyID)
+            return CompanyExclusion(name: "Monzo", added: true)
+        }
+        client.notifications = {
+            calls.loads += 1
+            return []
+        }
+        let model = NotificationsModel(client: client)
+        try await model.decide(.excludeCompany, on: .sample)
+        #expect(calls.excluded == [Job.sample.companyID])
+        #expect(calls.loads == 1)
+    }
+
+    @Test func decideFailureThrows() async {
+        let model = NotificationsModel(client: .mock(failure: .status(500)))
+        await #expect(throws: APIError.status(500)) { try await model.decide(.skip, on: .sample) }
     }
 
     @Test func groupsOmitEmptyDays() async {

@@ -11,7 +11,10 @@ struct TriageView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(Session.self) private var session
 
-    init(client: APIClient, store: OfflineStore = .live) {
+    let refresh: Int
+
+    init(client: APIClient, store: OfflineStore = .live, refresh: Int = 0) {
+        self.refresh = refresh
         _model = State(initialValue: TriageModel(client: client, store: store))
     }
 
@@ -50,6 +53,7 @@ struct TriageView: View {
                     onSync: sync,
                     onClearNote: model.clearSyncNote)
             }
+            .onChange(of: refresh) { sync() }
             .onChange(of: scenePhase) {
                 if scenePhase == .active, model.isOffline || !model.queued.isEmpty { sync() }
             }

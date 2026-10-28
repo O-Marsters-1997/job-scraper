@@ -2,6 +2,7 @@ import SwiftUI
 
 struct JobDescriptionSheet: View {
     let job: Job?
+    var actions: AnyView?
 
     var body: some View {
         NavigationStack {
@@ -19,6 +20,13 @@ struct JobDescriptionSheet: View {
             }
             .navigationTitle("Job")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if let actions {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu { actions } label: { Label("Job actions", systemImage: "ellipsis") }
+                    }
+                }
+            }
         }
         .presentationDetents([.fraction(0.45), .large])
         .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.45)))
