@@ -82,9 +82,7 @@ final class TriageModel {
             persistCards()
             let decision = TriageDecision(id: id, job: job, action: action, receipt: receipt)
             undoStack.append(decision)
-            if action != .skip { banner = decision }
-            if case .dismiss = action { await reloadIfRefitted() }
-        }
+            if action != .skip { banner = decision }        }
     }
 
     @discardableResult
@@ -196,11 +194,6 @@ final class TriageModel {
             unseen[stack] = max((page.total ?? page.items.count) - dropped, items.count)
         }
         persistCards()
-    }
-
-    private func reloadIfRefitted() async {
-        guard !isOffline, let latest = try? await client.scoringBands(), latest.fittedAt != scoring?.fittedAt else { return }
-        try? await reloadQueue()
     }
 
     private func apply(_ action: TriageAction, to job: Job) {

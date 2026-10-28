@@ -186,7 +186,7 @@ extension APIClient {
                 let items = jobs.filter { $0.stack == stack }
                 return try respond(JobPage(items: items, total: items.count))
             },
-            scoringBands: { try respond(ScoringBands(bands: .init(great: 80, good: 65, fair: 45), fittedAt: nil)) },
+            scoringBands: { try respond(ScoringBands(bands: .init(great: 80, good: 65, fair: 45))) },
             job: { id in try respond(jobs.first { $0.id == id } ?? .sample) },
             shortlist: { jobID in try respond(Application(id: "application-\(jobID)", jobID: jobID)) },
             deleteApplication: { _ in try respond(()) },

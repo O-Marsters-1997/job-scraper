@@ -15,5 +15,10 @@ type ScoringConfigView struct {
 	BackfillQueued        int64       `json:"backfillQueued"`
 	DroppedOptionIDs      []string    `json:"droppedOptionIds,omitempty"`
 	Bands                 BandCuts    `json:"bands"`
-	FittedAt              *time.Time  `json:"fittedAt,omitempty"`
+}
+
+type BandCuts struct {
+	Great int `json:"great"`
+	Good  int `json:"good"`
+	Fair  int `json:"fair"`
 }

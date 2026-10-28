@@ -8,5 +8,4 @@ struct ScoringBands: Decodable, Hashable {
     }
 
     let bands: Cuts
-    let fittedAt: Date?
 }

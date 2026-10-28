@@ -20,8 +20,7 @@ extension Job {
             case .fair: "\(cuts.fair)–\(cuts.good - 1)"
             case .poor: "below \(cuts.fair)"
             }
-            let source = scoring.fittedAt == nil ? "the default" : "your fitted"
-            parts.append("\(band.title) is \(range) in \(source) bands; this job scores \(score).")
+            parts.append("\(band.title) is \(range); this job scores \(score).")
         }
         if let gate {
             parts.append(gate.effect == .blocked

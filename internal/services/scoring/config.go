@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -218,10 +217,6 @@ func stanceAllowed(spec dto.DimensionSpec, stance string) bool {
 }
 
 func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
-	var fittedAt *time.Time
-	if p := cfg.Preferences.Scoring; p != nil && !p.FittedAt.IsZero() {
-		fittedAt = &p.FittedAt
-	}
 	return dto.ScoringConfigView{
 		Preferences: dto.Preferences{
 			Picks:          picksView(cfg.Preferences.Picks),
@@ -236,8 +231,7 @@ func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 		NotifyThreshold:       cfg.NotifyThreshold,
 		MaxJobAgeDays:         cfg.MaxJobAgeDays,
 		UpdatedAt:             cfg.UpdatedAt,
-		Bands:                 bandsFor(cfg.Preferences.Scoring),
-		FittedAt:              fittedAt,
+		Bands:                 dto.BandCuts{Great: greatFrom, Good: goodFrom, Fair: fairFrom},
 	}
 }
 
