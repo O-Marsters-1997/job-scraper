@@ -16,6 +16,7 @@ type DraftRole struct {
 	Budget     int          `json:"budget"`
 	Bullets    []RoleBullet `json:"bullets"`
 	Bank       []RoleBullet `json:"bank"`
+	Excluded   []RoleBullet `json:"excluded"`
 }
 
 type RoleBullet struct {

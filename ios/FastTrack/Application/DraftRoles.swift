@@ -13,6 +13,7 @@ struct DraftRoles: Decodable {
         let budget: Int
         let bullets: [Bullet]
         let bank: [Bullet]
+        var excluded: [Bullet] = []
 
         var id: String { positionID ?? "\(employer)|\(title)" }
         var isLinked: Bool { positionID != nil }
@@ -25,19 +26,28 @@ struct DraftRoles: Decodable {
         func linesAfter(replacing old: Bullet, with new: Bullet) -> Int { used - old.lines + new.lines }
         func budgetLabel(forLines lines: Int) -> String { lines > budget ? "\(lines - budget) over" : "\(lines)/\(budget)" }
 
-        func replacing(_ old: Bullet, with new: Bullet) -> [Bullet] { bullets.map { $0.id == old.id ? new : $0 } }
+        func replacing(_ old: Bullet, with new: Bullet) -> [Bullet] { bullets.map { $0.text == old.text ? new : $0 } }
         func adding(_ new: Bullet) -> [Bullet] { bullets + [new] }
-        func removing(_ old: Bullet) -> [Bullet] { bullets.filter { $0.id != old.id } }
+        func removing(_ old: Bullet) -> [Bullet] { bullets.filter { $0.text != old.text } }
 
         func moving(_ bullet: Bullet, by offset: Int) -> [Bullet] {
-            guard let i = bullets.firstIndex(of: bullet), bullets.indices.contains(i + offset) else { return bullets }
+            guard let i = bullets.firstIndex(where: { $0.text == bullet.text }), bullets.indices.contains(i + offset) else { return bullets }
             var moved = bullets
             moved.swapAt(i, i + offset)
             return moved
         }
 
+        func moving(_ bullet: Bullet, onto target: Bullet) -> [Bullet] {
+            guard let from = bullets.firstIndex(where: { $0.text == bullet.text }),
+                let to = bullets.firstIndex(where: { $0.text == target.text }), from != to
+            else { return bullets }
+            var moved = bullets
+            moved.insert(moved.remove(at: from), at: to)
+            return moved
+        }
+
         enum CodingKeys: String, CodingKey {
-            case employer, title, budget, bullets, bank
+            case employer, title, budget, bullets, bank, excluded
             case positionID = "positionId"
         }
     }
