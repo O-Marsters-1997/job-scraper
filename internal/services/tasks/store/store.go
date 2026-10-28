@@ -288,6 +288,21 @@ func (s *Store) CompleteApplyTasks(ctx context.Context, tx pgx.Tx, userID, jobID
 	return nil
 }
 
+func (s *Store) DeleteOpenApplyTasks(ctx context.Context, tx pgx.Tx, userID string, jobIDs []string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	jids, err := data.UUIDs(jobIDs)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.WithTx(tx).DeleteOpenApplyTasks(ctx, sqlc.DeleteOpenApplyTasksParams{UserID: uid, JobIds: jids}); err != nil {
+		return fmt.Errorf("store.DeleteOpenApplyTasks: %w", err)
+	}
+	return nil
+}
+
 func userAndJob(userID, jobID string) (uid, jid pgtype.UUID, err error) {
 	if uid, err = data.UUID(userID); err != nil {
 		return uid, jid, err

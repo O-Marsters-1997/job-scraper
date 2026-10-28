@@ -31,6 +31,7 @@ type EventRecorder interface {
 type TaskSync interface {
 	ApplicationTracked(ctx context.Context, tx pgx.Tx, userID, jobID string) error
 	ApplicationApplied(ctx context.Context, tx pgx.Tx, userID, jobID string) error
+	ApplicationsDeleted(ctx context.Context, tx pgx.Tx, userID string, jobIDs []string) error
 }
 
 type Store struct {
@@ -270,13 +271,24 @@ func (s *Store) DeleteApplication(ctx context.Context, userID, id string) error 
 	if err != nil {
 		return err
 	}
-	if err := s.queries.DeleteApplication(ctx, sqlc.DeleteApplicationParams{
-		ID:     aid,
-		UserID: uid,
-	}); err != nil {
-		return fmt.Errorf("store.DeleteApplication: %w", err)
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		jobIDs, err := s.queries.WithTx(tx).DeleteApplication(ctx, sqlc.DeleteApplicationParams{ID: aid, UserID: uid})
+		if err != nil {
+			return fmt.Errorf("store.DeleteApplication: %w", err)
+		}
+		return s.dropApplyTasks(ctx, tx, userID, jobIDs)
+	})
+}
+
+func (s *Store) dropApplyTasks(ctx context.Context, tx pgx.Tx, userID string, jobIDs []pgtype.UUID) error {
+	if len(jobIDs) == 0 {
+		return nil
 	}
-	return nil
+	ids := make([]string, len(jobIDs))
+	for i, id := range jobIDs {
+		ids[i] = id.String()
+	}
+	return s.tasks.ApplicationsDeleted(ctx, tx, userID, ids)
 }
 
 func (s *Store) DeleteApplications(ctx context.Context, userID string, ids []string) error {
@@ -288,10 +300,13 @@ func (s *Store) DeleteApplications(ctx context.Context, userID string, ids []str
 	if err != nil {
 		return err
 	}
-	if err := s.queries.DeleteApplications(ctx, sqlc.DeleteApplicationsParams{UserID: uid, Ids: aids}); err != nil {
-		return fmt.Errorf("store.DeleteApplications: %w", err)
-	}
-	return nil
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		jobIDs, err := s.queries.WithTx(tx).DeleteApplications(ctx, sqlc.DeleteApplicationsParams{UserID: uid, Ids: aids})
+		if err != nil {
+			return fmt.Errorf("store.DeleteApplications: %w", err)
+		}
+		return s.dropApplyTasks(ctx, tx, userID, jobIDs)
+	})
 }
 
 func (s *Store) GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error) {
