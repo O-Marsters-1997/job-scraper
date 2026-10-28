@@ -31,6 +31,28 @@
           "onSource": false,
           "replacedFrom": null
         }
+      ],
+      "excluded": [
+        {
+          "slotId": "",
+          "achievementId": null,
+          "text": "Ran on-call",
+          "lines": 1,
+          "lean": null,
+          "state": null,
+          "onSource": true,
+          "replacedFrom": null
+        },
+        {
+          "slotId": "",
+          "achievementId": null,
+          "text": "Wrote docs",
+          "lines": 1,
+          "lean": null,
+          "state": null,
+          "onSource": true,
+          "replacedFrom": null
+        }
       ]
     }
   ]

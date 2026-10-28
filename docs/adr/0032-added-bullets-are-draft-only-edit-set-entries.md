@@ -15,8 +15,13 @@ the User adds has no base paragraph and no slot ID.
   their positional mapping to base slots. `after` names the bullet it follows, a base slot or another
   added one. `PositionEdit.Lines()` is the one place that merges both into page order.
 - **Save.** `PUT .../slots` takes `{slotId, text, after}` to add or update an added bullet and
-  `{slotId, remove: true}` to delete one. Removal is idempotent and re-anchors its followers. Removing a base
-  bullet is rejected: only what the User added can be removed.
+  `{slotId, remove: true}` to delete one. Removal is idempotent and re-anchors its followers. A `slots`
+  removal of a base bullet is rejected: only what the User added can be removed that way.
+- **Exclusion** (amended for #1449). A role's `positions` list may omit base bullets: `docedit` deletes the
+  Doc paragraphs left without a line. `GET .../roles` returns the omitted ones as `excluded`, so a client
+  can show them dimmed and put them back by resending their text in the list. A base bullet swapped out
+  for another is not excluded; it stays under that bullet's `replacedFrom`. The list still keeps at least
+  one bullet.
 - **Rendering.** `docedit` maps the merged lines onto the Draft Doc's paragraphs by position. Extra lines
   are inserted as `"\n" + text` at the end of the position's last paragraph, so Google copies that
   paragraph's bullet and paragraph style. Newly inserted text takes the preceding character's text style.

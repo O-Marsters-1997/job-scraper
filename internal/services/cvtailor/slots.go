@@ -182,9 +182,6 @@ func (pl plan) replaceBullets(edits cvedit.EditSet, reps []dto.DraftPosition) (c
 		if at < 0 {
 			return edits, apperr.Invalid("unknown position")
 		}
-		if len(r.Bullets) < len(ids) {
-			return edits, apperr.Invalid("a base bullet cannot be removed")
-		}
 		pe := cvedit.PositionEdit{PositionID: r.PositionID}
 		after := ""
 		for i, b := range r.Bullets {

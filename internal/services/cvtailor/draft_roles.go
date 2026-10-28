@@ -117,7 +117,7 @@ func (s *Service) DraftRoles(ctx context.Context, userID string, q dto.DraftQuer
 	for _, pe := range edits.Positions {
 		slots := slotsOf[pe.PositionID]
 		pos := bankOf[pe.PositionID]
-		role := dto.DraftRole{PositionID: &pe.PositionID, Employer: pos.Employer, Title: pos.Title, Bullets: []dto.RoleBullet{}, Bank: []dto.RoleBullet{}}
+		role := dto.DraftRole{PositionID: &pe.PositionID, Employer: pos.Employer, Title: pos.Title, Bullets: []dto.RoleBullet{}, Bank: []dto.RoleBullet{}, Excluded: []dto.RoleBullet{}}
 		onSource := map[string]bool{}
 		for _, sl := range slots {
 			onSource[normalizeText(sl.Text)] = true
@@ -135,6 +135,7 @@ func (s *Service) DraftRoles(ctx context.Context, userID string, q dto.DraftQuer
 				Lean: bl.Lean, State: bl.State, OnSource: onSource[normalizeText(l.Text)], ReplacedFrom: bl.ReplacedFrom,
 			})
 		}
+		role.Excluded = excludedBase(role.Bullets, slots, pos, geo, blockAt)
 		out.Roles = append(out.Roles, role)
 	}
 	blockOf := func(positionID string) *tabcopy.Block {
@@ -145,6 +146,9 @@ func (s *Service) DraftRoles(ctx context.Context, userID string, q dto.DraftQuer
 	}
 	if err := s.fillBank(ctx, userID, draft.JobID, out.Roles, bankOf, used, sourceTexts, blockOf, geo); err != nil {
 		return dto.DraftRoles{}, err
+	}
+	for i := range out.Roles {
+		foldExcludedBank(&out.Roles[i])
 	}
 	linked := map[string]bool{}
 	for _, m := range mappings {
@@ -159,13 +163,54 @@ func (s *Service) DraftRoles(ctx context.Context, userID string, q dto.DraftQuer
 		if !ok {
 			i = len(out.Roles)
 			roleAt[sl.HeadingIndex] = i
-			out.Roles = append(out.Roles, dto.DraftRole{Title: ds.Headings[sl.HeadingIndex].Text, Bullets: []dto.RoleBullet{}, Bank: []dto.RoleBullet{}})
+			out.Roles = append(out.Roles, dto.DraftRole{Title: ds.Headings[sl.HeadingIndex].Text, Bullets: []dto.RoleBullet{}, Bank: []dto.RoleBullet{}, Excluded: []dto.RoleBullet{}})
 		}
 		n := geo.lines(sl.Text, blockAt[sl.StartIndex])
 		out.Roles[i].Budget += n
 		out.Roles[i].Bullets = append(out.Roles[i].Bullets, dto.RoleBullet{Text: sl.Text, Lines: n, OnSource: true})
 	}
 	return out, nil
+}
+
+func excludedBase(bullets []dto.RoleBullet, slots []docparse.Slot, pos dto.Position, geo pageGeometry, blockAt map[int]*tabcopy.Block) []dto.RoleBullet {
+	present := map[string]bool{}
+	for _, b := range bullets {
+		present[normalizeText(b.Text)] = true
+		if b.ReplacedFrom != nil {
+			present[normalizeText(*b.ReplacedFrom)] = true
+		}
+	}
+	out := []dto.RoleBullet{}
+	for _, sl := range slots {
+		if present[normalizeText(sl.Text)] {
+			continue
+		}
+		b := dto.RoleBullet{Text: sl.Text, Lines: geo.lines(sl.Text, blockAt[sl.StartIndex]), OnSource: true}
+		for _, a := range pos.Achievements {
+			if normalizeText(a.Text) == normalizeText(sl.Text) {
+				b.AchievementID = &a.ID
+				break
+			}
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
+func foldExcludedBank(r *dto.DraftRole) {
+	for i, ex := range r.Excluded {
+		if ex.AchievementID == nil {
+			continue
+		}
+		at := slices.IndexFunc(r.Bank, func(b dto.RoleBullet) bool {
+			return b.AchievementID != nil && *b.AchievementID == *ex.AchievementID
+		})
+		if at < 0 {
+			continue
+		}
+		r.Excluded[i].Lean, r.Excluded[i].State = r.Bank[at].Lean, r.Bank[at].State
+		r.Bank = slices.Delete(r.Bank, at, at+1)
+	}
 }
 
 func (s *Service) fillBank(ctx context.Context, userID, jobID string, roles []dto.DraftRole, bankOf map[string]dto.Position, used map[string]bool, sourceTexts map[string]map[string]bool, blockOf func(positionID string) *tabcopy.Block, geo pageGeometry) error {

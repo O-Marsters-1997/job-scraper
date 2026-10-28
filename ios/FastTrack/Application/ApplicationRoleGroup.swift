@@ -34,7 +34,22 @@ struct ApplicationRoleGroup: View {
                         move: { offset in Task { await model.move(bullet, by: offset, in: role) } },
                         remove: { Task { await model.remove(bullet, from: role) } }
                     )
+                    .draggable(bullet.text)
+                    .dropDestination(for: String.self) { texts, _ in
+                        guard let dragged = role.bullets.first(where: { $0.text == texts.first }) else { return false }
+                        Task { await model.move(dragged, onto: bullet, in: role) }
+                        return true
+                    }
                     Divider().padding(.leading, 42)
+                }
+                if !role.excluded.isEmpty {
+                    Text("Left out").font(.caption).foregroundStyle(.secondary)
+                        .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 2)
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(role.excluded) { bullet in
+                        ApplicationBankRow(bullet: bullet, symbol: "plus", hint: "Put it back in the CV") { putBack(bullet) }
+                        Divider().padding(.leading, 42)
+                    }
                 }
                 if !role.bank.isEmpty {
                     bankToggle
@@ -55,6 +70,14 @@ struct ApplicationRoleGroup: View {
         }
         .sheet(item: $adding) { ApplicationInPlaceOfSheet(role: role, candidate: $0, model: model) }
         .sheet(item: $replacing) { ApplicationSwapInSheet(role: role, old: $0, model: model) }
+    }
+
+    private func putBack(_ bullet: DraftRoles.Bullet) {
+        if role.fits(bullet) {
+            Task { await model.add(bullet, to: role) }
+        } else {
+            adding = bullet
+        }
     }
 
     private var header: some View {
@@ -141,13 +164,13 @@ struct ApplicationBulletRow: View {
             if !isLast { Button("Move down", systemImage: "arrow.down") { move(1) } }
             if !isOnlyOne {
                 Divider()
-                Button("Remove", systemImage: "minus.circle", role: .destructive, action: remove)
+                Button(bullet.onSource ? "Leave out" : "Remove", systemImage: "minus.circle", role: .destructive, action: remove)
             }
         } label: {
             content.frame(minHeight: 44).contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Shows replace, move and remove actions")
+        .accessibilityHint("Shows replace, move and leave out actions. Touch and hold to drag.")
     }
 
     private var content: some View {
@@ -173,12 +196,14 @@ struct ApplicationBulletRow: View {
 
 struct ApplicationBankRow: View {
     let bullet: DraftRoles.Bullet
+    var symbol = "arrow.left.arrow.right"
+    var hint = "Choose what it replaces"
     let choose: () -> Void
 
     var body: some View {
         Button(action: choose) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "arrow.left.arrow.right")
+                Image(systemName: symbol)
                     .font(.caption)
                     .foregroundStyle(Color(.tertiaryLabel))
                     .frame(width: 18, height: 18)
@@ -194,6 +219,6 @@ struct ApplicationBankRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Choose what it replaces")
+        .accessibilityHint(hint)
     }
 }
