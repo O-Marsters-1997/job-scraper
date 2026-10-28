@@ -409,6 +409,7 @@ export function DraftEditor(props: {
 				: undefined;
 		},
 		roleFor: (block) => rolePicks.headings().get(block),
+		isPlaceholder: rolePicks.isPlaceholder,
 		get onEditRole() {
 			return editable() ? openRole : undefined;
 		},
@@ -766,7 +767,9 @@ export function DraftEditor(props: {
 							onSelect={setSelectedPick}
 							onToggle={(id) => rolePicks.toggle(positionId(), id)}
 							onMove={(id, place) => rolePicks.move(positionId(), id, place)}
-							onClear={() => rolePicks.clear(positionId())}
+							carried={rolePicks.carriedFor(positionId())}
+							onEmpty={() => rolePicks.empty(positionId())}
+							onReset={() => rolePicks.reset(positionId())}
 							onClose={closeRole}
 						/>
 					);
