@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NotificationsView: View {
     let model: NotificationsModel
+    var onDecided: () -> Void = {}
     @State private var openJobID: String?
     @State private var preview: AppNotification?
     @State private var suppressedTap: String?
@@ -11,7 +12,9 @@ struct NotificationsView: View {
             content
                 .navigationBarTitleDisplayMode(.inline)
                 .navigationDestination(item: $openJobID) { JobDetailView(id: $0) }
-                .sheet(item: $preview, onDismiss: { suppressedTap = nil }) { JobPreviewSheet(id: $0.jobID) }
+                .sheet(item: $preview, onDismiss: { suppressedTap = nil }) {
+                    JobPreviewSheet(id: $0.jobID, model: model, onDecided: onDecided)
+                }
                 .sensoryFeedback(.impact(weight: .medium), trigger: preview) { _, new in new != nil }
         }
     }
@@ -173,22 +176,59 @@ private struct NotificationRow: View {
 
 private struct JobPreviewSheet: View {
     let id: String
+    let model: NotificationsModel
+    let onDecided: () -> Void
     @Environment(\.apiClient) private var client
+    @Environment(\.dismiss) private var dismiss
     @State private var job: Job?
     @State private var loaded = false
+    @State private var showReasons = false
+    @State private var showNote = false
+    @State private var failed = false
 
     var body: some View {
         Group {
             if loaded {
-                JobDescriptionSheet(job: job)
+                JobDescriptionSheet(job: job, actions: job.map { menu(for: $0) })
             } else {
                 ProgressView()
                     .presentationDetents([.fraction(0.45), .large])
             }
         }
+        .sheet(isPresented: $showReasons) {
+            DismissReasonSheet { decide(.dismiss(reasons: $0)) }
+        }
+        .sheet(isPresented: $showNote) {
+            if let job {
+                NoteSheet(load: { try await model.note(for: job) }) { decide(.note($0)) }
+            }
+        }
+        .alert("Couldn't save that", isPresented: $failed) { Button("OK") {} }
         .task {
             job = try? await client.job(id)
             loaded = true
+        }
+    }
+
+    private func menu(for job: Job) -> some View {
+        JobActionsMenu(
+            job: job, onDecide: decide, onDismissWithReason: { showReasons = true }, onAddNote: { showNote = true })
+    }
+
+    private func decide(_ action: TriageAction) {
+        guard let job else { return }
+        Task {
+            do {
+                try await model.decide(action, on: job)
+                onDecided()
+                if !action.keepsCard {
+                    dismiss()
+                } else if case .reclassify = action {
+                    self.job = try? await client.job(id)
+                }
+            } catch {
+                failed = true
+            }
         }
     }
 }

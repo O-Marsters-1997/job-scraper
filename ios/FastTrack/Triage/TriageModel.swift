@@ -63,7 +63,7 @@ final class TriageModel {
         lastRemoved = action
         banner = nil
         let id = UUID()
-        let kind = kind(of: action, on: job)
+        let kind = action.kind(on: job)
         return Task {
             var receipt: UndoReceipt?
             do {
@@ -163,17 +163,6 @@ final class TriageModel {
             _ = try await client.createDraft(job.id, cv)
         } catch {
             fail("The job was shortlisted, but the CV draft didn't start: \(error.localizedDescription)")
-        }
-    }
-
-    private func kind(of action: TriageAction, on job: Job) -> QueuedAction.Kind {
-        switch action {
-        case .shortlist(let draftCV): .shortlist(draftCV: draftCV)
-        case .dismiss(let reasons): .dismiss(reasons: reasons)
-        case .skip: .skip
-        case .excludeCompany: .excludeCompany(companyID: job.companyID)
-        case .reclassify(let kind): .reclassify(companyID: job.companyID, to: kind)
-        case .note(let body): .note(body: body)
         }
     }
 

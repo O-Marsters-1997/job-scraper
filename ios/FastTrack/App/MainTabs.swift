@@ -4,6 +4,7 @@ struct MainTabs: View {
     private enum Tab { case triage, due, notifications }
 
     @State private var tab = Tab.triage
+    @State private var triageRefresh = 0
     @State private var due: DueModel
     @State private var notifications: NotificationsModel
     @Binding var path: [Route]
@@ -22,7 +23,7 @@ struct MainTabs: View {
     var body: some View {
         TabView(selection: $tab) {
             NavigationStack(path: $path) {
-                TriageView(client: client)
+                TriageView(client: client, refresh: triageRefresh)
                     .navigationDestination(for: Route.self) { route in
                         switch route {
                         case .job(let id): JobDetailView(id: id)
@@ -35,7 +36,10 @@ struct MainTabs: View {
                 .tabItem { Label("Due", systemImage: "checklist") }
                 .badge(due.badge)
                 .tag(Tab.due)
-            NotificationsView(model: notifications)
+            NotificationsView(model: notifications, onDecided: {
+                triageRefresh += 1
+                Task { await due.load() }
+            })
                 .tabItem { Label("Notifications", systemImage: "bell") }
                 .badge(notifications.badge)
                 .tag(Tab.notifications)
