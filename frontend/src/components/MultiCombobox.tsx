@@ -152,10 +152,11 @@ export function MultiCombobox(props: {
 												? "Drag to reorder, or Alt+Arrow keys"
 												: undefined
 										}
-										onPointerDown={(e) =>
-											!props.onReorder && e.preventDefault()
-										}
-										onDragStart={() => setDragFrom(i())}
+										onPointerDown={(e) => e.preventDefault()}
+										onDragStart={(e) => {
+											e.dataTransfer?.setData("text/plain", o.label);
+											setDragFrom(i());
+										}}
 										onDragOver={(e) =>
 											dragFrom() !== undefined && e.preventDefault()
 										}

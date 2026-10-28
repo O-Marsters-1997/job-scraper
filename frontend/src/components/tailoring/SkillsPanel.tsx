@@ -18,6 +18,8 @@ import {
 const fitPct = (score: number) =>
 	Math.round(Math.min(Math.max(score, 0), 1) * 100);
 
+const normalise = (s: string) => s.toLowerCase();
+
 const lineName = (g: SkillGroup) => g.label || "Skills";
 
 function SkillsForm(props: {
@@ -52,10 +54,10 @@ function SkillsForm(props: {
 			.map((name) => ({ id: name, label: name }));
 	};
 	const candidatesFor = (line: number) => {
-		const onCv = new Set(groups().flatMap((g) => g.items));
+		const onCv = new Set(groups().flatMap((g) => g.items.map(normalise)));
 		return (
 			suggestions.data?.lines[line]?.candidates.filter(
-				(c) => !onCv.has(c.name),
+				(c) => !onCv.has(normalise(c.name)),
 			) ?? []
 		);
 	};
