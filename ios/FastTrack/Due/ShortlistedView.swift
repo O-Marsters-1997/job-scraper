@@ -75,6 +75,7 @@ struct ShortlistedView: View {
             actions(job)
         }
         .hairlineCard()
+        .swipeToDelete { Task { await model.delete(job) } }
     }
 
     private func actions(_ job: DueJob) -> some View {

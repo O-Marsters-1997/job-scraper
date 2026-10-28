@@ -279,6 +279,17 @@ func (f *FakeStore) CreateApplyTask(ctx context.Context, _ pgx.Tx, userID, jobID
 	return err
 }
 
+func (f *FakeStore) DeleteOpenApplyTasks(_ context.Context, _ pgx.Tx, userID string, jobIDs []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, t := range f.tasks {
+		if t.userID == userID && t.TypeSystemKey == dto.TaskTypeApply && t.JobID != nil && slices.Contains(jobIDs, *t.JobID) && t.CompletedAt == nil {
+			delete(f.tasks, id)
+		}
+	}
+	return nil
+}
+
 func (f *FakeStore) CompleteApplyTasks(_ context.Context, _ pgx.Tx, userID, jobID string, now time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -41,6 +41,10 @@ func (m *Module) ApplicationTracked(ctx context.Context, tx pgx.Tx, userID, jobI
 	return m.store.CreateApplyTask(ctx, tx, userID, jobID)
 }
 
+func (m *Module) ApplicationsDeleted(ctx context.Context, tx pgx.Tx, userID string, jobIDs []string) error {
+	return m.store.DeleteOpenApplyTasks(ctx, tx, userID, jobIDs)
+}
+
 func (m *Module) ApplicationApplied(ctx context.Context, tx pgx.Tx, userID, jobID string) error {
 	return m.store.CompleteApplyTasks(ctx, tx, userID, jobID, time.Now())
 }

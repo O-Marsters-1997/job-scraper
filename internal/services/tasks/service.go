@@ -43,6 +43,7 @@ type Store interface {
 	SeedDefaultTaskTypes(ctx context.Context, tx pgx.Tx, userID string) error
 	CreateApplyTask(ctx context.Context, tx pgx.Tx, userID, jobID string) error
 	CompleteApplyTasks(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error
+	DeleteOpenApplyTasks(ctx context.Context, tx pgx.Tx, userID string, jobIDs []string) error
 }
 
 type Service struct {

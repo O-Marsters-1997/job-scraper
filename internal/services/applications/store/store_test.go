@@ -370,6 +370,36 @@ func TestApplyTaskSync(t *testing.T) {
 		}
 	})
 
+	t.Run("deleting the application removes its open Apply task", func(t *testing.T) {
+		t.Parallel()
+		e := setup(t)
+		app, err := e.st.CreateApplication(t.Context(), e.userID, dto.CreateApplicationInput{JobID: e.jobID})
+		if err != nil {
+			t.Fatalf("CreateApplication err = %v", err)
+		}
+		if err := e.st.DeleteApplication(t.Context(), e.userID, app.ID); err != nil {
+			t.Fatalf("DeleteApplication err = %v", err)
+		}
+		if open, done := taskCounts(t, e); open != 0 || done != 0 {
+			t.Errorf("open = %d, done = %d, want 0 and 0", open, done)
+		}
+	})
+
+	t.Run("bulk deleting applications removes their open Apply tasks", func(t *testing.T) {
+		t.Parallel()
+		e := setup(t)
+		app, err := e.st.CreateApplication(t.Context(), e.userID, dto.CreateApplicationInput{JobID: e.jobID})
+		if err != nil {
+			t.Fatalf("CreateApplication err = %v", err)
+		}
+		if err := e.st.DeleteApplications(t.Context(), e.userID, []string{app.ID}); err != nil {
+			t.Fatalf("DeleteApplications err = %v", err)
+		}
+		if open, done := taskCounts(t, e); open != 0 || done != 0 {
+			t.Errorf("open = %d, done = %d, want 0 and 0", open, done)
+		}
+	})
+
 	t.Run("tracking straight to Applied leaves the task done", func(t *testing.T) {
 		t.Parallel()
 		e := setup(t)

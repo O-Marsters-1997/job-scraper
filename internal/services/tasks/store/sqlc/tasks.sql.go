@@ -196,6 +196,25 @@ func (q *Queries) CreateTaskType(ctx context.Context, arg CreateTaskTypeParams) 
 	return i, err
 }
 
+const deleteOpenApplyTasks = `-- name: DeleteOpenApplyTasks :exec
+DELETE FROM tasks t
+USING task_types tt
+WHERE tt.id = t.type_id AND tt.system_key = 'apply'
+  AND t.user_id = $1::uuid
+  AND t.job_id = ANY($2::uuid[])
+  AND t.completed_at IS NULL
+`
+
+type DeleteOpenApplyTasksParams struct {
+	UserID pgtype.UUID
+	JobIds []pgtype.UUID
+}
+
+func (q *Queries) DeleteOpenApplyTasks(ctx context.Context, arg DeleteOpenApplyTasksParams) error {
+	_, err := q.db.Exec(ctx, deleteOpenApplyTasks, arg.UserID, arg.JobIds)
+	return err
+}
+
 const deleteTask = `-- name: DeleteTask :execrows
 DELETE FROM tasks WHERE id = $1 AND user_id = $2
 `
