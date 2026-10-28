@@ -223,6 +223,8 @@ export function createDraft(input: DraftInput): DraftRef {
 			content: null,
 			base: null,
 			skillsEditable: false,
+			baseDocId: input.docId,
+			baseTabId: input.tabId,
 		},
 		polls: 0,
 	});
@@ -387,6 +389,8 @@ function seedDraft(id: string, outcome: Draft["outcome"]) {
 			],
 			provenance: mockProvenance(),
 			skillsEditable: true,
+			baseDocId: "mock-doc",
+			baseTabId: "mock-tab",
 			...mockContent(),
 		},
 	});
