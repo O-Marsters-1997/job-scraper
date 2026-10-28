@@ -398,9 +398,9 @@ digits), on a 10% tint of the hue with 5pt corners. Used for Bands, chase state 
   ease-out (it fades with Reduce Motion). Below that, it springs back (`.spring(duration: 0.3, bounce: 0.15)`,
   no bounce with Reduce Motion).
 
-**CV editor bullets.** Drag is the Triage card's gesture and, here, the system's touch-and-hold lift
-(`draggable` / `dropDestination`) to reorder a bullet within its role: dropping on a row takes that row's
-place. A tap still opens the row's native `Menu` (Replace with…, Move up, Move down, Leave out). A base-CV bullet
+**CV editor bullets.** Drag is the Triage card's gesture and, here, a grip handle at the row's trailing
+edge (`draggable`, since the `Menu` swallows a touch-and-hold on the row) to reorder a bullet within its role:
+dropping on a row (`dropDestination`) takes that row's place. A tap still opens the row's native `Menu` (Replace with…, Move up, Move down, Leave out). A base-CV bullet
 the User leaves out drops into a "Left out" list under the role, dimmed to `.secondary`; tapping it puts it
 back (a sheet picks what it replaces when it no longer fits). Reordering and leaving out save at once and
 queue, so a second drag never overwrites the first ([ADR 0032](../docs/adr/0032-added-bullets-are-draft-only-edit-set-entries.md)).
