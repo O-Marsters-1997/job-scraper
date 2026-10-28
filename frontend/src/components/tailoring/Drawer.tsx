@@ -49,6 +49,7 @@ export function RoleBudget(props: { budget: RoleBudgetValue }) {
 export function Drawer(props: {
 	label: string;
 	title: string;
+	crumb?: JSX.Element;
 	hint: string;
 	onClose: () => void;
 	children: JSX.Element;
@@ -75,6 +76,7 @@ export function Drawer(props: {
 		>
 			<header class="flex items-start gap-3 border-b border-border px-5 py-4">
 				<div class="flex-1">
+					{props.crumb}
 					<h2 class="text-sm font-semibold text-foreground">{props.title}</h2>
 					<p class="mt-0.5 text-xs text-muted">{props.hint}</p>
 				</div>

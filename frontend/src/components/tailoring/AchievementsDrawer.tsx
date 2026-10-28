@@ -20,6 +20,7 @@ export function AchievementsDrawer(
 		usedLines: number;
 		budgetLines: number;
 		roleBudget: RoleBudgetValue | undefined;
+		onBackToRoles?: (() => void) | undefined;
 		onClear: () => void;
 		onClose: () => void;
 	},
@@ -28,6 +29,19 @@ export function AchievementsDrawer(
 		<Drawer
 			label="Choose Achievements"
 			title={props.title}
+			crumb={
+				<Show when={props.onBackToRoles}>
+					{(back) => (
+						<button
+							type="button"
+							class="mb-0.5 text-sm text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+							onClick={() => back()()}
+						>
+							Roles ›
+						</button>
+					)}
+				</Show>
+			}
 			hint={HINT}
 			onClose={props.onClose}
 		>
