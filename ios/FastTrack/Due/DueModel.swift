@@ -35,7 +35,7 @@ final class DueModel {
     func shortlisted(matching query: String) -> [DueJob] { shortlisted.filter { $0.matches(query) } }
     var comingUp: [DueJob] { jobs.filter { $0.chaseBy != nil && !hasChaseDue($0) }.sorted { ($0.chaseBy ?? .distantFuture) < ($1.chaseBy ?? .distantFuture) } }
     var chasesDue: Int { jobs.filter(hasChaseDue).count }
-    var readyDrafts: Int { jobs.filter { $0.draft?.state == .ready }.count }
+    var readyDrafts: Int { jobs.filter { $0.dueDraft?.state == .ready }.count }
     var hasPendingDraft: Bool { jobs.contains { $0.draft?.state == .pending } }
     var badge: Int { loadState.value == nil ? 0 : chasesDue + readyDrafts }
 

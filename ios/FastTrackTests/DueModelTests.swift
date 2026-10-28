@@ -177,6 +177,7 @@ struct DueModelTests {
         #expect(try #require(model.dueJobs.first { $0.id == "high" }).dueDraft?.id == "kept-high")
         #expect(model.shortlisted.map(\.id) == ["plain"])
         #expect(model.shortlistedCount == 1)
+        #expect(model.readyDrafts == 2)
     }
 
     @Test(arguments: [
