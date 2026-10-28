@@ -11,6 +11,7 @@ import {
 } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
+import { inlineMarks } from "@/lib/bulletDiff";
 import { isSparse, maxCharsForFewerLines } from "@/lib/docLayout";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
@@ -19,10 +20,10 @@ import { createDraftEditor } from "../../hooks/useDraftEditor";
 import { useJob } from "../../hooks/useJobs";
 import { createKeepFlow } from "../../hooks/useKeepFlow";
 import { createSuggestions } from "../../hooks/useSuggestions";
-import { ChangesDiff } from "./ChangesDiff";
 import {
 	DEFAULT_BODY_LINE_PT,
 	DocPage,
+	type PageDiff,
 	type PageEditor,
 	type PageMetrics,
 	PX_PER_PT,
@@ -88,7 +89,7 @@ export function DraftEditor(props: {
 	const [metrics, setMetrics] = createSignal(NO_METRICS);
 	const [showCounts, setShowCounts] = createSignal(true);
 	const [showResolved, setShowResolved] = createSignal(false);
-	const [showChanges, setShowChanges] = createSignal(false);
+	const [showDiff, setShowDiff] = createSignal(false);
 	const [preview, setPreview] = createSignal(false);
 	const [skillsOpen, setSkillsOpen] = createSignal(false);
 	const [stage, setStage] = createSignal<HTMLDivElement>();
@@ -103,6 +104,26 @@ export function DraftEditor(props: {
 	const changes = () => {
 		const { base, content } = props.draft;
 		return base && content ? { base, content } : null;
+	};
+	const pageDiff = (): PageDiff | undefined => {
+		const c = changes();
+		if (!showDiff() || !c) return undefined;
+		const added = new Set<string>();
+		const removedAfter: Record<string, string[]> = {};
+		for (const p of props.draft.provenance?.positions ?? []) {
+			const slots = p.bullets.map((b) => b.slotId);
+			const base = c.base.positions.find((x) => x.positionId === p.positionId);
+			const marks = inlineMarks(
+				base?.bullets.map((b) => b.text) ?? [],
+				slots.map(ed.text),
+			);
+			slots.forEach((s, i) => {
+				if (marks.added[i]) added.add(s);
+			});
+			const last = slots.at(-1);
+			if (last && marks.removed.length > 0) removedAfter[last] = marks.removed;
+		}
+		return { added, removedAfter };
 	};
 
 	const pagePx = () => (props.layout?.page.width ?? 0) * PX_PER_PT;
@@ -312,10 +333,10 @@ export function DraftEditor(props: {
 						<Button
 							variant="ghost"
 							size="sm"
-							aria-pressed={showChanges()}
-							onClick={() => setShowChanges((v) => !v)}
+							aria-pressed={showDiff()}
+							onClick={() => setShowDiff((v) => !v)}
 						>
-							Changes
+							Diff
 						</Button>
 					</Show>
 					<Button
@@ -358,26 +379,6 @@ export function DraftEditor(props: {
 				}}
 			>
 				<Switch fallback={<LayoutUnavailable reason={props.layoutError} />}>
-					<Match when={showChanges() && changes()}>
-						{(c) => (
-							<div class="mx-auto max-w-3xl px-6 py-10">
-								<section
-									aria-label="Changes from your base CV"
-									class="rounded-xl border border-border bg-surface p-6"
-								>
-									<h2 class="mb-3 text-sm font-semibold">
-										Changes from your base CV
-									</h2>
-									<ChangesDiff
-										base={c().base}
-										content={c().content}
-										provenance={props.draft.provenance}
-										onUndo={editable() ? ed.setText : undefined}
-									/>
-								</section>
-							</div>
-						)}
-					</Match>
 					<Match when={props.layout}>
 						{(layout) => (
 							<div
@@ -415,6 +416,7 @@ export function DraftEditor(props: {
 										<DocPage
 											layout={layout()}
 											editor={pageEditor}
+											diff={pageDiff()}
 											onMetrics={setMetrics}
 											onMeasurer={(fn) => {
 												measureLines = fn;

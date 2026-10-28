@@ -63,3 +63,14 @@ export function bulletDiff(base: string[], current: string[]): BulletRow[] {
 	for (const j of baseLeft) rows.push({ kind: "removed", text: base[j]! });
 	return rows;
 }
+
+export function inlineMarks(
+	base: string[],
+	current: string[],
+): { added: boolean[]; removed: string[] } {
+	const rows = bulletDiff(base, current);
+	return {
+		added: rows.slice(0, current.length).map((r) => r.kind === "added"),
+		removed: rows.flatMap((r) => (r.kind === "removed" ? [r.text] : [])),
+	};
+}
