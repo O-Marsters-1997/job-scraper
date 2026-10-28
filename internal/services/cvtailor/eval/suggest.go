@@ -6,10 +6,9 @@ import (
 	"maps"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
-	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
 )
 
 // SuggestFixture is one inline-edit request: a line, the Achievements it may
@@ -19,8 +18,12 @@ type SuggestFixture struct {
 	Scenario     string
 	Text         string
 	Achievements []string
+	Scope        []string
+	Bank         []string
+	Profile      bool
 	Action       string
 	Prompt       string
+	Quote        string
 	MaxChars     int
 }
 
@@ -28,56 +31,62 @@ func SuggestFixtures() ([]SuggestFixture, error) {
 	return loadFixtures("fixtures/suggest", func(f *SuggestFixture) *string { return &f.Name })
 }
 
-type Suggester interface {
-	Suggest(ctx context.Context, apiKey string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error)
-}
-
 type SuggestOutcome struct {
 	Fixture   string
 	Action    string
 	Output    string
 	Findings  []checks.Finding
-	OverLimit bool
+	Rejection string
 	Cost      float64
+	Model     string
+	PromptKey string
 }
 
 // Passed reports whether the suggestion is grounded, free of banned words and
 // within the length its action allows.
 func (o SuggestOutcome) Passed() bool {
-	return len(checks.Blocking(o.Findings)) == 0 && !o.OverLimit
+	return len(checks.Blocking(o.Findings)) == 0 && o.Rejection == ""
 }
 
-func RunSuggest(ctx context.Context, s Suggester, apiKey string, f SuggestFixture) (SuggestOutcome, error) {
-	res, err := s.Suggest(ctx, apiKey, cvedit.SuggestInput{
-		Action: f.Action, Prompt: f.Prompt, Text: f.Text, MaxChars: f.MaxChars, Achievements: f.Achievements,
-	}, func(string) {})
-	out := SuggestOutcome{Fixture: f.Name, Action: f.Action, Output: res.Text, Cost: res.Cost}
+func RunSuggest(ctx context.Context, e *lineedit.Editor, apiKey string, f SuggestFixture) (SuggestOutcome, error) {
+	req := lineedit.Request{Action: f.Action, Prompt: f.Prompt, Quote: f.Quote, Text: f.Text, MaxChars: f.MaxChars, SlotID: "s0"}
+	ev := lineedit.Evidence{
+		Cited:   f.Achievements,
+		Scope:   orElse(f.Scope, f.Achievements),
+		Bank:    orElse(f.Bank, f.Achievements),
+		Profile: f.Profile,
+	}
+	res, err := e.Rewrite(ctx, apiKey, req, ev, func(string) {})
+	out := SuggestOutcome{
+		Fixture: f.Name, Action: f.Action, Output: res.Text, Findings: res.Findings,
+		Rejection: res.Rejection, Cost: res.Cost, Model: res.Model, PromptKey: res.PromptKey,
+	}
 	if err != nil {
 		return out, fmt.Errorf("suggest fixture %s: %w", f.Name, err)
-	}
-	slot := checks.Slot{ID: "s0", Text: res.Text, BaseText: f.Text, Cited: f.Achievements}
-	d := checks.Draft{
-		Positions: []checks.Position{{ID: "p1", Achievements: f.Achievements, Bullets: []checks.Slot{slot}}},
-		Bank:      f.Achievements,
-	}
-	out.Findings = append(checks.Grounding(d), checks.BannedWords(d)...)
-	length := utf8.RuneCountInString(res.Text)
-	switch f.Action {
-	case "fit":
-		out.OverLimit = length > f.MaxChars
-	case "tighten":
-		out.OverLimit = length > utf8.RuneCountInString(f.Text)
 	}
 	return out, nil
 }
 
-func SuggestReport(promptVersion, model string, outcomes []SuggestOutcome) string {
+func orElse(v, fallback []string) []string {
+	if len(v) > 0 {
+		return v
+	}
+	return fallback
+}
+
+func SuggestReport(outcomes []SuggestOutcome) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "suggest prompt_version=%s model=%s runs=%d\n\n", promptVersion, model, len(outcomes))
+	model := ""
+	if len(outcomes) > 0 {
+		model = outcomes[0].Model
+	}
+	fmt.Fprintf(&b, "suggest model=%s runs=%d\n\n", model, len(outcomes))
 	passed, cost := 0, 0.0
 	perFixture := map[string][2]int{}
+	keys := map[string]string{}
 	for _, o := range outcomes {
 		cost += o.Cost
+		keys[o.Fixture] = o.PromptKey
 		c := perFixture[o.Fixture]
 		c[1]++
 		if o.Passed() {
@@ -89,7 +98,7 @@ func SuggestReport(promptVersion, model string, outcomes []SuggestOutcome) strin
 	fmt.Fprintf(&b, "pass %s\n", rate(passed, len(outcomes)))
 	for _, name := range slices.Sorted(maps.Keys(perFixture)) {
 		c := perFixture[name]
-		fmt.Fprintf(&b, "%s: %s\n", name, rate(c[0], c[1]))
+		fmt.Fprintf(&b, "%s: %s prompt_key=%s\n", name, rate(c[0], c[1]), keys[name])
 	}
 	for _, o := range outcomes {
 		if o.Passed() {
@@ -99,8 +108,8 @@ func SuggestReport(promptVersion, model string, outcomes []SuggestOutcome) strin
 		for _, f := range checks.Blocking(o.Findings) {
 			fmt.Fprintf(&b, "  [%s] %s\n", f.Check, f.Message)
 		}
-		if o.OverLimit {
-			b.WriteString("  over the length limit\n")
+		if o.Rejection != "" {
+			fmt.Fprintf(&b, "  rejected: %s\n", o.Rejection)
 		}
 	}
 	fmt.Fprintf(&b, "\ntotal cost=$%.4f\n", cost)

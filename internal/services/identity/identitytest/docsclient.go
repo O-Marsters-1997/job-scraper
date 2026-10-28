@@ -154,6 +154,10 @@ func (d *DocsClient) CopyFile(context.Context, string, string, string) (string, 
 	return "copy-id", nil
 }
 
+func (d *DocsClient) AddTab(context.Context, string, string, string) (string, error) {
+	return "t.added", nil
+}
+
 func (d *DocsClient) BatchUpdate(context.Context, string, string, []json.RawMessage) error {
 	return nil
 }

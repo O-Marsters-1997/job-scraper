@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     url          TEXT         NOT NULL UNIQUE,
     company_slug TEXT         NOT NULL,
     source       TEXT         NOT NULL,
-    updated_at   TIMESTAMPTZ  NOT NULL,
+    posted_at    TIMESTAMPTZ,
     scraped_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     description      TEXT         NOT NULL DEFAULT '',
     salary_raw       TEXT         NOT NULL DEFAULT '',
@@ -18,7 +18,12 @@ CREATE TABLE IF NOT EXISTS jobs (
     content_changed_at  TIMESTAMPTZ,
     first_discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     match_title         TEXT,
-    match_location      TEXT
+    match_location      TEXT,
+    posted_after        TIMESTAMPTZ,
+    reposted_at         TIMESTAMPTZ,
+    salary_min          DOUBLE PRECISION,
+    salary_max          DOUBLE PRECISION,
+    discovered_via      TEXT
 );
 
 CREATE INDEX jobs_page_idx ON jobs (scraped_at DESC, id DESC);
@@ -50,10 +55,12 @@ CREATE TABLE IF NOT EXISTS sessions (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMPTZ NOT NULL
+    expires_at TIMESTAMPTZ NOT NULL,
+    token_hash BYTEA       NOT NULL CONSTRAINT sessions_token_hash_key UNIQUE
 );
 
 CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions (user_id);
 
 CREATE TABLE IF NOT EXISTS google_oauth_tokens (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -73,8 +80,13 @@ CREATE TABLE IF NOT EXISTS application_statuses (
     name       TEXT        NOT NULL,
     colour     TEXT        NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    reply_window_days INT  CHECK (reply_window_days BETWEEN 1 AND 60)
+    reply_window_days INT  CHECK (reply_window_days BETWEEN 1 AND 60),
+    counts_as_reply BOOLEAN NOT NULL DEFAULT FALSE,
+    system_key TEXT        CHECK (system_key IN ('draft', 'applied'))
 );
+
+CREATE UNIQUE INDEX application_statuses_user_system_key_idx
+    ON application_statuses (user_id, system_key) WHERE system_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS notification_digests (
     id        UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -87,7 +99,6 @@ CREATE TABLE IF NOT EXISTS applications (
     user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     job_id      UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     status_id   UUID        REFERENCES application_statuses(id) ON DELETE SET NULL,
-    notes       TEXT,
     applied_at  DATE,
     salary_info TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -102,6 +113,8 @@ CREATE TABLE IF NOT EXISTS tracked_docs (
     id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id  UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     doc_id   TEXT        NOT NULL,
+    kind     TEXT        NOT NULL DEFAULT 'cv'
+        CONSTRAINT tracked_docs_kind_check CHECK (kind IN ('cv', 'letter')),
     added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (user_id, doc_id)
 );
@@ -112,6 +125,7 @@ CREATE TABLE IF NOT EXISTS tracked_doc_tabs (
     tab_id         TEXT        NOT NULL,
     title          TEXT        NOT NULL DEFAULT '',
     visible        BOOLEAN     NOT NULL DEFAULT TRUE,
+    is_default     BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (tracked_doc_id, tab_id)
 );
@@ -136,7 +150,8 @@ CREATE TABLE achievements (
     text        TEXT        NOT NULL,
     sort_order  INT         NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    context     TEXT        NOT NULL DEFAULT ''
 );
 CREATE INDEX achievements_position_sort_idx ON achievements (position_id, sort_order);
 
@@ -151,6 +166,29 @@ CREATE TABLE bank_skills (
 );
 CREATE UNIQUE INDEX bank_skills_user_name_idx ON bank_skills (user_id, lower(name));
 CREATE INDEX bank_skills_user_sort_idx ON bank_skills (user_id, sort_order);
+
+CREATE TABLE letter_skeletons (
+    user_id    UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    intro      TEXT        NOT NULL DEFAULT '',
+    conclusion TEXT        NOT NULL DEFAULT '',
+    sections   TEXT[]      NOT NULL DEFAULT '{}',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE cover_letters (
+    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id          UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    source_doc_id   TEXT        NOT NULL,
+    source_tab_id   TEXT        NOT NULL,
+    scaffold_tab_id TEXT        NOT NULL,
+    achievement_ids UUID[]      NOT NULL,
+    model           TEXT        NOT NULL,
+    cost            REAL        NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    done_at         TIMESTAMPTZ
+);
+CREATE INDEX cover_letters_user_job_idx ON cover_letters (user_id, job_id, created_at DESC);
 
 CREATE TABLE cv_heading_mappings (
     user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -182,35 +220,49 @@ CREATE TABLE tailored_cvs (
     draft_doc_id    TEXT,
     status          TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'keeping', 'ready', 'failed')),
     outcome         TEXT        CHECK (outcome IN ('kept', 'discarded')),
+    mode            TEXT        NOT NULL DEFAULT 'generate' CONSTRAINT tailored_cvs_mode_check CHECK (mode IN ('as_is', 'generate')),
     kept_as         TEXT        CHECK (kept_as IN ('tab', 'doc')),
     keep_note       TEXT        NOT NULL DEFAULT '',
     attempts        INT         NOT NULL DEFAULT 0,
     due_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     lease_until     TIMESTAMPTZ,
     last_error      TEXT        NOT NULL DEFAULT '',
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    insights        JSONB,
+    insights_for    TEXT        NOT NULL DEFAULT ''
 );
 CREATE UNIQUE INDEX tailored_cvs_kept_idx ON tailored_cvs (user_id, job_id) WHERE outcome = 'kept';
+CREATE UNIQUE INDEX tailored_cvs_live_idx ON tailored_cvs (user_id, job_id) WHERE outcome IS NULL;
 CREATE INDEX tailored_cvs_claim_idx ON tailored_cvs (due_at, id) WHERE status IN ('pending', 'running', 'keeping');
 
-CREATE TABLE preference_labels (
-    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id        UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    job_id         UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-    draft_id       UUID        REFERENCES tailored_cvs(id) ON DELETE SET NULL,
-    kind           TEXT        NOT NULL CHECK (kind IN ('bullet')),
-    achievement_id UUID        REFERENCES achievements(id) ON DELETE SET NULL,
-    p_yes          DOUBLE PRECISION,
-    p_no           DOUBLE PRECISION,
-    p_not_stated   DOUBLE PRECISION,
-    confidence     DOUBLE PRECISION,
-    preselected    BOOLEAN     NOT NULL,
-    kept           BOOLEAN     NOT NULL,
-    position       INT,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE achievement_outcomes (
+    draft_id                    UUID        NOT NULL REFERENCES tailored_cvs(id) ON DELETE CASCADE,
+    achievement_id              UUID        NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
+    user_id                     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id                      UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    p_yes                       DOUBLE PRECISION,
+    p_no                        DOUBLE PRECISION,
+    on_source_cv                BOOLEAN     NOT NULL,
+    in_final_cv                 BOOLEAN     NOT NULL,
+    outscored_kept_but_left_out BOOLEAN     NOT NULL,
+    reworded                    BOOLEAN     NOT NULL,
+    created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (draft_id, achievement_id)
 );
-CREATE INDEX preference_labels_user_job_idx ON preference_labels (user_id, job_id);
-CREATE INDEX preference_labels_draft_idx ON preference_labels (draft_id);
+CREATE INDEX achievement_outcomes_achievement_idx ON achievement_outcomes (achievement_id);
+
+CREATE TABLE profile_attempts (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    draft_id   UUID NOT NULL REFERENCES tailored_cvs(id) ON DELETE CASCADE,
+    text       TEXT NOT NULL,
+    steer      TEXT NOT NULL DEFAULT '',
+    rejection  TEXT NOT NULL DEFAULT '',
+    prompt_key TEXT NOT NULL,
+    model      TEXT NOT NULL,
+    cost       NUMERIC(10, 6) NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX profile_attempts_draft_id_created_at_idx ON profile_attempts (draft_id, created_at);
 
 CREATE TABLE IF NOT EXISTS job_scores (
     id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -219,6 +271,7 @@ CREATE TABLE IF NOT EXISTS job_scores (
     suitability_score    INT,
     band                 TEXT        CHECK (band IN ('great', 'good', 'fair', 'poor')),
     breakdown            JSONB       NOT NULL DEFAULT '[]',
+    blocked              BOOLEAN     NOT NULL GENERATED ALWAYS AS (breakdown @> '[{"effect":"blocked"}]'::jsonb) STORED,
     cost                 NUMERIC,
     score_fingerprint    TEXT,
     score_model          TEXT,
@@ -243,6 +296,21 @@ CREATE TABLE effect_outbox (
 CREATE UNIQUE INDEX effect_outbox_pending_idx ON effect_outbox (job_id, fingerprint, model)
     WHERE status IN ('pending', 'running');
 CREATE INDEX job_scores_user_job_idx ON job_scores (user_id, job_id);
+CREATE INDEX job_scores_user_best_idx ON job_scores (user_id, suitability_score DESC NULLS LAST) WHERE NOT blocked;
+
+CREATE TABLE job_rejections (
+    user_id               UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id                UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    kind                  TEXT        NOT NULL
+        CONSTRAINT job_rejections_kind_check CHECK (kind IN ('filter', 'age')),
+    reason                TEXT        NOT NULL,
+    search_config_version TIMESTAMPTZ,
+    content_fingerprint   TEXT        NOT NULL,
+    rejected_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, job_id)
+);
+CREATE INDEX job_rejections_job_idx ON job_rejections (job_id);
+CREATE INDEX job_rejections_user_rejected_idx ON job_rejections (user_id, rejected_at DESC, job_id DESC);
 
 CREATE TABLE answer_corrections (
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -289,7 +357,10 @@ CREATE TABLE IF NOT EXISTS companies (
     last_crawled_at     TIMESTAMPTZ,
     first_seen_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    kind                TEXT        NOT NULL DEFAULT 'unclassified'
+        CONSTRAINT companies_kind_check
+        CHECK (kind IN ('unclassified', 'likely_agency', 'likely_direct', 'agency', 'direct'))
 );
 
 CREATE TABLE IF NOT EXISTS source_targets (
@@ -344,9 +415,13 @@ CREATE TABLE IF NOT EXISTS company_boards (
     retired_at TIMESTAMPTZ,
     superseded_at TIMESTAMPTZ,
     discovered_via TEXT,
+    uk_jobs_seen_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (source, board_token)
 );
+
+CREATE UNIQUE INDEX company_boards_source_token_lower_key
+    ON company_boards (source, lower(board_token)) WHERE status <> 'retired';
 
 CREATE TABLE board_poll_state (
     board_id UUID PRIMARY KEY REFERENCES company_boards(id) ON DELETE CASCADE,
@@ -360,7 +435,8 @@ CREATE TABLE board_poll_state (
     last_parsed INT NOT NULL DEFAULT 0,
     lease_owner TEXT,
     lease_until TIMESTAMPTZ,
-    next_due_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    next_due_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    check_published_at TIMESTAMPTZ
 );
 
 CREATE TABLE board_job_observations (
@@ -382,6 +458,7 @@ CREATE TABLE IF NOT EXISTS job_candidates (
     card_company TEXT NOT NULL DEFAULT '',
     card_location TEXT NOT NULL DEFAULT '',
     card JSONB,
+    posted_at TIMESTAMPTZ,
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '60 days',
@@ -399,9 +476,65 @@ CREATE TABLE IF NOT EXISTS candidate_discoveries (
 
 CREATE INDEX IF NOT EXISTS candidate_discoveries_target_idx ON candidate_discoveries(source_target_id, candidate_id);
 
+CREATE TABLE scrape_runs (
+    id               UUID        PRIMARY KEY,
+    kind             TEXT        NOT NULL CONSTRAINT scrape_runs_kind_check CHECK (kind IN ('search', 'board')),
+    source           TEXT        NOT NULL,
+    source_target_id UUID        REFERENCES source_targets(id) ON DELETE CASCADE,
+    trigger          TEXT        NOT NULL CONSTRAINT scrape_runs_trigger_check CHECK (trigger IN ('scheduled', 'manual')),
+    started_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at      TIMESTAMPTZ,
+    stop_reason      TEXT        CONSTRAINT scrape_runs_stop_reason_check CHECK (stop_reason IN ('last_page', 'page_cap', 'failed')),
+    pages            INT         NOT NULL DEFAULT 0,
+    listings         INT         NOT NULL DEFAULT 0,
+    new_listings     INT         NOT NULL DEFAULT 0,
+    elsewhere        INT         NOT NULL DEFAULT 0,
+    repeat_listings  INT         NOT NULL DEFAULT 0,
+    deferred         INT         NOT NULL DEFAULT 0,
+    retries          INT         NOT NULL DEFAULT 0,
+    board_id         UUID        REFERENCES company_boards(id) ON DELETE CASCADE,
+    removed          INT         NOT NULL DEFAULT 0,
+    reopened         INT         NOT NULL DEFAULT 0,
+    CONSTRAINT scrape_runs_finished_check CHECK ((finished_at IS NULL) = (stop_reason IS NULL)),
+    CONSTRAINT scrape_runs_subject_check CHECK (
+        (kind = 'search' AND source_target_id IS NOT NULL AND board_id IS NULL)
+        OR (kind = 'board' AND board_id IS NOT NULL))
+);
+CREATE INDEX scrape_runs_started_idx ON scrape_runs (started_at DESC, id DESC);
+CREATE INDEX scrape_runs_target_idx ON scrape_runs (source_target_id, started_at DESC) WHERE source_target_id IS NOT NULL;
+CREATE INDEX scrape_runs_board_idx ON scrape_runs (board_id, started_at DESC) WHERE board_id IS NOT NULL;
+
+CREATE TABLE scrape_run_errors (
+    id      BIGINT      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    run_id  UUID        NOT NULL REFERENCES scrape_runs(id) ON DELETE CASCADE,
+    page    INT         NOT NULL,
+    attempt INT         NOT NULL,
+    message TEXT        NOT NULL,
+    at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX scrape_run_errors_run_idx ON scrape_run_errors (run_id);
+
+CREATE TABLE scrape_run_job_changes (
+    run_id   UUID  NOT NULL REFERENCES scrape_runs(id) ON DELETE CASCADE,
+    job_id   UUID  NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    change   TEXT  NOT NULL CONSTRAINT scrape_run_job_changes_change_check
+        CHECK (change IN ('new', 'removed', 'reopened')),
+    snapshot JSONB NOT NULL,
+    PRIMARY KEY (run_id, job_id)
+);
+CREATE INDEX scrape_run_job_changes_job_idx ON scrape_run_job_changes (job_id);
+
 CREATE TABLE harvest_runs (
     harvester TEXT PRIMARY KEY,
     last_succeeded_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE harvest_seen_ids (
+    source        TEXT        NOT NULL,
+    external_id   TEXT        NOT NULL,
+    outcome       TEXT        NOT NULL CONSTRAINT harvest_seen_ids_outcome_check CHECK (outcome IN ('backfill', 'ineligible', 'exported', 'ats_check')),
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (source, external_id)
 );
 
 CREATE TABLE IF NOT EXISTS candidate_assessments (
@@ -445,6 +578,13 @@ CREATE TABLE fetch_cache (
 );
 
 CREATE INDEX fetch_cache_fetched_at_idx ON fetch_cache (fetched_at);
+
+CREATE TABLE board_discover_misses (
+    source      TEXT        NOT NULL,
+    board_token TEXT        NOT NULL,
+    missed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (source, board_token)
+);
 
 CREATE TABLE company_profiles (
     company_id UUID        NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -518,8 +658,97 @@ CREATE TABLE events (
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     type       event_type  NOT NULL,
     subject_id UUID,
+    client     TEXT        NOT NULL DEFAULT 'web' CONSTRAINT events_client_check CHECK (client IN ('web', 'ios')),
     props      JSONB       NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX events_user_type_created_idx ON events (user_id, type, created_at);
 CREATE INDEX events_user_subject_idx ON events (user_id, subject_id);
+
+CREATE TABLE IF NOT EXISTS recruiter_contacts (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id       UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    contacted_on DATE        NOT NULL,
+    channel      TEXT        NOT NULL
+        CONSTRAINT recruiter_contacts_channel_check
+        CHECK (channel IN ('linkedin_message', 'email', 'call', 'inbound')),
+    outcome      TEXT        NOT NULL
+        CONSTRAINT recruiter_contacts_outcome_check
+        CHECK (outcome IN ('no_reply', 'rejected', 'spoke', 'submitted')),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX recruiter_contacts_user_job_idx ON recruiter_contacts (user_id, job_id, contacted_on DESC);
+
+CREATE TABLE IF NOT EXISTS job_notes (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id     UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    body       TEXT        NOT NULL
+        CONSTRAINT job_notes_body_check CHECK (length(body) <= 10000),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT job_notes_user_job_key UNIQUE (user_id, job_id)
+);
+CREATE INDEX job_notes_job_idx ON job_notes (job_id);
+
+CREATE TABLE IF NOT EXISTS job_comments (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id       UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    body         TEXT        NOT NULL
+        CONSTRAINT job_comments_body_check CHECK (length(body) BETWEEN 1 AND 10000),
+    quote        TEXT        NOT NULL
+        CONSTRAINT job_comments_quote_check CHECK (length(quote) BETWEEN 1 AND 2000),
+    quote_prefix TEXT        NOT NULL DEFAULT ''
+        CONSTRAINT job_comments_quote_prefix_check CHECK (length(quote_prefix) <= 64),
+    quote_suffix TEXT        NOT NULL DEFAULT ''
+        CONSTRAINT job_comments_quote_suffix_check CHECK (length(quote_suffix) <= 64),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX job_comments_user_job_idx ON job_comments (user_id, job_id, created_at DESC);
+CREATE INDEX job_comments_job_idx ON job_comments (job_id);
+
+CREATE TABLE IF NOT EXISTS task_types (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name       TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 50),
+    colour     TEXT        NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    system_key TEXT        CHECK (system_key IN ('apply', 'finish')),
+    UNIQUE (user_id, name)
+);
+
+CREATE UNIQUE INDEX task_types_user_system_key_idx
+    ON task_types (user_id, system_key) WHERE system_key IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS tasks (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type_id      UUID        NOT NULL REFERENCES task_types(id) ON DELETE CASCADE,
+    job_id       UUID        REFERENCES jobs(id) ON DELETE SET NULL,
+    link         TEXT        CHECK (link ~ '^https?://' AND length(link) <= 2048),
+    notes        TEXT        CHECK (length(notes) <= 10000),
+    completed_at TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX tasks_user_open_idx ON tasks (user_id, created_at DESC) WHERE completed_at IS NULL;
+CREATE INDEX tasks_job_idx ON tasks (job_id) WHERE job_id IS NOT NULL;
+CREATE INDEX tasks_type_idx ON tasks (type_id);
+
+CREATE TABLE notifications (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id     UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    title      TEXT        NOT NULL,
+    body       TEXT        NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    read_at    TIMESTAMPTZ,
+    kind       TEXT        NOT NULL DEFAULT 'new_match' CONSTRAINT notifications_kind_check CHECK (kind IN ('new_match'))
+);
+
+CREATE INDEX notifications_user_created ON notifications (user_id, created_at DESC);
+CREATE INDEX notifications_job_idx ON notifications (job_id);

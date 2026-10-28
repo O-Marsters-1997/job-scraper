@@ -11,17 +11,19 @@ import (
 )
 
 // One gate for every company subdomain: Recruitee's limit spans *.recruitee.com.
-var limiter = sources.NewGate(2*time.Second, time.Hour)
+func NewGate() *sources.Gate { return sources.NewGate(2*time.Second, time.Hour) }
 
 // New builds a Recruitee source for one company subdomain (e.g. "acmecorp").
-func New(token string) *sources.BoardSource {
+func New(token string, gate *sources.Gate) *sources.BoardSource {
 	return sources.NewBoardSource(sources.BoardSpec{
 		Name:        "recruitee",
 		URL:         fmt.Sprintf("https://%s.recruitee.com/api/offers/", token),
 		CompanySlug: token,
 		Parse:       parse,
 		Count:       sources.JSONArrayLen("offers"),
-		Gate:        limiter,
+		Gate:        gate,
+
+		RedirectRetires: true,
 	})
 }
 
@@ -84,7 +86,7 @@ func parse(body []byte) ([]dto.Job, error) {
 			Description:       o.Description,
 			SalaryRaw:         o.salaryRaw(),
 			WorkArrangement:   o.workArrangement(),
-			UpdatedAt:         sources.TimeOrNow(timestampLayout, o.CreatedAt),
+			PostedAt:          sources.TimeOrNil(timestampLayout, o.CreatedAt),
 		})
 	}
 	return jobs, nil

@@ -28,13 +28,13 @@ import {
 faker.seed(1234);
 
 const STATUS_DEFINITIONS = [
-	{ name: "Saved", colour: "#64748b" },
-	{ name: "Applied", colour: "#2563eb" },
-	{ name: "Phone Screen", colour: "#7c3aed" },
-	{ name: "Interview", colour: "#d97706" },
-	{ name: "Offer", colour: "#059669" },
-	{ name: "Rejected", colour: "#dc2626" },
-];
+	{ name: "Draft", colour: "#64748b", systemKey: "draft" },
+	{ name: "Applied", colour: "#2563eb", systemKey: "applied" },
+	{ name: "Phone Screen", colour: "#7c3aed", systemKey: "" },
+	{ name: "Interview", colour: "#d97706", systemKey: "" },
+	{ name: "Offer", colour: "#059669", systemKey: "" },
+	{ name: "Rejected", colour: "#dc2626", systemKey: "" },
+] as const;
 
 const statuses: ApplicationStatus[] = STATUS_DEFINITIONS.map((s, i) => ({
 	ID: `status-${i + 1}`,
@@ -42,6 +42,8 @@ const statuses: ApplicationStatus[] = STATUS_DEFINITIONS.map((s, i) => ({
 	Name: s.name,
 	Colour: s.colour,
 	ReplyWindowDays: null,
+	CountsAsReply: s.name === "Interview" || s.name === "Offer",
+	SystemKey: s.systemKey,
 	CreatedAt: new Date("2024-01-01").toISOString(),
 }));
 
@@ -49,6 +51,10 @@ function mockBand(score: number): Band {
 	if (score >= 80) return "great";
 	if (score >= 65) return "good";
 	return score >= 45 ? "fair" : "poor";
+}
+
+function hoursBefore(iso: string, hours: number): string {
+	return new Date(new Date(iso).getTime() - hours * 3600 * 1000).toISOString();
 }
 
 const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
@@ -71,7 +77,9 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 		URL: faker.internet.url(),
 		CompanySlug: slugify(company),
 		Source: faker.helpers.arrayElement(SOURCES),
-		UpdatedAt: scrapedAt,
+		PostedAt: i % 4 === 3 ? null : hoursBefore(scrapedAt, 6),
+		PostedAfter: i % 8 === 3 ? hoursBefore(scrapedAt, 5) : null,
+		RepostedAt: i % 7 === 0 ? hoursBefore(scrapedAt, 1) : null,
 		ScrapedAt: scrapedAt,
 		FirstDiscoveredAt: scrapedAt,
 		DaysInOffice: daysInOffice,
@@ -127,6 +135,7 @@ const companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
 		ATSSource: hasBoard ? ATS_SOURCES[i % ATS_SOURCES.length]! : "",
 		ATSToken: hasBoard ? slug : "",
 		FirstSeenAt: faker.date.past({ years: 1 }).toISOString(),
+		Kind: "unclassified",
 		JobCount: jobs.filter((j) => j.CompanySlug === slug).length,
 		Tracked: tracked,
 		ReviewState: isNew ? "new" : tracked ? "kept" : "",
@@ -180,7 +189,6 @@ for (const { statusIndex, count } of APP_DISTRIBUTION) {
 			UserID: "user-1",
 			JobID: job.ID,
 			StatusID: status.ID,
-			Notes: "",
 			AppliedAt: appliedAt,
 			SalaryInfo: "",
 			CreatedAt: faker.date.recent({ days: 25 }).toISOString(),
@@ -235,6 +243,7 @@ const cvs: CV[] = [
 		ModifiedAt: faker.date.recent({ days: 5 }).toISOString(),
 		DocURL: "https://docs.google.com/document/d/doc-1/edit",
 		Visible: true,
+		Default: false,
 	},
 	{
 		DocID: "doc-1",
@@ -244,6 +253,7 @@ const cvs: CV[] = [
 		ModifiedAt: faker.date.recent({ days: 10 }).toISOString(),
 		DocURL: "https://docs.google.com/document/d/doc-1/edit",
 		Visible: true,
+		Default: false,
 	},
 	{
 		DocID: "doc-2",
@@ -253,6 +263,7 @@ const cvs: CV[] = [
 		ModifiedAt: faker.date.recent({ days: 20 }).toISOString(),
 		DocURL: "https://docs.google.com/document/d/doc-2/edit",
 		Visible: false,
+		Default: false,
 	},
 ];
 

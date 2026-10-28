@@ -12,8 +12,6 @@ const pickSchema = z.object({
 	overridden: z.boolean(),
 });
 
-export type Pick = z.infer<typeof pickSchema>;
-
 const moneySchema = z.object({
 	amount: z.number().int().min(0),
 	currency: z.string().min(1),

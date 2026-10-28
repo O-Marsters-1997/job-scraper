@@ -5,11 +5,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/api"
@@ -24,6 +27,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
+	"github.com/ollymarsters/job-scraper/internal/services/tasks"
 )
 
 const ingestToken = "router-test-ingest-token"
@@ -34,7 +38,7 @@ type app struct {
 	router http.Handler
 }
 
-func newApp(t *testing.T) *app {
+func newApp(t *testing.T, extra ...api.Module) *app {
 	t.Helper()
 	t.Setenv("INGEST_SERVICE_TOKEN", ingestToken)
 	t.Setenv("AI_CREDENTIAL_ENC_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
@@ -43,15 +47,56 @@ func newApp(t *testing.T) *app {
 	pool := pgtest.New(t)
 	scoringFacade := scoring.NewFacade(pool)
 	eventsModule := events.New(pool, scoringFacade)
-	apps := applications.New(pool, eventsModule)
-	idm, err := identity.New(pool, apps, "", "", "")
+	apps := applications.New(pool, eventsModule, tasks.NewFacade(pool))
+	taskModule := tasks.New(pool, apps)
+	idm, err := identity.New(pool, []identity.Seeder{apps, taskModule}, "test-session-secret", "", "", "")
 	if err != nil {
 		t.Fatalf("identity.New: %v", err)
 	}
-	js := jobsearch.New(pool, &queue.Broker{}, scoringFacade, nil, sourcetargets.DefaultMaxAutomatic)
-	sc := scoring.New(pool, idm, idm, js, "", "", scoring.VAPID{})
+	js := jobsearch.New(pool, &queue.Broker{}, scoringFacade, nil, sourcetargets.DefaultMaxAutomatic, slog.Default())
+	sc := scoring.New(pool, idm, idm, js, js, nil, "", "", scoring.VAPID{})
 	cv := cvtemplates.New(pool, idm.DocsClient())
-	return &app{t: t, pool: pool, router: api.NewRouter(idm, js, apps, cv, sc, eventsModule)}
+	router, err := api.NewRouter(idm, js, append([]api.Module{apps, taskModule, cv, sc, eventsModule}, extra...)...)
+	if err != nil {
+		t.Fatalf("api.NewRouter: %v", err)
+	}
+	return &app{t: t, pool: pool, router: router}
+}
+
+func TestCrossSiteWritesRejected(t *testing.T) {
+	a := newApp(t)
+
+	cases := []struct {
+		name   string
+		header map[string]string
+		want   int
+	}{
+		{"cross-site fetch metadata", map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusForbidden},
+		{"foreign origin", map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
+		{"same-origin fetch metadata", map[string]string{"Sec-Fetch-Site": "same-origin"}, http.StatusUnauthorized},
+		{"same-site frontend on allowed origin", map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "http://localhost:3000"}, http.StatusUnauthorized},
+		{"allowed origin", map[string]string{"Origin": "http://localhost:3000"}, http.StatusUnauthorized},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := jsonRequest(t, http.MethodPost, "/auth/logout", nil)
+			for k, v := range tc.header {
+				req.Header.Set(k, v)
+			}
+			w := httptest.NewRecorder()
+			a.router.ServeHTTP(w, req)
+			if w.Code != tc.want {
+				t.Errorf("POST /auth/logout = %d, want %d: %s", w.Code, tc.want, w.Body)
+			}
+		})
+	}
+}
+
+func TestNewRouterRejectsInvalidOrigin(t *testing.T) {
+	t.Setenv("CORS_ALLOWED_ORIGIN", "not-an-origin")
+	if _, err := api.NewRouter(nil, nil); err == nil {
+		t.Error("NewRouter with invalid CORS_ALLOWED_ORIGIN returned nil error")
+	}
 }
 
 type user struct {
@@ -123,10 +168,61 @@ type ingestResult struct {
 
 func (a *app) ingest(job map[string]string) ingestResult {
 	a.t.Helper()
-	job["UpdatedAt"] = time.Now().Format(time.RFC3339)
+	job["PostedAt"] = time.Now().Format(time.RFC3339)
 	req := jsonRequest(a.t, http.MethodPost, "/ingest", job)
 	req.Header.Set("Authorization", "Bearer "+ingestToken)
 	return send[ingestResult](a, http.StatusOK, req)
+}
+
+func TestRouterRejectsBadBodies(t *testing.T) {
+	a := newApp(t)
+
+	tooBig := jsonRequest(t, http.MethodPost, "/auth/login", map[string]string{"email": strings.Repeat("x", 2<<20)})
+	send[map[string]any](a, http.StatusRequestEntityTooLarge, tooBig)
+
+	text := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{}`))
+	text.Header.Set("Content-Type", "text/plain")
+	send[map[string]any](a, http.StatusUnsupportedMediaType, text)
+}
+
+type panickingModule struct{}
+
+func (panickingModule) Routes(chi.Router) {}
+
+func (panickingModule) PublicRoutes(r chi.Router) {
+	r.Get("/boom", func(http.ResponseWriter, *http.Request) { panic("boom") })
+	r.Get("/ok", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+}
+
+func TestPanickingHandlerReturnsJSON500AndKeepsServing(t *testing.T) {
+	a := newApp(t, panickingModule{})
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	w := httptest.NewRecorder()
+	a.router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/boom", http.NoBody))
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("content type = %q, want application/json", ct)
+	}
+	body := handlerstest.DecodeJSON[map[string]string](t, w.Body.Bytes())
+	if body["error"] != "internal server error" {
+		t.Errorf("body = %v", body)
+	}
+	if !strings.Contains(logs.String(), "handler panic") || !strings.Contains(logs.String(), "recover.go") {
+		t.Errorf("panic log lacks message or stack: %s", logs.String())
+	}
+
+	w = httptest.NewRecorder()
+	a.router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ok", http.NoBody))
+	if w.Code != http.StatusNoContent {
+		t.Errorf("after panic status = %d, want 204", w.Code)
+	}
 }
 
 func TestSignupSeedsDefaultStatuses(t *testing.T) {
@@ -170,6 +266,22 @@ func TestIngestedJobCanBeAppliedToAndMovedThroughStatuses(t *testing.T) {
 	got := do[[]dto.ApplicationWithDetails](u, http.StatusOK, http.MethodGet, "/applications/", nil)
 	if len(got) != 1 || got[0].StatusID != next {
 		t.Fatalf("applications = %+v, want one in status %s", got, next)
+	}
+
+	types := do[[]dto.TaskType](u, http.StatusOK, http.MethodGet, "/task-types", nil)
+	if len(types) != 5 {
+		t.Fatalf("GET /task-types = %+v, want the 5 seeded types", types)
+	}
+
+	task := do[dto.Task](u, http.StatusCreated, http.MethodPost, "/tasks/", map[string]any{"type_id": types[0].ID, "job_id": res.JobID})
+	if task.JobTitle != "Engineer" || task.JobPostedAt == nil {
+		t.Fatalf("created task = %+v, want the job's title and posted date", task)
+	}
+	do[dto.Task](u, http.StatusOK, http.MethodPut, "/tasks/"+task.ID+"/done", map[string]bool{"done": true})
+
+	open := do[dto.TaskPage](u, http.StatusOK, http.MethodGet, "/tasks/", nil)
+	if open.Total != 0 {
+		t.Fatalf("open tasks = %+v, want none after completing", open)
 	}
 }
 

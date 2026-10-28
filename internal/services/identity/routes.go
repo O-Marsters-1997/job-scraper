@@ -12,19 +12,17 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
-// PublicRoutes mounts login, signup and the Google OAuth start redirect
-// outside the session-protected group.
 func (m *Module) PublicRoutes(r chi.Router) {
-	r.Post("/auth/login", loginHandler(m.service))
-	r.Post("/auth/signup", signupHandler(m.service))
-	r.Get("/google/oauth/start", oauthStartHandler(m.service))
+	limited := r.With(limitByRemoteHost(m.ipLimiter))
+	limited.Post("/auth/login", loginHandler(m.service))
+	limited.Post("/auth/signup", signupHandler(m.service))
 }
 
 // Routes mounts logout, me, profile, AI credentials/prefs and the rest of
 // the Google Link inside the session-protected group.
 func (m *Module) Routes(r chi.Router) {
 	r.Post("/auth/logout", logoutHandler(m.service))
-	r.Get("/auth/me", meHandler)
+	r.Get("/auth/me", meHandler())
 
 	r.Get("/profile", handlers.GetAll(m.store.GetProfile))
 	r.Put("/profile", handlers.Update(m.service.UpdateProfile))
@@ -33,23 +31,19 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/ai-usage", handlers.GetAll(m.service.AIUsage))
 	r.Put("/ai-credentials", handlers.Update(m.service.UpdateCredential))
 
+	r.Get("/google/oauth/start", oauthStartHandler(m.service))
 	r.Get("/google/oauth/callback", oauthCallbackHandler(m.service))
 	r.Get("/google/status", handlers.GetAll(m.service.GoogleStatus))
 	r.Delete("/google/link", handlers.Delete(m.service.DisconnectGoogle))
 }
 
 func newCookie(name, value string, maxAge int) *http.Cookie {
-	secure := os.Getenv("COOKIE_SECURE") == "true"
-	sameSite := http.SameSiteLaxMode
-	if secure {
-		sameSite = http.SameSiteNoneMode
-	}
 	return &http.Cookie{
 		Name:     name,
 		Value:    value,
 		HttpOnly: true,
-		SameSite: sameSite,
-		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   os.Getenv("COOKIE_SECURE") == "true",
 		Path:     "/",
 		MaxAge:   maxAge,
 	}
@@ -62,7 +56,7 @@ type sessionUser struct {
 
 func respondSession(status int) func(http.ResponseWriter, *http.Request, sessionUser) {
 	return func(w http.ResponseWriter, _ *http.Request, out sessionUser) {
-		http.SetCookie(w, newCookie("session_id", out.session.ID, 30*24*60*60))
+		http.SetCookie(w, newCookie("session_id", out.session.Token, 30*24*60*60))
 		handlers.WriteJSON(w, status, dto.AuthUserView{Username: out.user.Username})
 	}
 }
@@ -108,16 +102,18 @@ func logoutHandler(svc *Service) http.HandlerFunc {
 	)
 }
 
-var meHandler = handlers.Handle(
-	func(r *http.Request) (dto.MeView, error) {
-		session, ok := handlers.Session(r)
-		if !ok {
-			return dto.MeView{}, apperr.Unauthorized("unauthorized")
-		}
-		return dto.MeView{ID: session.UserID, Username: session.Username, IsAdmin: session.Role == dto.RoleAdmin}, nil
-	},
-	func(_ context.Context, v dto.MeView) (dto.MeView, error) { return v, nil },
-	func(w http.ResponseWriter, _ *http.Request, res dto.MeView) {
-		handlers.WriteJSON(w, http.StatusOK, res)
-	},
-)
+func meHandler() http.HandlerFunc {
+	return handlers.Handle(
+		func(r *http.Request) (dto.MeView, error) {
+			session, ok := handlers.Session(r)
+			if !ok {
+				return dto.MeView{}, apperr.Unauthorized("unauthorized")
+			}
+			return dto.MeView{ID: session.UserID, Username: session.Username, IsAdmin: session.Role == dto.RoleAdmin}, nil
+		},
+		func(_ context.Context, v dto.MeView) (dto.MeView, error) { return v, nil },
+		func(w http.ResponseWriter, _ *http.Request, res dto.MeView) {
+			handlers.WriteJSON(w, http.StatusOK, res)
+		},
+	)
+}

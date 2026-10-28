@@ -5,4 +5,5 @@ type ApplicationStatusInput struct {
 	Name            string `json:"name"`
 	Colour          string `json:"colour"`
 	ReplyWindowDays *int   `json:"replyWindowDays"`
+	CountsAsReply   bool   `json:"countsAsReply"`
 }

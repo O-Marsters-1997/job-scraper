@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,11 @@ const (
 	DriveReadonlyScope = "https://www.googleapis.com/auth/drive.readonly"
 	DriveFileScope     = "https://www.googleapis.com/auth/drive.file"
 	DocumentsScope     = "https://www.googleapis.com/auth/documents"
+)
+
+var (
+	ErrNoWriteAccess = apperr.Unprocessable("allow FastTrack to edit your Google Docs, then reconnect Google")
+	errForbidden     = fmt.Errorf("unexpected status %d", http.StatusForbidden)
 )
 
 type Tab struct {
@@ -92,11 +98,12 @@ func (c *Client) SaveToken(ctx context.Context, userID string, tok *oauth2.Token
 		kept.RefreshToken = stored.RefreshToken
 		tok = &kept
 	}
-	accessEnc, err := c.cipher.Encrypt(tok.AccessToken)
+	aad := tokenAAD(userID)
+	accessEnc, err := c.cipher.Encrypt(tok.AccessToken, aad)
 	if err != nil {
 		return fmt.Errorf("google.SaveToken encrypt access: %w", err)
 	}
-	refreshEnc, err := c.cipher.Encrypt(tok.RefreshToken)
+	refreshEnc, err := c.cipher.Encrypt(tok.RefreshToken, aad)
 	if err != nil {
 		return fmt.Errorf("google.SaveToken encrypt refresh: %w", err)
 	}
@@ -133,17 +140,22 @@ func (c *Client) DeleteToken(ctx context.Context, userID string) error {
 	return c.store.DeleteGoogleToken(ctx, userID)
 }
 
+func tokenAAD(userID string) tokencrypt.AAD {
+	return tokencrypt.AAD{Table: tokencrypt.TableGoogleOAuthTokens, Owner: userID}
+}
+
 func (c *Client) getToken(ctx context.Context, userID string) (*oauth2.Token, error) {
 	row, err := c.store.GetGoogleToken(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	access, err := c.cipher.Decrypt(row.AccessTokenEnc)
+	aad := tokenAAD(userID)
+	access, err := c.cipher.Decrypt(row.AccessTokenEnc, aad)
 	if err != nil {
 		return nil, fmt.Errorf("%w: decrypt access: %w", ErrTokenUnusable, err)
 	}
-	refresh, err := c.cipher.Decrypt(row.RefreshTokenEnc)
+	refresh, err := c.cipher.Decrypt(row.RefreshTokenEnc, aad)
 	if err != nil {
 		return nil, fmt.Errorf("%w: decrypt refresh: %w", ErrTokenUnusable, err)
 	}
@@ -333,6 +345,41 @@ func (c *Client) BatchUpdate(ctx context.Context, userID, docID string, requests
 	return nil
 }
 
+func (c *Client) AddTab(ctx context.Context, userID, docID, title string) (string, error) {
+	body, err := json.Marshal(map[string]any{"requests": []any{
+		map[string]any{"addDocumentTab": map[string]any{"tabProperties": map[string]string{"title": title}}},
+	}})
+	if err != nil {
+		return "", fmt.Errorf("google.AddTab marshal: %w", err)
+	}
+	resp, err := c.do(ctx, userID, http.MethodPost,
+		fmt.Sprintf("https://docs.googleapis.com/v1/documents/%s:batchUpdate", url.PathEscape(docID)), body)
+	if errors.Is(err, errForbidden) {
+		return "", ErrNoWriteAccess
+	}
+	if err != nil {
+		return "", fmt.Errorf("google.AddTab: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var out struct {
+		Replies []struct {
+			AddDocumentTab struct {
+				TabProperties struct {
+					TabID string `json:"tabId"`
+				} `json:"tabProperties"`
+			} `json:"addDocumentTab"`
+		} `json:"replies"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", fmt.Errorf("google.AddTab decode: %w", err)
+	}
+	if len(out.Replies) == 0 || out.Replies[0].AddDocumentTab.TabProperties.TabID == "" {
+		return "", errors.New("google.AddTab: reply has no tab id")
+	}
+	return out.Replies[0].AddDocumentTab.TabProperties.TabID, nil
+}
+
 func (c *Client) DeleteFile(ctx context.Context, userID, fileID string) error {
 	resp, err := c.do(ctx, userID, http.MethodDelete,
 		fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%s", url.PathEscape(fileID)), nil)
@@ -376,6 +423,9 @@ func (c *Client) do(ctx context.Context, userID, method, target string, body []b
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		_ = resp.Body.Close()
+		if resp.StatusCode == http.StatusForbidden {
+			return nil, errForbidden
+		}
 		return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
 	return resp, nil

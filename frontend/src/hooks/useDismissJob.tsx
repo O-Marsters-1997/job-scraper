@@ -3,7 +3,7 @@ import { recordEvent } from "@/api/events";
 import { GradeChips } from "@/components/jobs/GradeChips";
 import { undoPlan } from "@/lib/gradeBatch";
 import type { Grade, GradeReason } from "@/types/grade";
-import { useExcludeCompany, useUnexcludeCompany } from "./useCompanies";
+import { useExcludeCompanies, useUnexcludeCompanies } from "./useCompanies";
 import { useClearGrade, useSetGrade } from "./useGrades";
 import { useMarkSeenAfterGrade } from "./useJobs";
 
@@ -16,17 +16,58 @@ interface Dismissal {
 }
 
 interface BulkGrading {
+	verb?: string;
 	jobIds: string[];
 	priors: Record<string, Grade | null>;
 }
 
 interface Exclusion {
-	companyId: string;
-	name: string;
-	added: boolean;
+	companies: { companyId: string; name: string; added: boolean }[];
+	skipped: number;
 }
 
 const [exclusion, setExclusion] = createSignal<Exclusion | null>(null);
+const [notice, setNotice] = createSignal<string | null>(null);
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+
+export function announceNotice(text: string) {
+	clearTimeout(noticeTimer);
+	setNotice(text);
+	noticeTimer = setTimeout(() => setNotice(null), TOAST_MS);
+}
+
+export function companyIdsOf(jobs: { CompanyID?: string | undefined }[]) {
+	const ids = [
+		...new Set(jobs.flatMap((j) => (j.CompanyID ? [j.CompanyID] : []))),
+	];
+	return { ids, skipped: jobs.filter((j) => !j.CompanyID).length };
+}
+
+function pluralCompanies(n: number) {
+	return n === 1 ? "1 company" : `${n} companies`;
+}
+
+function skippedSuffix(skipped: number) {
+	return skipped > 0 ? ` Skipped ${skipped} without a company.` : "";
+}
+
+function describeExclusion(e: Exclusion) {
+	const [only] = e.companies;
+	const head =
+		e.companies.length === 1 && only
+			? `Excluded “${only.name}”.`
+			: `Excluded ${pluralCompanies(e.companies.length)}.`;
+	return head + skippedSuffix(e.skipped);
+}
+
+export function describeKind(
+	updated: number,
+	kind: "agency" | "direct",
+	skipped: number,
+) {
+	const label = kind === "agency" ? "recruiters" : "direct employers";
+	return `Marked ${pluralCompanies(updated)} as ${label}.${skippedSuffix(skipped)}`;
+}
 const [dismissal, setDismissal] = createSignal<Dismissal | null>(null);
 const [bulkGrading, setBulkGrading] = createSignal<BulkGrading | null>(null);
 let hideTimer: ReturnType<typeof setTimeout> | undefined;
@@ -58,8 +99,28 @@ export function useDismissJob() {
 			recordEvent({ type: "job_dismissed", subject_id: job.ID });
 			showFor({ jobId: job.ID, title: job.Title, reasons: [] });
 		},
+		dismissMany: async (jobs: { ID: string }[]) => {
+			const results = await Promise.allSettled(
+				jobs.map((j) =>
+					set.mutateAsync({ jobId: j.ID, grade: "no", reasons: [] }),
+				),
+			);
+			const jobIds = jobs.flatMap((j, i) =>
+				results[i]?.status === "fulfilled" ? [j.ID] : [],
+			);
+			if (jobIds.length === 0) {
+				announceNotice("Could not dismiss jobs.");
+				return;
+			}
+			await markSeen(jobIds);
+			for (const subject_id of jobIds) {
+				recordEvent({ type: "job_dismissed", subject_id });
+			}
+			announceBulkGrading({ verb: "Dismissed", jobIds, priors: {} });
+		},
 		undo: async (jobId: string) => {
 			await clear.mutateAsync(jobId);
+			recordEvent({ type: "job_dismissed", subject_id: jobId, undone: true });
 			showFor(null);
 		},
 		setReasons: async (jobId: string, reasons: GradeReason[]) => {
@@ -78,22 +139,42 @@ function showExclusion(next: Exclusion | null) {
 	if (next) hideTimer = setTimeout(() => setExclusion(null), TOAST_MS);
 }
 
-export function useExcludeJobCompany() {
-	const exclude = useExcludeCompany();
+export function useExcludeJobCompanies() {
+	const exclude = useExcludeCompanies();
 	return {
-		exclude: async (job: { CompanyID?: string | undefined }) => {
-			if (!job.CompanyID) return;
-			const result = await exclude.mutateAsync(job.CompanyID);
-			showExclusion({ companyId: job.CompanyID, ...result });
+		exclude: async (jobs: { CompanyID?: string | undefined }[]) => {
+			const { ids, skipped } = companyIdsOf(jobs);
+			if (ids.length === 0) {
+				announceNotice(`No companies to exclude.${skippedSuffix(skipped)}`);
+				return;
+			}
+			try {
+				const result = await exclude.mutateAsync(ids);
+				showExclusion({ companies: result.companies, skipped });
+			} catch {
+				announceNotice("Could not exclude companies.");
+			}
 		},
 	};
 }
 
+export function useExcludeJobCompany() {
+	const { exclude } = useExcludeJobCompanies();
+	return {
+		exclude: (job: { CompanyID?: string | undefined }) => exclude([job]),
+	};
+}
+
 function ExcludeCompanyToast() {
-	const unexclude = useUnexcludeCompany();
+	const unexclude = useUnexcludeCompanies();
 	const undo = async (e: Exclusion) => {
 		try {
-			await unexclude.mutateAsync({ id: e.companyId, removeName: e.added });
+			await unexclude.mutateAsync(
+				e.companies.map((c) => ({
+					companyId: c.companyId,
+					removeName: c.added,
+				})),
+			);
 		} finally {
 			setExclusion(null);
 		}
@@ -102,7 +183,7 @@ function ExcludeCompanyToast() {
 		<Show when={exclusion()}>
 			{(e) => (
 				<output class="fixed inset-x-4 bottom-20 z-50 flex items-center gap-3 rounded-lg border border-border-strong bg-surface px-4 py-3 text-sm text-foreground shadow-md md:bottom-4 md:left-auto md:max-w-sm">
-					<span class="truncate">Excluded “{e().name}”.</span>
+					<span class="truncate">{describeExclusion(e())}</span>
 					<button
 						type="button"
 						onClick={() => undo(e())}
@@ -134,7 +215,9 @@ function BulkGradeToast() {
 		<Show when={bulkGrading()}>
 			{(b) => (
 				<output class="fixed inset-x-4 bottom-20 z-50 flex items-center gap-3 rounded-lg border border-border-strong bg-surface px-4 py-3 text-sm text-foreground shadow-md md:bottom-4 md:left-auto md:max-w-sm">
-					<span class="truncate">Graded {b().jobIds.length} jobs.</span>
+					<span class="truncate">
+						{b().verb ?? "Graded"} {b().jobIds.length} jobs.
+					</span>
 					<button
 						type="button"
 						onClick={() => undo(b())}
@@ -154,6 +237,13 @@ export function DismissToast() {
 		<>
 			<BulkGradeToast />
 			<ExcludeCompanyToast />
+			<Show when={notice()}>
+				{(text) => (
+					<output class="fixed inset-x-4 bottom-20 z-50 rounded-lg border border-border-strong bg-surface px-4 py-3 text-sm text-foreground shadow-md md:bottom-4 md:left-auto md:max-w-sm">
+						{text()}
+					</output>
+				)}
+			</Show>
 			<Show when={dismissal()}>
 				{(d) => (
 					<output class="fixed inset-x-4 bottom-20 z-50 flex flex-col gap-2 rounded-lg border border-border-strong bg-surface px-4 py-3 text-sm text-foreground shadow-md md:bottom-4 md:left-auto md:max-w-sm">

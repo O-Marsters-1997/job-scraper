@@ -1,45 +1,45 @@
 # ADR 0011 — A modular monolith split by context, each owning its tables
 
-One `*jobsdb.DB` implemented every `providers` interface, so every service could reach every table and constructors took `db` several times over (`suitability.New(db, db, db, …, db)`). The goal is locality and data ownership inside one process and one database. Pulling a context out into its own service is not planned.
+A single shared DB handle that every service can use gives no locality and no data ownership. The goal is locality and data ownership inside one process and one database. Pulling a context out into its own service is not planned.
 
 - **Contexts.**
   - `jobsearch` decides what to fetch: jobs, job URLs, companies, boards, poll state, candidates and Relevance, harvest runs, source targets with their run state, tracked companies, and the fetch cache (ADR 0016).
-  - `scoring` decides how well a job fits: search config, options, answers, scores, `effect_outbox`, Jev and notify. The answer-effect loop becomes `scoring.Run(ctx)`.
-  - `applications`: applications and statuses.
-  - `events`: the generic `events` log (ADR 0026). Amendment (2026-10-10): it owns `events` and exports `RecordApplicationCreated` and `RecordApplicationStatusChanged`, transaction-scoped ports that `applications` calls in the same transaction. It takes a `ScoreSnapshotter` from scoring so job events carry the score at event time.
+  - `scoring` decides how well a job fits: search config, options, answers, scores, `effect_outbox` and Jev. It decides who is alerted and hands each User to `notify` through the `scoring.Notifications` port. The answer-effect loop is `scoring.Run(ctx)`.
+  - `notify`: Notifications and ntfy delivery. It owns `notifications` and imports no context; the email and Web Push senders in the package stay as they are.
+  - `applications`: applications, statuses, recruiter contacts and Job Notes. It owns `applications`, `application_statuses`, `recruiter_contacts` and `job_notes`.
+  - `tasks`: Tasks and Task types. It owns `tasks` and `task_types` and SELECT-joins `jobs` for each Task's title, company and posted date.
+  - `events`: the generic `events` log (ADR 0026). It owns `events` and exports `RecordApplicationCreated` and `RecordApplicationStatusChanged`, transaction-scoped ports that `applications` calls in the same transaction. It takes a `ScoreSnapshotter` from scoring so job events carry the score at event time.
   - `cvtemplates`: tracked docs and tabs.
   - `identity`: users, sessions, profile, AI credentials, and the Google Link. The Google Link covers OAuth, tokens and the Docs client, which identity exposes to cvtemplates.
-  - `cvtailor`: tailored CVs and the Experience Bank. Its `cvedit` (the Sonnet client and its prompts), `checks` (deterministic gates) and `docedit` (edits to Docs requests) are subpackages; see the amendment under Layout.
+  - `cvtailor`: tailored CVs and the Experience Bank. Its `cvedit` (the Sonnet client and its prompts), `checks` (deterministic gates) and `docedit` (edits to Docs requests) are subpackages; see Layout.
 - **Layout.** Every context lives under `internal/services/`.
   - `internal/services/<ctx>/module.go`: `New(deps) *Module`, where `deps` are required constructor args.
   - `Module` has a narrow facade: exported methods for what other contexts, the worker or `cmd/admin` need, taking and returning `dto` types.
   - `m.Routes(r chi.Router)`, in `internal/services/<ctx>/routes.go`, binds the context's routes with `handlers.Handle` (ADR 0008).
   - The context's main feature service is `internal/services/<ctx>/service.go` (`NewService`). A context is one package: one `Service`, one `Store` interface, and each feature a file on that `Service`. A feature gets its own package only when the store returns its types, so folding it into the root would be an import cycle: `sourcetargets` owns `Candidate`, which `jobsearch/store` returns. Such a package declares its own store interface and never imports the store. `Build(Deps)` takes the store and one field per other boundary: external clients and other contexts' ports.
-  - Amendment (2026-09-29): a context may hold subpackages beyond a feature that must avoid a store import cycle, for three kinds of code only: an external or LLM client with its prompts (`cvtailor/cvedit`), pure rules with no store (`cvtailor/checks`, `cvtailor/docedit`), and a dev-only eval harness (`cvtailor/eval`, consumed by `cmd/` alone). None of them imports the context's store or root. `cvedit`, `checks` and `docedit` had sat in the shared kernel while importing each other's context code, so they moved here and `depguard` now enforces the kernel rule.
+  - A context may hold subpackages beyond a feature that must avoid a store import cycle, for three kinds of code only: an external or LLM client with its prompts (`cvtailor/cvedit`), pure rules with no store (`cvtailor/checks`, `cvtailor/docedit`, `cvtailor/linefit`), and a dev-only eval harness (`cvtailor/eval`, consumed by `cmd/` alone). None of them imports the context's store or root. `depguard` enforces the kernel rule.
   - `internal/services/<ctx>/store/` holds the store (`store.go`), its sqlc-to-`dto` converters (`transform.go`, named `to<Name>DTO`), its queries and its generated sqlc.
-  - `cmd/api/main.go` is the only composition root. `internal/api` shrinks to the HTTP shell: middleware, CORS, and mounting each module's routes.
-  - `handlers.Handle` and the CRUD generics move to `internal/handlers`, so every context can import them.
-- **Shared kernel.** Packages stay flat under `internal/`: `dto`, `apperr`, `queue`, `telemetry`, `handlers`, `pgtest`, plus existing helpers such as `sourcespec` and `slug`. `dto` keeps only HTTP shapes and types that cross a facade. DB input structs move into their context (amends ADR 0001). The kernel never imports a context: `telemetry.StateCollector` takes an interface that scoring satisfies.
+  - `cmd/api/main.go` is the only composition root. `internal/api` is the HTTP shell: middleware, CORS, and mounting each module's routes.
+  - `handlers.Handle` and the CRUD generics live in `internal/handlers`, so every context can import them.
+- **Shared kernel.** Packages stay flat under `internal/`: `dto`, `apperr`, `queue`, `telemetry`, `handlers`, `pgtest`, plus existing helpers such as `sourcespec` and `slug`. `dto` keeps only HTTP shapes and types that cross a facade. DB input structs live in their context. The kernel never imports a context: `telemetry.StateCollector` takes an interface that scoring satisfies.
 - **Writes are owned, reads may join.**
   - Only the owning context writes its tables. Any store may SELECT-join another context's tables, which keeps score-sorted job pagination in one query.
-  - A write that must change another context's rows in the same transaction goes through a transaction-scoped port that context exports. Scoring exports three: `JobsChanged(ctx, tx, jobIDs)` (a job's content changed), `JobsClosed(ctx, tx, jobIDs)` (a job closed) and `CompanyTracked(ctx, tx, userID, companyID)` (a user started tracking a company). `applications.SeedDefaults(ctx, tx, userID)` serves signup.
+  - A write that must change another context's rows in the same transaction goes through a transaction-scoped port that context exports. Scoring exports three: `JobsChanged(ctx, tx, jobIDs)` (a job's content changed), `JobsClosed(ctx, tx, jobIDs)` (a job closed) and `CompanyTracked(ctx, tx, userID, companyID)` (a user started tracking a company). `applications.SeedDefaults(ctx, tx, userID)` and `tasks.SeedDefaults(ctx, tx, userID)` serve signup: identity takes a list of `Seeder`s and calls each in the signup transaction.
 - **Enforcement.**
-  - `sqlc.yaml` has one `sql:` block per context. All of them read the shared `internal/data/db/sqlc/schema.sql`.
+  - `sqlc.yaml` has one `sql:` block per context. All of them read `scripts/migrations` (ADR 0030).
   - Queries live in `internal/services/<ctx>/store/queries/` and generate into `internal/services/<ctx>/store/sqlc/`, so a context cannot call another context's write queries.
   - `depguard` keeps each store private. A `<ctx>-store` rule per context denies `internal/services/<ctx>/store` outside `internal/services/<ctx>/`. This is enforced by lint, not by the compiler.
   - The worker and `cmd/admin` import context roots only and never call `Routes`. ADR 0009's rule stands, and `depguard` keeps enforcing it.
 - **Tests.**
-  - `providers` and `providers.Mock*` are removed. Each service declares its own store interface and is tested with small hand fakes.
-  - Stores are tested against Postgres through the shared `internal/pgtest` helper (amends ADR 0008's tests bullet).
-- **Errors.**
-  - A store returns sentinels declared in its own package, kinded with `apperr` when they map to an HTTP status, and maps `pgx.ErrNoRows` to its own `ErrNotFound`.
+  - There is no shared `providers` package and no mock package. Each service declares its own store interface and is tested with small hand fakes.
+  - Stores are tested against Postgres through the shared `internal/pgtest` helper, each test on its own database and in parallel (ADR 0012, ADR 0025).
+- **Errors.** The go-idiomatic skill (`references/errors.md`) is the authority.
+  - Each context's store exports its own sentinels: `ErrNotFound`, `ErrInvalidID` and constraint-named conflicts (`ErrUsernameTaken`). A shared sentinel would let one context's not-found pass for another's, so there is none. The store maps `pgx.ErrNoRows` to its own `ErrNotFound`.
+  - Stores never import `apperr`. The service maps a store sentinel to an `apperr` kind.
+  - `apperr` has a `KindUnknown` zero value, `Wrap(kind, publicMsg, cause)` and `KindOf(err)`. `writeError` sends only the public message and logs the cause.
   - The context root (`internal/services/<ctx>`) re-exports only the sentinels that other contexts or the worker must match. The root can't declare them itself, because it imports the store.
-  - Amendment (2026-09-28): `ErrNotFound` carried no domain-specific detail in any store, so four
-    independently-built copies were silently not `errors.Is`-equal to each other. It's now one
-    `data.ErrNotFound` (`internal/data/errors.go`), returned directly — no per-store declaration
-    or root re-export. A sentinel stays local only when it carries real domain meaning
-    (`ErrApplicationExists`, `ErrUsernameTaken`, ...).
-- **Migration order.** `applications` was the pilot, followed by `identity`, `cvtemplates` and `scoring`. `jobsearch` went last, taking what remained of the old `*jobsdb.DB`. `internal/data/db` now only connects and migrates.
+- **Config.** Each binary reads the environment once into a typed `Config` in `main` (go-idiomatic `secrets.md`). Nothing below `cmd/` calls `os.Getenv`; `forbidigo` enforces it.
+- **Packages.** `internal/data/db` only connects and migrates. `depguard` bans `apperr` inside `store/` and `pgxpool` outside `store/`, `internal/data/db` and `cmd/`. `pgx.Tx` stays legal in transaction-scoped ports.
 
 Rejected alternatives:
 
@@ -54,5 +54,3 @@ Rejected alternatives:
 - `internal/<ctx>/internal/<feature>` and `internal/<ctx>/internal/store`, so Go's `internal/` rule enforces store privacy: the applications pilot found the doubled `internal` hard to read, and depguard covers the same boundary.
 
 Trade-off: transaction-scoped ports put `pgx.Tx` in interfaces that cross contexts, and read-joins mean a context can't change its tables freely without checking who reads them. sqlc also generates duplicate model structs in each package, which get mapped to `dto` anyway.
-
-Status: complete (2026-09-28, PR #305) — `internal/data/providers` and the legacy sqlc block removed.

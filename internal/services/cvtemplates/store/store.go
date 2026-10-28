@@ -33,7 +33,7 @@ func (s *Store) AddTrackedDoc(ctx context.Context, input dto.AddTrackedDocInput)
 	if err != nil {
 		return err
 	}
-	if err := s.queries.AddTrackedDoc(ctx, sqlc.AddTrackedDocParams{UserID: uid, DocID: input.DocID}); err != nil {
+	if err := s.queries.AddTrackedDoc(ctx, sqlc.AddTrackedDocParams{UserID: uid, DocID: input.DocID, Kind: string(input.Kind)}); err != nil {
 		return fmt.Errorf("store.AddTrackedDoc: %w", err)
 	}
 	return nil
@@ -54,12 +54,12 @@ func (s *Store) RemoveTrackedDoc(ctx context.Context, userID, docID string) erro
 	return nil
 }
 
-func (s *Store) ListTrackedDocs(ctx context.Context, userID string) ([]dto.TrackedDoc, error) {
+func (s *Store) ListTrackedDocs(ctx context.Context, userID string, kind dto.TrackedDocKind) ([]dto.TrackedDoc, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.queries.ListTrackedDocs(ctx, uid)
+	rows, err := s.queries.ListTrackedDocs(ctx, sqlc.ListTrackedDocsParams{UserID: uid, Kind: string(kind)})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListTrackedDocs: %w", err)
 	}
@@ -112,6 +112,21 @@ func (s *Store) SetTabVisible(ctx context.Context, userID, docID, tabID string, 
 	n, err := s.queries.SetTabVisible(ctx, sqlc.SetTabVisibleParams{UserID: uid, DocID: docID, TabID: tabID, Visible: visible})
 	if err != nil {
 		return fmt.Errorf("store.SetTabVisible: %w", err)
+	}
+	if n == 0 {
+		return ErrTabNotFound
+	}
+	return nil
+}
+
+func (s *Store) SetTabDefault(ctx context.Context, userID, docID, tabID string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.SetTabDefault(ctx, sqlc.SetTabDefaultParams{UserID: uid, DocID: docID, TabID: tabID})
+	if err != nil {
+		return fmt.Errorf("store.SetTabDefault: %w", err)
 	}
 	if n == 0 {
 		return ErrTabNotFound

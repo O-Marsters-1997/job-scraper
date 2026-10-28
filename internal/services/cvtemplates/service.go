@@ -30,10 +30,11 @@ type DocsClient interface {
 type Store interface {
 	AddTrackedDoc(ctx context.Context, input dto.AddTrackedDocInput) error
 	RemoveTrackedDoc(ctx context.Context, userID, docID string) error
-	ListTrackedDocs(ctx context.Context, userID string) ([]dto.TrackedDoc, error)
+	ListTrackedDocs(ctx context.Context, userID string, kind dto.TrackedDocKind) ([]dto.TrackedDoc, error)
 	EnsureTabs(ctx context.Context, trackedDocID string, tabIDs, titles []string) error
 	ListTabs(ctx context.Context, trackedDocID string) ([]dto.Tab, error)
 	SetTabVisible(ctx context.Context, userID, docID, tabID string, visible bool) error
+	SetTabDefault(ctx context.Context, userID, docID, tabID string) error
 }
 
 type CV struct {
@@ -44,6 +45,7 @@ type CV struct {
 	ModifiedAt time.Time
 	DocURL     string
 	Visible    bool
+	Default    bool
 }
 
 type Service struct {
@@ -57,12 +59,16 @@ func NewService(gc DocsClient, store Store) *Service {
 
 // List returns userID's CVs, one per visible or hidden tab across their
 // tracked docs. A doc Google can no longer access is skipped, not an error.
-func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
+func (s *Service) List(ctx context.Context, userID string, kind dto.TrackedDocKind) ([]CV, error) {
+	kind, err := normalizeKind(kind)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := s.gc.HTTPClientForUser(ctx, userID); err != nil {
 		return nil, fmt.Errorf("google account not connected: %w", err)
 	}
 
-	tracked, err := s.store.ListTrackedDocs(ctx, userID)
+	tracked, err := s.store.ListTrackedDocs(ctx, userID, kind)
 	if err != nil {
 		return nil, fmt.Errorf("cvtemplates.List list docs: %w", err)
 	}
@@ -98,9 +104,9 @@ func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
 		if err != nil {
 			return nil, fmt.Errorf("cvtemplates.List list tabs: %w", err)
 		}
-		visibilityOf := make(map[string]bool, len(persisted))
+		stateOf := make(map[string]dto.Tab, len(persisted))
 		for _, p := range persisted {
-			visibilityOf[p.TabID] = p.Visible
+			stateOf[p.TabID] = p
 		}
 		for _, tab := range tabs {
 			cvs = append(cvs, CV{
@@ -110,7 +116,8 @@ func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
 				SourceDoc:  meta.Title,
 				ModifiedAt: meta.ModifiedAt,
 				DocURL:     docTabURL(doc.DocID, tab.ID),
-				Visible:    visibilityOf[tab.ID],
+				Visible:    stateOf[tab.ID].Visible,
+				Default:    stateOf[tab.ID].IsDefault,
 			})
 		}
 	}

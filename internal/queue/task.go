@@ -38,7 +38,13 @@ type Task struct {
 	Manual      bool     `json:"manual,omitempty"`
 	Recovery    bool     `json:"recovery,omitempty"`
 	Via         string   `json:"via,omitempty"`
+	ListingURL  string   `json:"listing_url,omitempty"`
+	ApplyURL    string   `json:"apply_url,omitempty"`
+	RequireUK   bool     `json:"require_uk,omitempty"`
+	Urgent      bool     `json:"urgent,omitempty"`
+	Poll        bool     `json:"poll,omitempty"`
 	Redelivered bool     `json:"-"`
+	Attempt     int      `json:"-"`
 }
 
 func (t Task) Validate() error {
@@ -48,6 +54,9 @@ func (t Task) Validate() error {
 	role, ok := sourcespec.SourceRole(t.Source)
 	if !ok {
 		return fmt.Errorf("unknown source %q", t.Source)
+	}
+	if role == sourcespec.RoleLinkOnly {
+		return fmt.Errorf("source %q has no queue", t.Source)
 	}
 	if (t.TargetID == "") != (t.RunID == "") || t.TargetID != "" && (uuid.Validate(t.TargetID) != nil || uuid.Validate(t.RunID) != nil) {
 		return errors.New("invalid target/run ID pair")

@@ -54,7 +54,7 @@ func TestBulkExport(t *testing.T) {
 			got <- recordedRequest{r.Method, r.URL.Path, r.Header.Get("Content-Type"), r.Header.Get("Authorization"), body.Jobs}
 			_, _ = w.Write([]byte(okBody))
 		})
-		if err := exporter.BulkExport(t.Context(), oneJob); err != nil {
+		if _, err := exporter.BulkExport(t.Context(), oneJob); err != nil {
 			t.Fatal(err)
 		}
 		want := recordedRequest{http.MethodPost, "/ingest/batch", "application/json", "Bearer test-token", oneJob}
@@ -65,8 +65,37 @@ func TestBulkExport(t *testing.T) {
 
 	t.Run("accepts any 2xx", func(t *testing.T) {
 		exporter := newExporter(t, respondWith(http.StatusCreated, `{"results":[{"status":"unchanged"}]}`))
-		if err := exporter.BulkExport(t.Context(), oneJob); err != nil {
+		if _, err := exporter.BulkExport(t.Context(), oneJob); err != nil {
 			t.Errorf("BulkExport() = %v, want nil on 201", err)
+		}
+	})
+
+	t.Run("counts new, merged and upgraded outcomes", func(t *testing.T) {
+		t.Parallel()
+		body := `{"results":[{"status":"new","job_id":"a"},{"status":"merged"},{"status":"changed"},{"status":"new","job_id":"b"},{"status":"unchanged"},{"status":"upgraded"}]}`
+		exporter := newExporter(t, respondWith(http.StatusOK, body))
+		jobs := make([]dto.Job, 6)
+		got, err := exporter.BulkExport(t.Context(), jobs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := dto.IngestTally{NewJobIDs: []string{"a", "b"}, Merged: 1, Upgraded: 1}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("BulkExport() tally (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a rejected job is tallied and the rest of the batch kept", func(t *testing.T) {
+		t.Parallel()
+		body := `{"results":[{"status":"rejected","reason":"bad"},{"status":"new","job_id":"a"}]}`
+		exporter := newExporter(t, respondWith(http.StatusOK, body))
+		got, err := exporter.BulkExport(t.Context(), make([]dto.Job, 2))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := dto.IngestTally{NewJobIDs: []string{"a"}, Rejected: 1}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("BulkExport() tally (-want +got):\n%s", diff)
 		}
 	})
 
@@ -79,7 +108,6 @@ func TestBulkExport(t *testing.T) {
 		{"4xx is not retried", http.StatusBadRequest, "", 1},
 		{"5xx retries then fails", http.StatusServiceUnavailable, "", 3},
 		{"unknown outcome", http.StatusOK, `{"results":[{"status":"pending"}]}`, 1},
-		{"rejected job", http.StatusOK, `{"results":[{"status":"rejected","reason":"bad"}]}`, 1},
 		{"result count mismatch", http.StatusOK, `{"results":[]}`, 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -88,7 +116,7 @@ func TestBulkExport(t *testing.T) {
 				calls.Add(1)
 				respondWith(tt.status, tt.body)(w, r)
 			})
-			if err := exporter.BulkExport(t.Context(), oneJob); err == nil {
+			if _, err := exporter.BulkExport(t.Context(), oneJob); err == nil {
 				t.Error("BulkExport() = nil, want error")
 			}
 			if got := calls.Load(); got != tt.wantCalls {
@@ -109,7 +137,7 @@ func TestBulkExport(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(okBody))
 		})
-		if err := exporter.BulkExport(t.Context(), oneJob); err != nil {
+		if _, err := exporter.BulkExport(t.Context(), oneJob); err != nil {
 			t.Fatal(err)
 		}
 		if first, second := <-bodies, <-bodies; first != second {
@@ -134,7 +162,7 @@ func TestBulkExport(t *testing.T) {
 			{Title: "A", URL: "https://example.com/a", Description: big},
 			{Title: "B", URL: "https://example.com/b", Description: big},
 		}
-		if err := exporter.BulkExport(t.Context(), jobs); err != nil {
+		if _, err := exporter.BulkExport(t.Context(), jobs); err != nil {
 			t.Fatal(err)
 		}
 		if first, second := <-sizes, <-sizes; first != 1 || second != 1 {
@@ -150,7 +178,7 @@ func TestExport(t *testing.T) {
 		wantErr bool
 	}{
 		{"new", okSingleBody, false},
-		{"rejected", `{"status":"rejected","reason":"bad"}`, true},
+		{"rejected", `{"status":"rejected","reason":"bad"}`, false},
 		{"unknown outcome", `{"status":"pending"}`, true},
 		{"undecodable", `nope`, true},
 	} {

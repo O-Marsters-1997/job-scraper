@@ -11,6 +11,85 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countJobs = `-- name: CountJobs :one
+SELECT count(*)
+FROM jobs j
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1::uuid
+LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $1::uuid
+WHERE j.closed_at IS NULL
+  AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > $2::timestamptz - interval '90 days'
+  AND COALESCE(j.company_slug, '') <> ALL($3::text[])
+  AND NOT COALESCE(js.blocked, false)
+  AND jg.grade IS DISTINCT FROM 'no'
+  AND ($4::uuid IS NULL OR j.company_id = $4::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = $4::uuid)))
+  AND (NOT $5::bool OR js.job_id IS NOT NULL)
+  AND ($6::int IS NULL OR js.suitability_score >= $6::int)
+  AND (cardinality($7::text[]) = 0 OR js.band = ANY($7::text[]))
+  AND ($8::timestamptz IS NULL OR j.scraped_at >= $8::timestamptz)
+  AND ($9::text = 'all' OR ($9::text = 'graded') = (COALESCE(jg.grade, '') <> ''))
+  AND ($10::text = 'all' OR ($10::text = 'seen') = (jv.job_id IS NOT NULL))
+  AND (NOT $11::bool OR NOT EXISTS (SELECT 1 FROM applications a WHERE a.user_id = $1::uuid AND a.job_id = j.id))
+  AND ($12::text = 'all' OR ($12::text = 'agency') = (COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified') IN ('agency', 'likely_agency')))
+  AND (NOT $13::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))))
+  AND (cardinality($14::text[]) = 0 OR j.source = ANY($14::text[]))
+  AND (cardinality($15::text[]) = 0 OR (CASE lower(btrim(j.work_arrangement)) WHEN 'remote' THEN 'remote' WHEN 'hybrid' THEN 'hybrid' WHEN 'onsite' THEN 'onsite' ELSE 'unknown' END) = ANY($15::text[]))
+  AND (NOT $16::bool OR (
+    j.salary_min IS NOT NULL
+    AND COALESCE(j.salary_max, j.salary_min) >= COALESCE($17::float8, '-Infinity'::float8)
+    AND j.salary_min <= COALESCE($18::float8, 'Infinity'::float8)))
+  AND ($19::text = '' OR concat_ws(' ', j.title, j.company_slug, j.location, j.source) ILIKE $19::text)
+`
+
+type CountJobsParams struct {
+	UserID               pgtype.UUID
+	Now                  pgtype.Timestamptz
+	ExcludedCompanySlugs []string
+	CompanyID            pgtype.UUID
+	ScoredOnly           bool
+	MinSuitability       pgtype.Int4
+	Bands                []string
+	ScrapedSince         pgtype.Timestamptz
+	Graded               string
+	Seen                 string
+	NoApplication        bool
+	Poster               string
+	FavouriteOnly        bool
+	Sources              []string
+	Arrangements         []string
+	SalaryOnly           bool
+	SalaryFloor          pgtype.Float8
+	SalaryCeiling        pgtype.Float8
+	SearchPattern        string
+}
+
+func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countJobs,
+		arg.UserID,
+		arg.Now,
+		arg.ExcludedCompanySlugs,
+		arg.CompanyID,
+		arg.ScoredOnly,
+		arg.MinSuitability,
+		arg.Bands,
+		arg.ScrapedSince,
+		arg.Graded,
+		arg.Seen,
+		arg.NoApplication,
+		arg.Poster,
+		arg.FavouriteOnly,
+		arg.Sources,
+		arg.Arrangements,
+		arg.SalaryOnly,
+		arg.SalaryFloor,
+		arg.SalaryCeiling,
+		arg.SearchPattern,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const existingURLs = `-- name: ExistingURLs :many
 SELECT url FROM jobs WHERE url = ANY($1::text[])
 UNION
@@ -38,7 +117,7 @@ func (q *Queries) ExistingURLs(ctx context.Context, dollar_1 []string) ([]string
 }
 
 const getJob = `-- name: GetJob :one
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.first_discovered_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $2 AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.reposted_at, j.scraped_at, j.first_discovered_at, j.description, j.salary_raw, j.work_arrangement, COALESCE(j.company_id, (SELECT cc.id FROM companies cc WHERE cc.slug = j.company_slug)) AS company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $2 AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite, COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id OR kc.slug = j.company_slug ORDER BY (kc.id = j.company_id) DESC LIMIT 1), 'unclassified')::text AS company_kind, COALESCE(j.discovered_via, (SELECT cb.discovered_via FROM company_boards cb WHERE cb.id = j.primary_board_id), '')::text AS discovered_via
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2
 LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $2
@@ -58,7 +137,9 @@ type GetJobRow struct {
 	Url                string
 	CompanySlug        string
 	Source             string
-	UpdatedAt          pgtype.Timestamptz
+	PostedAt           pgtype.Timestamptz
+	PostedAfter        pgtype.Timestamptz
+	RepostedAt         pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
 	FirstDiscoveredAt  pgtype.Timestamptz
 	Description        string
@@ -73,6 +154,8 @@ type GetJobRow struct {
 	Breakdown          []byte
 	Seen               bool
 	CompanyFavourite   bool
+	CompanyKind        string
+	DiscoveredVia      string
 }
 
 func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, error) {
@@ -85,7 +168,9 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 		&i.Url,
 		&i.CompanySlug,
 		&i.Source,
-		&i.UpdatedAt,
+		&i.PostedAt,
+		&i.PostedAfter,
+		&i.RepostedAt,
 		&i.ScrapedAt,
 		&i.FirstDiscoveredAt,
 		&i.Description,
@@ -100,6 +185,126 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 		&i.Breakdown,
 		&i.Seen,
 		&i.CompanyFavourite,
+		&i.CompanyKind,
+		&i.DiscoveredVia,
+	)
+	return i, err
+}
+
+const jobInsightGroups = `-- name: JobInsightGroups :many
+SELECT to_char(j.scraped_at AT TIME ZONE $1::text, 'YYYY-MM-DD')::text AS day,
+       j.source,
+       COALESCE(LEAST(js.suitability_score / 20, 4), -1)::int AS score_band,
+       CASE WHEN js.band IN ('good', 'great') THEN COALESCE(
+         NULLIF(COALESCE(j.discovered_via, (SELECT cb.discovered_via FROM company_boards cb WHERE cb.id = j.primary_board_id), ''), ''),
+         (SELECT ju.source FROM job_urls ju WHERE ju.job_id = j.id ORDER BY ju.first_seen_at, ju.normalized_url LIMIT 1),
+         j.source) ELSE '' END::text AS found_by,
+       count(*)::int AS jobs,
+       count(js.suitability_score)::int AS scored,
+       COALESCE(sum(js.suitability_score), 0)::int AS score_sum
+FROM jobs j
+JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $2::uuid
+WHERE j.closed_at IS NULL
+  AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > $3::timestamptz - interval '90 days'
+  AND COALESCE(j.company_slug, '') <> ALL($4::text[])
+  AND NOT COALESCE(js.blocked, false)
+  AND jg.grade IS DISTINCT FROM 'no'
+GROUP BY 1, 2, 3, 4
+`
+
+type JobInsightGroupsParams struct {
+	Tz                   string
+	UserID               pgtype.UUID
+	Now                  pgtype.Timestamptz
+	ExcludedCompanySlugs []string
+}
+
+type JobInsightGroupsRow struct {
+	Day       string
+	Source    string
+	ScoreBand int32
+	FoundBy   string
+	Jobs      int32
+	Scored    int32
+	ScoreSum  int32
+}
+
+func (q *Queries) JobInsightGroups(ctx context.Context, arg JobInsightGroupsParams) ([]JobInsightGroupsRow, error) {
+	rows, err := q.db.Query(ctx, jobInsightGroups,
+		arg.Tz,
+		arg.UserID,
+		arg.Now,
+		arg.ExcludedCompanySlugs,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []JobInsightGroupsRow
+	for rows.Next() {
+		var i JobInsightGroupsRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Source,
+			&i.ScoreBand,
+			&i.FoundBy,
+			&i.Jobs,
+			&i.Scored,
+			&i.ScoreSum,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const jobStats = `-- name: JobStats :one
+SELECT count(*)::int AS total,
+       count(DISTINCT j.source)::int AS sources,
+       (count(*) FILTER (WHERE j.scraped_at >= $1::timestamptz))::int AS new_today,
+       (count(DISTINCT j.source) FILTER (WHERE j.scraped_at >= $1::timestamptz))::int AS today_sources
+FROM jobs j
+JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $2::uuid
+WHERE j.closed_at IS NULL
+  AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > $3::timestamptz - interval '90 days'
+  AND COALESCE(j.company_slug, '') <> ALL($4::text[])
+  AND NOT COALESCE(js.blocked, false)
+  AND jg.grade IS DISTINCT FROM 'no'
+`
+
+type JobStatsParams struct {
+	DayStart             pgtype.Timestamptz
+	UserID               pgtype.UUID
+	Now                  pgtype.Timestamptz
+	ExcludedCompanySlugs []string
+}
+
+type JobStatsRow struct {
+	Total        int32
+	Sources      int32
+	NewToday     int32
+	TodaySources int32
+}
+
+func (q *Queries) JobStats(ctx context.Context, arg JobStatsParams) (JobStatsRow, error) {
+	row := q.db.QueryRow(ctx, jobStats,
+		arg.DayStart,
+		arg.UserID,
+		arg.Now,
+		arg.ExcludedCompanySlugs,
+	)
+	var i JobStatsRow
+	err := row.Scan(
+		&i.Total,
+		&i.Sources,
+		&i.NewToday,
+		&i.TodaySources,
 	)
 	return i, err
 }
@@ -137,80 +342,34 @@ func (q *Queries) ListJobListings(ctx context.Context, jobID pgtype.UUID) ([]Lis
 	return items, nil
 }
 
-const listJobs = `-- name: ListJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $1::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
-FROM jobs j
-JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
-LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1::uuid
-LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $1::uuid
-WHERE j.closed_at IS NULL
-  AND j.updated_at > now() - interval '90 days'
-  AND COALESCE(j.company_slug, '') <> ALL($2::text[])
-  AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
-  AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = $1::uuid AND g.grade = 'no')
-ORDER BY js.suitability_score DESC, j.scraped_at DESC
+const listJobListingsForJobs = `-- name: ListJobListingsForJobs :many
+SELECT job_id, source, normalized_url, first_seen_at
+FROM job_urls
+WHERE job_id = ANY($1::uuid[])
+ORDER BY first_seen_at, normalized_url
 `
 
-type ListJobsParams struct {
-	UserID               pgtype.UUID
-	ExcludedCompanySlugs []string
+type ListJobListingsForJobsRow struct {
+	JobID         pgtype.UUID
+	Source        string
+	NormalizedUrl string
+	FirstSeenAt   pgtype.Timestamptz
 }
 
-type ListJobsRow struct {
-	ID                 pgtype.UUID
-	Title              string
-	Location           string
-	Url                string
-	CompanySlug        string
-	Source             string
-	UpdatedAt          pgtype.Timestamptz
-	ScrapedAt          pgtype.Timestamptz
-	FirstDiscoveredAt  pgtype.Timestamptz
-	SalaryRaw          string
-	WorkArrangement    string
-	CompanyID          pgtype.UUID
-	PrimaryBoardID     pgtype.UUID
-	ProviderPostingID  pgtype.Text
-	ContentFingerprint pgtype.Text
-	SuitabilityScore   pgtype.Int4
-	Band               pgtype.Text
-	Breakdown          []byte
-	Grade              string
-	Seen               bool
-	CompanyFavourite   bool
-}
-
-func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsRow, error) {
-	rows, err := q.db.Query(ctx, listJobs, arg.UserID, arg.ExcludedCompanySlugs)
+func (q *Queries) ListJobListingsForJobs(ctx context.Context, dollar_1 []pgtype.UUID) ([]ListJobListingsForJobsRow, error) {
+	rows, err := q.db.Query(ctx, listJobListingsForJobs, dollar_1)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListJobsRow
+	var items []ListJobListingsForJobsRow
 	for rows.Next() {
-		var i ListJobsRow
+		var i ListJobListingsForJobsRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Location,
-			&i.Url,
-			&i.CompanySlug,
+			&i.JobID,
 			&i.Source,
-			&i.UpdatedAt,
-			&i.ScrapedAt,
-			&i.FirstDiscoveredAt,
-			&i.SalaryRaw,
-			&i.WorkArrangement,
-			&i.CompanyID,
-			&i.PrimaryBoardID,
-			&i.ProviderPostingID,
-			&i.ContentFingerprint,
-			&i.SuitabilityScore,
-			&i.Band,
-			&i.Breakdown,
-			&i.Grade,
-			&i.Seen,
-			&i.CompanyFavourite,
+			&i.NormalizedUrl,
+			&i.FirstSeenAt,
 		); err != nil {
 			return nil, err
 		}
@@ -256,32 +415,76 @@ func (q *Queries) MarkJobsUnseen(ctx context.Context, arg MarkJobsUnseenParams) 
 }
 
 const pageJobs = `-- name: PageJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $1::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
+WITH ranked AS (
+  SELECT j.id, row_number() OVER (ORDER BY
+    CASE WHEN $2::text NOT IN ('newest', 'best') THEN
+      COALESCE(js.suitability_score, 50)::float8 * power(0.5::float8, GREATEST(0, extract(epoch FROM $3::timestamptz - COALESCE(j.posted_at, j.first_discovered_at))) / 86400 / 3)
+    END DESC NULLS LAST,
+    CASE WHEN $2::text = 'best' THEN js.suitability_score END DESC NULLS LAST,
+    CASE WHEN $2::text NOT IN ('newest', 'best') THEN j.first_discovered_at END DESC,
+    CASE WHEN $2::text IN ('newest', 'best') THEN COALESCE(j.posted_at, j.first_discovered_at) END DESC,
+    j.id
+  ) AS rn
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
 LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1::uuid
 LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $1::uuid
-WHERE ($2::timestamptz IS NULL OR (j.scraped_at, j.id) < ($2::timestamptz, $3::uuid))
-  AND ($4::uuid IS NULL OR j.company_id = $4::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = $4::uuid)))
-  AND ($5::text = 'all' OR ($5::text = 'open' AND j.closed_at IS NULL) OR ($5::text = 'closed' AND j.closed_at IS NOT NULL))
-  AND (NOT $6::bool OR EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = j.id AND s.user_id = $1::uuid))
-  AND ($7::int = 0 OR j.updated_at >= now() - make_interval(days => $7::int))
-  AND COALESCE(j.company_slug, '') <> ALL($8::text[])
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
-  AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = $1::uuid AND g.grade = 'no')
-ORDER BY j.scraped_at DESC, j.id DESC
-LIMIT $9::int
+WHERE j.closed_at IS NULL
+  AND COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) > $3::timestamptz - interval '90 days'
+  AND COALESCE(j.company_slug, '') <> ALL($4::text[])
+  AND NOT COALESCE(js.blocked, false)
+  AND jg.grade IS DISTINCT FROM 'no'
+  AND ($5::uuid IS NULL OR j.company_id = $5::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = $5::uuid)))
+  AND (NOT $6::bool OR js.job_id IS NOT NULL)
+  AND ($7::int IS NULL OR js.suitability_score >= $7::int)
+  AND (cardinality($8::text[]) = 0 OR js.band = ANY($8::text[]))
+  AND ($9::timestamptz IS NULL OR j.scraped_at >= $9::timestamptz)
+  AND ($10::text = 'all' OR ($10::text = 'graded') = (COALESCE(jg.grade, '') <> ''))
+  AND ($11::text = 'all' OR ($11::text = 'seen') = (jv.job_id IS NOT NULL))
+  AND (NOT $12::bool OR NOT EXISTS (SELECT 1 FROM applications a WHERE a.user_id = $1::uuid AND a.job_id = j.id))
+  AND ($13::text = 'all' OR ($13::text = 'agency') = (COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified') IN ('agency', 'likely_agency')))
+  AND (NOT $14::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))))
+  AND (cardinality($15::text[]) = 0 OR j.source = ANY($15::text[]))
+  AND (cardinality($16::text[]) = 0 OR (CASE lower(btrim(j.work_arrangement)) WHEN 'remote' THEN 'remote' WHEN 'hybrid' THEN 'hybrid' WHEN 'onsite' THEN 'onsite' ELSE 'unknown' END) = ANY($16::text[]))
+  AND (NOT $17::bool OR (
+    j.salary_min IS NOT NULL
+    AND COALESCE(j.salary_max, j.salary_min) >= COALESCE($18::float8, '-Infinity'::float8)
+    AND j.salary_min <= COALESCE($19::float8, 'Infinity'::float8)))
+  AND ($20::text = '' OR concat_ws(' ', j.title, j.company_slug, j.location, j.source) ILIKE $20::text)
+  ORDER BY rn
+  LIMIT $22::int OFFSET $21::int
+)
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.reposted_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, COALESCE(j.company_id, (SELECT cc.id FROM companies cc WHERE cc.slug = j.company_slug)) AS company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND (cf.company_id = j.company_id OR cf.company_id = (SELECT fc.id FROM companies fc WHERE fc.slug = j.company_slug))) AS company_favourite, COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id), (SELECT kc.kind FROM companies kc WHERE kc.slug = j.company_slug), 'unclassified')::text AS company_kind, COALESCE(j.discovered_via, (SELECT cb.discovered_via FROM company_boards cb WHERE cb.id = j.primary_board_id), '')::text AS discovered_via
+FROM ranked r
+JOIN jobs j ON j.id = r.id
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1::uuid
+LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $1::uuid
+ORDER BY r.rn
 `
 
 type PageJobsParams struct {
 	UserID               pgtype.UUID
-	CursorTime           pgtype.Timestamptz
-	CursorID             pgtype.UUID
-	CompanyID            pgtype.UUID
-	Availability         string
-	ScoredOnly           bool
-	SinceDays            int32
+	Sort                 string
+	Now                  pgtype.Timestamptz
 	ExcludedCompanySlugs []string
+	CompanyID            pgtype.UUID
+	ScoredOnly           bool
+	MinSuitability       pgtype.Int4
+	Bands                []string
+	ScrapedSince         pgtype.Timestamptz
+	Graded               string
+	Seen                 string
+	NoApplication        bool
+	Poster               string
+	FavouriteOnly        bool
+	Sources              []string
+	Arrangements         []string
+	SalaryOnly           bool
+	SalaryFloor          pgtype.Float8
+	SalaryCeiling        pgtype.Float8
+	SearchPattern        string
+	PageOffset           int32
 	PageLimit            int32
 }
 
@@ -292,7 +495,9 @@ type PageJobsRow struct {
 	Url                string
 	CompanySlug        string
 	Source             string
-	UpdatedAt          pgtype.Timestamptz
+	PostedAt           pgtype.Timestamptz
+	PostedAfter        pgtype.Timestamptz
+	RepostedAt         pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
 	FirstDiscoveredAt  pgtype.Timestamptz
 	SalaryRaw          string
@@ -307,18 +512,33 @@ type PageJobsRow struct {
 	Grade              string
 	Seen               bool
 	CompanyFavourite   bool
+	CompanyKind        string
+	DiscoveredVia      string
 }
 
 func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsRow, error) {
 	rows, err := q.db.Query(ctx, pageJobs,
 		arg.UserID,
-		arg.CursorTime,
-		arg.CursorID,
-		arg.CompanyID,
-		arg.Availability,
-		arg.ScoredOnly,
-		arg.SinceDays,
+		arg.Sort,
+		arg.Now,
 		arg.ExcludedCompanySlugs,
+		arg.CompanyID,
+		arg.ScoredOnly,
+		arg.MinSuitability,
+		arg.Bands,
+		arg.ScrapedSince,
+		arg.Graded,
+		arg.Seen,
+		arg.NoApplication,
+		arg.Poster,
+		arg.FavouriteOnly,
+		arg.Sources,
+		arg.Arrangements,
+		arg.SalaryOnly,
+		arg.SalaryFloor,
+		arg.SalaryCeiling,
+		arg.SearchPattern,
+		arg.PageOffset,
 		arg.PageLimit,
 	)
 	if err != nil {
@@ -335,7 +555,9 @@ func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsR
 			&i.Url,
 			&i.CompanySlug,
 			&i.Source,
-			&i.UpdatedAt,
+			&i.PostedAt,
+			&i.PostedAfter,
+			&i.RepostedAt,
 			&i.ScrapedAt,
 			&i.FirstDiscoveredAt,
 			&i.SalaryRaw,
@@ -350,6 +572,8 @@ func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsR
 			&i.Grade,
 			&i.Seen,
 			&i.CompanyFavourite,
+			&i.CompanyKind,
+			&i.DiscoveredVia,
 		); err != nil {
 			return nil, err
 		}

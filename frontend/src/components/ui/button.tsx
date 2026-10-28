@@ -1,7 +1,8 @@
 import { Root as ButtonPrimitive } from "@kobalte/core/button";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ComponentProps, ValidComponent } from "solid-js";
-import { splitProps } from "solid-js";
+import { Show, splitProps } from "solid-js";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
@@ -37,7 +38,7 @@ const buttonVariants = cva(
 export type ButtonProps<T extends ValidComponent = "button"> = ComponentProps<
 	typeof ButtonPrimitive<T>
 > &
-	VariantProps<typeof buttonVariants>;
+	VariantProps<typeof buttonVariants> & { loading?: boolean | undefined };
 
 export const Button = <T extends ValidComponent = "button">(
 	props: ButtonProps<T>,
@@ -46,14 +47,32 @@ export const Button = <T extends ValidComponent = "button">(
 		"class",
 		"variant",
 		"size",
+		"loading",
+		"disabled",
+		"children",
 	]);
 	return (
 		<ButtonPrimitive
 			class={cn(
 				buttonVariants({ variant: local.variant, size: local.size }),
+				local.loading && "relative disabled:opacity-100",
 				local.class,
 			)}
+			disabled={local.disabled || local.loading}
+			aria-busy={local.loading || undefined}
 			{...rest}
-		/>
+		>
+			<span
+				class={cn(
+					"inline-flex items-center justify-center gap-2",
+					local.loading && "invisible",
+				)}
+			>
+				{local.children}
+			</span>
+			<Show when={local.loading}>
+				<Spinner decorative class="absolute size-5 text-current" />
+			</Show>
+		</ButtonPrimitive>
 	);
 };

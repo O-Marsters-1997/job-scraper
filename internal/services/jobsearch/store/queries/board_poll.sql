@@ -6,11 +6,19 @@ JOIN companies c ON c.id = b.company_id
 JOIN tracked_companies tc ON tc.company_id = b.company_id AND tc.enabled
 LEFT JOIN board_poll_state s ON s.board_id = b.id
 WHERE b.status = 'verified'
-GROUP BY b.id, c.slug, s.last_scheduled_at, s.lease_until, s.next_due_at
+GROUP BY b.id, c.slug, s.last_scheduled_at, s.lease_until, s.next_due_at, s.check_published_at
 HAVING (s.last_scheduled_at IS NULL OR s.last_scheduled_at + MIN(tc.check_interval_minutes) * INTERVAL '1 minute' <= NOW())
    AND (s.lease_until IS NULL OR s.lease_until < NOW())
    AND (s.next_due_at IS NULL OR s.next_due_at <= NOW())
+   AND (s.check_published_at IS NULL OR s.check_published_at <= NOW() - INTERVAL '1 day')
 ORDER BY b.id;
+
+-- name: MarkBoardCheckPublished :exec
+INSERT INTO board_poll_state (board_id, check_published_at) VALUES ($1, NOW())
+ON CONFLICT (board_id) DO UPDATE SET check_published_at = EXCLUDED.check_published_at;
+
+-- name: ClearBoardCheckPublished :exec
+UPDATE board_poll_state SET check_published_at = NULL WHERE board_id = $1;
 
 -- name: ListActiveBoards :many
 SELECT b.id, b.company_id, c.slug AS company_slug, b.source, b.board_token,
@@ -71,12 +79,13 @@ VALUES ($1, $2, NOW(), $3)
 ON CONFLICT (board_id, job_id) DO UPDATE
 SET last_seen_at = EXCLUDED.last_seen_at, last_snapshot_version = EXCLUDED.last_snapshot_version;
 
--- name: ReopenObservedBoardJobs :exec
+-- name: ReopenObservedBoardJobs :many
 UPDATE jobs SET closed_at = NULL
 WHERE id IN (SELECT job_id FROM board_job_observations WHERE board_id = $1 AND last_snapshot_version = $2)
-  AND closed_at IS NOT NULL;
+  AND closed_at IS NOT NULL
+RETURNING id;
 
--- name: CloseMissingBoardJobs :exec
+-- name: CloseMissingBoardJobs :many
 -- Writes scoring's option_answers table directly; documented exception
 -- (ADR 0011, issue #264) pending #267.
 WITH closed AS (
@@ -84,14 +93,17 @@ WITH closed AS (
     WHERE primary_board_id = $1 AND closed_at IS NULL
       AND id IN (SELECT job_id FROM board_job_observations WHERE board_id = $1 AND last_snapshot_version < $2)
     RETURNING id
+), cleared AS (
+    DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed)
 )
-DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed);
+SELECT id FROM closed;
 
 -- name: CompletePollState :execrows
 UPDATE board_poll_state
 SET last_completed_at = NOW(),
     last_scheduled_at = CASE WHEN sqlc.arg(manual)::boolean THEN last_scheduled_at ELSE NOW() END,
     next_due_at = CASE WHEN sqlc.arg(manual)::boolean THEN next_due_at ELSE NOW() + sqlc.arg(interval_minutes)::int * INTERVAL '1 minute' END,
+    check_published_at = CASE WHEN sqlc.arg(manual)::boolean THEN check_published_at END,
     consecutive_complete_empty = CASE WHEN sqlc.arg(empty)::boolean THEN consecutive_complete_empty + 1 ELSE 0 END,
     consecutive_failures = 0, lease_owner = NULL, lease_until = NULL,
     last_reported_total = sqlc.arg(reported)::int, last_parsed = sqlc.arg(parsed)::int

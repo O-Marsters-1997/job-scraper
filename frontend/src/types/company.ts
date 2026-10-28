@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+export const companyKindSchema = z.enum([
+	"unclassified",
+	"likely_agency",
+	"likely_direct",
+	"agency",
+	"direct",
+]);
+
+export type CompanyKind = z.infer<typeof companyKindSchema>;
+
+export const POSTER_OPTIONS = ["all", "direct", "agency"] as const;
+export type PosterFilter = (typeof POSTER_OPTIONS)[number];
+
 export const companySchema = z.object({
 	ID: z.string(),
 	Slug: z.string(),
@@ -7,6 +20,7 @@ export const companySchema = z.object({
 	ATSSource: z.string(),
 	ATSToken: z.string(),
 	FirstSeenAt: z.string(),
+	Kind: companyKindSchema,
 	JobCount: z.number(),
 	Tracked: z.boolean(),
 	Favourite: z.boolean().optional(),
@@ -18,19 +32,42 @@ export const companySchema = z.object({
 
 export type Company = z.infer<typeof companySchema>;
 
-export const companyExclusionSchema = z.object({
+const companyExclusionSchema = z.object({
 	name: z.string(),
 	added: z.boolean(),
 });
 
 export type CompanyExclusion = z.infer<typeof companyExclusionSchema>;
 
+export const companiesExclusionSchema = z.object({
+	companies: z.array(
+		z.object({
+			companyId: z.string(),
+			name: z.string(),
+			added: z.boolean(),
+		}),
+	),
+});
+
+export type CompaniesExclusion = z.infer<typeof companiesExclusionSchema>;
+
+export const companiesKindResultSchema = z.object({ updated: z.number() });
+
 export const companyPageSchema = z.object({
 	items: z.array(companySchema),
 	total: z.number(),
+	allCompanies: z.number(),
+	verifiedBoardCompanies: z.number(),
 });
 
 export type CompanyPage = z.infer<typeof companyPageSchema>;
+
+export const atsCountSchema = z.object({
+	source: z.string(),
+	companies: z.number(),
+});
+
+export type ATSCount = z.infer<typeof atsCountSchema>;
 
 export const companyTrackingSchema = z.object({
 	CompanyID: z.string(),
@@ -86,7 +123,7 @@ const companyProfileEntrySchema = z.object({
 	total: z.number(),
 });
 
-export const companyProfileSchema = z.object({
+const companyProfileSchema = z.object({
 	sectors: z.array(z.string()).nullable(),
 	size: z.string(),
 	growth: z.string(),
@@ -102,7 +139,7 @@ export const companyProfileSchema = z.object({
 
 export type CompanyProfile = z.infer<typeof companyProfileSchema>;
 
-export const newCompanySchema = z.object({
+const newCompanySchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	slug: z.string(),
@@ -110,11 +147,18 @@ export const newCompanySchema = z.object({
 	matching_roles: z.number(),
 	best_suitability: z.number().nullable(),
 	rollup: z.array(companyProfileEntrySchema),
+	rollup_unknown: z.number(),
 	profile: companyProfileSchema.nullable(),
+});
+
+export const newCompanyPageSchema = z.object({
+	items: z.array(newCompanySchema),
+	total: z.number(),
 });
 
 export type CompanyProfileEntry = z.infer<typeof companyProfileEntrySchema>;
 export type NewCompany = z.infer<typeof newCompanySchema>;
+export type NewCompanyPage = z.infer<typeof newCompanyPageSchema>;
 export type TrackedBoard = z.infer<typeof trackedBoardSchema>;
 export type TrackedCompany = z.infer<typeof trackedCompanySchema>;
 

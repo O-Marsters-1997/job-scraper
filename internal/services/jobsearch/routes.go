@@ -15,9 +15,17 @@ import (
 
 func (m *Module) Routes(r chi.Router) {
 	r.Get("/jobs", handlers.Query(m.jobs.List))
-	r.Get("/jobs/all", handlers.GetAll(m.jobs.ListScored))
+	r.Get("/jobs/triage", handlers.Query(m.jobs.TriageQueue))
+	r.Get("/jobs/overview", handlers.Query(m.jobs.Overview))
+	r.Get("/jobs/insights", handlers.Query(m.jobs.Insights))
 	r.Post("/jobs/seen", handlers.Create(m.jobs.MarkSeen))
+	r.Post("/jobs/manual", handlers.Create(m.jobs.AddManualJob))
 	r.Get("/jobs/{id}", handlers.GetByID(m.jobs.Get))
+
+	r.Get("/scrape-runs", handlers.Query(m.jobs.ListScrapeRuns))
+	r.Get("/scrape-runs/health", handlers.GetAll(m.jobs.SourceHealth))
+	r.Get("/scrape-runs/{id}/job-changes", handlers.GetByID(m.jobs.ListScrapeRunJobSnapshots))
+	r.Get("/scrape-runs/summary", handlers.Query(m.jobs.ScrapeRunSummary))
 
 	r.Get("/sources", handlers.GetAll(m.jobs.ListSources))
 	r.Get("/sources/resolve", handlers.Query(m.jobs.ResolveBoard))
@@ -35,13 +43,19 @@ func (m *Module) Routes(r chi.Router) {
 	r.Route("/companies", func(r chi.Router) {
 		r.Get("/", handlers.Query(m.jobs.ListCompanies))
 		r.Post("/", handlers.Create(m.jobs.CreateCompany))
+		r.Put("/kind", handlers.Update(m.jobs.SetCompaniesKind))
+		r.Post("/exclusions", handlers.Create(m.ExcludeCompanies))
+		r.Post("/exclusions/undo", handlers.Update(m.UnexcludeCompanies))
+		r.Get("/ats-counts", handlers.GetAll(m.jobs.CompanyATSCounts))
 		r.Get("/{id}", handlers.GetByID(m.jobs.GetCompany))
-		r.Get("/new", handlers.GetAll(m.ListNewCompanies))
+		r.Get("/new", handlers.Query(m.ListNewCompanies))
 		r.Get("/tracked", handlers.GetAll(m.jobs.ListTrackedCompanies))
 		r.Delete("/{id}/tracking", handlers.Delete(m.jobs.UntrackCompany))
 		r.Put("/{id}/tracking", handlers.Update(m.jobs.SetCompanyTracking))
 		r.Put("/{id}/favourite", handlers.GetByID(m.jobs.FavouriteCompany))
 		r.Delete("/{id}/favourite", handlers.GetByID(m.jobs.UnfavouriteCompany))
+		r.Put("/{id}/kind", handlers.Update(m.jobs.SetCompanyKind))
+		r.Post("/{id}/kind/undo", handlers.Update(m.jobs.UndoCompanyKind))
 		r.Put("/{id}/review", handlers.Update(m.jobs.SetCompanyReview))
 		r.Put("/{id}/exclusion", handlers.Update(m.ExcludeCompany))
 		r.Post("/{id}/exclusion/undo", handlers.Update(m.UnexcludeCompany))
@@ -54,7 +68,7 @@ func (m *Module) Routes(r chi.Router) {
 // router applies ServiceTokenMiddleware itself: depguard's "shared" rule
 // keeps internal/api out of internal/services/** (ADR 0011).
 func (m *Module) PublicRoutes(r chi.Router) {
-	r.Post("/ingest", handlers.Handle(
+	r.With(chimw.RequestSize(1<<20)).Post("/ingest", handlers.Handle(
 		handlers.DecodeBody[dto.Job],
 		func(ctx context.Context, job dto.Job) (IngestResult, error) {
 			results, err := m.jobs.IngestJobs(ctx, []dto.Job{job})

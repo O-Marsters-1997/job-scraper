@@ -19,6 +19,7 @@ const (
 const (
 	RoleATS       = "ats"
 	RoleDiscovery = "discovery"
+	RoleLinkOnly  = "link_only"
 )
 
 // FilterField describes a structured filter parameter accepted by a kindFilter source.
@@ -26,10 +27,18 @@ type FilterField struct {
 	Name     string         `json:"name"`
 	Param    string         `json:"-"`
 	Numeric  bool           `json:"-"`
+	Local    bool           `json:"-"`
 	Label    string         `json:"label"`
 	Required bool           `json:"required"`
 	Options  []FilterOption `json:"options,omitempty"` // non-empty for enumerated fields
 }
+
+const (
+	LinkedInOnsite            = "1"
+	LinkedInRemote            = "2"
+	LinkedInHybrid            = "3"
+	LinkedInCityCardsFullPage = "full_page"
+)
 
 // FilterOption is one permitted value of an enumerated FilterField.
 type FilterOption struct {
@@ -136,6 +145,16 @@ var entries = []registryEntry{
 			{Value: "95000", Label: "£95,000+"},
 			{Value: "100000", Label: "£100,000+"},
 		}},
+		{Name: "date_posted", Param: "f", Label: "Date posted", Options: []FilterOption{
+			{Value: "1", Label: "Past 24 hours"},
+			{Value: "3", Label: "Past 3 days"},
+			{Value: "7", Label: "Past week"},
+		}},
+		{Name: "sort", Label: "Sort by", Options: []FilterOption{
+			{Value: "date", Label: "Most recent"},
+			{Value: "salary_high", Label: "Highest salary"},
+			{Value: "salary_low", Label: "Lowest salary"},
+		}},
 	}},
 	{name: "linkedin", label: "LinkedIn", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://www.linkedin.com/jobs", filters: []FilterField{
 		{Name: "location", Param: "location", Label: "Location"},
@@ -145,25 +164,13 @@ var entries = []registryEntry{
 			{Value: "r604800", Label: "Past week"},
 			{Value: "r2592000", Label: "Past month"},
 		}},
-		{Name: "arrangement", Param: "f_WT", Label: "Work Arrangement", Options: []FilterOption{
-			{Value: "1", Label: "On-site"},
-			{Value: "2", Label: "Remote"},
-			{Value: "3", Label: "Hybrid"},
+		{Name: "arrangement", Param: "f_WT", Local: true, Label: "Work Arrangement", Options: []FilterOption{
+			{Value: LinkedInOnsite, Label: "On-site (not remote)"},
+			{Value: LinkedInRemote, Label: "Remote"},
+			{Value: LinkedInHybrid, Label: "Hybrid (not remote)"},
 		}},
-		{Name: "experience", Param: "f_E", Label: "Experience Level", Options: []FilterOption{
-			{Value: "1", Label: "Internship"},
-			{Value: "2", Label: "Entry level"},
-			{Value: "3", Label: "Associate"},
-			{Value: "4", Label: "Mid-Senior level"},
-			{Value: "5", Label: "Director"},
-			{Value: "6", Label: "Executive"},
-		}},
-		{Name: "job_type", Param: "f_JT", Label: "Job Type", Options: []FilterOption{
-			{Value: "F", Label: "Full-time"},
-			{Value: "P", Label: "Part-time"},
-			{Value: "C", Label: "Contract"},
-			{Value: "T", Label: "Temporary"},
-			{Value: "I", Label: "Internship"},
+		{Name: "city_cards", Local: true, Label: "Remote: city-located jobs", Options: []FilterOption{
+			{Value: LinkedInCityCardsFullPage, Label: "Fetch the full page and keep those marked remote"},
 		}},
 		{Name: "geo_id", Param: "geoId", Label: "Geo ID", Numeric: true},
 		{Name: "distance", Param: "f_D", Label: "Distance", Options: []FilterOption{
@@ -173,18 +180,8 @@ var entries = []registryEntry{
 			{Value: "75", Label: "75 miles"},
 			{Value: "100", Label: "100 miles"},
 		}},
-		{Name: "salary_band", Param: "f_SB2", Label: "Salary Band", Options: []FilterOption{
-			{Value: "1", Label: "$40,000+"},
-			{Value: "2", Label: "$60,000+"},
-			{Value: "3", Label: "$80,000+"},
-			{Value: "4", Label: "$100,000+"},
-			{Value: "5", Label: "$120,000+"},
-			{Value: "6", Label: "$140,000+"},
-			{Value: "7", Label: "$160,000+"},
-			{Value: "8", Label: "$180,000+"},
-			{Value: "9", Label: "$200,000+"},
-		}},
 	}},
+	{name: "hiringcafe", label: "hiring.cafe", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://hiringcafe.com"},
 	{name: "indeed", label: "Indeed", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://uk.indeed.com", cardComplete: true, filters: []FilterField{
 		{Name: "location", Param: "l", Label: "Location"},
 		{Name: "radius", Param: "radius", Label: "Radius", Options: []FilterOption{
@@ -204,6 +201,11 @@ var entries = []registryEntry{
 	}},
 	{name: "remoteok", label: "RemoteOK", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://remoteok.com", cardComplete: true},
 	{name: "remotive", label: "Remotive", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://remotive.com", cardComplete: true},
+	{name: "wellfound", label: "Wellfound", kind: kindFilter, role: RoleDiscovery, incremental: true,
+		urlPrefix: "https://wellfound.com", cardComplete: true, filters: []FilterField{
+			{Name: "location", Label: "Location"},
+		}},
+	{name: "other", label: "Other", kind: kindURL, role: RoleLinkOnly},
 }
 
 func Sources() []SourceInfo {
@@ -278,7 +280,7 @@ func ValidFilterValue(source, field, value string) bool {
 	return false
 }
 
-// SourceRole returns the role (RoleATS | RoleDiscovery) for a source, plus whether
+// SourceRole returns the role (RoleATS | RoleDiscovery | RoleLinkOnly) for a source, plus whether
 // the source name is known.
 func SourceRole(name string) (string, bool) {
 	e, ok := findEntry(name)
@@ -298,6 +300,14 @@ func Incremental(name string) bool {
 func IsFilterSource(name string) bool {
 	e, ok := findEntry(name)
 	return ok && e.kind == kindFilter
+}
+
+func NormalizeBoardToken(source, token string) string {
+	switch source {
+	case "ashby", "smartrecruiters", "pinpoint", "recruitee", "personio", "teamtailor", "hibob":
+		return strings.ToLower(token)
+	}
+	return token
 }
 
 // ValidBoardToken reports whether a board token can be used as one URL path segment.

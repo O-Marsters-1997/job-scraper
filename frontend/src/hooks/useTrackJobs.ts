@@ -1,23 +1,44 @@
-import type { RowSelectionState } from "@tanstack/solid-table";
 import { createMemo, createSignal } from "solid-js";
-import { createJobColumns } from "@/components/jobs/columns";
+import {
+	createJobColumns,
+	type JobTableContext,
+} from "@/components/jobs/columns";
 import {
 	toApplicationSummary,
 	toExistingApp,
 } from "@/components/jobs/TrackApplicationDialog";
+import { loadedData } from "@/lib/queryData";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
-import { useApplications } from "./useApplications";
-import { useSetCompanyFavourite } from "./useCompanies";
-import { useDismissJob, useExcludeJobCompany } from "./useDismissJob";
+import type { RecruiterContactSummary } from "@/types/recruiterContact";
+import { useApplications, useCreateApplication } from "./useApplications";
+import {
+	useSetCompaniesKind,
+	useSetCompanyFavourite,
+	useSetCompanyKind,
+} from "./useCompanies";
+import {
+	announceNotice,
+	companyIdsOf,
+	describeKind,
+	useDismissJob,
+	useExcludeJobCompanies,
+	useExcludeJobCompany,
+} from "./useDismissJob";
 import { useMarkJobsSeen } from "./useJobs";
 import { announceBulkSeen } from "./useSeenToast";
 
-export function useTrackJobs(jobs: () => Job[]) {
+export function useTrackJobs(
+	jobs: () => Job[],
+	contactSummaries: () =>
+		| Record<string, RecruiterContactSummary>
+		| undefined = () => undefined,
+	clearSelection: () => void = () => undefined,
+) {
 	const applications = useApplications();
 	const appsForJobs = createMemo<Record<string, JobApplicationSummary>>(() =>
 		Object.fromEntries(
-			(applications.data ?? []).map((app) => [
+			(loadedData(applications) ?? []).map((app) => [
 				app.JobID,
 				toApplicationSummary(app),
 			]),
@@ -27,18 +48,48 @@ export function useTrackJobs(jobs: () => Job[]) {
 	const [modalOpen, setModalOpen] = createSignal(false);
 	const [trackingJobId, setTrackingJobId] = createSignal<string | null>(null);
 
-	const openTrack = (jobId: string) => {
-		setTrackingJobId(jobId);
-		setModalOpen(true);
+	const create = useCreateApplication();
+	const isTracked = (jobId: string) =>
+		!!loadedData(applications)?.some((a) => a.JobID === jobId);
+
+	const openTrack = async (jobId: string) => {
+		if (!loadedData(applications)) return;
+		if (isTracked(jobId)) {
+			setTrackingJobId(jobId);
+			setModalOpen(true);
+			return;
+		}
+		try {
+			await create.mutateAsync({ job_id: jobId });
+			announceNotice("Tracked as Draft.");
+		} catch {
+			announceNotice("Could not track application.");
+		}
+	};
+
+	const bulkTrack = async (target: Job[]) => {
+		const untracked = target.filter((j) => !isTracked(j.ID));
+		const results = await Promise.allSettled(
+			untracked.map((j) => create.mutateAsync({ job_id: j.ID })),
+		);
+		const failed = results.filter((r) => r.status === "rejected").length;
+		const tracked = untracked.length - failed;
+		announceNotice(
+			failed > 0
+				? `Tracked ${tracked} as Draft. ${failed} failed.`
+				: `Tracked ${tracked} as Draft.`,
+		);
+		clearSelection();
 	};
 
 	const currentJob = () => jobs().find((j) => j.ID === trackingJobId());
 	const existingApp = () => {
-		const app = applications.data?.find((a) => a.JobID === trackingJobId());
+		const app = loadedData(applications)?.find(
+			(a) => a.JobID === trackingJobId(),
+		);
 		return app ? toExistingApp(app) : undefined;
 	};
 
-	const [selection, setSelection] = createSignal<RowSelectionState>({});
 	const [gradeJobs, setGradeJobs] = createSignal<Job[]>([]);
 	const [gradeOpen, setGradeOpen] = createSignal(false);
 	const openGrade = (target: Job[]) => {
@@ -49,7 +100,7 @@ export function useTrackJobs(jobs: () => Job[]) {
 	const markSeen = useMarkJobsSeen();
 	const bulkSeen = async (target: Job[], seen: boolean) => {
 		await markSeen.mutateAsync({ jobIds: target.map((j) => j.ID), seen });
-		setSelection({});
+		clearSelection();
 	};
 	const markAllSeen = async (unseen: Job[]) => {
 		const jobIds = unseen.map((j) => j.ID);
@@ -57,10 +108,31 @@ export function useTrackJobs(jobs: () => Job[]) {
 		announceBulkSeen(jobIds);
 	};
 
+	const bulkExclude = useExcludeJobCompanies();
+	const setKinds = useSetCompaniesKind();
+	const bulkSetKind = async (target: Job[], kind: "agency" | "direct") => {
+		const { ids, skipped } = companyIdsOf(target);
+		if (ids.length === 0) {
+			announceNotice(describeKind(0, kind, skipped));
+			return;
+		}
+		try {
+			const result = await setKinds.mutateAsync({ ids, kind });
+			announceNotice(describeKind(result.updated, kind, skipped));
+		} catch {
+			announceNotice("Could not update companies.");
+		}
+	};
+
 	const dismiss = useDismissJob();
+	const bulkDismiss = async (target: Job[]) => {
+		await dismiss.dismissMany(target);
+		clearSelection();
+	};
 	const setFavourite = useSetCompanyFavourite();
 	const exclude = useExcludeJobCompany();
-	const columns = createJobColumns({
+	const setKind = useSetCompanyKind();
+	const columnContext: JobTableContext = {
 		appsForJobs,
 		onTrack: openTrack,
 		onDismiss: dismiss.dismiss,
@@ -73,24 +145,37 @@ export function useTrackJobs(jobs: () => Job[]) {
 			});
 		},
 		onExcludeCompany: exclude.exclude,
+		onSetCompanyKind: (job, kind) => {
+			if (!job.CompanyID) return;
+			setKind.mutate({ id: job.CompanyID, kind });
+		},
+	};
+	const columns = createJobColumns(columnContext);
+	const contactColumns = createJobColumns({
+		...columnContext,
+		contactSummaries,
 	});
 
 	return {
 		columns,
+		contactColumns,
 		applications,
 		appsForJobs,
 		openTrack,
+		bulkTrack,
 		modalOpen,
 		setModalOpen,
 		currentJob,
 		existingApp,
-		selection,
-		setSelection,
 		gradeJobs,
 		gradeOpen,
 		setGradeOpen,
 		openGrade,
 		bulkSeen,
+		bulkDismiss,
+		dismissJob: dismiss.dismiss,
 		markAllSeen,
+		bulkExcludeCompanies: bulkExclude.exclude,
+		bulkMarkRecruiters: (target: Job[]) => bulkSetKind(target, "agency"),
 	};
 }

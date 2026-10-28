@@ -14,12 +14,14 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/wellfound"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 )
 
 var parsers = map[string]sources.SnapshotSource{
-	"wis":      wis.New(wis.Search{}),
-	"linkedin": linkedin.New("", nil, ""),
+	"wis":       wis.New(wis.Search{}, wis.NewGate()),
+	"linkedin":  linkedin.New("", nil, "", linkedin.NewGate()),
+	"wellfound": wellfound.New(wellfound.Search{}, wellfound.NewGate()),
 }
 
 func main() {
@@ -46,6 +48,15 @@ func main() {
 		}
 		if err := rebase(os.Args[2]); err != nil {
 			fmt.Fprintf(os.Stderr, "rebase: %v\n", err)
+			os.Exit(1)
+		}
+	case "hiringcafe":
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "usage: snapshot hiringcafe <search-url>")
+			os.Exit(1)
+		}
+		if err := hiringcafeSpike(os.Args[2], spikeDuration, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "hiringcafe: %v\n", err)
 			os.Exit(1)
 		}
 	default:
@@ -184,4 +195,5 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  snapshot download <source> <name> <url>")
 	fmt.Fprintln(os.Stderr, "  snapshot rebase <source>")
+	fmt.Fprintln(os.Stderr, "  snapshot hiringcafe <search-url>")
 }

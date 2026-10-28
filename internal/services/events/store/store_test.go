@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/ollymarsters/job-scraper/internal/client"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/events/eventstest"
@@ -12,6 +13,7 @@ import (
 )
 
 func TestStoreContract(t *testing.T) {
+	t.Parallel()
 	eventstest.RunStoreContract(t, func(t *testing.T) eventstest.Fixture {
 		t.Helper()
 		pool := pgtest.New(t)
@@ -25,12 +27,13 @@ func TestStoreContract(t *testing.T) {
 }
 
 func TestInsertEventRollsBackWithItsTransaction(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	st := store.New(pool)
 	userID := pgtest.InsertUser(t, pool)
 
 	pgtest.InTx(t, pool, false, func(tx pgx.Tx) error {
-		return st.InsertEvent(t.Context(), tx, userID, events.JobOpened, "", []byte(`{}`))
+		return st.InsertEvent(t.Context(), tx, userID, events.JobOpened, "", client.Web, []byte(`{}`))
 	})
 
 	got, err := st.ListEvents(t.Context(), userID, "")

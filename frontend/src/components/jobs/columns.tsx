@@ -5,21 +5,28 @@ import { FavouriteStar } from "@/components/FavouriteStar";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { formatRelative } from "@/lib/datetime";
+import { formatDate } from "@/lib/datetime";
+import { postedLabel } from "@/lib/postedLabel";
 import { cn, titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import { GRADE_LABEL } from "@/types/grade";
 import type { Job } from "@/types/job";
+import {
+	outcomeLabels,
+	type RecruiterContactSummary,
+} from "@/types/recruiterContact";
 import { JobActionsMenu } from "./JobActionsMenu";
 import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
+	contactSummaries?: () => Record<string, RecruiterContactSummary> | undefined;
 	onTrack: (jobId: string) => void;
 	onDismiss: (job: Job) => void;
 	onGrade: (job: Job) => void;
 	onToggleFavourite: (job: Job) => void;
 	onExcludeCompany: (job: Job) => void;
+	onSetCompanyKind: (job: Job, kind: "agency" | "direct") => void;
 }
 
 // Extend TanStack Table's meta type so cells can read expand state
@@ -27,6 +34,7 @@ declare module "@tanstack/solid-table" {
 	interface TableMeta<TData> {
 		isExpanded: (rowId: string) => boolean;
 		toggleExpanded: (rowId: string) => void;
+		selectRow: (rowId: string, extendRange: boolean) => void;
 	}
 }
 
@@ -58,7 +66,13 @@ export function createJobColumns(
 					aria-label={`Select ${info.row.original.Title}`}
 					class="size-4 cursor-pointer align-middle accent-primary"
 					checked={info.row.getIsSelected()}
-					onChange={info.row.getToggleSelectedHandler()}
+					onMouseDown={(e) => {
+						if (e.shiftKey) e.preventDefault();
+					}}
+					onClick={(e) => {
+						info.table.options.meta?.selectRow(info.row.id, e.shiftKey);
+						e.currentTarget.checked = info.row.getIsSelected();
+					}}
 				/>
 			),
 		},
@@ -78,7 +92,7 @@ export function createJobColumns(
 						to="/jobs/$id"
 						params={{ id: info.row.original.ID }}
 						class={cn(
-							"block max-w-[11vw] truncate text-foreground transition-colors hover:text-primary",
+							"block max-w-[10vw] truncate text-foreground transition-colors hover:text-primary",
 							info.row.original.Seen ? "font-medium" : "font-bold",
 						)}
 						title={info.getValue() as string}
@@ -107,12 +121,34 @@ export function createJobColumns(
 							onToggle={() => ctx.onToggleFavourite(info.row.original)}
 						/>
 					</Show>
-					<span
-						class="block max-w-[7vw] truncate text-muted"
-						title={titleCase(info.getValue() as string)}
+					<Show
+						when={info.row.original.CompanyID}
+						fallback={
+							<span
+								class="block max-w-[7vw] truncate text-muted"
+								title={titleCase(info.getValue() as string)}
+							>
+								{titleCase(info.getValue() as string)}
+							</span>
+						}
 					>
-						{titleCase(info.getValue() as string)}
-					</span>
+						{(companyId) => (
+							<Link
+								to="/companies/$id"
+								params={{ id: companyId() }}
+								class="block max-w-[7vw] truncate text-muted transition-colors hover:text-primary"
+								title={titleCase(info.getValue() as string)}
+							>
+								{titleCase(info.getValue() as string)}
+							</Link>
+						)}
+					</Show>
+					<Show when={info.row.original.CompanyKind === "agency"}>
+						<Badge variant="outline">Agency</Badge>
+					</Show>
+					<Show when={info.row.original.CompanyKind === "likely_agency"}>
+						<Badge variant="outline">Maybe recruiter</Badge>
+					</Show>
 				</div>
 			),
 		},
@@ -194,13 +230,19 @@ export function createJobColumns(
 		},
 		{
 			accessorKey: "ScrapedAt",
-			header: "Scraped",
+			header: "Posted",
 			enableGlobalFilter: false,
-			cell: (info) => (
-				<span class="font-mono text-xs tabular-nums text-faint">
-					{formatRelative(info.getValue() as string)}
-				</span>
-			),
+			cell: (info) => {
+				const label = () => postedLabel(info.row.original);
+				return (
+					<span
+						class="block max-w-[6vw] truncate font-mono text-xs tabular-nums text-faint"
+						title={label().listTitle ?? label().list}
+					>
+						{label().list}
+					</span>
+				);
+			},
 		},
 		{
 			id: "status",
@@ -226,6 +268,34 @@ export function createJobColumns(
 				</Show>
 			),
 		},
+		...(ctx.contactSummaries
+			? [
+					{
+						id: "contact",
+						header: "Contact",
+						enableSorting: false,
+						enableGlobalFilter: false,
+						cell: (info) => (
+							<Show
+								when={ctx.contactSummaries?.()?.[info.row.original.ID]}
+								fallback={
+									<span class="text-faint">
+										{ctx.contactSummaries?.() ? "No contact" : "—"}
+									</span>
+								}
+							>
+								{(summary) => (
+									<span class="text-xs text-muted">
+										{summary().count}x ·{" "}
+										{formatDate(`${summary().last_contacted_on}T00:00:00`)} ·{" "}
+										{outcomeLabels[summary().best_outcome]}
+									</span>
+								)}
+							</Show>
+						),
+					} satisfies ColumnDef<Job, unknown>,
+				]
+			: []),
 		{
 			id: "actions",
 			enableSorting: false,
@@ -239,6 +309,9 @@ export function createJobColumns(
 						onGrade={() => ctx.onGrade(info.row.original)}
 						onDismiss={() => ctx.onDismiss(info.row.original)}
 						onExcludeCompany={() => ctx.onExcludeCompany(info.row.original)}
+						onSetCompanyKind={(kind) =>
+							ctx.onSetCompanyKind(info.row.original, kind)
+						}
 					/>
 				</div>
 			),

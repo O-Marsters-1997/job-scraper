@@ -1,38 +1,34 @@
-import { createQuery } from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { type Accessor, createMemo } from "solid-js";
 import { keys } from "../api/keys";
 import {
 	createDraft,
 	discardDraft,
-	explainAchievement,
+	explainDraft,
 	fetchDraft,
+	fetchDraftInsights,
 	fetchDraftLayout,
+	fetchDraftLean,
+	fetchDraftRoles,
 	fetchExperienceMatch,
-	fetchHeadings,
 	fetchJobDrafts,
 	fetchSkillSuggestions,
 	fetchSuggestions,
 	keepDraft,
+	redraftProfile,
 	saveDraftSlots,
 	saveHeadings,
 } from "../api/tailoring";
 import { isSettled } from "../lib/tailoring";
-import type { HeadingMapping, SkillGroup, SlotEdit } from "../types/tailoring";
+import type {
+	HeadingMapping,
+	ProfileRedraftInput,
+	SkillGroup,
+	SlotEdit,
+} from "../types/tailoring";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export type CVRef = { docId: string; tabId: string };
-
-export function useHeadings(cv: Accessor<CVRef | undefined>) {
-	return createQuery(() => {
-		const ref = cv();
-		const { docId = "", tabId = "" } = ref ?? {};
-		return {
-			queryKey: keys.tailoring.headings(docId, tabId),
-			queryFn: () => fetchHeadings(docId, tabId),
-			enabled: ref !== undefined,
-		};
-	});
-}
 
 export function useSaveHeadings() {
 	return useInvalidatingMutation(
@@ -76,20 +72,16 @@ export function useSkillSuggestions(
 	});
 }
 
-export function useExperienceMatch(jobId: Accessor<string>) {
-	return createQuery(() => ({
-		queryKey: keys.tailoring.experienceMatch(jobId()),
-		queryFn: () => fetchExperienceMatch(jobId()),
+export const experienceMatchQueryOptions = (jobId: string) =>
+	queryOptions({
+		queryKey: keys.tailoring.experienceMatch(jobId),
+		queryFn: () => fetchExperienceMatch(jobId),
 		retry: false,
 		staleTime: 5 * 60 * 1000,
-	}));
-}
+	});
 
-export function useExplainAchievement(jobId: Accessor<string>) {
-	return useInvalidatingMutation(
-		(achievementId: string) => explainAchievement(jobId(), achievementId),
-		[],
-	);
+export function useExperienceMatch(jobId: Accessor<string>) {
+	return createQuery(() => experienceMatchQueryOptions(jobId()));
 }
 
 export function useCreateDraft() {
@@ -122,16 +114,64 @@ export function useDraftLayout(id: Accessor<string>) {
 	}));
 }
 
-export function useJobDrafts(jobId: Accessor<string>) {
+export function useDraftLean(id: Accessor<string>, enabled: Accessor<boolean>) {
 	return createQuery(() => ({
-		queryKey: keys.tailoring.jobDrafts(jobId()),
-		queryFn: () => fetchJobDrafts(jobId()),
+		queryKey: keys.tailoring.draftLean(id()),
+		queryFn: () => fetchDraftLean(id()),
+		enabled: enabled(),
+		retry: false,
+		refetchOnWindowFocus: false,
+		staleTime: 5 * 60 * 1000,
+	}));
+}
+
+export function useDraftRoles(
+	id: Accessor<string>,
+	enabled: Accessor<boolean>,
+) {
+	return createQuery(() => ({
+		queryKey: keys.tailoring.draftRoles(id()),
+		queryFn: () => fetchDraftRoles(id()),
+		enabled: enabled(),
+		retry: false,
+		refetchOnWindowFocus: false,
+	}));
+}
+
+export function useDraftInsights(
+	id: Accessor<string>,
+	enabled: Accessor<boolean>,
+) {
+	return createQuery(() => ({
+		queryKey: keys.tailoring.draftInsights(id()),
+		queryFn: () => fetchDraftInsights(id()),
+		enabled: enabled(),
+		retry: false,
+		refetchOnWindowFocus: false,
+		staleTime: Number.POSITIVE_INFINITY,
+	}));
+}
+
+export function useExplainDraft(id: Accessor<string>) {
+	return useInvalidatingMutation(
+		() => explainDraft(id()),
+		() => [keys.tailoring.draftInsights(id())],
+	);
+}
+
+export const jobDraftsQueryOptions = (jobId: string) =>
+	queryOptions({
+		queryKey: keys.tailoring.jobDrafts(jobId),
+		queryFn: () => fetchJobDrafts(jobId),
 		retry: false,
 		refetchInterval: (query) =>
 			query.state.data?.some((d) => !isSettled(d.status))
 				? DRAFT_POLL_MS
 				: false,
-	}));
+	});
+
+export function useJobDrafts(jobId: Accessor<string>) {
+	return createQuery(() => jobDraftsQueryOptions(jobId()));
 }
 
 export function useKeepDraft() {
@@ -141,14 +181,25 @@ export function useKeepDraft() {
 export function useSaveDraftSlots(id: Accessor<string>) {
 	return useInvalidatingMutation(
 		(slots: SlotEdit[]) => saveDraftSlots(id(), slots),
-		() => [keys.tailoring.draft(id())],
+		() => [keys.tailoring.draft(id()), keys.tailoring.draftInsights(id())],
+	);
+}
+
+export function useRedraftProfile(id: Accessor<string>) {
+	return useInvalidatingMutation(
+		(input: ProfileRedraftInput) => redraftProfile(id(), input),
+		() => [keys.tailoring.draft(id()), keys.tailoring.draftInsights(id())],
 	);
 }
 
 export function useSaveDraftSkills(id: Accessor<string>) {
 	return useInvalidatingMutation(
 		(skills: SkillGroup[]) => saveDraftSlots(id(), [], skills),
-		() => [keys.tailoring.draft(id()), keys.tailoring.draftLayout(id())],
+		() => [
+			keys.tailoring.draft(id()),
+			keys.tailoring.draftLayout(id()),
+			keys.tailoring.draftInsights(id()),
+		],
 	);
 }
 

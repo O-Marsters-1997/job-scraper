@@ -1,0 +1,12 @@
+[
+  {
+    "DocID": "doc-1",
+    "TabID": "tab-1",
+    "Title": "Backend",
+    "SourceDoc": "My CVs",
+    "ModifiedAt": "2026-10-01T09:00:00Z",
+    "DocURL": "https://docs.google.com/document/d/doc-1",
+    "Visible": true,
+    "Default": true
+  }
+]

@@ -1,0 +1,6 @@
+name,slug,url
+Acme,acme,https://apply.workable.com/acme/
+Dupe,acme,https://apply.workable.com/acme
+Slug Only,slugonly,
+Url Wins,different,https://apply.workable.com/urltoken
+Bad,bad slug!,

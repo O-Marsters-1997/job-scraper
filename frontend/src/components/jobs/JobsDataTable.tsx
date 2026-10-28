@@ -3,20 +3,25 @@ import {
 	createSolidTable,
 	flexRender,
 	getCoreRowModel,
-	getPaginationRowModel,
-	getSortedRowModel,
 	type RowSelectionState,
-	type SortingState,
 } from "@tanstack/solid-table";
-import { createEffect, createSignal, For, on, Show } from "solid-js";
-import { Icon } from "@/components/Icon";
+import { createEffect, createSignal, For, on, Show, untrack } from "solid-js";
+import { Icon, type IconName } from "@/components/Icon";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
+import { JobPreviewDialog } from "@/components/jobs/JobPreviewDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
 import { Kbd } from "@/components/Kbd";
 import { Pager } from "@/components/Pager";
-import { SortableTableHead } from "@/components/SortableTableHead";
+import { TableShortcuts } from "@/components/TableShortcuts";
+import { ToggleChip } from "@/components/ToggleChip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -30,82 +35,102 @@ import {
 	Table,
 	TableBody,
 	TableCell,
+	TableHead,
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { useShortcuts } from "@/hooks/useShortcuts";
-import { activeFilterCount, type JobFilters } from "@/lib/jobFilters";
-import { type JobSort, SORT_LABELS, SORT_OPTIONS } from "@/lib/jobSort";
+import { useDebouncedTerm } from "@/hooks/useDebouncedTerm";
+import { useTableKeyNav } from "@/hooks/useTableKeyNav";
+import {
+	activeFilterCount,
+	type JobFilters,
+	SORT_LABELS,
+	SORT_OPTIONS,
+} from "@/lib/jobFilters";
+import { pageCount } from "@/lib/serverTable";
+import { cn } from "@/lib/utils";
 import type { Job } from "@/types/job";
+
+interface BulkAction<TData> {
+	label: string;
+	icon?: IconName;
+	onSelect: (jobs: TData[]) => void;
+}
 
 interface JobsDataTableProps<TData extends Job> {
 	columns: ColumnDef<TData, unknown>[];
 	data: TData[];
+	total: number;
+	page: number;
+	pageSize: number;
+	onPage: (page: number) => void;
 	filters: JobFilters;
 	onChange: (patch: Partial<JobFilters>) => void;
-	page?: number | undefined;
-	onPageChange?: (page: number | undefined) => void;
-	sourceOptions: string[];
+	sourceOptions: { value: string; label: string }[];
 	sortControl?: boolean;
-	selection?: RowSelectionState;
-	onSelectionChange?: (next: RowSelectionState) => void;
-	onBulkGrade?: (jobs: TData[]) => void;
-	onBulkSeen?: (jobs: TData[], seen: boolean) => void;
+	selection: RowSelectionState;
+	onSelectionChange: (next: RowSelectionState) => void;
+	selectedJobs: TData[];
+	bulkActions?: BulkAction<TData>[];
 	onMarkAllSeen?: (jobs: TData[]) => void;
+	hidePosterFilter?: boolean;
+	onActiveRowChange?: (id: string | null) => void;
+	onTrack?: (jobId: string) => void;
+	onDismiss?: (job: TData) => void;
 }
 
-const PAGE_SIZE = 10;
+const JOB_SHORTCUTS = [
+	[["p"], "Preview description"],
+	[["y"], "Track application"],
+	[["n"], "Not for me"],
+] as const;
 
-type SortChoice = JobSort | "custom";
-const SORT_CHOICES = [...SORT_OPTIONS, "custom" as const].map((value) => ({
+const SORT_CHOICES = SORT_OPTIONS.map((value) => ({
 	value,
 	label: SORT_LABELS[value],
-	disabled: value === "custom",
 }));
+
+const POSTER_CHIPS = [
+	{ value: "direct", label: "Direct" },
+	{ value: "agency", label: "Agency" },
+	{ value: "all", label: "All" },
+] as const;
 
 export function JobsDataTable<TData extends Job>(
 	props: JobsDataTableProps<TData>,
 ) {
-	const [sorting, setSorting] = createSignal<SortingState>([]);
 	const [filtersOpen, setFiltersOpen] = createSignal(false);
-	const [localSelection, setLocalSelection] = createSignal<RowSelectionState>(
-		{},
-	);
-	const selection = () => props.selection ?? localSelection();
-	const setSelection = (next: RowSelectionState) =>
-		(props.onSelectionChange ?? setLocalSelection)(next);
+	let selectionAnchor: string | undefined;
+	const setSelection = (next: RowSelectionState) => {
+		if (Object.keys(next).length === 0) selectionAnchor = undefined;
+		props.onSelectionChange(next);
+	};
 
 	const [expandedRow, setExpandedRow] = createSignal<string | null>(null);
 	const isExpanded = (rowId: string) => expandedRow() === rowId;
 	const toggleExpanded = (rowId: string) =>
 		setExpandedRow((prev) => (prev === rowId ? null : rowId));
 
-	const [localPageIndex, setLocalPageIndex] = createSignal(0);
-	const controlled = () => props.onPageChange !== undefined;
-	const requestedPageIndex = () =>
-		controlled() ? (props.page ?? 1) - 1 : localPageIndex();
-	const pageIndex = () =>
-		Math.min(
-			requestedPageIndex(),
-			Math.max(0, Math.ceil(props.data.length / PAGE_SIZE) - 1),
-		);
-	const setPageIndex = (next: number) => {
-		if (props.onPageChange) props.onPageChange(next > 0 ? next + 1 : undefined);
-		else setLocalPageIndex(next);
+	const lastPage = () => pageCount(props.total, props.pageSize);
+
+	const selectRow = (rowId: string, extendRange: boolean) => {
+		const ids = table.getRowModel().rows.map((row) => row.id);
+		const from =
+			selectionAnchor === undefined ? -1 : ids.indexOf(selectionAnchor);
+		const to = ids.indexOf(rowId);
+		const next = { ...props.selection };
+		if (extendRange && from !== -1 && to !== -1) {
+			for (const id of ids.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+				next[id] = true;
+			}
+		} else if (next[rowId]) {
+			delete next[rowId];
+		} else {
+			next[rowId] = true;
+		}
+		setSelection(next);
+		selectionAnchor = rowId;
 	};
-
-	createEffect(
-		on(
-			() => props.filters,
-			() => setLocalPageIndex(0),
-			{ defer: true },
-		),
-	);
-
-	createEffect(() => {
-		if (!controlled() || props.data.length === 0) return;
-		if (requestedPageIndex() > pageIndex()) setPageIndex(pageIndex());
-	});
 
 	const table = createSolidTable({
 		get data() {
@@ -115,100 +140,71 @@ export function JobsDataTable<TData extends Job>(
 			return props.columns;
 		},
 		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: getSortedRowModel(),
-		getPaginationRowModel: getPaginationRowModel(),
 		getRowId: (row) => row.ID,
 		enableRowSelection: true,
-		autoResetPageIndex: false,
+		enableSorting: false,
+		manualPagination: true,
+		get pageCount() {
+			return lastPage();
+		},
 		state: {
-			get sorting() {
-				return sorting();
-			},
 			get rowSelection() {
-				return selection();
+				return props.selection;
 			},
 			get pagination() {
-				return { pageIndex: pageIndex(), pageSize: PAGE_SIZE };
+				return { pageIndex: props.page - 1, pageSize: props.pageSize };
 			},
-		},
-		onSortingChange: (updater) => {
-			setSorting(updater);
-			setPageIndex(0);
-		},
-		onPaginationChange: (updater) => {
-			const next =
-				typeof updater === "function"
-					? updater({ pageIndex: pageIndex(), pageSize: PAGE_SIZE })
-					: updater;
-			setPageIndex(next.pageIndex);
 		},
 		onRowSelectionChange: (updater) =>
 			setSelection(
-				typeof updater === "function" ? updater(selection()) : updater,
+				typeof updater === "function" ? updater(props.selection) : updater,
 			),
 		meta: {
 			isExpanded,
 			toggleExpanded,
+			selectRow,
 		},
 	});
 
-	createEffect(
-		on(
-			[() => props.data, sorting, () => table.getState().pagination.pageIndex],
-			() => setSelection({}),
-			{ defer: true },
-		),
-	);
-
-	let tableContainer: HTMLDivElement | undefined;
-	let focusAfterPaging = false;
-
-	const focusFirstRow = () => {
-		tableContainer?.scrollIntoView({ block: "start" });
-		tableContainer
-			?.querySelector<HTMLElement>("tbody tr a")
-			?.focus({ preventScroll: true });
-	};
-
-	createEffect(
-		on(
-			() => table.getState().pagination.pageIndex,
-			() => {
-				if (!focusAfterPaging) return;
-				focusAfterPaging = false;
-				focusFirstRow();
+	const [previewId, setPreviewId] = createSignal<string | null>(null);
+	const nav = useTableKeyNav({
+		rowIds: () => table.getRowModel().rows.map((row) => row.id),
+		data: () => props.data,
+		page: () => props.page,
+		lastPage,
+		onPage: (page) => props.onPage(page),
+		rowUrl: (id) => `/jobs/${encodeURIComponent(id)}`,
+		extraShortcuts: {
+			p: () => {
+				const id = nav.activeRow();
+				if (id === null) return false;
+				setPreviewId(id);
 			},
-			{ defer: true },
-		),
-	);
-
-	let searchInput: HTMLInputElement | undefined;
-	const [searchFocused, setSearchFocused] = createSignal(false);
-
-	useShortcuts({
-		"/": () => {
-			searchInput?.scrollIntoView({ block: "nearest" });
-			searchInput?.focus();
-			searchInput?.select();
-		},
-		"]": () => {
-			if (!table.getCanNextPage()) return;
-			focusAfterPaging = true;
-			table.nextPage();
-		},
-		"[": () => {
-			if (!table.getCanPreviousPage()) return;
-			focusAfterPaging = true;
-			table.previousPage();
+			y: () => {
+				const id = nav.activeRow();
+				if (id === null || !props.onTrack) return false;
+				props.onTrack(id);
+			},
+			n: () => {
+				const job = props.data.find((j) => j.ID === nav.activeRow());
+				if (!job || !props.onDismiss) return false;
+				props.onDismiss(job);
+			},
 		},
 	});
 
-	const selectedJobs = () =>
-		props.data.filter((job) => selection()[job.ID] === true);
+	createEffect(() => props.onActiveRowChange?.(nav.activeRow()));
+
+	const [searchFocused, setSearchFocused] = createSignal(false);
+	const [searchTerm, search] = useDebouncedTerm();
+	createEffect(
+		on(searchTerm, (q) => props.onChange({ q }), {
+			defer: true,
+		}),
+	);
+
 	const unseenJobs = () => props.data.filter((job) => !job.Seen);
 	const filterCount = () => activeFilterCount(props.filters);
-	const sortChoice = (): SortChoice =>
-		sorting().length > 0 ? "custom" : props.filters.sort;
 
 	return (
 		<div class="flex flex-col gap-3">
@@ -224,21 +220,16 @@ export function JobsDataTable<TData extends Job>(
 							Search jobs
 						</Label>
 						<Input
-							ref={searchInput}
+							ref={nav.searchRef}
 							id="jobs-search"
 							aria-keyshortcuts="/"
 							type="search"
 							placeholder="Search by role or company…"
-							value={props.filters.q}
-							onInput={(e) => props.onChange({ q: e.currentTarget.value })}
+							value={untrack(() => props.filters.q)}
+							onInput={(e) => search(e.currentTarget.value)}
 							onFocus={() => setSearchFocused(true)}
 							onBlur={() => setSearchFocused(false)}
-							onKeyDown={(e) => {
-								if (e.key !== "Enter" || e.isComposing) return;
-								if (table.getRowModel().rows.length === 0) return;
-								e.preventDefault();
-								focusFirstRow();
-							}}
+							onKeyDown={nav.onSearchKeyDown}
 							class="pr-3 pl-9"
 						/>
 						<Show when={!searchFocused() && props.filters.q === ""}>
@@ -256,7 +247,7 @@ export function JobsDataTable<TData extends Job>(
 						<Icon name="filter" size={14} />
 						Filters
 						<Show when={filterCount() > 0}>
-							<Badge class="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+							<Badge class="ml-0.5 h-4 min-w-4 justify-center px-1 py-0 text-2xs leading-none">
 								{filterCount()}
 							</Badge>
 						</Show>
@@ -272,19 +263,29 @@ export function JobsDataTable<TData extends Job>(
 						</Button>
 					</Show>
 				</div>
-				<Show when={props.sortControl}>
-					<div class="ml-auto">
+				<div class="ml-auto flex shrink-0 items-center gap-2">
+					<Show when={!props.hidePosterFilter}>
+						<For each={POSTER_CHIPS}>
+							{(chip) => (
+								<ToggleChip
+									solid
+									active={props.filters.poster === chip.value}
+									onClick={() => props.onChange({ poster: chip.value })}
+								>
+									{chip.label}
+								</ToggleChip>
+							)}
+						</For>
+					</Show>
+					<Show when={props.sortControl}>
 						<Select
 							options={SORT_CHOICES}
 							optionValue={(o) => o?.value ?? ""}
 							optionTextValue={(o) => o?.label ?? ""}
-							optionDisabled={(o) => o?.disabled ?? false}
 							disallowEmptySelection
-							value={SORT_CHOICES.find((o) => o.value === sortChoice())}
+							value={SORT_CHOICES.find((o) => o.value === props.filters.sort)}
 							onChange={(opt) => {
-								if (!opt || opt.value === "custom") return;
-								setSorting([]);
-								props.onChange({ sort: opt.value });
+								if (opt) props.onChange({ sort: opt.value });
 							}}
 							itemComponent={(itemProps) => (
 								<SelectItem item={itemProps.item}>
@@ -301,50 +302,49 @@ export function JobsDataTable<TData extends Job>(
 							</SelectTrigger>
 							<SelectContent />
 						</Select>
-					</div>
-				</Show>
-				<Show when={props.onBulkGrade && selectedJobs().length > 0}>
+					</Show>
+				</div>
+				<Show
+					when={
+						(props.bulkActions?.length ?? 0) > 0 &&
+						props.selectedJobs.length > 0
+					}
+				>
 					<div class="flex items-center gap-2">
 						<span class="font-mono text-xs tabular-nums text-muted">
-							{selectedJobs().length} selected
+							{props.selectedJobs.length} selected
 						</span>
 						<Button variant="ghost" size="sm" onClick={() => setSelection({})}>
 							Clear
 						</Button>
-						<Button
-							size="sm"
-							onClick={() => props.onBulkGrade?.(selectedJobs())}
-						>
-							<Icon name="check" size={14} />
-							Grade
-						</Button>
-						<Show when={props.onBulkSeen}>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => props.onBulkSeen?.(selectedJobs(), true)}
-							>
-								Mark seen
-							</Button>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => props.onBulkSeen?.(selectedJobs(), false)}
-							>
-								Mark unseen
-							</Button>
-						</Show>
+						<DropdownMenu>
+							<DropdownMenuTrigger as={Button} variant="outline" size="sm">
+								Actions
+								<Icon name="moreVertical" size={14} />
+							</DropdownMenuTrigger>
+							<DropdownMenuContent>
+								<For each={props.bulkActions}>
+									{(action) => (
+										<DropdownMenuItem
+											onSelect={() => action.onSelect(props.selectedJobs)}
+										>
+											<Show when={action.icon}>
+												{(icon) => <Icon name={icon()} size={14} />}
+											</Show>
+											{action.label}
+										</DropdownMenuItem>
+									)}
+								</For>
+							</DropdownMenuContent>
+						</DropdownMenu>
 					</div>
 				</Show>
 			</div>
 
 			<div
-				ref={tableContainer}
+				ref={nav.containerRef}
 				class="overflow-hidden rounded-xl border border-border bg-surface"
-				data-feedback-collection={table
-					.getPrePaginationRowModel()
-					.rows.map((row) => row.original.ID)
-					.join(",")}
+				data-feedback-collection={props.data.map((job) => job.ID).join(",")}
 			>
 				<Table class="[&_td]:px-2.5 [&_th]:px-2.5">
 					<TableHeader>
@@ -353,23 +353,14 @@ export function JobsDataTable<TData extends Job>(
 								<TableRow class="hover:bg-transparent">
 									<For each={headerGroup.headers}>
 										{(header) => (
-											<SortableTableHead
-												sorted={
-													header.column.getCanSort()
-														? header.column.getIsSorted() || "none"
-														: false
-												}
-												onToggle={(e) =>
-													header.column.getToggleSortingHandler()?.(e)
-												}
-											>
+											<TableHead>
 												{header.isPlaceholder
 													? null
 													: flexRender(
 															header.column.columnDef.header,
 															header.getContext(),
 														)}
-											</SortableTableHead>
+											</TableHead>
 										)}
 									</For>
 								</TableRow>
@@ -394,10 +385,12 @@ export function JobsDataTable<TData extends Job>(
 								{(row) => (
 									<>
 										<TableRow
+											{...nav.rowProps(row.id)}
 											data-state={row.getIsSelected() ? "selected" : undefined}
-											class={
-												row.getIsSelected() ? "bg-accent-subtle/40" : undefined
-											}
+											class={cn(
+												row.getIsSelected() && "bg-accent-subtle/40",
+												"data-[active]:bg-accent-subtle",
+											)}
 											data-feedback-job={
 												row.original.SuitabilityScore == null
 													? undefined
@@ -428,23 +421,36 @@ export function JobsDataTable<TData extends Job>(
 						</Show>
 					</TableBody>
 				</Table>
-				<Show when={props.data.length > 0}>
+				<Show when={props.total > 0}>
 					<Pager
-						total={props.data.length}
-						page={pageIndex() + 1}
-						pageSize={PAGE_SIZE}
+						total={props.total}
+						page={props.page}
+						pageSize={props.pageSize}
 						noun="jobs"
 						keyHints
-						onPage={(page) => table.setPageIndex(page - 1)}
+						onPage={props.onPage}
 					/>
 				</Show>
 			</div>
+
+			<TableShortcuts noun="job" extra={JOB_SHORTCUTS} />
+
+			<JobPreviewDialog
+				jobId={previewId()}
+				onClose={() => setPreviewId(null)}
+			/>
 
 			<JobFiltersDialog
 				open={filtersOpen()}
 				onOpenChange={setFiltersOpen}
 				filters={props.filters}
-				onChange={props.onChange}
+				onChange={(patch) =>
+					props.onChange(
+						props.hidePosterFilter
+							? { ...patch, poster: props.filters.poster }
+							: patch,
+					)
+				}
 				sourceOptions={props.sourceOptions}
 			/>
 		</div>

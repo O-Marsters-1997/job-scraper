@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"net/http"
+	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -18,6 +21,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/filter"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/openrouter"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
@@ -39,7 +43,7 @@ type Store interface {
 	ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error)
 	ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error)
 	ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error)
-	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error)
+	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore, rejections []dto.JobRejection) ([]string, error)
 	SaveAnswers(ctx context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 	UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error)
@@ -83,16 +87,19 @@ type Store interface {
 }
 
 type Service struct {
-	store        Store
-	answerer     Answerer
-	credentials  Credentials
-	alerter      Alerter
-	pusher       PushSender
-	vapidKey     string
-	profiles     ProfileReader
-	candidates   Reconsiderer
-	extractor    Extractor
-	tickInterval time.Duration
+	store         Store
+	answerer      Answerer
+	credentials   Credentials
+	alerter       Alerter
+	notifications Notifications
+	pusher        PushSender
+	vapidKey      string
+	profiles      ProfileReader
+	candidates    Reconsiderer
+	extractor     Extractor
+	classifier    RecruiterClassifier
+	companyKinds  CompanyKinds
+	tickInterval  time.Duration
 }
 
 func NewService(deps Deps) *Service {
@@ -104,10 +111,15 @@ func NewService(deps Deps) *Service {
 	if pusher == nil {
 		pusher = noopPusher{}
 	}
+	notifications := deps.Notifications
+	if notifications == nil {
+		notifications = noopNotifications{}
+	}
 	return &Service{
-		store: deps.Store, answerer: deps.Answerer, credentials: deps.Credentials, alerter: deps.Alerter,
+		store: deps.Store, answerer: deps.Answerer, credentials: deps.Credentials, alerter: deps.Alerter, notifications: notifications,
 		pusher: pusher, vapidKey: deps.VAPIDPublicKey,
 		profiles: deps.Profiles, candidates: deps.Candidates, extractor: deps.Extractor, tickInterval: tickInterval,
+		classifier: deps.Classifier, companyKinds: deps.CompanyKinds,
 	}
 }
 
@@ -131,6 +143,10 @@ func (s *Service) Run(ctx context.Context) error {
 func (s *Service) RunTick(ctx context.Context) error {
 	g := &errgroup.Group{}
 	g.SetLimit(maxConcurrentEffects)
+	var (
+		mu         sync.Mutex
+		effectErrs []error
+	)
 	for {
 		effect, err := s.store.ClaimAnswerEffect(ctx)
 		if errors.Is(err, data.ErrNotFound) {
@@ -143,14 +159,18 @@ func (s *Service) RunTick(ctx context.Context) error {
 		g.Go(func() error {
 			if err := s.process(ctx, effect); err != nil {
 				slog.ErrorContext(ctx, "answer effect failed", slog.String("effect_id", effect.ID), slog.Any(logger.KeyErr, err))
+				mu.Lock()
+				effectErrs = append(effectErrs, err)
+				mu.Unlock()
 			}
 			return nil
 		})
 	}
-	return g.Wait()
+	_ = g.Wait()
+	return errors.Join(effectErrs...)
 }
 
-func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
+func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result error) {
 	fail := func(err error) error {
 		failure := dto.ScoringFailure{Reason: err.Error()}
 		var jevErr *jev.Error
@@ -163,13 +183,23 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		}
 		return err
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(ctx, "answer effect panicked",
+				slog.String("effect_id", effect.ID),
+				slog.Any("panic", r),
+				slog.String(logger.KeyStack, string(debug.Stack())),
+			)
+			result = fail(fmt.Errorf("answer effect panicked: %v", r))
+		}
+	}()
 
 	job, err := s.store.GetJobForScoring(ctx, effect.JobID)
 	if err != nil {
 		return fail(fmt.Errorf("load answer job: %w", err))
 	}
 	if job.ContentFingerprint != effect.Fingerprint {
-		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil)
+		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil, nil)
 		return err
 	}
 
@@ -179,15 +209,21 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	}
 	now := time.Now()
 	surviving := make([]dto.SearchConfig, 0, len(configs))
+	var rejections []dto.JobRejection
 	for _, cfg := range configs {
-		if _, rejected := filter.Reject(job, cfg); !rejected && !postedBeforeCutoff(job, cfg, now) {
-			surviving = append(surviving, cfg)
+		rejection, rejected := rejectionFor(job, cfg, now)
+		if rejected {
+			rejections = append(rejections, rejection)
+			continue
 		}
+		surviving = append(surviving, cfg)
 	}
 	if len(surviving) == 0 {
-		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil)
+		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil, rejections)
 		return err
 	}
+
+	s.classifyCompany(ctx, job, surviving)
 
 	bk, err := s.loadBank(ctx)
 	if err != nil {
@@ -240,7 +276,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		scores = append(scores, score)
 	}
 
-	saved, err := s.store.CompleteAnswerEffect(ctx, effect, fresh, scores)
+	saved, err := s.store.CompleteAnswerEffect(ctx, effect, fresh, scores, rejections)
 	if err != nil {
 		return err
 	}
@@ -252,11 +288,25 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	return nil
 }
 
+func rejectionFor(job dto.Job, cfg dto.SearchConfig, now time.Time) (dto.JobRejection, bool) {
+	rejection := dto.JobRejection{JobID: job.ID, UserID: cfg.UserID, ConfigVersion: cfg.UpdatedAt}
+	if reason, rejected := filter.Reject(job, cfg); rejected {
+		rejection.Kind, rejection.Reason = dto.RejectionKindFilter, reason
+		return rejection, true
+	}
+	if postedBeforeCutoff(job, cfg, now) {
+		rejection.Kind = dto.RejectionKindAge
+		rejection.Reason = fmt.Sprintf("age: older than %d days", cfg.MaxJobAgeDays)
+		return rejection, true
+	}
+	return dto.JobRejection{}, false
+}
+
 func postedBeforeCutoff(job dto.Job, cfg dto.SearchConfig, now time.Time) bool {
 	if cfg.MaxJobAgeDays <= 0 {
 		return false
 	}
-	return job.UpdatedAt.Before(now.AddDate(0, 0, -cfg.MaxJobAgeDays))
+	return job.EffectiveAge().Before(now.AddDate(0, 0, -cfg.MaxJobAgeDays))
 }
 
 func (s *Service) profileAnswers(ctx context.Context, job dto.Job, byID map[string]dto.ScoringOption, asked map[string]string) (map[string]dto.Answer, error) {
@@ -328,6 +378,9 @@ func (s *Service) notifyNewJob(ctx context.Context, job dto.Job, surviving []dto
 			continue
 		}
 		s.emailNewJob(ctx, job, sc.UserID)
+		if err := s.notifications.NewJob(ctx, sc.UserID, job); err != nil {
+			slog.ErrorContext(ctx, "new job notification failed", slog.String(logger.KeyUserID, sc.UserID), slog.Any(logger.KeyErr, err))
+		}
 		if err := s.pushToUser(ctx, sc.UserID, newJobPush(job, sc)); err != nil {
 			slog.ErrorContext(ctx, "new job push failed", slog.String(logger.KeyUserID, sc.UserID), slog.Any(logger.KeyErr, err))
 		}
@@ -390,6 +443,12 @@ func (s *Service) Ask(ctx context.Context, userID, jobID string, questions []str
 		return nil, fmt.Errorf("scoring.Ask: load credential: %w", err)
 	}
 	answers, usage, err := s.answerer.Answer(ctx, key, job, missing)
+	if se, ok := errors.AsType[*openrouter.StatusError](err); ok {
+		switch se.Code {
+		case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden:
+			return nil, apperr.Unprocessable("OpenRouter refused the request; check your key and credit in Settings, AI")
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("scoring.Ask: answer questions: %w", err)
 	}

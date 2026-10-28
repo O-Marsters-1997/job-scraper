@@ -17,6 +17,7 @@ jobs:
       go: ${{ steps.filter.outputs.go }}
       frontend: ${{ steps.filter.outputs.frontend }}
       emails: ${{ steps.filter.outputs.emails }}
+      ios: ${{ steps.filter.outputs.ios }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v4
@@ -37,6 +38,10 @@ jobs:
             emails:
               - 'emails/**'
               - '.github/workflows/ci.yml'
+            ios:
+              - 'internal/dto/**'
+              - 'ios/FastTrackTests/Fixtures/**'
+              - 'ios/**'
 
   # --- Go ---
 
@@ -46,6 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
@@ -159,6 +166,7 @@ jobs:
           bun install --frozen-lockfile
           bun run check
           bun run lint:solid
+          bun run knip
 
   build-frontend:
     needs: changes
@@ -198,3 +206,18 @@ jobs:
         run: |
           bun install --frozen-lockfile
           bun run typecheck
+
+  # --- iOS ---
+
+  test-ios:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test iOS models against dto fixtures
+        working-directory: ios
+        run: |
+          xcrun simctl list devices available
+          udid=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
+          xcodebuild test -scheme FastTrack -destination "platform=iOS Simulator,id=$udid"

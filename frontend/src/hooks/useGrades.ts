@@ -1,22 +1,35 @@
-import { createQuery } from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { clearGrade, fetchGrade, setGrade } from "../api/grades";
 import { keys } from "../api/keys";
+import { patchJobPages } from "./patchJobPages";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
+export const gradeQueryOptions = (jobId: string) =>
+	queryOptions({
+		queryKey: keys.grade(jobId),
+		queryFn: () => fetchGrade(jobId),
+	});
+
 export function useGrade(jobId: () => string) {
-	return createQuery(() => ({
-		queryKey: keys.grade(jobId()),
-		queryFn: () => fetchGrade(jobId()),
-	}));
+	return createQuery(() => gradeQueryOptions(jobId()));
 }
 
 export function useSetGrade() {
-	return useInvalidatingMutation(setGrade, (grade) => [
-		keys.grade(grade.jobId),
-		keys.jobs.all,
-	]);
+	return useInvalidatingMutation(
+		setGrade,
+		(grade) => [keys.grade(grade.jobId), keys.jobs.all],
+		{
+			patch: (queryClient, grade) =>
+				patchJobPages(queryClient, (job) => job.ID === grade.jobId, {
+					Grade: grade.grade,
+				}),
+		},
+	);
 }
 
 export function useClearGrade() {
-	return useInvalidatingMutation(clearGrade, [["grade"], keys.jobs.all]);
+	return useInvalidatingMutation(clearGrade, [["grade"], keys.jobs.all], {
+		patch: (queryClient, _result, jobId) =>
+			patchJobPages(queryClient, (job) => job.ID === jobId, { Grade: "" }),
+	});
 }

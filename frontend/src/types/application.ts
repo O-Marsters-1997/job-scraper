@@ -1,11 +1,20 @@
 import { z } from "zod";
+import { draftOutcomeSchema, draftStatusSchema } from "./tailoring";
+
+const linkedDraftSchema = z.object({
+	ID: z.string(),
+	Status: draftStatusSchema,
+	Outcome: draftOutcomeSchema.nullable(),
+	LastError: z.string(),
+});
+
+export type LinkedDraft = z.infer<typeof linkedDraftSchema>;
 
 export const applicationSchema = z.object({
 	ID: z.string(),
 	UserID: z.string(),
 	JobID: z.string(),
 	StatusID: z.string(),
-	Notes: z.string(),
 	AppliedAt: z.string().nullable(),
 	SalaryInfo: z.string(),
 	CreatedAt: z.string(),
@@ -23,6 +32,7 @@ export const applicationWithDetailsSchema = applicationSchema.extend({
 	JobClosedAt: z.string().nullable(),
 	StatusName: z.string(),
 	StatusColour: z.string(),
+	Draft: linkedDraftSchema.nullable(),
 });
 
 export type ApplicationWithDetails = z.infer<
@@ -39,7 +49,6 @@ export interface JobApplicationSummary {
 export interface CreateApplicationPayload {
 	job_id: string;
 	status_id?: string | undefined;
-	notes?: string | undefined;
 	applied_at?: string | null | undefined;
 	salary_info?: string | undefined;
 }

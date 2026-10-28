@@ -1,20 +1,20 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { createMemo, Show } from "solid-js";
+import { Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { GradeDialog } from "@/components/jobs/GradeDialog";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { PageHeading } from "@/components/PageHeading";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
-import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
-import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
-import { sortJobs } from "@/lib/jobSort";
+import { parseSearch } from "@/lib/jobFilters";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { useCompany } from "../../hooks/useCompanies";
 import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
-import { useAllJobs } from "../../hooks/useJobs";
+import { useJobPages } from "../../hooks/useJobs";
 import { SeenToast } from "../../hooks/useSeenToast";
+import { useSourceOptions } from "../../hooks/useSources";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 
@@ -29,31 +29,26 @@ function JobsPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: "/jobs" });
 
-	const query = useAllJobs();
 	const aiPrefs = useAiPrefs();
-	const jobs = () => query.data ?? [];
 
 	const filters = () => parseSearch(search() as Record<string, unknown>);
-	const company = useCompany(() => filters().company ?? "");
-	const companyName = () => company.data?.Name ?? "Selected company";
-	const filtered = createMemo(() =>
-		sortJobs(applyJobFilters(jobs(), filters()), filters().sort),
-	);
-	const srcOptions = () => sourceOptions(jobs());
-
-	const setFilters = (patch: Partial<JobFilters>) => {
+	const table = useJobPages(filters, (patch) =>
 		navigate({
 			to: "/jobs",
-			search: (p) => ({
-				...p,
-				...("page" in patch ? {} : { page: undefined }),
-				...patch,
-			}),
+			search: (p) => ({ ...p, ...patch }),
 			replace: true,
-		});
-	};
+		}),
+	);
+	const query = table.query;
+	const company = useCompany(() => filters().company ?? "");
+	const companyName = () => company.data?.Name ?? "Selected company";
+	const sourceOptions = useSourceOptions();
 
-	const track = useTrackJobs(jobs);
+	const track = useTrackJobs(
+		table.items,
+		() => undefined,
+		table.clearSelection,
+	);
 
 	return (
 		<div class="px-7 py-6">
@@ -74,19 +69,6 @@ function JobsPage() {
 				</div>
 			</Show>
 
-			<Show when={query.isPending}>
-				<SkeletonList rows={6} />
-			</Show>
-
-			<Show when={query.isError}>
-				<div class="rounded-xl border border-destructive/30 bg-destructive-subtle p-6">
-					<p class="mb-1 text-sm font-semibold text-destructive-strong">
-						Error
-					</p>
-					<p class="text-sm text-muted">{query.error?.message}</p>
-				</div>
-			</Show>
-
 			<Show when={filters().company || filters().scored}>
 				<div class="mb-3 flex flex-wrap items-center gap-2">
 					<Show when={filters().company}>
@@ -94,7 +76,7 @@ function JobsPage() {
 							variant="outline"
 							size="sm"
 							aria-label={`Clear company filter: ${companyName()}`}
-							onClick={() => setFilters({ company: undefined })}
+							onClick={() => table.setFilters({ company: undefined })}
 						>
 							{companyName()}
 							<Icon name="x" size={12} />
@@ -105,7 +87,7 @@ function JobsPage() {
 							variant="outline"
 							size="sm"
 							aria-label="Clear scored filter"
-							onClick={() => setFilters({ scored: false })}
+							onClick={() => table.setFilters({ scored: false })}
 						>
 							Scored for me
 							<Icon name="x" size={12} />
@@ -114,23 +96,49 @@ function JobsPage() {
 				</div>
 			</Show>
 
-			<Show when={query.isSuccess}>
-				<JobsDataTable
-					columns={track.columns}
-					data={filtered()}
-					filters={filters()}
-					onChange={setFilters}
-					page={filters().page}
-					onPageChange={(page) => setFilters({ page })}
-					sourceOptions={srcOptions()}
-					sortControl
-					selection={track.selection()}
-					onSelectionChange={track.setSelection}
-					onBulkGrade={track.openGrade}
-					onBulkSeen={track.bulkSeen}
-					onMarkAllSeen={track.markAllSeen}
-				/>
-			</Show>
+			<QueryBoundary query={query} fallbackRows={6}>
+				{() => (
+					<JobsDataTable
+						columns={track.columns}
+						data={table.items()}
+						total={table.total()}
+						page={table.page()}
+						pageSize={table.pageSize}
+						onPage={table.setPage}
+						filters={filters()}
+						onChange={table.setFilters}
+						sourceOptions={sourceOptions()}
+						sortControl
+						selection={table.rowSelection()}
+						onSelectionChange={table.select}
+						selectedJobs={table.selectedItems()}
+						bulkActions={[
+							{ label: "Grade", icon: "check", onSelect: track.openGrade },
+							{ label: "Not for me", onSelect: track.bulkDismiss },
+							{ label: "Track", icon: "plus", onSelect: track.bulkTrack },
+							{
+								label: "Mark seen",
+								onSelect: (jobs) => track.bulkSeen(jobs, true),
+							},
+							{
+								label: "Mark unseen",
+								onSelect: (jobs) => track.bulkSeen(jobs, false),
+							},
+							{
+								label: "Exclude companies",
+								onSelect: track.bulkExcludeCompanies,
+							},
+							{
+								label: "Mark as recruiter",
+								onSelect: track.bulkMarkRecruiters,
+							},
+						]}
+						onMarkAllSeen={track.markAllSeen}
+						onTrack={track.openTrack}
+						onDismiss={track.dismissJob}
+					/>
+				)}
+			</QueryBoundary>
 
 			<DismissToast />
 			<SeenToast />
@@ -140,7 +148,7 @@ function JobsPage() {
 				onOpenChange={track.setGradeOpen}
 				jobs={track.gradeJobs()}
 				onSaved={(jobIds, priors) => {
-					track.setSelection({});
+					table.clearSelection();
 					if (jobIds.length > 1) announceBulkGrading({ jobIds, priors });
 				}}
 			/>

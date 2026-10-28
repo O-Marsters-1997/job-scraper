@@ -1,0 +1,831 @@
+{
+  "data": {
+    "company": {
+      "fundingRounds": [
+        {
+          "id": "85815"
+        },
+        {
+          "id": "82442"
+        },
+        {
+          "id": "82443"
+        },
+        {
+          "id": "42927"
+        }
+      ],
+      "glassdoorRating": "3.90",
+      "jobLocations": [
+        "LONDON",
+        "REMOTE_UK"
+      ],
+      "liveJobs": [
+        {
+          "externalId": "a-1anGDH",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Backend Engineer"
+          }
+        },
+        {
+          "externalId": "8-Y5adJl",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Backend Engineer"
+          }
+        },
+        {
+          "externalId": "xhB0k6ZA",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Backend Engineer"
+          }
+        },
+        {
+          "externalId": "2rFrm9ri",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Backend Engineer"
+          }
+        },
+        {
+          "externalId": "Ukh53vH2",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Backend Engineer"
+          }
+        },
+        {
+          "externalId": "s2RMKgfC",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Backend Engineer"
+          }
+        },
+        {
+          "externalId": "UIfVvpUL",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Backend Engineer"
+          }
+        },
+        {
+          "externalId": "FrsgYYyx",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Backend Engineer"
+          }
+        },
+        {
+          "externalId": "qfY7oAQZ",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Backend Engineer"
+          }
+        },
+        {
+          "externalId": "lE1uvpBc",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Backend Engineer"
+          }
+        },
+        {
+          "externalId": "qKUlG5r6",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "Aa5tJw3V",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "zGC0O4FY",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "OWlKxESr",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "CjrPenDx",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "VXuRmrzB",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "GZQSTEen",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "Ec6E00-w",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "1yzgA6cI",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "amaFnqCe",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "DGfPmWwT",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "WXJkfqWQ",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "7_ma1fXn",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "D5xzzEs4",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "l4KDocUi",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "IpJCh7A4",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "8v_xHeCo",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "2OlhOnUv",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "dK3lDvpG",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "kTRXg8pn",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "Vkpltf90",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "QcBb8RsB",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "XV2HLyUc",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "Wn81v0EL",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "1jpUlRas",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "sCwnWInk",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "Thlohq_M",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "pNUbCe7f",
+          "locationPreferences": [
+            {
+              "location": "REMOTE_UK"
+            },
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "ymstR1AS",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "2OzzOUFZ",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "24TfqxVC",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "JdBHHnYm",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "exKEWPCj",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "TS3CW6hz",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "0upmP054",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "jPnnHrKS",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "234TZ-pT",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "sbEvjNc8",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "zu9fx_ri",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "-wxHMJg6",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "u0N10bSD",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "N0O51G3I",
+          "locationPreferences": [
+            {
+              "location": "REMOTE_UK"
+            },
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "WeVWKLao",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "5KfNBlaj",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "H-T-9Kgn",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "Xwz8uZvK",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "IP1ggk8o",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "h-q52-Cj",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "7y4UoInJ",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "QcvC4-Iw",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "FuJIn28y",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "iAeuv5y6",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "L9NApoXp",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        },
+        {
+          "externalId": "LCnM_TwN",
+          "locationPreferences": [
+            {
+              "location": "LONDON"
+            }
+          ],
+          "minYearsExperienceRequired": null,
+          "subFunction": {
+            "value": "Data Scientist"
+          }
+        }
+      ],
+      "mission": "The safe, widespread adoption of AI.",
+      "name": "Faculty",
+      "parsedHqAddress": "Old Street, London, UK",
+      "sectorTags": [
+        {
+          "value": "B2B"
+        },
+        {
+          "value": "Artificial Intelligence"
+        },
+        {
+          "value": "Big data"
+        },
+        {
+          "value": "Machine Learning"
+        }
+      ],
+      "size": {
+        "value": "201-500"
+      },
+      "totalFunding": {
+        "amount": "56150000"
+      },
+      "visaSponsorshipCountries": [
+        {
+          "location": "UK",
+          "offersVisa": true
+        }
+      ],
+      "yearEmployeeGrowthPercentage": 19
+    }
+  }
+}

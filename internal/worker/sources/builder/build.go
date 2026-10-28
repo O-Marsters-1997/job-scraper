@@ -4,6 +4,7 @@
 package builder
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -12,6 +13,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/ashby"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/greenhouse"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/hibob"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/hiringcafe"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/indeed"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/lever"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
@@ -22,6 +24,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/remotive"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/smartrecruiters"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/teamtailor"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/wellfound"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/workable"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
@@ -36,45 +39,72 @@ func boardEntry(newSource func(token string) sources.Source) entry {
 	return entry{build: func(t dto.SourceTarget) sources.Source { return newSource(t.Value) }}
 }
 
-var registry = map[string]entry{
-	"greenhouse":      boardEntry(func(v string) sources.Source { return greenhouse.New(v) }),
-	"lever":           boardEntry(func(v string) sources.Source { return lever.New(v) }),
-	"ashby":           boardEntry(func(v string) sources.Source { return ashby.New(v) }),
-	"workable":        boardEntry(func(v string) sources.Source { return workable.New(v) }),
-	"recruitee":       boardEntry(func(v string) sources.Source { return recruitee.New(v) }),
-	"personio":        boardEntry(func(v string) sources.Source { return personio.New(v) }),
-	"pinpoint":        boardEntry(func(v string) sources.Source { return pinpoint.New(v) }),
-	"teamtailor":      boardEntry(func(v string) sources.Source { return teamtailor.New(v) }),
-	"hibob":           boardEntry(func(v string) sources.Source { return hibob.New(v) }),
-	"smartrecruiters": boardEntry(func(v string) sources.Source { return smartrecruiters.New(v) }),
-	"wttj":            {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now) }},
-	"indeed": {build: func(t dto.SourceTarget) sources.Source {
-		return indeed.New(t.Value, t.Filters, indeed.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()))
-	}},
-	"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
-	"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
-	"wis": {
-		build: func(t dto.SourceTarget) sources.Source {
-			return wis.New(wis.Search{
-				Keywords: t.Value,
-				Filters:  t.Filters,
-				Recency:  wis.Recency(t.LastSucceededAt, time.Now()),
-			})
+type Builder struct {
+	registry map[string]entry
+}
+
+func New(wellfoundGate *sources.Gate, decodoScrapeToken string) *Builder {
+	return &Builder{registry: newRegistry(wellfoundGate, decodoScrapeToken)}
+}
+
+func newRegistry(wellfoundGate *sources.Gate, decodoScrapeToken string) map[string]entry {
+	linkedinGate := linkedin.NewGate()
+	hiringcafeTab := hiringcafe.NewAPI(hiringcafe.DecodoScrapeURL, decodoScrapeToken, hiringcafe.NewGate())
+	workableGate := workable.NewGate()
+	recruiteeGate := recruitee.NewGate()
+	wisGate := wis.NewGate()
+	wttjClient := wttj.NewClient(2 * time.Second)
+	postings := smartrecruiters.NewPostingCache()
+	return map[string]entry{
+		"greenhouse":      boardEntry(func(v string) sources.Source { return greenhouse.New(v) }),
+		"lever":           boardEntry(func(v string) sources.Source { return lever.New(v) }),
+		"ashby":           boardEntry(func(v string) sources.Source { return ashby.New(v) }),
+		"workable":        boardEntry(func(v string) sources.Source { return workable.New(v, workableGate) }),
+		"recruitee":       boardEntry(func(v string) sources.Source { return recruitee.New(v, recruiteeGate) }),
+		"personio":        boardEntry(func(v string) sources.Source { return personio.New(v) }),
+		"pinpoint":        boardEntry(func(v string) sources.Source { return pinpoint.New(v) }),
+		"teamtailor":      boardEntry(func(v string) sources.Source { return teamtailor.New(v) }),
+		"hibob":           boardEntry(func(v string) sources.Source { return hibob.New(v) }),
+		"smartrecruiters": boardEntry(func(v string) sources.Source { return smartrecruiters.New(v, postings) }),
+		"wttj":            {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now, wttjClient) }},
+		"indeed": {build: func(t dto.SourceTarget) sources.Source {
+			return indeed.New(t.Value, t.Filters, indeed.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()))
+		}},
+		"hiringcafe": {
+			build: func(t dto.SourceTarget) sources.Source {
+				state := hiringcafe.Recency(json.RawMessage(t.Value), t.LastSucceededAt, time.Now())
+				return hiringcafe.New(state, hiringcafeTab)
+			},
+			detail: hiringcafe.New(nil, hiringcafeTab),
 		},
-		detail: wis.New(wis.Search{}),
-	},
-	"linkedin": {
-		build: func(t dto.SourceTarget) sources.Source {
-			return linkedin.New(t.Value, t.Filters, linkedin.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()))
+		"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
+		"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
+		"wellfound": {build: func(t dto.SourceTarget) sources.Source {
+			return wellfound.New(wellfound.Search{Role: t.Value, Location: t.Filters["location"]}, wellfoundGate)
+		}},
+		"wis": {
+			build: func(t dto.SourceTarget) sources.Source {
+				return wis.New(wis.Search{
+					Keywords: t.Value,
+					Filters:  t.Filters,
+					Recency:  wis.Recency(t.Filters["date_posted"], t.LastSucceededAt, time.Now()),
+				}, wisGate)
+			},
+			detail: wis.New(wis.Search{}, wisGate),
 		},
-		detail: linkedin.New("", nil, ""),
-	},
+		"linkedin": {
+			build: func(t dto.SourceTarget) sources.Source {
+				return linkedin.New(t.Value, t.Filters, linkedin.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()), linkedinGate)
+			},
+			detail: linkedin.New("", nil, "", linkedinGate),
+		},
+	}
 }
 
 // BuildSource builds the Source for one enabled target. It returns false when
 // the target is disabled or its source is unknown.
-func BuildSource(t dto.SourceTarget) (sources.Source, bool) {
-	e, ok := registry[t.Source]
+func (b *Builder) BuildSource(t dto.SourceTarget) (sources.Source, bool) {
+	e, ok := b.registry[t.Source]
 	if !ok || !t.Enabled {
 		return nil, false
 	}
@@ -82,9 +112,9 @@ func BuildSource(t dto.SourceTarget) (sources.Source, bool) {
 }
 
 // Detailers returns the detail fetcher of every source that has one.
-func Detailers() map[string]sources.DetailFetcher {
+func (b *Builder) Detailers() map[string]sources.DetailFetcher {
 	out := map[string]sources.DetailFetcher{}
-	for name, e := range registry {
+	for name, e := range b.registry {
 		if e.detail != nil {
 			out[name] = e.detail
 		}
@@ -93,9 +123,9 @@ func Detailers() map[string]sources.DetailFetcher {
 }
 
 // CardComplete returns the sources whose listing card is already the full job.
-func CardComplete() map[string]bool {
+func (b *Builder) CardComplete() map[string]bool {
 	out := map[string]bool{}
-	for name := range registry {
+	for name := range b.registry {
 		if sourcespec.CardComplete(name) {
 			out[name] = true
 		}

@@ -202,6 +202,21 @@ func TestParseSkillLines(t *testing.T) {
 			want:  []docparse.SkillLine{{Items: []string{"Go (since 2019: advanced)", "SQL"}, Separator: ", ", ItemsStart: 1, End: 31}},
 		},
 		{
+			name:  "a leading bold run labels a line with no colon",
+			paras: []testPara{{text: "Languages/ Frameworks Typescript, React", bold: "Languages/ Frameworks "}},
+			want:  []docparse.SkillLine{{Label: "Languages/ Frameworks", Items: []string{"Typescript", "React"}, Separator: ", ", ItemsStart: 23, End: 40}},
+		},
+		{
+			name:  "a bold first item followed by a separator is not a label",
+			paras: []testPara{{text: "Go, SQL", bold: "Go"}},
+			want:  []docparse.SkillLine{{Items: []string{"Go", "SQL"}, Separator: ", ", ItemsStart: 1, End: 8}},
+		},
+		{
+			name:  "a line that is bold throughout has no label",
+			paras: []testPara{{text: "Go, SQL", bold: "Go, SQL"}},
+			want:  []docparse.SkillLine{{Items: []string{"Go", "SQL"}, Separator: ", ", ItemsStart: 1, End: 8}},
+		},
+		{
 			name:  "indices count UTF-16 code units",
 			paras: []testPara{{text: "Café 🙂: Go, SQL"}},
 			want:  []docparse.SkillLine{{Label: "Café 🙂", Items: []string{"Go", "SQL"}, Separator: ", ", ItemsStart: 10, End: 17}},
@@ -225,6 +240,7 @@ func TestParseSkillLines(t *testing.T) {
 
 type testPara struct {
 	text string
+	bold string
 	list bool
 }
 
@@ -238,8 +254,29 @@ func skillsTab(paras []testPara) []byte {
 		if p.list {
 			bullet = `,"bullet":{}`
 		}
-		els = append(els, fmt.Sprintf(`{"startIndex":%d,"endIndex":%d,"paragraph":{"elements":[{"textRun":{"content":%q}}],"paragraphStyle":{"namedStyleType":"NORMAL_TEXT"}%s}}`, start, end, p.text+"\n", bullet))
+		runs := fmt.Sprintf(`{"textRun":{"content":%q}}`, p.text+"\n")
+		if p.bold != "" {
+			runs = fmt.Sprintf(`{"textRun":{"content":%q,"textStyle":{"bold":true}}},{"textRun":{"content":%q}}`, p.bold, strings.TrimPrefix(p.text, p.bold)+"\n")
+		}
+		els = append(els, fmt.Sprintf(`{"startIndex":%d,"endIndex":%d,"paragraph":{"elements":[%s],"paragraphStyle":{"namedStyleType":"NORMAL_TEXT"}%s}}`, start, end, runs, bullet))
 		start = end
 	}
 	return []byte(`{"documentTab":{"body":{"content":[` + strings.Join(els, ",") + `]}}}`)
+}
+
+func TestText(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile(filepath.Join("testdata", "profile_skills_list.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := docparse.Text(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Profile\nBackend engineer", "Mentored four engineers through promotion.\n"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Text() lacks %q:\n%s", want, got)
+		}
+	}
 }

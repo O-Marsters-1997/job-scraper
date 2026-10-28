@@ -9,6 +9,7 @@ import type { ApplicationStatus } from "@/types/applicationStatus";
 import { failIfRequested } from "./helpers";
 import { getJobs } from "./jobs";
 import { seed } from "./seed";
+import { completeOpenApplyTasks } from "./tasks";
 
 let statuses: ApplicationStatus[] = seed.statuses;
 let applications: Application[] = seed.applications;
@@ -31,9 +32,10 @@ function buildWithDetails(app: Application): ApplicationWithDetails {
 		JobCompanySlug: job.CompanySlug,
 		JobLocation: job.Location,
 		JobURL: job.URL,
-		JobClosedAt: seed.closedJobIDs.has(job.ID) ? job.UpdatedAt : null,
+		JobClosedAt: seed.closedJobIDs.has(job.ID) ? job.PostedAt : null,
 		StatusName: status.Name,
 		StatusColour: status.Colour,
+		Draft: null,
 	};
 }
 
@@ -55,21 +57,30 @@ export function getApplications(
 		.map(buildWithDetails);
 }
 
+function chaseFor(statusId: string): string | null {
+	const days = statuses.find((s) => s.ID === statusId)?.ReplyWindowDays;
+	if (days == null) return null;
+	const d = new Date();
+	d.setUTCHours(0, 0, 0, 0);
+	d.setUTCDate(d.getUTCDate() + days);
+	return d.toISOString();
+}
+
 export function createApplication(data: CreateApplicationPayload): Application {
-	const status = data.status_id
-		? (statuses.find((s) => s.ID === data.status_id) ?? statuses[0]!)
-		: statuses[0]!;
+	const status =
+		statuses.find((s) => s.ID === data.status_id) ??
+		statuses.find((s) => s.SystemKey === "draft") ??
+		statuses[0]!;
 	const app: Application = {
 		ID: faker.string.uuid(),
 		UserID: "user-1",
 		JobID: data.job_id,
 		StatusID: status.ID,
-		Notes: data.notes ?? "",
 		AppliedAt: data.applied_at ?? null,
 		SalaryInfo: data.salary_info ?? "",
 		CreatedAt: new Date().toISOString(),
 		UpdatedAt: new Date().toISOString(),
-		ChaseBy: null,
+		ChaseBy: chaseFor(status.ID),
 	};
 	applications = [...applications, app];
 	return app;
@@ -89,12 +100,17 @@ export function updateApplication(
 		ChaseBy:
 			data.status_id === undefined || data.status_id === prev.StatusID
 				? prev.ChaseBy
-				: null,
-		Notes: data.notes ?? prev.Notes,
+				: chaseFor(data.status_id),
 		AppliedAt: data.applied_at !== undefined ? data.applied_at : prev.AppliedAt,
 		SalaryInfo: data.salary_info ?? prev.SalaryInfo,
 		UpdatedAt: new Date().toISOString(),
 	};
+	if (
+		updated.StatusID !== prev.StatusID &&
+		statuses.find((s) => s.ID === updated.StatusID)?.SystemKey === "applied"
+	) {
+		completeOpenApplyTasks(updated.JobID);
+	}
 	applications = [
 		...applications.slice(0, idx),
 		updated,
@@ -117,8 +133,8 @@ export function clearChase(id: string): void {
 	);
 }
 
-export function deleteApplication(id: string): void {
-	applications = applications.filter((a) => a.ID !== id);
+export function deleteApplications(ids: string[]): void {
+	applications = applications.filter((a) => !ids.includes(a.ID));
 }
 
 export function createStatus(
@@ -133,6 +149,8 @@ export function createStatus(
 		Name: name,
 		Colour: colour,
 		ReplyWindowDays: replyWindowDays,
+		CountsAsReply: false,
+		SystemKey: "",
 		CreatedAt: new Date().toISOString(),
 	};
 	statuses = [...statuses, status];
@@ -144,6 +162,7 @@ export function updateStatus(
 	name: string,
 	colour: string,
 	replyWindowDays: number | null,
+	countsAsReply: boolean,
 ): ApplicationStatus {
 	const idx = statuses.findIndex((s) => s.ID === id);
 	if (idx === -1) throw new Error("Status not found");
@@ -152,6 +171,7 @@ export function updateStatus(
 		Name: name,
 		Colour: colour,
 		ReplyWindowDays: replyWindowDays,
+		CountsAsReply: countsAsReply,
 	};
 	statuses = [...statuses.slice(0, idx), updated, ...statuses.slice(idx + 1)];
 	return updated;

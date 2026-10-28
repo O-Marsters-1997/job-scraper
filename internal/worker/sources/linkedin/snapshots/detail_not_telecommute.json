@@ -1,0 +1,32 @@
+[
+  {
+    "ID": "",
+    "Title": "Senior Backend Engineer",
+    "Location": "London, England, United Kingdom",
+    "URL": "https://uk.linkedin.com/jobs/view/senior-backend-engineer-at-albert-bow-4454545347",
+    "ApplyURL": "",
+    "CompanySlug": "albert-bow",
+    "CompanyID": "",
+    "BoardID": "",
+    "ProviderPostingID": "",
+    "ContentFingerprint": "",
+    "Source": "linkedin",
+    "PostedAt": null,
+    "PostedAfter": null,
+    "RepostedAt": null,
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "FirstDiscoveredAt": "0001-01-01T00:00:00Z",
+    "Description": "Seniority level: Mid-Senior level\nEmployment type: Full-time\nIndustries: Technology, Information and Internet\n\n\n          \u003cp\u003eSenior Backend Engineer | London | AI x 0→1 Product | Python | Competitive Salary + Equity\u003c/p\u003e\u003cp\u003e\u003cbr/\u003e\u003c/p\u003e\u003cp\u003eWe’re working with a $9M-backed AI company building a new product that helps people manage their travel, dining, experiences and other personal requests through AI. Early stage so you’ll be building the product from scratch, working directly with the CTO and founders.\u003c/p\u003e\u003cp\u003eYou’ll be working mainly in Python, building backend services, APIs, data pipelines and AI features, and taking what you build into production.\u003c/p\u003e\u003cp\u003eNo legacy systems, no internal CRM and no endless ticket queue. You’ll have real ownership over what gets built.\u003c/p\u003e\u003cp\u003e\u003cbr/\u003e\u003c/p\u003e\u003cp\u003e\u003cstrong\u003eWhat you will be doing \u003c/strong\u003e\u003c/p\u003e\u003cul\u003e\u003cli\u003eArchitect and build the backend from the ground up you\u0026#39;ll have a genuine say in how the system is designed\u003c/li\u003e\u003cli\u003eTake ideas from 0→1, through architecture, implementation, deployment and iteration\u003c/li\u003e\u003cli\u003eBuild high-performance APIs, background workers, data pipelines and third-party integrations\u003c/li\u003e\u003cli\u003eDesign and ship AI agent workflows, including LLM orchestration, tool calling and retrieval\u003c/li\u003e\u003cli\u003eSolve problems around latency, reliability, observability, cost and model performance\u003c/li\u003e\u003cli\u003eMake the difficult calls around architecture, infrastructure and technical trade-offs\u003c/li\u003e\u003cli\u003eWork directly with the CTO and founders no six layers between you and the decision\u003c/li\u003e\u003cli\u003eShip to real users, learn from what breaks, and improve it\u003c/li\u003e\u003c/ul\u003e\u003cp\u003e\u003cbr/\u003e\u003c/p\u003e\u003cp\u003e\u003cstrong\u003eWhat I\u0026#39;m Looking For\u003c/strong\u003e\u003c/p\u003e\u003cul\u003e\u003cli\u003eExcellent software engineering fundamentals CS fundamentals actually matter here\u003c/li\u003e\u003cli\u003eStrong production experience with Python\u003c/li\u003e\u003cli\u003eStrong backend/API engineering experience\u003c/li\u003e\u003cli\u003eExperience building and shipping 0→1 products or significant greenfield systems\u003c/li\u003e\u003cli\u003eStrong understanding of distributed systems, databases, concurrency and asynchronous processing\u003c/li\u003e\u003cli\u003eHands-on experience with LLMs, AI agents, RAG, embeddings or model-driven applications\u003c/li\u003e\u003cli\u003eSomeone who can look at an ambiguous problem and work out the architecture rather than waiting for someone else to define it\u003c/li\u003e\u003cli\u003eA track record of shipping GitHub, products, side projects, startups, whatever proves you build\u003c/li\u003e\u003c/ul\u003e\u003cp\u003e\u003cbr/\u003e\u003c/p\u003e\u003cp\u003e\u003cstrong\u003eTech Stack\u003c/strong\u003e\u003c/p\u003e\u003cul\u003e\u003cli\u003eFastAPI / Django\u003c/li\u003e\u003cli\u003ePostgreSQL\u003c/li\u003e\u003cli\u003eAWS\u003c/li\u003e\u003cli\u003eRedis / Celery / Kafka\u003c/li\u003e\u003cli\u003eVector databases\u003c/li\u003e\u003cli\u003eAgent orchestration / tool calling\u003c/li\u003e\u003cli\u003eRAG / retrieval systems\u003c/li\u003e\u003cli\u003eLLM evaluation and observability\u003c/li\u003e\u003cli\u003eAI-native products\u003c/li\u003e\u003cli\u003eHigh-growth startups\u003c/li\u003e\u003cli\u003eStrong open-source projects\u003c/li\u003e\u003c/ul\u003e\u003cp\u003e\u003cbr/\u003e\u003c/p\u003e\u003cp\u003eTop university / Computer Science background is highly valued, particularly from places such as Imperial, Cambridge, Oxford, UCL, Edinburgh or Warwick but I\u0026#39;m much more interested in what you\u0026#39;ve actually built than a university name on a CV.\u003c/p\u003e\u003cp\u003e\u003cbr/\u003e\u003c/p\u003e\u003cp\u003e\u003cstrong\u003eWhy this one is different\u003c/strong\u003e\u003c/p\u003e\u003cp\u003eYou won\u0026#39;t be joining a huge engineering organization and owning 3% of a service nobody understands. You\u0026#39;ll be one of the engineers actually building the thing. You\u0026#39;ll have direct access to the people making the decisions, meaningful equity, serious technical ownership and the opportunity to put your fingerprints on the architecture before it becomes difficult to change.\u003c/p\u003e\u003cp\u003eIf you\u0026#39;re the type of engineer who sees 0→1, greenfield, AI agents and “figure it out” and thinks that\u0026#39;s exactly what I want to be doing! I\u0026#39;d like to hear from you\u003c/p\u003e\u003cp\u003e\u003cbr/\u003e\u003c/p\u003e\u003cp\u003eApply with your CV.\u003c/p\u003e\u003cp\u003e\u003cbr/\u003e\u003c/p\u003e",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RemoteCheckURL": "",
+    "SuitabilityScore": null,
+    "Band": "",
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
+    "CompanyKind": "",
+    "Breakdown": null,
+    "Listings": null
+  }
+]

@@ -13,10 +13,11 @@ import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { useGoogleStatus } from "@/hooks/useGoogle";
 import { useCreateDraft, useJobDrafts } from "@/hooks/useTailoring";
 import { formatDate } from "@/lib/datetime";
+import { loadedData } from "@/lib/queryData";
 import { sharePdf } from "@/lib/sharePdf";
 import type { Job } from "@/types/job";
 import { fetchCVPdf } from "../../api/cvTemplates";
-import { fetchDraftPdf, fetchSuggestions } from "../../api/tailoring";
+import { fetchDraftPdf } from "../../api/tailoring";
 
 interface CvSheetProps {
 	job: Pick<Job, "ID" | "CompanySlug">;
@@ -43,21 +44,21 @@ export function CvSheet(props: CvSheetProps) {
 	let baseCv = { DocID: "", TabID: "" };
 	const tailor = useFormSubmit(async () => {
 		const { DocID: docId, TabID: tabId } = baseCv;
-		const suggestions = await fetchSuggestions(props.job.ID, docId, tabId);
 		const draft = await createDraft.mutateAsync({
 			jobId: props.job.ID,
 			docId,
 			tabId,
-			achievementIds: suggestions
-				.filter((s) => s.preselected)
-				.map((s) => s.achievementId),
+			mode: "generate",
 		});
 		await navigate({ to: "/tailoring/drafts/$id", params: { id: draft.id } });
 	});
 
-	const baseCvs = () => cvs.data?.filter((c) => c.Visible) ?? [];
+	const baseCvs = () =>
+		(loadedData(cvs)?.filter((c) => c.Visible) ?? []).sort(
+			(a, b) => Number(b.Default) - Number(a.Default),
+		);
 	const keptDrafts = () =>
-		drafts.data?.filter((d) => d.outcome === "kept") ?? [];
+		loadedData(drafts)?.filter((d) => d.outcome === "kept") ?? [];
 
 	return (
 		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
@@ -91,13 +92,14 @@ export function CvSheet(props: CvSheetProps) {
 											<span class="text-xs text-faint">{c.SourceDoc}</span>
 										</Button>
 										<Button
-											disabled={tailor.pending() || share.pending()}
+											loading={tailor.pending()}
+											disabled={share.pending()}
 											onClick={() => {
 												baseCv = c;
 												void tailor.submit();
 											}}
 										>
-											{tailor.pending() ? "Tailoring…" : "Tailor"}
+											Tailor
 										</Button>
 									</fieldset>
 								)}

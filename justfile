@@ -25,6 +25,22 @@ build:
     go build -o bin/snapshot ./cmd/snapshot
     go build -o bin/queue    ./cmd/queue
 
+[doc('rebuild and start db, RabbitMQ, api and worker in docker, then the frontend dev server')]
+dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker compose up -d --build --wait db rabbitmq api worker
+    (cd frontend && bun install && bun run dev)
+
+[doc('worker in docker against an api you launch from the editor (Run: api); stops the compose api')]
+dev-debug:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker compose stop api
+    docker compose up -d --wait db rabbitmq
+    WORKER_API_BASE_URL=http://host.docker.internal:8080 docker compose up -d --build --force-recreate worker
+    (cd frontend && bun install && bun run dev)
+
 # run the worker
 run *args:
     OTEL_SERVICE_NAME=worker METRICS_ADDR=:9092 LOG_FORMAT=text LOG_LEVEL=debug go run ./cmd/worker {{args}}
@@ -60,9 +76,9 @@ deploy:
     docker compose up -d --build --remove-orphans
     docker compose ps
 
-[doc('from the laptop: forward the app (localhost:8000) and RabbitMQ management (localhost:15673) from the server')]
-tunnel host:
-    ssh -N -L 8000:127.0.0.1:8000 -L 15673:127.0.0.1:15672 {{host}}
+[doc('from the laptop: forward the app (target=app, localhost:8000) or RabbitMQ management (target=rabbit, localhost:15674) from the server')]
+tunnel target:
+    ssh -N {{ if target == "app" { "fast-track-app" } else if target == "rabbit" { "-L 15674:127.0.0.1:15672 fast-track" } else { error("target must be app or rabbit") } }}
 
 [doc('tail api and worker logs')]
 logs:
@@ -117,6 +133,10 @@ down:
 clean *args:
     scripts/clean.sh {{args}}
 
+[doc('wipe dev jobs, companies and scores and reseed fake data for perf testing (local dev only): just perf-seed --scale 10x')]
+perf-seed *args:
+    go run ./cmd/perfseed --yes-wipe-dev-data {{args}}
+
 # ── Migrations ────────────────────────────────────────────────────────────────
 
 # show migration status
@@ -152,6 +172,13 @@ scoring-feedback-clear user:
 # replay a user's labels against current scoring and print the report
 eval-scoring user:
     go run ./cmd/admin scoring replay {{user}}
+
+resolve-domains file:
+    go run ./cmd/admin resolve-domains {{file}}
+
+[doc('record a new-job Notification for a real job and push it to ntfy, from inside the api container')]
+notify-test user job:
+    docker compose exec api ./admin notify-test {{user}} {{job}}
 
 # ── Seeds ─────────────────────────────────────────────────────────────────────
 

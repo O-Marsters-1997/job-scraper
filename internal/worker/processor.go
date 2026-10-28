@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/filter"
+	"github.com/ollymarsters/job-scraper/internal/location"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
@@ -26,14 +28,31 @@ import (
 )
 
 func (p *Processor) FailRun(ctx context.Context, task queue.Task) error {
+	if task.Kind == queue.BoardCheckTask && !task.Manual {
+		if err := p.js.Boards().ClearBoardCheckPublished(ctx, task.BoardID); err != nil {
+			return err
+		}
+	}
+	var boardErr error
+	if task.Kind == queue.BoardCheckTask {
+		boardErr = p.js.FinishBoardRun(ctx, boardRunStart(task), dto.StopFailed, dto.BoardTally{})
+	}
 	if task.Kind == queue.DetailTask || task.TargetID == "" || task.RunID == "" {
-		return nil
+		return boardErr
 	}
 	_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "Work failed after retries. Try running it again.")
 	if errors.Is(err, data.ErrNotFound) {
-		return nil
+		err = nil
 	}
-	return err
+	return errors.Join(boardErr, err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
+}
+
+func boardRunStart(task queue.Task) dto.BoardRunStart {
+	trigger := dto.TriggerScheduled
+	if task.Manual {
+		trigger = dto.TriggerManual
+	}
+	return dto.BoardRunStart{ID: task.ID, BoardID: task.BoardID, Source: task.Source, Trigger: trigger, StartedAt: time.Now()}
 }
 
 type Publisher interface {
@@ -46,6 +65,8 @@ type IncludeFilterConfigs interface {
 
 type DiscoverFunc func(ctx context.Context, source, token string) (scraper.Discovery, error)
 
+type VerifyFunc func(ctx context.Context, source, token string) (scraper.Verification, error)
+
 type Deps struct {
 	JS           *jobsearch.Module
 	Broker       Publisher
@@ -57,6 +78,8 @@ type Deps struct {
 	MaxPages     int
 	Scoring      IncludeFilterConfigs
 	Discover     DiscoverFunc
+	Verify       VerifyFunc
+	Logger       *slog.Logger
 }
 
 type Processor struct {
@@ -70,10 +93,12 @@ type Processor struct {
 	maxPages     int
 	scoring      IncludeFilterConfigs
 	discover     DiscoverFunc
+	verify       VerifyFunc
+	log          *slog.Logger
 }
 
 func NewProcessor(d Deps) *Processor {
-	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, cardComplete: d.CardComplete, exporter: d.Exporter, maxPages: d.MaxPages, scoring: d.Scoring, discover: d.Discover}
+	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, cardComplete: d.CardComplete, exporter: d.Exporter, maxPages: d.MaxPages, scoring: d.Scoring, discover: d.Discover, verify: d.Verify, log: cmp.Or(d.Logger, slog.New(slog.DiscardHandler))}
 }
 
 func (p *Processor) Process(ctx context.Context, task queue.Task) error {
@@ -87,17 +112,29 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 			return fmt.Errorf("source %s cannot fetch details", task.Source)
 		}
 		ctx, fetches := proxy.WithCollector(ctx)
-		job, err := fetcher.GetDetails(ctx, task.URL)
+		job, err := fetcher.GetDetails(ctx, task.Card)
 		if errors.Is(err, sources.ErrGone) {
 			slog.WarnContext(ctx, "job is gone", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyURL, task.URL), slog.Any(logger.KeyErr, err))
 			return nil
 		}
+		if errors.Is(err, sources.ErrNotRemote) {
+			p.logDetail(ctx, task, "not_remote")
+			p.forgetFetches(ctx, fetches)
+			return nil
+		}
+		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
+			return &queue.DeferError{Until: until, Err: err}
+		}
 		if err != nil {
 			return err
+		}
+		if task.Card.PostedAt != nil {
+			job.PostedAt = task.Card.PostedAt
 		}
 		if err := p.exporter.Export(ctx, job); err != nil {
 			return err
 		}
+		p.logDetail(ctx, task, "exported")
 		p.forgetFetches(ctx, fetches)
 		return nil
 	case queue.ListingPageTask:
@@ -118,6 +155,13 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 	}
 }
 
+func (p *Processor) logDetail(ctx context.Context, task queue.Task, outcome string) {
+	p.log.InfoContext(ctx, "detail fetched",
+		slog.String(logger.KeySource, task.Source),
+		slog.Bool("remote_check", task.Card.RemoteCheckURL != ""),
+		slog.String(logger.KeyOutcome, outcome))
+}
+
 func (p *Processor) forgetFetches(ctx context.Context, c *proxy.Collector) {
 	if err := p.js.ForgetFetches(ctx, c.URLs()); err != nil {
 		slog.ErrorContext(ctx, "forget fetch cache failed", slog.Any(logger.KeyErr, err))
@@ -125,15 +169,28 @@ func (p *Processor) forgetFetches(ctx context.Context, c *proxy.Collector) {
 }
 
 func (p *Processor) verifyBoard(ctx context.Context, task queue.Task) error {
-	verified, err := scraper.VerifyBoard(ctx, task.Source, task.BoardToken)
+	verified, err := p.verify(ctx, task.Source, task.BoardToken)
 	if err != nil {
 		slog.WarnContext(ctx, "board verification failed", slog.String(logger.KeyCompanyID, task.CompanyID), slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		return nil
 	}
-	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, verified.Method, task.Via); err != nil {
+	board, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, verified.Method, task.Via)
+	if err != nil {
 		return err
 	}
-	return p.nameCompany(ctx, task.CompanyID, verified.CompanyName)
+	if err := p.nameCompany(ctx, task.CompanyID, verified.CompanyName); err != nil {
+		return err
+	}
+	if !task.Poll {
+		return nil
+	}
+	if _, err := p.boards.PollBoard(ctx, board.ID, true, taskListing(task)); err != nil {
+		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
+			return &queue.DeferError{Until: until, Err: err}
+		}
+		return err
+	}
+	return nil
 }
 
 func (p *Processor) nameCompany(ctx context.Context, companyID, name string) error {
@@ -158,7 +215,11 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	if err != nil {
 		slog.WarnContext(ctx, "board discovery failed", slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		logBoardDiscover(ctx, task, "failed")
-		return nil
+		return p.recordMiss(ctx, task)
+	}
+	if len(found.Jobs) == 0 && task.RequireUK {
+		logBoardDiscover(ctx, task, "empty")
+		return p.recordMiss(ctx, task)
 	}
 	companyID, err := p.discoveryCompanyID(ctx, task, found.Name)
 	if err != nil {
@@ -173,6 +234,14 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	}
 	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, companyID, task.Source, task.BoardToken, method, task.Via); err != nil && !errors.Is(err, data.ErrNotFound) {
 		return err
+	}
+	if hasUKJob(found.Jobs) {
+		if err := p.js.Boards().MarkBoardUKJobsSeen(ctx, task.Source, task.BoardToken); err != nil {
+			return err
+		}
+	} else if task.RequireUK {
+		logBoardDiscover(ctx, task, "non_uk")
+		return nil
 	}
 	pivoted, err := p.pivotToATS(ctx, task.Source, cmp.Or(task.Via, task.Source), companyID, found.Jobs)
 	if err != nil {
@@ -213,7 +282,23 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 			return err
 		}
 	}
-	return p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0)
+	_, err = p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0, taskListing(task))
+	return err
+}
+
+func taskListing(task queue.Task) scraper.Listing {
+	return scraper.Listing{Via: task.Via, URL: task.ListingURL, ApplyURL: task.ApplyURL}
+}
+
+func hasUKJob(jobs []dto.Job) bool {
+	return slices.ContainsFunc(jobs, func(j dto.Job) bool { return location.IsUK(j.Location) })
+}
+
+func (p *Processor) recordMiss(ctx context.Context, task queue.Task) error {
+	if !task.RequireUK {
+		return nil
+	}
+	return p.js.Boards().RecordDiscoverMiss(ctx, task.Source, task.BoardToken)
 }
 
 func logBoardDiscover(ctx context.Context, task queue.Task, outcome string) {
@@ -248,7 +333,7 @@ func (p *Processor) pivotToATS(ctx context.Context, source, via, companyID strin
 		case !errors.Is(err, data.ErrNotFound):
 			return false, err
 		}
-		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: atsSource, Kind: queue.BoardDiscoverTask, BoardToken: token, CompanyID: companyID, Via: via}
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: atsSource, Kind: queue.BoardDiscoverTask, BoardToken: token, CompanyID: companyID, Via: via, ListingURL: job.URL, ApplyURL: target}
 		if err := p.broker.Publish(ctx, task); err != nil {
 			return false, err
 		}
@@ -278,7 +363,7 @@ func (p *Processor) discoveryCompanyID(ctx context.Context, task queue.Task, nam
 	if !errors.Is(err, data.ErrNotFound) {
 		return "", err
 	}
-	company, err := p.js.Boards().UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug.Company(name), Name: name})
+	company, err := p.js.Boards().UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug.Company(name), Name: name, Kind: dto.KindDirect})
 	return company.ID, err
 }
 
@@ -291,6 +376,8 @@ func anyPasses(jobs []dto.Job, cfg dto.SearchConfig) bool {
 	return false
 }
 
+const waitingPrefix = "waiting until "
+
 func (p *Processor) currentTarget(ctx context.Context, task queue.Task) (dto.SourceTarget, bool, error) {
 	target, err := p.js.Targets().GetSourceTarget(ctx, task.TargetID)
 	if errors.Is(err, data.ErrNotFound) {
@@ -302,7 +389,8 @@ func (p *Processor) currentTarget(ctx context.Context, task queue.Task) (dto.Sou
 	if !target.Enabled || target.RunID != task.RunID || target.Source != task.Source || target.RunStatus == "succeeded" || target.RunStatus == "failed" {
 		return target, false, nil
 	}
-	if task.Cursor == "" && !task.Redelivered && !task.Recovery && target.RunStatus == "running" && time.Since(target.UpdatedAt) < 30*time.Minute {
+	deferred := strings.HasPrefix(target.LastRunError, waitingPrefix)
+	if task.Cursor == "" && !task.Redelivered && !task.Recovery && !deferred && target.RunStatus == "running" && time.Since(target.UpdatedAt) < 30*time.Minute {
 		return target, false, nil
 	}
 	return target, true, nil
@@ -320,18 +408,42 @@ func (p *Processor) processPage(ctx context.Context, task queue.Task) error {
 	}
 	next, err := p.orchestrator.ScrapePage(ctx, target, task.Cursor)
 	if errors.Is(err, sources.ErrSourceKeyRejected) {
-		return p.disableSource(ctx, task.Source, err)
+		return errors.Join(p.disableSource(ctx, task.Source, err), p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
+	}
+	if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
+		if err := p.js.ScrapeRunDeferred(ctx, task.RunID); err != nil {
+			return err
+		}
+		msg := waitingPrefix + until.Format(time.RFC3339)
+		if _, transitionErr := p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", msg); transitionErr != nil {
+			return transitionErr
+		}
+		return &queue.DeferError{Until: until, Err: err}
 	}
 	if err != nil {
+		if recordErr := p.js.ScrapeRunAttemptFailed(ctx, task.RunID, task.Page, task.Attempt, err.Error()); recordErr != nil {
+			p.log.WarnContext(ctx, "record scrape run attempt failed", slog.Any(logger.KeyErr, recordErr))
+		}
+		return err
+	}
+	if err := p.js.ScrapeRunPageDone(ctx, task.RunID); err != nil {
 		return err
 	}
 	task.Page++
-	if next != "" && (p.maxPages == 0 || task.Page < p.maxPages) {
+	capped := next != "" && p.maxPages != 0 && task.Page >= p.maxPages
+	if next != "" && !capped {
 		task.ID, task.Cursor = uuid.NewString(), next
 		if err := p.broker.Publish(ctx, task); err != nil {
 			return err
 		}
 		_, err = p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", "")
+		return err
+	}
+	stop := dto.StopLastPage
+	if capped {
+		stop = dto.StopPageCap
+	}
+	if err := p.js.FinishScrapeRun(ctx, task.RunID, stop); err != nil {
 		return err
 	}
 	_, err = p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "succeeded", "")
@@ -349,6 +461,13 @@ func (p *Processor) disableSource(ctx context.Context, source string, cause erro
 	return nil
 }
 
+func (p *Processor) finishBoardRun(ctx context.Context, run dto.BoardRunStart, stop dto.StopReason, tally dto.BoardTally) error {
+	if !tally.Claimed {
+		return nil
+	}
+	return p.js.FinishBoardRun(ctx, run, stop, tally)
+}
+
 func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 	if task.TargetID != "" {
 		target, active, err := p.currentTarget(ctx, task)
@@ -359,15 +478,43 @@ func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 			return err
 		}
 	}
-	if err := p.boards.PollBoard(ctx, task.BoardID, task.Manual); err != nil {
+	run := boardRunStart(task)
+	tally, err := p.boards.PollBoard(ctx, task.BoardID, task.Manual, taskListing(task))
+	if err != nil {
 		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
 			return &queue.DeferError{Until: until, Err: err}
 		}
+		gone := errors.Is(err, sources.ErrGone) || errors.Is(err, sources.ErrMoved)
+		if !gone && !errors.Is(err, sources.ErrUnparseable) {
+			if tally.Claimed {
+				if recordErr := p.js.BoardRunAttemptFailed(ctx, run, task.Attempt, err.Error()); recordErr != nil {
+					p.log.WarnContext(ctx, "record board run attempt failed", slog.Any(logger.KeyErr, recordErr))
+				}
+			}
+			return err
+		}
+		message := "The board's page could not be read."
+		var boardErr error
+		if gone {
+			message = "The board no longer exists."
+			p.log.WarnContext(ctx, "board gone, retiring", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyBoardID, task.BoardID), slog.Any(logger.KeyErr, err))
+			boardErr = p.js.Boards().RetireBoard(ctx, task.BoardID)
+		} else {
+			p.log.WarnContext(ctx, "board page unparseable", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyBoardID, task.BoardID), slog.Any(logger.KeyErr, err))
+		}
+		boardErr = errors.Join(boardErr, p.finishBoardRun(ctx, run, dto.StopFailed, tally))
+		if task.TargetID == "" {
+			return boardErr
+		}
+		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", message)
+		return errors.Join(boardErr, err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopFailed))
+	}
+	if err := p.finishBoardRun(ctx, run, dto.StopLastPage, tally); err != nil {
 		return err
 	}
 	if task.TargetID != "" {
 		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "succeeded", "")
-		return err
+		return errors.Join(err, p.js.FinishScrapeRun(ctx, task.RunID, dto.StopLastPage))
 	}
 	return nil
 }

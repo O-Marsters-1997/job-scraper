@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,14 +28,62 @@ type EventRecorder interface {
 	RecordApplicationStatusChanged(ctx context.Context, tx pgx.Tx, userID, applicationID, jobID, fromStatusID, toStatusID string, snap *dto.JobScoreEvidence) error
 }
 
+type TaskSync interface {
+	ApplicationTracked(ctx context.Context, tx pgx.Tx, userID, jobID string) error
+	ApplicationApplied(ctx context.Context, tx pgx.Tx, userID, jobID string) error
+}
+
 type Store struct {
 	pool    *pgxpool.Pool
 	queries *sqlc.Queries
 	events  EventRecorder
+	tasks   TaskSync
 }
 
-func New(pool *pgxpool.Pool, events EventRecorder) *Store {
-	return &Store{pool: pool, queries: sqlc.New(pool), events: events}
+func New(pool *pgxpool.Pool, events EventRecorder, tasks TaskSync) *Store {
+	return &Store{pool: pool, queries: sqlc.New(pool), events: events, tasks: tasks}
+}
+
+func (s *Store) syncTasks(ctx context.Context, tx pgx.Tx, userID string, a dto.Application, tracked bool) error {
+	if tracked {
+		if err := s.tasks.ApplicationTracked(ctx, tx, userID, a.JobID); err != nil {
+			return err
+		}
+	}
+	if a.StatusID == "" {
+		return nil
+	}
+	sid, err := data.UUID(a.StatusID)
+	if err != nil {
+		return err
+	}
+	applied, err := s.queries.WithTx(tx).IsAppliedStatus(ctx, sid)
+	if err != nil || !applied {
+		return err
+	}
+	return s.tasks.ApplicationApplied(ctx, tx, userID, a.JobID)
+}
+
+func (s *Store) MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return err
+	}
+	row, err := s.queries.WithTx(tx).MarkApplicationApplied(ctx, sqlc.MarkApplicationAppliedParams{
+		UserID: uid, JobID: jid, Now: pgtype.Timestamptz{Time: now, Valid: true},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("store.MarkApplied: %w", err)
+	}
+	snap := s.events.Snapshot(ctx, userID, jobID)
+	return s.events.RecordApplicationStatusChanged(ctx, tx, userID, row.ID.String(), jobID, row.FromStatusID.String(), row.ToStatusID.String(), snap)
 }
 
 func parseOptionalDate(s *string) (pgtype.Date, error) {
@@ -75,7 +124,6 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 			UserID:     uid,
 			JobID:      jid,
 			StatusID:   sid,
-			Notes:      data.Text(input.Notes),
 			AppliedAt:  appliedAt,
 			SalaryInfo: data.Text(input.SalaryInfo),
 		})
@@ -83,13 +131,16 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 			return err
 		}
 		out = toApplicationDTO(a)
-		return s.events.RecordApplicationCreated(ctx, tx, userID, out.ID, out.JobID, snap)
+		if err := s.events.RecordApplicationCreated(ctx, tx, userID, out.ID, out.JobID, snap); err != nil {
+			return err
+		}
+		return s.syncTasks(ctx, tx, userID, out, true)
 	})
 	if err != nil {
 		if data.IsUniqueViolation(err) {
 			return dto.Application{}, ErrApplicationExists
 		}
-		return dto.Application{}, fmt.Errorf("store.CreateApplication: %w", err)
+		return dto.Application{}, data.QueryErr("CreateApplication", err)
 	}
 	return out, nil
 }
@@ -151,7 +202,6 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 			ID:         aid,
 			UserID:     uid,
 			StatusID:   sid,
-			Notes:      data.Text(input.Notes),
 			AppliedAt:  appliedAt,
 			SalaryInfo: data.Text(input.SalaryInfo),
 		})
@@ -162,7 +212,10 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 		if !statusChanged {
 			return nil
 		}
-		return s.events.RecordApplicationStatusChanged(ctx, tx, userID, out.ID, out.JobID, before.StatusID.String(), out.StatusID, snap)
+		if err := s.events.RecordApplicationStatusChanged(ctx, tx, userID, out.ID, out.JobID, before.StatusID.String(), out.StatusID, snap); err != nil {
+			return err
+		}
+		return s.syncTasks(ctx, tx, userID, out, false)
 	})
 	if err != nil {
 		return dto.Application{}, data.QueryErr("UpdateApplication", err)
@@ -226,6 +279,21 @@ func (s *Store) DeleteApplication(ctx context.Context, userID, id string) error 
 	return nil
 }
 
+func (s *Store) DeleteApplications(ctx context.Context, userID string, ids []string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	aids, err := data.UUIDs(ids)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.DeleteApplications(ctx, sqlc.DeleteApplicationsParams{UserID: uid, Ids: aids}); err != nil {
+		return fmt.Errorf("store.DeleteApplications: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
@@ -264,7 +332,7 @@ func (s *Store) SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID strin
 	return nil
 }
 
-func (s *Store) CreateApplicationStatus(ctx context.Context, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error) {
+func (s *Store) CreateApplicationStatus(ctx context.Context, userID, name, colour string, replyWindowDays *int, countsAsReply bool) (dto.ApplicationStatus, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.ApplicationStatus{}, err
@@ -274,6 +342,7 @@ func (s *Store) CreateApplicationStatus(ctx context.Context, userID, name, colou
 		Name:            name,
 		Colour:          colour,
 		ReplyWindowDays: toInt4(replyWindowDays),
+		CountsAsReply:   countsAsReply,
 	})
 	if err != nil {
 		return dto.ApplicationStatus{}, fmt.Errorf("store.CreateApplicationStatus: %w", err)
@@ -297,7 +366,7 @@ func (s *Store) ListApplicationStatusesByUser(ctx context.Context, userID string
 	return out, nil
 }
 
-func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error) {
+func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string, replyWindowDays *int, countsAsReply bool) (dto.ApplicationStatus, error) {
 	sid, err := data.UUID(id)
 	if err != nil {
 		return dto.ApplicationStatus{}, err
@@ -312,6 +381,7 @@ func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, c
 		Name:            name,
 		Colour:          colour,
 		ReplyWindowDays: toInt4(replyWindowDays),
+		CountsAsReply:   countsAsReply,
 	})
 	if err != nil {
 		return dto.ApplicationStatus{}, fmt.Errorf("store.UpdateApplicationStatus: %w", err)
@@ -354,4 +424,196 @@ func (s *Store) CountApplicationsUsingStatus(ctx context.Context, statusID, user
 		return 0, fmt.Errorf("store.CountApplicationsUsingStatus: %w", err)
 	}
 	return count, nil
+}
+
+func (s *Store) CreateRecruiterContact(ctx context.Context, userID string, in dto.LogRecruiterContactInput) (dto.RecruiterContact, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.RecruiterContact{}, err
+	}
+	jid, err := data.UUID(in.JobID)
+	if err != nil {
+		return dto.RecruiterContact{}, err
+	}
+	var on pgtype.Date
+	if err := on.Scan(in.ContactedOn); err != nil {
+		return dto.RecruiterContact{}, fmt.Errorf("invalid contacted_on: %w", err)
+	}
+	row, err := s.queries.CreateRecruiterContact(ctx, sqlc.CreateRecruiterContactParams{
+		UserID: uid, JobID: jid, ContactedOn: on, Channel: string(in.Channel), Outcome: string(in.Outcome),
+	})
+	if err != nil {
+		if data.IsForeignKeyViolation(err, "recruiter_contacts_job_id_fkey") {
+			return dto.RecruiterContact{}, data.ErrNotFound
+		}
+		return dto.RecruiterContact{}, fmt.Errorf("store.CreateRecruiterContact: %w", err)
+	}
+	return toRecruiterContactDTO(row), nil
+}
+
+func (s *Store) ListRecruiterContacts(ctx context.Context, userID, jobID string) ([]dto.RecruiterContact, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListRecruiterContactsForJob(ctx, sqlc.ListRecruiterContactsForJobParams{UserID: uid, JobID: jid})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListRecruiterContacts: %w", err)
+	}
+	out := make([]dto.RecruiterContact, len(rows))
+	for i, row := range rows {
+		out[i] = toRecruiterContactDTO(row)
+	}
+	return out, nil
+}
+
+func (s *Store) GetRecruiterContactSummaries(ctx context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	pgIDs := make([]pgtype.UUID, 0, len(jobIDs))
+	for _, id := range jobIDs {
+		jid, err := data.UUID(id)
+		if err != nil {
+			return nil, apperr.Invalid("invalid job id")
+		}
+		pgIDs = append(pgIDs, jid)
+	}
+	rows, err := s.queries.GetRecruiterContactSummaries(ctx, sqlc.GetRecruiterContactSummariesParams{UserID: uid, Column2: pgIDs})
+	if err != nil {
+		return nil, fmt.Errorf("store.GetRecruiterContactSummaries: %w", err)
+	}
+	out := make(map[string]dto.RecruiterContactSummary, len(rows))
+	for _, row := range rows {
+		out[row.JobID.String()] = dto.RecruiterContactSummary{
+			Count:           int(row.ContactCount),
+			LastContactedOn: row.LastContactedOn.Time.Format(time.DateOnly),
+			BestOutcome:     dto.ContactOutcome(row.BestOutcome),
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) GetJobNote(ctx context.Context, userID, jobID string) (dto.JobNote, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	row, err := s.queries.GetJobNote(ctx, sqlc.GetJobNoteParams{UserID: uid, JobID: jid})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.JobNote{JobID: jobID}, nil
+	}
+	if err != nil {
+		return dto.JobNote{}, fmt.Errorf("store.GetJobNote: %w", err)
+	}
+	return toJobNoteDTO(row), nil
+}
+
+func (s *Store) PutJobNote(ctx context.Context, userID string, in dto.PutJobNoteInput) (dto.JobNote, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	jid, err := data.UUID(in.JobID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	row, err := s.queries.UpsertJobNote(ctx, sqlc.UpsertJobNoteParams{UserID: uid, JobID: jid, Body: in.Body})
+	if err != nil {
+		if data.IsForeignKeyViolation(err, "job_notes_job_id_fkey") {
+			return dto.JobNote{}, data.ErrNotFound
+		}
+		return dto.JobNote{}, fmt.Errorf("store.PutJobNote: %w", err)
+	}
+	return toJobNoteDTO(row), nil
+}
+
+func (s *Store) CreateJobComment(ctx context.Context, userID string, in dto.CreateJobCommentInput) (dto.JobComment, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobComment{}, err
+	}
+	jid, err := data.UUID(in.JobID)
+	if err != nil {
+		return dto.JobComment{}, err
+	}
+	row, err := s.queries.CreateJobComment(ctx, sqlc.CreateJobCommentParams{
+		UserID:      uid,
+		JobID:       jid,
+		Body:        in.Body,
+		Quote:       in.Quote.Exact,
+		QuotePrefix: in.Quote.Prefix,
+		QuoteSuffix: in.Quote.Suffix,
+	})
+	if err != nil {
+		if data.IsForeignKeyViolation(err, "job_comments_job_id_fkey") {
+			return dto.JobComment{}, data.ErrNotFound
+		}
+		return dto.JobComment{}, fmt.Errorf("store.CreateJobComment: %w", err)
+	}
+	return toJobCommentDTO(row), nil
+}
+
+func (s *Store) ListJobComments(ctx context.Context, userID, jobID string) ([]dto.JobComment, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListJobCommentsForJob(ctx, sqlc.ListJobCommentsForJobParams{UserID: uid, JobID: jid})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListJobComments: %w", err)
+	}
+	out := make([]dto.JobComment, len(rows))
+	for i, row := range rows {
+		out[i] = toJobCommentDTO(row)
+	}
+	return out, nil
+}
+
+func (s *Store) UpdateJobComment(ctx context.Context, userID string, in dto.UpdateJobCommentInput) (dto.JobComment, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobComment{}, err
+	}
+	cid, err := data.UUID(in.ID)
+	if err != nil {
+		return dto.JobComment{}, err
+	}
+	row, err := s.queries.UpdateJobCommentBody(ctx, sqlc.UpdateJobCommentBodyParams{ID: cid, UserID: uid, Body: in.Body})
+	if err != nil {
+		return dto.JobComment{}, data.QueryErr("UpdateJobCommentBody", err)
+	}
+	return toJobCommentDTO(row), nil
+}
+
+func (s *Store) DeleteJobComment(ctx context.Context, userID, id string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	cid, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.DeleteJobComment(ctx, sqlc.DeleteJobCommentParams{ID: cid, UserID: uid})
+	if err != nil {
+		return fmt.Errorf("store.DeleteJobComment: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
 }

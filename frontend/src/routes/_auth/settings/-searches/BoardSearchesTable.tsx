@@ -21,6 +21,7 @@ import {
 	SEARCH_PAGE_SIZE,
 	type SearchParams,
 	type SearchStatus,
+	searchTitle,
 	sortTargets,
 } from "@/lib/searchTargets";
 import { cn } from "@/lib/utils";
@@ -190,7 +191,7 @@ export function BoardSearchesTable(props: {
 															class="max-w-64 truncate font-medium"
 															title={t.Value}
 														>
-															{t.Value}
+															{searchTitle(t)}
 														</span>
 														<Show when={t.URL}>
 															<a
@@ -237,7 +238,7 @@ export function BoardSearchesTable(props: {
 															setEditing(editing() === t.ID ? undefined : t.ID)
 														}
 														aria-expanded={editing() === t.ID}
-														aria-label={`Edit schedule for ${t.Value}`}
+														aria-label={`Edit schedule for ${searchTitle(t)}`}
 														class="whitespace-nowrap text-xs text-muted hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
 													>
 														{t.Enabled
@@ -262,13 +263,13 @@ export function BoardSearchesTable(props: {
 												<TableCell>
 													<EnabledSwitch
 														enabled={t.Enabled}
-														name={t.Value}
+														name={searchTitle(t)}
 														onToggle={() => props.onToggle(t)}
 													/>
 												</TableCell>
 												<TableCell>
 													<DeleteIconButton
-														label={`Delete ${t.Value}`}
+														label={`Delete ${searchTitle(t)}`}
 														title="Delete"
 														onClick={() => props.onDelete(t)}
 													/>

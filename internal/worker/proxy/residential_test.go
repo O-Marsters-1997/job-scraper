@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
@@ -87,6 +88,7 @@ func residentialFetcher(t *testing.T, residential *fakeProxy, cache proxy.Cache)
 	if err != nil {
 		t.Fatal(err)
 	}
+	proxy.WithRetryBackoff(tr, 0)
 	return tr
 }
 
@@ -194,6 +196,53 @@ func TestResidentialFetcher(t *testing.T) {
 	})
 }
 
+func TestResidentialFetcherBacksOffBetweenBlockedAttempts(t *testing.T) { //nolint:paralleltest // residentialFetcher calls t.Setenv, which forbids t.Parallel
+	const backoff = 40 * time.Millisecond
+	var mu sync.Mutex
+	var times []time.Time
+	residential := newFakeProxy(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		times = append(times, time.Now())
+		mu.Unlock()
+		status(429, "")(w, r)
+	})
+	tr := residentialFetcher(t, residential, nil)
+	proxy.WithRetryBackoff(tr, backoff)
+	resp, err := tr.RoundTrip(httpTarget(t))
+	if err == nil {
+		_ = resp.Body.Close()
+	}
+	if !errors.Is(err, proxy.ErrBlocked) {
+		t.Fatalf("RoundTrip() error = %v, want ErrBlocked", err)
+	}
+	if len(times) != 3 {
+		t.Fatalf("attempts = %d, want 3", len(times))
+	}
+	for i := 1; i < len(times); i++ {
+		if gap := times[i].Sub(times[i-1]); gap < backoff/2 {
+			t.Errorf("gap before attempt %d = %v, want at least %v", i+1, gap, backoff/2)
+		}
+	}
+}
+
+func TestResidentialFetcherStopsBackingOffOnCancel(t *testing.T) { //nolint:paralleltest // residentialFetcher calls t.Setenv, which forbids t.Parallel
+	residential := newFakeProxy(t, status(429, ""))
+	tr := residentialFetcher(t, residential, nil)
+	proxy.WithRetryBackoff(tr, time.Hour)
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	resp, err := tr.RoundTrip(httpTarget(t).WithContext(ctx))
+	if err == nil {
+		_ = resp.Body.Close()
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("RoundTrip() error = %v, want DeadlineExceeded", err)
+	}
+	if got := residential.hits(); got != 1 {
+		t.Errorf("attempts = %d, want 1", got)
+	}
+}
+
 func TestResidentialFetcherCachesOnlySuccess(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -248,6 +297,32 @@ func TestResidentialFetcherLogsRotations(t *testing.T) {
 	}
 	if len(counts) != 3 || counts[0] != 1 || counts[2] != 3 {
 		t.Errorf("rotation counts = %v, want 1..3", counts)
+	}
+}
+
+func TestResidentialFetcherWireBytes(t *testing.T) { //nolint:paralleltest // residentialFetcher calls t.Setenv, which forbids t.Parallel
+	residential := newFakeProxy(t, status(200, ""))
+	resp, err := residentialFetcher(t, residential, nil).RoundTrip(httpTarget(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	for _, direction := range []string{"read", "write"} {
+		counter := proxy.FetchWireBytes.WithLabelValues(t.Name(), "residential", direction)
+		tick := time.NewTicker(time.Millisecond)
+		deadline := time.After(5 * time.Second)
+		for testutil.ToFloat64(counter) <= 0 {
+			select {
+			case <-tick.C:
+				continue
+			case <-deadline:
+			}
+			break
+		}
+		tick.Stop()
+		if got := testutil.ToFloat64(counter); got <= 0 {
+			t.Errorf("wire bytes %s = %v, want > 0", direction, got)
+		}
 	}
 }
 

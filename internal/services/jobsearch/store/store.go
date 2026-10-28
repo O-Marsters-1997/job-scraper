@@ -4,11 +4,13 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"slices"
 	"strings"
@@ -18,12 +20,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/jobmatch"
 	"github.com/ollymarsters/job-scraper/internal/runwindow"
+	"github.com/ollymarsters/job-scraper/internal/salary"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store/sqlc"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
@@ -51,10 +55,23 @@ type Store struct {
 	pool    *pgxpool.Pool
 	queries *sqlc.Queries
 	scoring ScoringWriter
+	log     *slog.Logger
+
+	coverage coverageCache
 }
 
-func New(pool *pgxpool.Pool, scoring ScoringWriter) *Store {
-	return &Store{pool: pool, queries: sqlc.New(pool), scoring: scoring}
+type Option func(*Store)
+
+func WithLogger(log *slog.Logger) Option {
+	return func(s *Store) { s.log = log }
+}
+
+func New(pool *pgxpool.Pool, scoring ScoringWriter, opts ...Option) *Store {
+	s := &Store{pool: pool, queries: sqlc.New(pool), scoring: scoring, log: slog.New(slog.DiscardHandler)}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 func optionalUUID(id string) (pgtype.UUID, error) {
@@ -73,65 +90,150 @@ func nonNil(items []string) []string {
 	return items
 }
 
-func (s *Store) ListJobs(ctx context.Context, userID string, excludedCompanySlugs []string) ([]dto.Job, error) {
-	var uid pgtype.UUID
-	if userID != "" {
-		var err error
-		uid, err = data.UUID(userID)
-		if err != nil {
-			return nil, fmt.Errorf("store.ListJobs: %w", err)
-		}
-	}
-	rows, err := s.queries.ListJobs(ctx, sqlc.ListJobsParams{UserID: uid, ExcludedCompanySlugs: nonNil(excludedCompanySlugs)})
-	if err != nil {
-		return nil, fmt.Errorf("store.ListJobs: %w", err)
-	}
-	jobs := make([]dto.Job, len(rows))
-	for i, row := range rows {
-		job, err := toPageJobDTO(sqlc.PageJobsRow(row))
-		if err != nil {
-			return nil, fmt.Errorf("store.ListJobs: %w", err)
-		}
-		jobs[i] = job
-	}
-	return jobs, nil
-}
-
 func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.JobPage{}, ErrInvalidID
 	}
-	params := sqlc.PageJobsParams{UserID: uid, Availability: options.Availability, PageLimit: options.Limit, ScoredOnly: options.ScoredOnly, SinceDays: options.SinceDays, ExcludedCompanySlugs: nonNil(options.ExcludedCompanySlugs)}
-	if params.Availability == "" {
-		params.Availability = "open"
-	}
-	if options.CursorID != "" {
-		params.CursorID, err = data.UUID(options.CursorID)
-		if err != nil {
-			return dto.JobPage{}, ErrInvalidID
-		}
-		params.CursorTime = pgtype.Timestamptz{Time: options.CursorTime, Valid: true}
-	}
+	var companyID pgtype.UUID
 	if options.CompanyID != "" {
-		params.CompanyID, err = data.UUID(options.CompanyID)
-		if err != nil {
+		if companyID, err = data.UUID(options.CompanyID); err != nil {
 			return dto.JobPage{}, ErrInvalidID
 		}
 	}
-	rows, err := s.queries.PageJobs(ctx, params)
-	if err != nil {
-		return dto.JobPage{}, fmt.Errorf("store.Page: %w", err)
+	now := options.Now
+	if now.IsZero() {
+		now = time.Now()
 	}
-	page := dto.JobPage{Items: make([]dto.Job, len(rows))}
-	for i, row := range rows {
-		job, err := toPageJobDTO(row)
+	filters := sqlc.CountJobsParams{
+		UserID:               uid,
+		Now:                  pgtype.Timestamptz{Time: now, Valid: true},
+		ExcludedCompanySlugs: nonNil(options.ExcludedCompanySlugs),
+		CompanyID:            companyID,
+		ScoredOnly:           options.ScoredOnly,
+		Graded:               cmp.Or(options.Graded, "all"),
+		Seen:                 cmp.Or(options.Seen, "all"),
+		NoApplication:        options.NoApplication,
+		Poster:               cmp.Or(string(options.Poster), "all"),
+		FavouriteOnly:        options.FavouriteOnly,
+		Sources:              nonNil(options.Sources),
+		Arrangements:         nonNil(options.Arrangements),
+		SalaryOnly:           options.SalaryOnly,
+		SearchPattern:        likePattern(options.Search),
+		Bands:                nonNil(options.Bands),
+	}
+	if options.ScrapedSince != nil {
+		filters.ScrapedSince = pgtype.Timestamptz{Time: *options.ScrapedSince, Valid: true}
+	}
+	if options.MinSuitability != nil {
+		filters.MinSuitability = pgtype.Int4{Int32: *options.MinSuitability, Valid: true}
+	}
+	if options.SalaryMin != nil {
+		filters.SalaryFloor = pgtype.Float8{Float64: *options.SalaryMin, Valid: true}
+	}
+	if options.SalaryMax != nil {
+		filters.SalaryCeiling = pgtype.Float8{Float64: *options.SalaryMax, Valid: true}
+	}
+
+	g, gctx := errgroup.WithContext(ctx)
+	var page dto.JobPage
+	g.Go(func() error {
+		rows, err := s.queries.PageJobs(gctx, sqlc.PageJobsParams{
+			UserID: filters.UserID, Now: filters.Now, ExcludedCompanySlugs: filters.ExcludedCompanySlugs,
+			CompanyID: filters.CompanyID, ScoredOnly: filters.ScoredOnly, MinSuitability: filters.MinSuitability,
+			Graded: filters.Graded, Seen: filters.Seen, NoApplication: filters.NoApplication, Poster: filters.Poster, FavouriteOnly: filters.FavouriteOnly,
+			Sources: filters.Sources, Arrangements: filters.Arrangements, SalaryOnly: filters.SalaryOnly,
+			SalaryFloor: filters.SalaryFloor, SalaryCeiling: filters.SalaryCeiling, SearchPattern: filters.SearchPattern,
+			Bands: filters.Bands, ScrapedSince: filters.ScrapedSince,
+			Sort: string(options.Sort), PageOffset: options.Offset, PageLimit: options.Limit,
+		})
 		if err != nil {
-			return dto.JobPage{}, fmt.Errorf("store.Page: %w", err)
+			return fmt.Errorf("page jobs: %w", err)
 		}
-		page.Items[i] = job
+		page.Items = make([]dto.Job, len(rows))
+		for i, row := range rows {
+			job, err := toPageJobDTO(row)
+			if err != nil {
+				return fmt.Errorf("page jobs: %w", err)
+			}
+			page.Items[i] = job
+		}
+		return s.attachListings(gctx, page.Items, rows)
+	})
+	if !options.SkipTotal {
+		g.Go(func() error {
+			total, err := s.queries.CountJobs(gctx, filters)
+			if err != nil {
+				return fmt.Errorf("count jobs: %w", err)
+			}
+			page.Total = new(int(total))
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return dto.JobPage{}, err
 	}
 	return page, nil
+}
+
+func (s *Store) JobStats(ctx context.Context, userID string, options dto.JobStatsOptions) (dto.JobStats, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobStats{}, ErrInvalidID
+	}
+	row, err := s.queries.JobStats(ctx, sqlc.JobStatsParams{
+		UserID:               uid,
+		Now:                  pgtype.Timestamptz{Time: options.Now, Valid: true},
+		DayStart:             pgtype.Timestamptz{Time: options.DayStart, Valid: true},
+		ExcludedCompanySlugs: nonNil(options.ExcludedCompanySlugs),
+	})
+	if err != nil {
+		return dto.JobStats{}, fmt.Errorf("job stats: %w", err)
+	}
+	return dto.JobStats{
+		Total:        int(row.Total),
+		Sources:      int(row.Sources),
+		NewToday:     int(row.NewToday),
+		TodaySources: int(row.TodaySources),
+	}, nil
+}
+
+func (s *Store) JobInsightGroups(ctx context.Context, userID string, options dto.JobInsightsOptions) ([]dto.JobInsightGroup, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, ErrInvalidID
+	}
+	rows, err := s.queries.JobInsightGroups(ctx, sqlc.JobInsightGroupsParams{
+		UserID:               uid,
+		Now:                  pgtype.Timestamptz{Time: options.Now, Valid: true},
+		Tz:                   options.TZ,
+		ExcludedCompanySlugs: nonNil(options.ExcludedCompanySlugs),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("job insight groups: %w", err)
+	}
+	groups := make([]dto.JobInsightGroup, len(rows))
+	for i, row := range rows {
+		groups[i] = dto.JobInsightGroup{
+			Day:       row.Day,
+			Source:    row.Source,
+			ScoreBand: int(row.ScoreBand),
+			FoundBy:   row.FoundBy,
+			Jobs:      int(row.Jobs),
+			Scored:    int(row.Scored),
+			ScoreSum:  int(row.ScoreSum),
+		}
+	}
+	return groups, nil
+}
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+func likePattern(search string) string {
+	if search = strings.TrimSpace(search); search == "" {
+		return ""
+	}
+	return "%" + likeEscaper.Replace(search) + "%"
 }
 
 func (s *Store) GetJob(ctx context.Context, jobID, userID string) (dto.Job, error) {
@@ -154,6 +256,38 @@ func (s *Store) GetJob(ctx context.Context, jobID, userID string) (dto.Job, erro
 	return job, nil
 }
 
+func (s *Store) FindJobByPosting(ctx context.Context, rawURL, source, token, postingID string) (dto.Job, error) {
+	if normalized, err := normalizeJobURL(rawURL); err == nil {
+		rawURL = normalized
+	}
+	row, err := s.queries.FindJobByPosting(ctx, sqlc.FindJobByPostingParams{
+		Url: rawURL, Source: source, Token: token, PostingID: postingID,
+	})
+	if err != nil {
+		return dto.Job{}, data.QueryErr("FindJobByPosting", err)
+	}
+	return dto.Job{
+		ID:                 row.ID.String(),
+		Title:              row.Title,
+		Location:           row.Location,
+		URL:                row.Url,
+		CompanySlug:        row.CompanySlug,
+		CompanyID:          row.CompanyID.String(),
+		BoardID:            row.PrimaryBoardID.String(),
+		ProviderPostingID:  row.ProviderPostingID.String,
+		ContentFingerprint: row.ContentFingerprint.String,
+		Source:             row.Source,
+		PostedAt:           data.TimePtr(row.PostedAt),
+		PostedAfter:        data.TimePtr(row.PostedAfter),
+		RepostedAt:         data.TimePtr(row.RepostedAt),
+		ScrapedAt:          row.ScrapedAt.Time,
+		FirstDiscoveredAt:  row.FirstDiscoveredAt.Time,
+		Description:        row.Description,
+		SalaryRaw:          row.SalaryRaw,
+		WorkArrangement:    row.WorkArrangement,
+	}, nil
+}
+
 func (s *Store) ListJobListings(ctx context.Context, jobID string) ([]dto.JobListing, error) {
 	jid, err := data.UUID(jobID)
 	if err != nil {
@@ -168,6 +302,29 @@ func (s *Store) ListJobListings(ctx context.Context, jobID string) ([]dto.JobLis
 		listings[i] = dto.JobListing{Source: row.Source, URL: row.NormalizedUrl, FirstSeenAt: row.FirstSeenAt.Time}
 	}
 	return listings, nil
+}
+
+func (s *Store) attachListings(ctx context.Context, jobs []dto.Job, rows []sqlc.PageJobsRow) error {
+	if len(jobs) == 0 {
+		return nil
+	}
+	ids := make([]pgtype.UUID, len(rows))
+	for i, row := range rows {
+		ids[i] = row.ID
+	}
+	listings, err := s.queries.ListJobListingsForJobs(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("list job listings: %w", err)
+	}
+	byJob := make(map[string][]dto.JobListing, len(jobs))
+	for _, l := range listings {
+		id := l.JobID.String()
+		byJob[id] = append(byJob[id], dto.JobListing{Source: l.Source, URL: l.NormalizedUrl, FirstSeenAt: l.FirstSeenAt.Time})
+	}
+	for i := range jobs {
+		jobs[i].Listings = byJob[jobs[i].ID]
+	}
+	return nil
 }
 
 func (s *Store) MarkJobsSeen(ctx context.Context, userID string, jobIDs []string, seen bool) error {
@@ -223,6 +380,14 @@ func jobFingerprint(job dto.Job) string {
 	return fmt.Sprintf("%x", sha256.Sum256(content))
 }
 
+func salaryBounds(raw string) (lo, hi pgtype.Float8) {
+	floor, ceiling, ok := salary.Parse(raw)
+	if !ok {
+		return lo, hi
+	}
+	return pgtype.Float8{Float64: floor, Valid: true}, pgtype.Float8{Float64: ceiling, Valid: true}
+}
+
 func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error) {
 	normalizedURL, err := normalizeJobURL(job.URL)
 	if err != nil {
@@ -240,7 +405,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	}
 	postingID := data.Text(job.ProviderPostingID)
 	fingerprint := pgtype.Text{String: job.ContentFingerprint, Valid: true}
-	updatedAt := pgtype.Timestamptz{Time: job.UpdatedAt, Valid: true}
+	postedAt := data.Timestamptz(job.PostedAt)
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -263,16 +428,40 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return dto.Job{}, "", fmt.Errorf("find canonical job: %w", err)
 	}
+	ownedByOtherSource := false
 	if previous.PrimaryBoardID.Valid && boardID.Valid &&
 		(previous.PrimaryBoardID != boardID || previous.ProviderPostingID != postingID) {
-		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another trusted posting", ErrCanonicalConflict)
+		if previous.PrimaryBoardID == boardID {
+			reclaimed, reclaimErr := reclaimURLFromAlias(ctx, queries, previous, normalizedURL)
+			if reclaimErr != nil {
+				return dto.Job{}, "", reclaimErr
+			}
+			if !reclaimed {
+				return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another trusted posting", ErrCanonicalConflict)
+			}
+			previous, err = sqlc.FindCanonicalJobRow{}, pgx.ErrNoRows
+		} else {
+			retired, retireErr := s.retireAliasBoard(ctx, queries, previous.PrimaryBoardID, boardID)
+			if retireErr != nil {
+				return dto.Job{}, "", retireErr
+			}
+			if retired {
+				if err := tx.Commit(ctx); err != nil {
+					return dto.Job{}, "", fmt.Errorf("commit board retirement: %w", err)
+				}
+				job.ID, job.URL = previous.ID.String(), previous.Url
+				return job, "unchanged", nil
+			}
+			ownedByOtherSource = true
+		}
 	}
 
+	salaryMin, salaryMax := salaryBounds(job.SalaryRaw)
 	matchTitle := jobmatch.Title(job.Title)
 	matchLocation := jobmatch.Location(job.Location)
 	trusted := boardID.Valid && postingID.Valid
-	isSecondaryListing := err == nil && previous.Url != normalizedURL &&
-		(!trusted || previous.PrimaryBoardID != boardID || previous.ProviderPostingID != postingID)
+	isSecondaryListing := err == nil && (ownedByOtherSource || previous.Url != normalizedURL &&
+		(!trusted || previous.PrimaryBoardID != boardID || previous.ProviderPostingID != postingID))
 
 	status := "new"
 	var jobID pgtype.UUID
@@ -297,7 +486,8 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			jobID = match.ID
 			err = queries.UpgradeCanonicalJob(ctx, sqlc.UpgradeCanonicalJobParams{
 				Title: job.Title, Location: job.Location, Url: job.URL, Source: job.Source,
-				UpdatedAt: updatedAt, Description: job.Description, SalaryRaw: job.SalaryRaw,
+				PostedAt: postedAt, Description: job.Description, SalaryRaw: job.SalaryRaw,
+				SalaryMin: salaryMin, SalaryMax: salaryMax,
 				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
 				MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
 				MatchLocation: pgtype.Text{String: matchLocation, Valid: true},
@@ -308,10 +498,19 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			}
 			break
 		}
+		cardDate, err := candidatePostedAt(ctx, queries, job, matchTitle, matchLocation)
+		if err != nil {
+			return dto.Job{}, "", err
+		}
+		if cardDate != nil && (job.PostedAt == nil || cardDate.Before(*job.PostedAt)) {
+			job.PostedAt = cardDate
+			postedAt = data.Timestamptz(cardDate)
+		}
 		jobID, err = queries.InsertCanonicalJob(ctx, sqlc.InsertCanonicalJobParams{
 			Title: job.Title, Location: job.Location, Url: job.URL, CompanySlug: job.CompanySlug,
-			Source: job.Source, UpdatedAt: updatedAt, Description: job.Description,
-			SalaryRaw: job.SalaryRaw, WorkArrangement: job.WorkArrangement,
+			Source: job.Source, PostedAt: postedAt, Description: job.Description,
+			SalaryRaw: job.SalaryRaw, SalaryMin: salaryMin, SalaryMax: salaryMax,
+			WorkArrangement: job.WorkArrangement, DiscoveredVia: job.DiscoveredVia,
 			CompanyID: companyID, BoardID: boardID, PostingID: postingID, Fingerprint: fingerprint,
 			MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
 			MatchLocation: pgtype.Text{String: matchLocation, Valid: true},
@@ -332,13 +531,14 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			status = "unchanged"
 			err = queries.UpdateUnchangedCanonicalJob(ctx, sqlc.UpdateUnchangedCanonicalJobParams{
 				CompanyID: companyID, CompanySlug: job.CompanySlug, BoardID: boardID, PostingID: postingID,
-				Fingerprint: fingerprint, ID: jobID,
+				Fingerprint: fingerprint, PostedAt: postedAt, ID: jobID,
 			})
 		} else {
 			status = "changed"
 			err = queries.UpdateChangedCanonicalJob(ctx, sqlc.UpdateChangedCanonicalJobParams{
-				Title: job.Title, Location: job.Location, UpdatedAt: updatedAt,
+				Title: job.Title, Location: job.Location, PostedAt: postedAt,
 				Description: job.Description, SalaryRaw: job.SalaryRaw,
+				SalaryMin: salaryMin, SalaryMax: salaryMax,
 				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
 				CompanyID: companyID, CompanySlug: job.CompanySlug, BoardID: boardID, PostingID: postingID, ID: jobID,
 			})
@@ -359,6 +559,9 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	if rows != 1 {
 		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another canonical job", ErrCanonicalConflict)
 	}
+	if err := saveDiscoveryAlias(ctx, queries, jobID, job); err != nil {
+		return dto.Job{}, "", err
+	}
 	if status == "new" || status == "changed" || status == "upgraded" {
 		if err := s.scoring.JobsChanged(ctx, tx, []string{id}, status == "new"); err != nil {
 			return dto.Job{}, "", fmt.Errorf("scoring.JobsChanged: %w", err)
@@ -371,23 +574,157 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	return job, status, nil
 }
 
+func reclaimURLFromAlias(ctx context.Context, queries *sqlc.Queries, owner sqlc.FindCanonicalJobRow, normalizedURL string) (bool, error) {
+	if owner.Url == normalizedURL {
+		return false, nil
+	}
+	alias, err := queries.GetJobURLAlias(ctx, normalizedURL)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("find job URL alias: %w", err)
+	}
+	if role, _ := sourcespec.SourceRole(alias.Source); alias.JobID != owner.ID || role == sourcespec.RoleATS {
+		return false, nil
+	}
+	if err := queries.DeleteJobURLAlias(ctx, sqlc.DeleteJobURLAliasParams{NormalizedUrl: normalizedURL, JobID: owner.ID}); err != nil {
+		return false, fmt.Errorf("delete job URL alias: %w", err)
+	}
+	return true, nil
+}
+
+func (s *Store) retireAliasBoard(ctx context.Context, queries *sqlc.Queries, ownerID, duplicateID pgtype.UUID) (bool, error) {
+	owner, err := queries.GetBoardIdentity(ctx, ownerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("get owner board: %w", err)
+	}
+	duplicate, err := queries.GetBoardIdentity(ctx, duplicateID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("get duplicate board: %w", err)
+	}
+	if owner.Source != duplicate.Source {
+		return false, nil
+	}
+	if err := queries.RehomeBoardJobs(ctx, sqlc.RehomeBoardJobsParams{OwnerID: ownerID, DuplicateID: duplicateID}); err != nil {
+		return false, fmt.Errorf("rehome board jobs: %w", err)
+	}
+	if err := queries.MoveBoardObservations(ctx, sqlc.MoveBoardObservationsParams{OwnerID: ownerID, DuplicateID: duplicateID}); err != nil {
+		return false, fmt.Errorf("move board observations: %w", err)
+	}
+	if err := queries.DeleteBoardObservations(ctx, duplicateID); err != nil {
+		return false, fmt.Errorf("delete board observations: %w", err)
+	}
+	if err := queries.RetireDuplicateBoard(ctx, duplicateID); err != nil {
+		return false, fmt.Errorf("retire duplicate board: %w", err)
+	}
+	s.log.WarnContext(ctx, "retired duplicate board",
+		slog.String("source", owner.Source),
+		slog.String("owner_board_id", ownerID.String()), slog.String("owner_token", owner.BoardToken),
+		slog.String("duplicate_board_id", duplicateID.String()), slog.String("duplicate_token", duplicate.BoardToken))
+	return true, nil
+}
+
+func saveDiscoveryAlias(ctx context.Context, queries *sqlc.Queries, jobID pgtype.UUID, job dto.Job) error {
+	if job.DiscoveredVia == "" || job.DiscoveryURL == "" {
+		return nil
+	}
+	listingURL, err := normalizeJobURL(job.DiscoveryURL)
+	if err == nil {
+		_, err = queries.SaveCanonicalJobAlias(ctx, sqlc.SaveCanonicalJobAliasParams{
+			Column1: jobID, NormalizedUrl: listingURL, Source: job.DiscoveredVia,
+		})
+	}
+	if err != nil {
+		return fmt.Errorf("save discovery listing URL: %w", err)
+	}
+	return nil
+}
+
 func findMatch(ctx context.Context, queries *sqlc.Queries, job dto.Job, companyID pgtype.UUID, matchTitle, matchLocation string, trusted bool) (sqlc.FindMatchCandidatesRow, bool, error) {
+	candidates, err := matchingJobs(ctx, queries, job, companyID, matchTitle, matchLocation, trusted)
+	if err != nil || len(candidates) != 1 {
+		return sqlc.FindMatchCandidatesRow{}, false, err
+	}
+	return candidates[0], true, nil
+}
+
+func matchingJobs(ctx context.Context, queries *sqlc.Queries, job dto.Job, companyID pgtype.UUID, matchTitle, matchLocation string, trusted bool) ([]sqlc.FindMatchCandidatesRow, error) {
 	if err := queries.LockCanonicalJob(ctx, "match:"+job.CompanySlug+"|"+matchTitle); err != nil {
-		return sqlc.FindMatchCandidatesRow{}, false, fmt.Errorf("lock match: %w", err)
+		return nil, fmt.Errorf("lock match: %w", err)
 	}
 	candidates, err := queries.FindMatchCandidates(ctx, sqlc.FindMatchCandidatesParams{
 		MatchTitle: pgtype.Text{String: matchTitle, Valid: true}, CompanySlug: job.CompanySlug, CompanyID: companyID,
 	})
 	if err != nil {
-		return sqlc.FindMatchCandidatesRow{}, false, fmt.Errorf("find match candidates: %w", err)
+		return nil, fmt.Errorf("find match candidates: %w", err)
 	}
-	candidates = slices.DeleteFunc(candidates, func(c sqlc.FindMatchCandidatesRow) bool {
+	return slices.DeleteFunc(candidates, func(c sqlc.FindMatchCandidatesRow) bool {
 		return (trusted && c.PrimaryBoardID.Valid) || !jobmatch.LocationsCompatible(matchLocation, c.MatchLocation)
-	})
-	if len(candidates) != 1 {
-		return sqlc.FindMatchCandidatesRow{}, false, nil
+	}), nil
+}
+
+func (s *Store) ApplyBoardCards(ctx context.Context, source string, cards []dto.Job) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin board card dates: %w", err)
 	}
-	return candidates[0], true, nil
+	defer func() { _ = tx.Rollback(ctx) }()
+	queries := s.queries.WithTx(tx)
+
+	for _, card := range cards {
+		if card.PostedAt == nil || card.URL == "" {
+			continue
+		}
+		matches, err := matchingJobs(ctx, queries, card, pgtype.UUID{}, jobmatch.Title(card.Title), jobmatch.Location(card.Location), false)
+		if err != nil {
+			return err
+		}
+		switch len(matches) {
+		case 0:
+			normalized, err := NormalizeCandidateURL(card.URL)
+			if err != nil {
+				return err
+			}
+			if err := queries.UpsertBoardCardDate(ctx, sqlc.UpsertBoardCardDateParams{
+				NormalizedUrl: normalized, Source: source, CardTitle: card.Title, CardCompany: card.CompanySlug,
+				CardLocation: card.Location, PostedAt: data.Timestamptz(card.PostedAt),
+			}); err != nil {
+				return fmt.Errorf("upsert board card candidate: %w", err)
+			}
+		case 1:
+			if err := queries.ApplyPostedDate(ctx, sqlc.ApplyPostedDateParams{PostedAt: data.Timestamptz(card.PostedAt), ID: matches[0].ID}); err != nil {
+				return fmt.Errorf("apply board card date: %w", err)
+			}
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit board card dates: %w", err)
+	}
+	return nil
+}
+
+func candidatePostedAt(ctx context.Context, queries *sqlc.Queries, job dto.Job, matchTitle, matchLocation string) (*time.Time, error) {
+	rows, err := queries.ListDatedCandidatesForCompany(ctx, job.CompanySlug)
+	if err != nil {
+		return nil, fmt.Errorf("list dated candidates: %w", err)
+	}
+	var earliest *time.Time
+	for _, row := range rows {
+		if jobmatch.Title(row.CardTitle) != matchTitle || !jobmatch.LocationsCompatible(matchLocation, jobmatch.Location(row.CardLocation)) {
+			continue
+		}
+		if earliest == nil || row.PostedAt.Time.Before(*earliest) {
+			earliest = &row.PostedAt.Time
+		}
+	}
+	return earliest, nil
 }
 
 func (s *Store) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error) {
@@ -398,6 +735,7 @@ func (s *Store) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Com
 		AtsToken:          data.Text(c.ATSToken),
 		Domain:            data.Text(c.Domain),
 		LinkedinCompanyID: data.Text(c.LinkedInCompanyID),
+		Kind:              string(c.Kind),
 	})
 	if err != nil {
 		return dto.Company{}, fmt.Errorf("store.UpsertCompany: %w", err)
@@ -429,6 +767,8 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 		FavouriteOnly: options.FavouriteOnly,
 		NoBoardOnly:   options.NoBoardOnly,
 		Sort:          string(options.Sort),
+		Poster:        string(options.Poster),
+		AtsSources:    options.ATSSources,
 		PageLimit:     options.Limit,
 		PageOffset:    options.Offset,
 	})
@@ -441,11 +781,27 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 		page.Items[i] = toCompanyForUserDTO(sqlc.GetCompanyForUserRow{
 			ID: r.ID, Slug: r.Slug, Name: r.Name, AtsSource: r.AtsSource, AtsToken: r.AtsToken,
 			Domain: r.Domain, LinkedinCompanyID: r.LinkedinCompanyID, LastCrawledAt: r.LastCrawledAt,
-			FirstSeenAt: r.FirstSeenAt, JobCount: r.JobCount, Tracked: r.Tracked, Favourite: r.Favourite,
+			FirstSeenAt: r.FirstSeenAt, Kind: r.Kind, JobCount: r.JobCount, Tracked: r.Tracked, Favourite: r.Favourite,
 			ReviewState: r.ReviewState, CheckIntervalMinutes: r.CheckIntervalMinutes, LastCheckedAt: r.LastCheckedAt,
 		})
 	}
+	page.AllCompanies, page.VerifiedBoardCompanies, err = s.coverage.get(ctx, s.queries)
+	if err != nil {
+		return dto.CompanyPage{}, fmt.Errorf("store.PageCompaniesForUser coverage: %w", err)
+	}
 	return page, nil
+}
+
+func (s *Store) CountCompaniesByATS(ctx context.Context) ([]dto.ATSCount, error) {
+	rows, err := s.queries.CountCompaniesByATS(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store.CountCompaniesByATS: %w", err)
+	}
+	counts := make([]dto.ATSCount, len(rows))
+	for i, r := range rows {
+		counts[i] = dto.ATSCount{Source: r.Source, Companies: int(r.Companies)}
+	}
+	return counts, nil
 }
 
 func (s *Store) GetCompanyForUser(ctx context.Context, userID, id string) (dto.Company, error) {
@@ -502,18 +858,30 @@ func (s *Store) ListTrackedCompaniesForUser(ctx context.Context, userID string) 
 	return out, nil
 }
 
-func (s *Store) ListNewCompanies(ctx context.Context, userID string) ([]dto.NewCompany, error) {
+func (s *Store) ListNewCompanies(ctx context.Context, userID string, limit, offset int32) (dto.NewCompanyPage, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
-		return nil, err
+		return dto.NewCompanyPage{}, err
 	}
-	rows, err := s.queries.ListNewCompaniesForUser(ctx, uid)
+	total, err := s.queries.CountNewCompaniesForUser(ctx, uid)
 	if err != nil {
-		return nil, fmt.Errorf("store.ListNewCompanies: %w", err)
+		return dto.NewCompanyPage{}, fmt.Errorf("store.ListNewCompanies count: %w", err)
 	}
-	boardRows, err := s.queries.ListTrackedCompanyBoards(ctx, uid)
+	rows, err := s.queries.ListNewCompaniesForUser(ctx, sqlc.ListNewCompaniesForUserParams{UserID: uid, PageLimit: limit, PageOffset: offset})
 	if err != nil {
-		return nil, fmt.Errorf("store.ListNewCompanies boards: %w", err)
+		return dto.NewCompanyPage{}, fmt.Errorf("store.ListNewCompanies: %w", err)
+	}
+	page := dto.NewCompanyPage{Items: make([]dto.NewCompany, len(rows)), Total: int(total)}
+	if len(rows) == 0 {
+		return page, nil
+	}
+	ids := make([]pgtype.UUID, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	boardRows, err := s.queries.ListBoardsForCompanies(ctx, ids)
+	if err != nil {
+		return dto.NewCompanyPage{}, fmt.Errorf("store.ListNewCompanies boards: %w", err)
 	}
 	boards := make(map[string][]dto.TrackedBoard, len(rows))
 	for _, b := range boardRows {
@@ -522,27 +890,26 @@ func (s *Store) ListNewCompanies(ctx context.Context, userID string) ([]dto.NewC
 			ID: b.ID.String(), Source: b.Source, BoardToken: b.BoardToken, Status: dto.BoardStatus(b.Status),
 		})
 	}
-	profileRows, err := s.queries.ListNewCompanyProfiles(ctx, uid)
+	profileRows, err := s.queries.ListNewCompanyProfiles(ctx, sqlc.ListNewCompanyProfilesParams{UserID: uid, CompanyIds: ids})
 	if err != nil {
-		return nil, fmt.Errorf("store.ListNewCompanies profiles: %w", err)
+		return dto.NewCompanyPage{}, fmt.Errorf("store.ListNewCompanies profiles: %w", err)
 	}
 	profiles := make(map[string]*dto.CompanyProfile, len(profileRows))
 	for _, p := range profileRows {
 		var profile dto.CompanyProfile
 		if err := json.Unmarshal(p.Data, &profile); err != nil {
-			return nil, fmt.Errorf("store.ListNewCompanies profile: %w", err)
+			return dto.NewCompanyPage{}, fmt.Errorf("store.ListNewCompanies profile: %w", err)
 		}
 		profiles[p.CompanyID.String()] = &profile
 	}
-	out := make([]dto.NewCompany, len(rows))
 	for i, r := range rows {
 		id := r.ID.String()
-		out[i] = dto.NewCompany{ID: id, Name: r.Name, Slug: r.Slug, Boards: []dto.TrackedBoard{}, Profile: profiles[id]}
+		page.Items[i] = dto.NewCompany{ID: id, Name: r.Name, Slug: r.Slug, Boards: []dto.TrackedBoard{}, Profile: profiles[id]}
 		if b, ok := boards[id]; ok {
-			out[i].Boards = b
+			page.Items[i].Boards = b
 		}
 	}
-	return out, nil
+	return page, nil
 }
 
 func (s *Store) SaveCompanyProfile(ctx context.Context, companyID, source string, profile dto.CompanyProfile) error {
@@ -560,12 +927,16 @@ func (s *Store) SaveCompanyProfile(ctx context.Context, companyID, source string
 	return nil
 }
 
-func (s *Store) ListNewCompanyJobs(ctx context.Context, userID string) ([]dto.Job, error) {
+func (s *Store) ListNewCompanyJobs(ctx context.Context, userID string, companyIDs []string) ([]dto.Job, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.queries.ListNewCompanyJobs(ctx, uid)
+	ids, err := data.UUIDs(companyIDs)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListNewCompanyJobs(ctx, sqlc.ListNewCompanyJobsParams{UserID: uid, CompanyIds: ids})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListNewCompanyJobs: %w", err)
 	}
@@ -714,6 +1085,35 @@ func (s *Store) SetCompanyReviewState(ctx context.Context, userID, companyID, st
 	}, nil
 }
 
+func (s *Store) SetCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) error {
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return ErrInvalidID
+	}
+	n, err := s.queries.SetCompanyKind(ctx, sqlc.SetCompanyKindParams{ID: cid, Kind: string(kind)})
+	if err != nil {
+		return fmt.Errorf("store.SetCompanyKind: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error) {
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return false, ErrInvalidID
+	}
+	n, err := s.queries.SuggestCompanyKind(ctx, sqlc.SuggestCompanyKindParams{ID: cid, Kind: string(kind)})
+	if err != nil {
+		return false, fmt.Errorf("store.SuggestCompanyKind: %w", err)
+	}
+	return n > 0, nil
+}
+
+const favouriteCheckIntervalMinutes = 60
+
 func (s *Store) SetCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) error {
 	uid, err := data.UUID(userID)
 	if err != nil {
@@ -733,17 +1133,51 @@ func (s *Store) SetCompanyFavourite(ctx context.Context, userID, companyID strin
 		if err := queries.AddCompanyFavourite(ctx, sqlc.AddCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
 			return fmt.Errorf("store.SetCompanyFavourite: %w", err)
 		}
-		if err := queries.KeepNewTrackedCompany(ctx, sqlc.KeepNewTrackedCompanyParams{UserID: uid, CompanyID: cid}); err != nil {
-			return fmt.Errorf("store.SetCompanyFavourite keep: %w", err)
+		boards, err := queries.ListCompanyBoards(ctx, cid)
+		if err != nil {
+			return fmt.Errorf("store.SetCompanyFavourite boards: %w", err)
 		}
-	} else if err := queries.RemoveCompanyFavourite(ctx, sqlc.RemoveCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
-		return fmt.Errorf("store.SetCompanyFavourite: %w", err)
+		if slices.ContainsFunc(boards, isVerifiedATSBoard) {
+			if err := s.trackFavourite(ctx, tx, queries, userID, companyID, uid, cid); err != nil {
+				return err
+			}
+		}
+	} else {
+		if err := queries.RemoveCompanyFavourite(ctx, sqlc.RemoveCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
+			return fmt.Errorf("store.SetCompanyFavourite: %w", err)
+		}
+		if err := queries.ResetTrackedCompanyInterval(ctx, sqlc.ResetTrackedCompanyIntervalParams{UserID: uid, CompanyID: cid}); err != nil {
+			return fmt.Errorf("store.SetCompanyFavourite reset interval: %w", err)
+		}
 	}
 	if err := s.scoring.CompanyFavouriteChanged(ctx, tx, userID, companyID); err != nil {
 		return fmt.Errorf("scoring.CompanyFavouriteChanged: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit company favourite: %w", err)
+	}
+	return nil
+}
+
+func isVerifiedATSBoard(b sqlc.CompanyBoard) bool {
+	role, ok := sourcespec.SourceRole(b.Source)
+	return ok && role == sourcespec.RoleATS && b.Status == string(dto.BoardVerified)
+}
+
+func (s *Store) trackFavourite(ctx context.Context, tx pgx.Tx, queries *sqlc.Queries, userID, companyID string, uid, cid pgtype.UUID) error {
+	if _, err := queries.SetCompanyTracking(ctx, sqlc.SetCompanyTrackingParams{
+		UserID: uid, CompanyID: cid, Enabled: true, CheckIntervalMinutes: favouriteCheckIntervalMinutes,
+	}); err != nil {
+		return fmt.Errorf("store.SetCompanyFavourite track: %w", err)
+	}
+	if err := queries.KeepNewTrackedCompany(ctx, sqlc.KeepNewTrackedCompanyParams{UserID: uid, CompanyID: cid}); err != nil {
+		return fmt.Errorf("store.SetCompanyFavourite keep: %w", err)
+	}
+	if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
+		return fmt.Errorf("backfill tracked company jobs: %w", err)
+	}
+	if err := s.scoring.CompanyTracked(ctx, tx, userID, companyID); err != nil {
+		return fmt.Errorf("scoring.CompanyTracked: %w", err)
 	}
 	return nil
 }
@@ -781,8 +1215,18 @@ func (s *Store) UpsertCandidateBoard(ctx context.Context, companyID, source, tok
 	if err != nil {
 		return dto.CompanyBoard{}, err
 	}
+	existing, err := s.queries.FindActiveBoardByToken(ctx, sqlc.FindActiveBoardByTokenParams{Source: source, Lower: token})
+	if err == nil {
+		if existing.CompanyID != id {
+			return dto.CompanyBoard{}, ErrBoardConflict
+		}
+		return toCompanyBoardDTO(existing), nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return dto.CompanyBoard{}, fmt.Errorf("store.UpsertCandidateBoard: %w", err)
+	}
 	row, err := s.queries.UpsertCandidateBoard(ctx, sqlc.UpsertCandidateBoardParams{
-		CompanyID: id, Source: source, BoardToken: token,
+		CompanyID: id, Source: source, BoardToken: sourcespec.NormalizeBoardToken(source, token),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.CompanyBoard{}, ErrBoardConflict
@@ -794,7 +1238,7 @@ func (s *Store) UpsertCandidateBoard(ctx context.Context, companyID, source, tok
 }
 
 func (s *Store) GetVerifiedBoardID(ctx context.Context, source, token string) (string, error) {
-	id, err := s.queries.GetVerifiedBoardID(ctx, sqlc.GetVerifiedBoardIDParams{Source: source, BoardToken: token})
+	id, err := s.queries.GetVerifiedBoardID(ctx, sqlc.GetVerifiedBoardIDParams{Source: source, BoardToken: sourcespec.NormalizeBoardToken(source, token)})
 	if err != nil {
 		return "", data.QueryErr("GetVerifiedBoardID", err)
 	}
@@ -802,15 +1246,15 @@ func (s *Store) GetVerifiedBoardID(ctx context.Context, source, token string) (s
 }
 
 func (s *Store) GetBoardCompanyID(ctx context.Context, source, token string) (string, error) {
-	id, err := s.queries.GetBoardCompanyID(ctx, sqlc.GetBoardCompanyIDParams{Source: source, BoardToken: token})
+	id, err := s.queries.GetBoardCompanyID(ctx, sqlc.GetBoardCompanyIDParams{Source: source, BoardToken: sourcespec.NormalizeBoardToken(source, token)})
 	if err != nil {
 		return "", data.QueryErr("GetBoardCompanyID", err)
 	}
 	return id.String(), nil
 }
 
-func (s *Store) ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.CompanyBoard, error) {
-	rows, err := s.queries.ListUntrackedDiscoveredBoards(ctx)
+func (s *Store) ListUntrackedDiscoveredBoards(ctx context.Context, uk bool, ukSince time.Time) ([]dto.CompanyBoard, error) {
+	rows, err := s.queries.ListUntrackedDiscoveredBoards(ctx, sqlc.ListUntrackedDiscoveredBoardsParams{Uk: uk, UkSince: pgtype.Timestamptz{Time: ukSince, Valid: true}})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListUntrackedDiscoveredBoards: %w", err)
 	}
@@ -828,7 +1272,7 @@ func (s *Store) ListVerifiedBoardsBySlug(ctx context.Context, slugs []string) ([
 	}
 	boards := make([]dto.CardBoard, len(rows))
 	for i, row := range rows {
-		boards[i] = dto.CardBoard{CompanySlug: row.Slug, Source: row.Source, BoardToken: row.BoardToken, Tracked: row.Tracked}
+		boards[i] = dto.CardBoard{CompanySlug: row.Slug, Source: row.Source, BoardToken: row.BoardToken, Tracked: row.Tracked, Polled: row.Polled}
 	}
 	return boards, nil
 }
@@ -900,7 +1344,16 @@ func (s *Store) CreateSourceTarget(ctx context.Context, userID, source, value st
 func (s *Store) CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string, window dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error) {
 	return s.createSourceTarget(ctx, "CreateSourceTargetWithRun", userID, source, value, enabled, filters, window, nextRunAt,
 		func(ctx context.Context, p sqlc.CreateSourceTargetParams) (sqlc.SourceTarget, error) {
-			return s.queries.CreateSourceTargetWithRun(ctx, sqlc.CreateSourceTargetWithRunParams(p))
+			var row sqlc.SourceTarget
+			err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+				queries := s.queries.WithTx(tx)
+				var err error
+				if row, err = queries.CreateSourceTargetWithRun(ctx, sqlc.CreateSourceTargetWithRunParams(p)); err != nil {
+					return err
+				}
+				return insertScrapeRun(ctx, queries, row, dto.TriggerManual)
+			})
+			return row, err
 		})
 }
 
@@ -982,7 +1435,15 @@ func (s *Store) StartSourceTargetRun(ctx context.Context, id string, nextRunAt *
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	row, err := s.queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: tid, NextRunAt: timestamptz(nextRunAt)})
+	var row sqlc.SourceTarget
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		queries := s.queries.WithTx(tx)
+		var err error
+		if row, err = queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: tid, NextRunAt: timestamptz(nextRunAt)}); err != nil {
+			return err
+		}
+		return insertScrapeRun(ctx, queries, row, dto.TriggerManual)
+	})
 	if err != nil {
 		return dto.SourceTarget{}, data.QueryErr("StartSourceTargetRun", err)
 	}
@@ -1010,6 +1471,9 @@ func (s *Store) ClaimDueSourceTargets(ctx context.Context, limit int, nextRunAt 
 		started, err := queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: row.ID, NextRunAt: timestamptz(next)})
 		if err != nil {
 			return nil, data.QueryErr("StartSourceTargetRun", err)
+		}
+		if err := insertScrapeRun(ctx, queries, started, dto.TriggerScheduled); err != nil {
+			return nil, err
 		}
 		claimed = append(claimed, toSourceTargetDTO(started))
 	}
@@ -1123,6 +1587,7 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 	queries := s.queries.WithTx(tx)
 
 	out := make([]sourcetargets.Candidate, 0, len(cards))
+	var tally cardTally
 	for _, card := range cards {
 		if card.URL == "" {
 			continue
@@ -1133,8 +1598,13 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		}
 		card.URL = normalized
 		card.Source = target.Source
+		kind, err := queries.ClassifyScrapeCard(ctx, sqlc.ClassifyScrapeCardParams{NormalizedUrl: normalized, SourceTargetID: targetID})
+		if err != nil {
+			return nil, fmt.Errorf("classify scrape card: %w", err)
+		}
+		tally.add(kind)
 		var payload []byte
-		if sourcespec.CardComplete(target.Source) {
+		if sourcespec.CardComplete(target.Source) || card.RemoteCheckURL != "" || card.WorkArrangement != "" {
 			if payload, err = json.Marshal(card); err != nil {
 				return nil, fmt.Errorf("marshal candidate card: %w", err)
 			}
@@ -1142,10 +1612,13 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		id, err := queries.UpsertCandidate(ctx, sqlc.UpsertCandidateParams{
 			NormalizedUrl: normalized, Source: target.Source,
 			CardTitle: card.Title, CardCompany: card.CompanySlug, CardLocation: card.Location,
-			Card: payload,
+			Card: payload, PostedAt: data.Timestamptz(card.PostedAt),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("upsert candidate: %w", err)
+		}
+		if err := applySighting(ctx, queries, normalized, card.PostedAt); err != nil {
+			return nil, err
 		}
 		if err := queries.RecordCandidateDiscovery(ctx, sqlc.RecordCandidateDiscoveryParams{
 			CandidateID: id, SourceTargetID: targetID,
@@ -1154,10 +1627,38 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		}
 		out = append(out, sourcetargets.Candidate{ID: id.String(), URL: normalized, Card: card})
 	}
+	if target.RunID != "" {
+		runID, err := data.UUID(target.RunID)
+		if err != nil {
+			return nil, err
+		}
+		if err := queries.AddScrapeRunCards(ctx, sqlc.AddScrapeRunCardsParams{
+			ID: runID, Listings: tally.total, NewListings: tally.fresh, Elsewhere: tally.elsewhere, RepeatListings: tally.repeat,
+		}); err != nil {
+			return nil, fmt.Errorf("add scrape run cards: %w", err)
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit candidate save: %w", err)
 	}
 	return out, nil
+}
+
+func applySighting(ctx context.Context, queries *sqlc.Queries, normalizedURL string, postedAt *time.Time) error {
+	if postedAt == nil {
+		return nil
+	}
+	jobID, err := queries.FindJobIDByURL(ctx, normalizedURL)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("find job by url: %w", err)
+	}
+	if err := queries.ApplyPostedDate(ctx, sqlc.ApplyPostedDateParams{PostedAt: data.Timestamptz(postedAt), ID: jobID}); err != nil {
+		return fmt.Errorf("apply sighting date: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit int) ([]sourcetargets.Candidate, error) {
@@ -1184,13 +1685,42 @@ func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit i
 	out := make([]sourcetargets.Candidate, 0, len(rows))
 	for _, row := range rows {
 		card := dto.Job{URL: row.NormalizedUrl, Title: row.CardTitle, CompanySlug: row.CardCompany,
-			Location: row.CardLocation, Source: row.Source}
+			Location: row.CardLocation, Source: row.Source, PostedAt: data.TimePtr(row.PostedAt)}
 		if row.Card != nil {
 			if err := json.Unmarshal(row.Card, &card); err != nil {
 				return nil, fmt.Errorf("unmarshal candidate card %s: %w", row.ID, err)
 			}
 		}
 		out = append(out, sourcetargets.Candidate{ID: row.ID.String(), URL: row.NormalizedUrl, Card: card})
+	}
+	return out, nil
+}
+
+func (s *Store) DiscoveryFilters(ctx context.Context, userID string, candidateIDs []string) (map[string][]map[string]string, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]pgtype.UUID, len(candidateIDs))
+	for i, id := range candidateIDs {
+		if ids[i], err = data.UUID(id); err != nil {
+			return nil, err
+		}
+	}
+	rows, err := s.queries.ListCandidateDiscoveryFilters(ctx, sqlc.ListCandidateDiscoveryFiltersParams{CandidateIds: ids, UserID: uid})
+	if err != nil {
+		return nil, fmt.Errorf("query candidate discovery filters: %w", err)
+	}
+	out := make(map[string][]map[string]string, len(candidateIDs))
+	for _, row := range rows {
+		filters := map[string]string{}
+		if len(row.Filters) > 0 {
+			if err := json.Unmarshal(row.Filters, &filters); err != nil {
+				return nil, fmt.Errorf("unmarshal target filters: %w", err)
+			}
+		}
+		id := row.CandidateID.String()
+		out[id] = append(out[id], filters)
 	}
 	return out, nil
 }
@@ -1303,13 +1833,20 @@ func (s *Store) RenameCompany(ctx context.Context, id, name string) error {
 	return nil
 }
 
+func (s *Store) MarkBoardUKJobsSeen(ctx context.Context, source, token string) error {
+	if err := s.queries.MarkBoardUKJobsSeen(ctx, sqlc.MarkBoardUKJobsSeenParams{Source: source, BoardToken: sourcespec.NormalizeBoardToken(source, token)}); err != nil {
+		return fmt.Errorf("store.MarkBoardUKJobsSeen: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) VerifyCompanyBoard(ctx context.Context, companyID, source, token, method, via string) (dto.CompanyBoard, error) {
 	id, err := data.UUID(companyID)
 	if err != nil {
 		return dto.CompanyBoard{}, err
 	}
 	row, err := s.queries.VerifyCompanyBoard(ctx, sqlc.VerifyCompanyBoardParams{
-		CompanyID: id, Source: source, BoardToken: token,
+		CompanyID: id, Source: source, BoardToken: sourcespec.NormalizeBoardToken(source, token),
 		VerificationMethod: pgtype.Text{String: method, Valid: true}, Via: via,
 	})
 	if err != nil {
@@ -1335,6 +1872,39 @@ func (s *Store) ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error) {
 		boards[i] = toBoardPollDTO(row.ID, row.CompanyID, row.CompanySlug, row.Source, row.BoardToken, row.IntervalMinutes)
 	}
 	return boards, nil
+}
+
+func (s *Store) MarkBoardCheckPublished(ctx context.Context, id string) error {
+	boardID, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.MarkBoardCheckPublished(ctx, boardID); err != nil {
+		return fmt.Errorf("store.MarkBoardCheckPublished: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ClearBoardCheckPublished(ctx context.Context, id string) error {
+	boardID, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.ClearBoardCheckPublished(ctx, boardID); err != nil {
+		return fmt.Errorf("store.ClearBoardCheckPublished: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) RetireBoard(ctx context.Context, id string) error {
+	boardID, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.RetireDuplicateBoard(ctx, boardID); err != nil {
+		return fmt.Errorf("store.RetireBoard: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error) {
@@ -1395,21 +1965,21 @@ func (s *Store) FailBoard(ctx context.Context, poll dto.BoardPoll) error {
 	return nil
 }
 
-func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error {
+func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) ([]dto.JobChange, error) {
 	if !snapshot.Complete {
-		return errors.New("incomplete board snapshot")
+		return nil, errors.New("incomplete board snapshot")
 	}
 	poll := snapshot.Poll
 	id, err := data.UUID(poll.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	urls := make([]string, 0, len(snapshot.Jobs))
 	seenURLs := make(map[string]bool, len(snapshot.Jobs))
 	for _, job := range snapshot.Jobs {
 		url, err := normalizeJobURL(job.URL)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !seenURLs[url] {
 			urls = append(urls, url)
@@ -1418,26 +1988,26 @@ func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) e
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("begin board completion: %w", err)
+		return nil, fmt.Errorf("begin board completion: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.queries.WithTx(tx)
 	state, err := q.LockPollState(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrBoardClaimUnavailable
+		return nil, ErrBoardClaimUnavailable
 	}
 	if err != nil {
-		return fmt.Errorf("lock board state: %w", err)
+		return nil, fmt.Errorf("lock board state: %w", err)
 	}
 	if state.LastSnapshotVersion != poll.Version || !state.LeaseOwner.Valid || state.LeaseOwner.String != poll.LeaseOwner || !state.LeaseUntil.Valid || !state.LeaseUntil.Time.After(time.Now()) {
-		return ErrBoardClaimUnavailable
+		return nil, ErrBoardClaimUnavailable
 	}
 	aliases, err := q.FindBoardJobAliases(ctx, urls)
 	if err != nil {
-		return fmt.Errorf("resolve board jobs: %w", err)
+		return nil, fmt.Errorf("resolve board jobs: %w", err)
 	}
 	if len(aliases) != len(urls) {
-		return errors.New("board ingest incomplete: job URL missing")
+		return nil, errors.New("board ingest incomplete: job URL missing")
 	}
 	seenJobs := make(map[pgtype.UUID]bool, len(aliases))
 	for _, alias := range aliases {
@@ -1446,33 +2016,42 @@ func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) e
 		}
 		seenJobs[alias.JobID] = true
 		if err := q.ObserveBoardJob(ctx, sqlc.ObserveBoardJobParams{BoardID: id, JobID: alias.JobID, LastSnapshotVersion: poll.Version}); err != nil {
-			return fmt.Errorf("observe board job: %w", err)
+			return nil, fmt.Errorf("observe board job: %w", err)
 		}
 	}
-	if err := q.ReopenObservedBoardJobs(ctx, sqlc.ReopenObservedBoardJobsParams{BoardID: id, LastSnapshotVersion: poll.Version}); err != nil {
-		return fmt.Errorf("reopen board jobs: %w", err)
+	var changes []dto.JobChange
+	reopened, err := q.ReopenObservedBoardJobs(ctx, sqlc.ReopenObservedBoardJobsParams{BoardID: id, LastSnapshotVersion: poll.Version})
+	if err != nil {
+		return nil, fmt.Errorf("reopen board jobs: %w", err)
+	}
+	for _, jobID := range reopened {
+		changes = append(changes, dto.JobChange{JobID: jobID.String(), Kind: dto.JobChangeReopened})
 	}
 	if len(urls) > 0 || state.ConsecutiveCompleteEmpty >= 1 {
-		if err := q.CloseMissingBoardJobs(ctx, sqlc.CloseMissingBoardJobsParams{PrimaryBoardID: id, LastSnapshotVersion: poll.Version}); err != nil {
-			return fmt.Errorf("close missing board jobs: %w", err)
+		closed, err := q.CloseMissingBoardJobs(ctx, sqlc.CloseMissingBoardJobsParams{PrimaryBoardID: id, LastSnapshotVersion: poll.Version})
+		if err != nil {
+			return nil, fmt.Errorf("close missing board jobs: %w", err)
+		}
+		for _, jobID := range closed {
+			changes = append(changes, dto.JobChange{JobID: jobID.String(), Kind: dto.JobChangeRemoved})
 		}
 	}
 	if len(urls) == 0 && state.ConsecutiveCompleteEmpty >= 1 {
 		if err := q.RetireSupersededBoard(ctx, id); err != nil {
-			return fmt.Errorf("retire board: %w", err)
+			return nil, fmt.Errorf("retire board: %w", err)
 		}
 	}
 	n, err := q.CompletePollState(ctx, sqlc.CompletePollStateParams{Manual: poll.Manual, IntervalMinutes: pollIntervalMinutes(poll, snapshot.NextPollIn), Empty: len(urls) == 0, Reported: int32(snapshot.Reported), Parsed: int32(len(urls)), BoardID: id, LeaseOwner: poll.LeaseOwner, Version: poll.Version})
 	if err != nil {
-		return fmt.Errorf("complete board state: %w", err)
+		return nil, fmt.Errorf("complete board state: %w", err)
 	}
 	if n != 1 {
-		return ErrBoardClaimUnavailable
+		return nil, ErrBoardClaimUnavailable
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit board completion: %w", err)
+		return nil, fmt.Errorf("commit board completion: %w", err)
 	}
-	return nil
+	return changes, nil
 }
 
 func pollIntervalMinutes(poll dto.BoardPoll, hint time.Duration) int32 {

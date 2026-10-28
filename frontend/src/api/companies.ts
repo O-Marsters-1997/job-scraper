@@ -1,21 +1,24 @@
 import type {
 	AddCompanyPayload,
+	ATSCount,
+	CompaniesExclusion,
 	Company,
 	CompanyBoard,
-	CompanyExclusion,
 	CompanyPage,
 	CompanyTracking,
-	NewCompany,
+	NewCompanyPage,
 	ReviewState,
 	TrackedCompany,
 } from "../types/company";
 import {
+	atsCountSchema,
+	companiesExclusionSchema,
+	companiesKindResultSchema,
 	companyBoardSchema,
-	companyExclusionSchema,
 	companyPageSchema,
 	companySchema,
 	companyTrackingSchema,
-	newCompanySchema,
+	newCompanyPageSchema,
 	trackedCompanySchema,
 } from "../types/company";
 import {
@@ -33,13 +36,17 @@ export class UnresolvableBoardError extends Error {
 	}
 }
 
-export type CompanySort = "relevance" | "alphabetical";
+export type CompanySort = "relevance" | "alphabetical" | "open_jobs";
+
+export type CompanyPoster = "agency" | "direct";
 
 export type CompanyPageParams = {
+	poster?: CompanyPoster | undefined;
 	q?: string;
 	tracked?: boolean;
 	favourite?: boolean;
 	noBoard?: boolean;
+	ats?: string[];
 	sort?: CompanySort;
 	offset?: number;
 	limit?: number;
@@ -56,11 +63,20 @@ export async function fetchCompanyPage(
 			if (params.tracked) query.set("tracked", "1");
 			if (params.favourite) query.set("favourite", "1");
 			if (params.noBoard) query.set("no_board", "1");
+			if (params.ats?.length) query.set("ats", params.ats.join(","));
 			if (params.sort) query.set("sort", params.sort);
+			if (params.poster) query.set("poster", params.poster);
 			if (params.offset) query.set("offset", String(params.offset));
 			if (params.limit) query.set("limit", String(params.limit));
 			return apiFetch(`/companies?${query}`, companyPageSchema);
 		},
+	);
+}
+
+export async function fetchCompanyAtsCounts(): Promise<ATSCount[]> {
+	return mocked(
+		(db) => db.getCompanyAtsCounts(),
+		() => apiFetch("/companies/ats-counts", atsCountSchema.array()),
 	);
 }
 
@@ -129,6 +145,21 @@ export async function setCompanyFavourite(
 	);
 }
 
+export async function setCompanyKind(
+	id: string,
+	kind: "agency" | "direct",
+): Promise<Company> {
+	return mocked(
+		(db) => db.setCompanyKind(id, kind),
+		() =>
+			apiFetch(
+				`/companies/${encodeURIComponent(id)}/kind`,
+				companySchema,
+				jsonInit("PUT", { kind }),
+			),
+	);
+}
+
 export async function setCompanyReview(
 	id: string,
 	state: ReviewState,
@@ -144,29 +175,45 @@ export async function setCompanyReview(
 	);
 }
 
-export async function excludeCompany(id: string): Promise<CompanyExclusion> {
+export async function excludeCompanies(
+	ids: string[],
+): Promise<CompaniesExclusion> {
 	return mocked(
-		(db) => db.excludeCompany(id),
+		(db) => db.excludeCompanies(ids),
 		() =>
 			apiFetch(
-				`/companies/${id}/exclusion`,
-				companyExclusionSchema,
-				jsonInit("PUT", {}),
+				"/companies/exclusions",
+				companiesExclusionSchema,
+				jsonInit("POST", { companyIds: ids }),
 			),
 	);
 }
 
-export async function unexcludeCompany(
-	id: string,
-	removeName: boolean,
-): Promise<CompanyExclusion> {
+export async function unexcludeCompanies(
+	companies: { companyId: string; removeName: boolean }[],
+): Promise<CompaniesExclusion> {
 	return mocked(
-		(db) => db.unexcludeCompany(id, removeName),
+		(db) => db.unexcludeCompanies(companies),
 		() =>
 			apiFetch(
-				`/companies/${id}/exclusion/undo`,
-				companyExclusionSchema,
-				jsonInit("POST", { removeName }),
+				"/companies/exclusions/undo",
+				companiesExclusionSchema,
+				jsonInit("POST", { companies }),
+			),
+	);
+}
+
+export async function setCompaniesKind(
+	ids: string[],
+	kind: "agency" | "direct",
+): Promise<{ updated: number }> {
+	return mocked(
+		(db) => db.setCompaniesKind(ids, kind),
+		() =>
+			apiFetch(
+				"/companies/kind",
+				companiesKindResultSchema,
+				jsonInit("PUT", { companyIds: ids, kind }),
 			),
 	);
 }
@@ -210,10 +257,17 @@ export async function fetchTrackedCompanies(): Promise<TrackedCompany[]> {
 	);
 }
 
-export async function fetchNewCompanies(): Promise<NewCompany[]> {
+export async function fetchNewCompanies(
+	page: number,
+	pageSize: number,
+): Promise<NewCompanyPage> {
 	return mocked(
-		(db) => db.getNewCompanies(),
-		() => apiFetch("/companies/new", newCompanySchema.array()),
+		(db) => db.getNewCompanies(page, pageSize),
+		() =>
+			apiFetch(
+				`/companies/new?page=${page}&page_size=${pageSize}`,
+				newCompanyPageSchema,
+			),
 	);
 }
 

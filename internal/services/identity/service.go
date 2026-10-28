@@ -3,12 +3,14 @@ package identity
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store"
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
@@ -16,48 +18,53 @@ import (
 
 const sessionTTL = 30 * 24 * time.Hour
 
-var bcryptCost = bcrypt.DefaultCost
+const bcryptCost = bcrypt.DefaultCost
 
 type Store interface {
 	GetUserByUsername(ctx context.Context, username string) (dto.User, error)
 	CreateUser(ctx context.Context, username, passwordHash, email string) (dto.User, error)
 	CreateUserTx(ctx context.Context, tx pgx.Tx, username, passwordHash, email string) (dto.User, error)
 	Begin(ctx context.Context) (pgx.Tx, error)
-	CreateSession(ctx context.Context, userID string, expiresAt time.Time) (dto.Session, error)
-	GetSession(ctx context.Context, id string) (dto.Session, error)
+	CreateSession(ctx context.Context, userID string, tokenHash []byte, expiresAt time.Time) (dto.Session, error)
+	GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (dto.Session, error)
 	DeleteSession(ctx context.Context, id string) error
 	DeleteExpiredSessions(ctx context.Context) error
 	SetRole(ctx context.Context, username, role string) error
-	SetPasswordHash(ctx context.Context, username, passwordHash string) error
+	SetPasswordHashTx(ctx context.Context, tx pgx.Tx, username, passwordHash string) (userID string, err error)
+	DeleteUserSessionsTx(ctx context.Context, tx pgx.Tx, userID string) error
 	GetProfile(ctx context.Context, userID string) (dto.Profile, error)
 	UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error)
-	UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error
-	GetUserAICredential(ctx context.Context, userID, provider string) (string, error)
-	DeleteUserAICredential(ctx context.Context, userID, provider string) error
+	UpsertUserAICredential(ctx context.Context, userID string, provider dto.Provider, encKey string) error
+	GetUserAICredential(ctx context.Context, userID string, provider dto.Provider) (string, error)
+	DeleteUserAICredential(ctx context.Context, userID string, provider dto.Provider) error
 	ListUserAICredentialProviders(ctx context.Context, userID string) ([]string, error)
 }
 
-// StatusSeeder seeds a new user's default application Statuses inside tx;
-// the applications Module satisfies this (ADR 0011).
-type StatusSeeder interface {
+// Seeder seeds a new user's defaults inside the signup tx; the applications
+// and tasks Modules satisfy this (ADR 0011).
+type Seeder interface {
 	SeedDefaults(ctx context.Context, tx pgx.Tx, userID string) error
 }
 
 type Service struct {
-	store  Store
-	seeder StatusSeeder
-	cipher *tokencrypt.Cipher
-	google googleClient
+	store   Store
+	seeders []Seeder
+	cipher  *tokencrypt.Cipher
+	google  googleClient
+
+	sessionSecret []byte
 
 	keyUsage KeyUsageFetcher
 	now      func() time.Time
 	usage    aiUsageCache
+	attempts *attemptLimiter
 }
 
 func NewService(deps Deps) *Service {
 	s := &Service{
-		store: deps.Store, seeder: deps.Seeder, cipher: deps.Cipher, google: deps.GoogleClient,
+		store: deps.Store, seeders: deps.Seeders, cipher: deps.Cipher, google: deps.GoogleClient,
 		keyUsage: deps.KeyUsage, now: deps.Now,
+		sessionSecret: deps.SessionSecret,
 	}
 	if s.keyUsage == nil {
 		s.keyUsage = newHTTPKeyUsage()
@@ -65,37 +72,93 @@ func NewService(deps Deps) *Service {
 	if s.now == nil {
 		s.now = time.Now
 	}
+	s.attempts = newAttemptLimiter(s.now, userAttemptEvery, userAttemptBurst)
 	return s
 }
 
-func (s *Service) Login(ctx context.Context, username, password string) (dto.Session, dto.User, error) {
-	user, err := s.store.GetUserByUsername(ctx, username)
+var dummyHash = sync.OnceValue(func() []byte {
+	hash, err := bcrypt.GenerateFromPassword([]byte("dummy-password"), bcryptCost)
 	if err != nil {
+		panic(err)
+	}
+	return hash
+})
+
+func (s *Service) allowAttempt(action, username string) error {
+	if !s.attempts.Allow(action + ":" + username) {
+		return apperr.TooManyRequests("too many attempts")
+	}
+	return nil
+}
+
+func (s *Service) Login(ctx context.Context, username, password string) (dto.Session, dto.User, error) {
+	if err := s.allowAttempt("login", username); err != nil {
+		return dto.Session{}, dto.User{}, err
+	}
+	user, err := s.store.GetUserByUsername(ctx, username)
+	switch {
+	case errors.Is(err, data.ErrNotFound):
+		_ = bcrypt.CompareHashAndPassword(dummyHash(), []byte(password))
 		return dto.Session{}, dto.User{}, apperr.Unauthorized("invalid credentials")
+	case err != nil:
+		return dto.Session{}, dto.User{}, err
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return dto.Session{}, dto.User{}, apperr.Unauthorized("invalid credentials")
 	}
-	session, err := s.store.CreateSession(ctx, user.ID, time.Now().Add(sessionTTL))
+	session, err := s.startSession(ctx, user.ID)
 	return session, user, err
 }
 
+func (s *Service) CreateUser(ctx context.Context, in dto.CreateUserInput) (dto.User, error) {
+	if err := validatePassword(in.Password); err != nil {
+		return dto.User{}, err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcryptCost)
+	if err != nil {
+		return dto.User{}, err
+	}
+	return s.store.CreateUser(ctx, in.Username, string(hash), in.Email)
+}
+
 func (s *Service) ResetPassword(ctx context.Context, username, password string) error {
-	if password == "" {
-		return apperr.Invalid("password must not be empty")
+	if err := s.allowAttempt("reset", username); err != nil {
+		return err
+	}
+	if err := validatePassword(password); err != nil {
+		return err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
 		return err
 	}
-	return s.store.SetPasswordHash(ctx, username, string(hash))
+	tx, err := s.store.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	userID, err := s.store.SetPasswordHashTx(ctx, tx, username, string(hash))
+	if err != nil {
+		return err
+	}
+	if err := s.store.DeleteUserSessionsTx(ctx, tx, userID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // Signup creates a user and seeds their default application statuses in
 // one transaction, then starts a session.
 func (s *Service) Signup(ctx context.Context, username, password, email string) (dto.Session, dto.User, error) {
-	if username == "" || password == "" {
+	if err := s.allowAttempt("signup", username); err != nil {
+		return dto.Session{}, dto.User{}, err
+	}
+	if username == "" {
 		return dto.Session{}, dto.User{}, apperr.Invalid("bad request")
+	}
+	if err := validatePassword(password); err != nil {
+		return dto.Session{}, dto.User{}, err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
@@ -115,15 +178,30 @@ func (s *Service) Signup(ctx context.Context, username, password, email string) 
 		}
 		return dto.Session{}, dto.User{}, err
 	}
-	if err := s.seeder.SeedDefaults(ctx, tx, user.ID); err != nil {
-		return dto.Session{}, dto.User{}, err
+	for _, seeder := range s.seeders {
+		if err := seeder.SeedDefaults(ctx, tx, user.ID); err != nil {
+			return dto.Session{}, dto.User{}, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return dto.Session{}, dto.User{}, err
 	}
 
-	session, err := s.store.CreateSession(ctx, user.ID, time.Now().Add(sessionTTL))
+	session, err := s.startSession(ctx, user.ID)
 	return session, user, err
+}
+
+func (s *Service) startSession(ctx context.Context, userID string) (dto.Session, error) {
+	token, err := newSessionToken()
+	if err != nil {
+		return dto.Session{}, err
+	}
+	session, err := s.store.CreateSession(ctx, userID, hashSessionToken(token), s.now().Add(sessionTTL))
+	if err != nil {
+		return dto.Session{}, err
+	}
+	session.Token = token
+	return session, nil
 }
 
 func (s *Service) Logout(ctx context.Context, sessionID string) error {

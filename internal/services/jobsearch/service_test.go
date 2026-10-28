@@ -19,7 +19,7 @@ func seedJobs(t *testing.T, n int) *jobsearchtest.FakeStore {
 	for i := range n {
 		job := dto.Job{
 			Title: "Role", URL: "https://example.com/" + string(rune('a'+i)),
-			ScrapedAt: time.Date(2026, 1, i+1, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Now(),
+			ScrapedAt: time.Date(2026, 1, i+1, 0, 0, 0, 0, time.UTC),
 		}
 		if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
 			t.Fatalf("SaveCanonical(%s) err = %v", job.URL, err)
@@ -34,12 +34,15 @@ func TestList(t *testing.T) {
 			name  string
 			query dto.JobsQuery
 		}{
-			{"limit too large", dto.JobsQuery{Limit: "9999"}},
-			{"cursor not base64", dto.JobsQuery{Cursor: "not-base64"}},
-			{"unknown availability", dto.JobsQuery{Availability: "unknown"}},
-			{"negative since_days", dto.JobsQuery{SinceDays: "-1"}},
-			{"huge since_days", dto.JobsQuery{SinceDays: "2147483647"}},
-			{"non-numeric since_days", dto.JobsQuery{SinceDays: "week"}},
+			{"page zero", dto.JobsQuery{Page: "0"}},
+			{"page not a number", dto.JobsQuery{Page: "next"}},
+			{"page offset overflows", dto.JobsQuery{Page: "2147483647"}},
+			{"page_size zero", dto.JobsQuery{PageSize: "0"}},
+			{"unknown graded", dto.JobsQuery{Graded: "maybe"}},
+			{"unknown seen", dto.JobsQuery{Seen: "maybe"}},
+			{"unknown poster", dto.JobsQuery{Poster: "recruiter"}},
+			{"suit not a number", dto.JobsQuery{Suit: "high"}},
+			{"salary_min not a number", dto.JobsQuery{SalaryMin: "lots"}},
 		}
 		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
 		for _, tt := range tests {
@@ -52,52 +55,77 @@ func TestList(t *testing.T) {
 		}
 	})
 
-	t.Run("windows on updated_at, defaulting to 90 days, 0 for none", func(t *testing.T) {
-		st := jobsearchtest.NewFakeStore()
-		now := time.Now()
-		for url, age := range map[string]int{"https://example.com/fresh": 89, "https://example.com/stale": 91} {
-			job := dto.Job{Title: "Role", URL: url, UpdatedAt: now.AddDate(0, 0, -age), ScrapedAt: now}
-			if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
-				t.Fatalf("SaveCanonical(%s) err = %v", url, err)
-			}
-		}
-		svc := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring())
+	t.Run("pages with offset and total", func(t *testing.T) {
+		t.Parallel()
+		svc := jobsearch.NewService(seedJobs(t, 3), nil, jobsearchtest.NewNoopScoring())
 
 		for _, tt := range []struct {
-			query dto.JobsQuery
-			want  int
+			name      string
+			query     dto.JobsQuery
+			wantItems int
 		}{
-			{dto.JobsQuery{}, 1},
-			{dto.JobsQuery{SinceDays: "0"}, 2},
-			{dto.JobsQuery{SinceDays: "7"}, 0},
+			{"first page", dto.JobsQuery{Page: "1", PageSize: "2"}, 2},
+			{"last page", dto.JobsQuery{Page: "2", PageSize: "2"}, 1},
+			{"past the end", dto.JobsQuery{Page: "9", PageSize: "2"}, 0},
 		} {
-			page, err := svc.List(t.Context(), userID, tt.query)
-			if err != nil {
-				t.Fatalf("List(%+v) err = %v", tt.query, err)
-			}
-			if len(page.Items) != tt.want {
-				t.Errorf("List(%+v) = %d items, want %d", tt.query, len(page.Items), tt.want)
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				page, err := svc.List(t.Context(), userID, tt.query)
+				if err != nil {
+					t.Fatalf("List(%+v) err = %v", tt.query, err)
+				}
+				if len(page.Items) != tt.wantItems || page.Total == nil || *page.Total != 3 {
+					t.Errorf("List(%+v) = %d items, total %v, want %d items, total 3", tt.query, len(page.Items), page.Total, tt.wantItems)
+				}
+			})
+		}
+	})
+
+	t.Run("skip_total=1 leaves the total null", func(t *testing.T) {
+		t.Parallel()
+		svc := jobsearch.NewService(seedJobs(t, 3), nil, jobsearchtest.NewNoopScoring())
+		page, err := svc.List(t.Context(), userID, dto.JobsQuery{Page: "2", PageSize: "2", SkipTotal: "1"})
+		if err != nil {
+			t.Fatalf("List(skip_total=1) err = %v", err)
+		}
+		if len(page.Items) != 1 || page.Total != nil {
+			t.Errorf("List(skip_total=1) = %d items, total %v, want 1 item, nil total", len(page.Items), page.Total)
+		}
+	})
+}
+
+func TestTriageQueue(t *testing.T) {
+	t.Parallel()
+
+	svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
+
+	t.Run("accepts the poster values", func(t *testing.T) {
+		t.Parallel()
+		for _, poster := range []string{"", "direct", "agency"} {
+			if _, err := svc.TriageQueue(t.Context(), userID, dto.TriageQuery{Poster: poster}); err != nil {
+				t.Errorf("TriageQueue(poster=%q) err = %v", poster, err)
 			}
 		}
 	})
 
-	t.Run("paginates", func(t *testing.T) {
-		svc := jobsearch.NewService(seedJobs(t, 3), nil, jobsearchtest.NewNoopScoring())
-
-		page, err := svc.List(t.Context(), userID, dto.JobsQuery{Limit: "2"})
+	t.Run("reports the stack's unseen total", func(t *testing.T) {
+		t.Parallel()
+		page, err := svc.TriageQueue(t.Context(), userID, dto.TriageQuery{Poster: "agency"})
 		if err != nil {
-			t.Fatalf("List(first) err = %v", err)
+			t.Fatalf("TriageQueue(agency) err = %v", err)
 		}
-		if len(page.Items) != 2 || page.NextCursor == "" {
-			t.Fatalf("first page = %+v, want 2 items and a cursor", page)
+		if page.Total == nil {
+			t.Error("TriageQueue(agency) total = nil, want the unseen count")
 		}
+	})
 
-		next, err := svc.List(t.Context(), userID, dto.JobsQuery{Limit: "2", Cursor: page.NextCursor})
-		if err != nil {
-			t.Fatalf("List(next) err = %v", err)
-		}
-		if len(next.Items) != 1 || next.NextCursor != "" {
-			t.Errorf("next page = %+v, want 1 item and no cursor", next)
+	t.Run("rejects any other poster", func(t *testing.T) {
+		t.Parallel()
+		for _, poster := range []string{"all", "recruiter"} {
+			_, err := svc.TriageQueue(t.Context(), userID, dto.TriageQuery{Poster: poster})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("TriageQueue(poster=%q) err = %v, want kind %v", poster, err, apperr.KindInvalid)
+			}
 		}
 	})
 }
@@ -146,38 +174,13 @@ func TestGet(t *testing.T) {
 	})
 }
 
-func TestListScored(t *testing.T) {
-	st := jobsearchtest.NewFakeStore()
-	for i, slug := range []string{"acme", "globex", "initech"} {
-		score := 90 - i
-		job := dto.Job{Title: "Role", URL: "https://example.com/" + slug, CompanySlug: slug, UpdatedAt: time.Now(), SuitabilityScore: &score}
-		if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
-			t.Fatalf("SaveCanonical(%s) err = %v", job.URL, err)
-		}
-	}
-	scoring := jobsearchtest.NewNoopScoring()
-	scoring.SeedSearchConfig(dto.SearchConfig{UserID: userID, ExcludedCompanies: []string{"Globex"}})
-
-	jobs, err := jobsearch.NewService(st, nil, scoring).ListScored(t.Context(), userID)
-	if err != nil {
-		t.Fatalf("ListScored() err = %v", err)
-	}
-	var got []string
-	for _, job := range jobs {
-		got = append(got, job.CompanySlug)
-	}
-	if diff := cmp.Diff([]string{"acme", "initech"}, got); diff != "" {
-		t.Errorf("ListScored() companies (-want +got):\n%s", diff)
-	}
-}
-
 func TestListHidesExcludedCompanies(t *testing.T) {
 	st := jobsearchtest.NewFakeStore()
 	for _, job := range []dto.Job{
 		{Title: "Role", URL: "https://example.com/acme", CompanySlug: "acme"},
 		{Title: "Role", URL: "https://example.com/globex", CompanySlug: "globex"},
 	} {
-		job.ScrapedAt, job.UpdatedAt = time.Now(), time.Now()
+		job.ScrapedAt = time.Now()
 		if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
 			t.Fatalf("SaveCanonical(%s) err = %v", job.URL, err)
 		}
@@ -192,4 +195,90 @@ func TestListHidesExcludedCompanies(t *testing.T) {
 	if len(page.Items) != 1 || page.Items[0].CompanySlug != "globex" {
 		t.Errorf("List() = %+v, want only the globex job", page.Items)
 	}
+}
+
+func TestOverview(t *testing.T) {
+	t.Parallel()
+	svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
+
+	t.Run("rejects a malformed day_start", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.Overview(t.Context(), userID, dto.JobOverviewQuery{DayStart: "today"})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("Overview() err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+
+	t.Run("rejects an unknown ranked value", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.Overview(t.Context(), userID, dto.JobOverviewQuery{Ranked: "false"})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("Overview() err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+
+	t.Run("an empty search returns zero stats and an empty, non-nil top list", func(t *testing.T) {
+		t.Parallel()
+		got, err := svc.Overview(t.Context(), userID, dto.JobOverviewQuery{})
+		if err != nil {
+			t.Fatalf("Overview() err = %v", err)
+		}
+		want := dto.JobOverview{Top: []dto.Job{}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Overview() (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestInsights(t *testing.T) {
+	t.Parallel()
+
+	t.Run("rejects an unknown time zone", func(t *testing.T) {
+		t.Parallel()
+		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
+		_, err := svc.Insights(t.Context(), userID, dto.JobInsightsQuery{TZ: "Mars/Olympus"})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("Insights() err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+
+	t.Run("no jobs returns empty non-nil series", func(t *testing.T) {
+		t.Parallel()
+		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
+		got, err := svc.Insights(t.Context(), userID, dto.JobInsightsQuery{})
+		if err != nil {
+			t.Fatalf("Insights() err = %v", err)
+		}
+		want := dto.JobInsights{
+			Daily: []dto.JobInsightDay{}, Sources: []dto.JobInsightSource{},
+			ScoreBands: []int{0, 0, 0, 0, 0}, FoundBy: []dto.JobInsightFinder{},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Insights() (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("folds groups into the chart series", func(t *testing.T) {
+		t.Parallel()
+		st := jobsearchtest.NewFakeStore()
+		st.SeedInsightGroups(
+			dto.JobInsightGroup{Day: "2026-03-02", Source: "lever", ScoreBand: 4, FoundBy: "wellfound", Jobs: 2, Scored: 2, ScoreSum: 171},
+			dto.JobInsightGroup{Day: "2026-03-01", Source: "lever", ScoreBand: 1, Jobs: 1, Scored: 1, ScoreSum: 30},
+			dto.JobInsightGroup{Day: "2026-03-01", Source: "ashby", ScoreBand: -1, Jobs: 1},
+		)
+		got, err := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring()).Insights(t.Context(), userID, dto.JobInsightsQuery{TZ: "Europe/London"})
+		if err != nil {
+			t.Fatalf("Insights() err = %v", err)
+		}
+		want := dto.JobInsights{
+			Total: 4, Scored: 3,
+			Daily:      []dto.JobInsightDay{{Day: "2026-03-01", Count: 2}, {Day: "2026-03-02", Count: 2}},
+			Sources:    []dto.JobInsightSource{{Source: "lever", Count: 3, Scored: 3, AvgScore: 67}, {Source: "ashby", Count: 1}},
+			ScoreBands: []int{0, 1, 0, 0, 2},
+			FoundBy:    []dto.JobInsightFinder{{Name: "wellfound", Count: 2}},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Insights() (-want +got):\n%s", diff)
+		}
+	})
 }

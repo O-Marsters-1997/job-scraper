@@ -6,29 +6,61 @@ import {
 import {
 	addCompany,
 	addCompanyBoard,
-	type CompanyPageParams,
-	excludeCompany,
+	excludeCompanies,
 	fetchCompany,
+	fetchCompanyAtsCounts,
 	fetchCompanyBoards,
 	fetchCompanyPage,
 	fetchNewCompanies,
 	fetchTrackedCompanies,
+	setCompaniesKind,
 	setCompanyFavourite,
+	setCompanyKind,
 	setCompanyReview,
 	setCompanyTracking,
-	unexcludeCompany,
+	unexcludeCompanies,
 } from "../api/companies";
 import { keys } from "../api/keys";
+import type { CompanyListState } from "../lib/companyFilters";
 import type { CompanyBoard, ReviewState } from "../types/company";
+import { patchJobPages } from "./patchJobPages";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
+import { useServerTable } from "./useServerTable";
 
 export const COMPANY_PAGE_SIZE = 50;
 
-export function useCompanyPages(params: () => CompanyPageParams) {
+export const companyPageQuery = (s: CompanyListState) => ({
+	queryKey: keys.companies.list(s),
+	queryFn: () =>
+		fetchCompanyPage({
+			poster: s.poster,
+			q: s.q,
+			favourite: s.favourite,
+			noBoard: s.noBoard,
+			ats: s.ats,
+			sort: s.sort,
+			offset: ((s.page ?? 1) - 1) * COMPANY_PAGE_SIZE,
+			limit: COMPANY_PAGE_SIZE,
+		}),
+});
+
+export function useCompanyPages(
+	state: () => CompanyListState,
+	onChange: (patch: Partial<CompanyListState>) => void,
+) {
+	return useServerTable({
+		state,
+		onChange,
+		pageSize: COMPANY_PAGE_SIZE,
+		query: companyPageQuery,
+		rowId: (company) => company.ID,
+	});
+}
+
+export function useCompanyAtsCounts() {
 	return createQuery(() => ({
-		queryKey: keys.companies.list(params()),
-		queryFn: () => fetchCompanyPage({ ...params(), limit: COMPANY_PAGE_SIZE }),
-		placeholderData: keepPreviousData,
+		queryKey: keys.companies.atsCounts,
+		queryFn: fetchCompanyAtsCounts,
 	}));
 }
 
@@ -64,13 +96,19 @@ export function useTrackedCompanies(poll: () => boolean = () => false) {
 	}));
 }
 
-export const newCompaniesQueryOptions = queryOptions({
-	queryKey: keys.companies.new,
-	queryFn: fetchNewCompanies,
-});
+export const NEW_COMPANY_PAGE_SIZE = 25;
 
-export function useNewCompanies() {
-	return createQuery(() => newCompaniesQueryOptions);
+export const newCompaniesQueryOptions = (page: number) =>
+	queryOptions({
+		queryKey: keys.companies.newPage(page),
+		queryFn: () => fetchNewCompanies(page, NEW_COMPANY_PAGE_SIZE),
+	});
+
+export function useNewCompanies(page: () => number) {
+	return createQuery(() => ({
+		...newCompaniesQueryOptions(page()),
+		placeholderData: keepPreviousData,
+	}));
 }
 
 export function useCompanyBoards(
@@ -122,6 +160,20 @@ export function useSetCompanyFavourite() {
 		({ id, favourite }: { id: string; favourite: boolean }) =>
 			setCompanyFavourite(id, favourite),
 		[keys.companies.all, keys.jobs.all],
+		{
+			patch: (queryClient, _result, { id, favourite }) =>
+				patchJobPages(queryClient, (job) => job.CompanyID === id, {
+					CompanyFavourite: favourite,
+				}),
+		},
+	);
+}
+
+export function useSetCompanyKind() {
+	return useInvalidatingMutation(
+		({ id, kind }: { id: string; kind: "agency" | "direct" }) =>
+			setCompanyKind(id, kind),
+		[keys.companies.all, keys.jobs.all],
 	);
 }
 
@@ -131,15 +183,19 @@ const excludeInvalidations = [
 	keys.scoringConfig,
 ];
 
-export function useExcludeCompany() {
-	return useInvalidatingMutation(excludeCompany, excludeInvalidations);
+export function useExcludeCompanies() {
+	return useInvalidatingMutation(excludeCompanies, excludeInvalidations);
 }
 
-export function useUnexcludeCompany() {
+export function useUnexcludeCompanies() {
+	return useInvalidatingMutation(unexcludeCompanies, excludeInvalidations);
+}
+
+export function useSetCompaniesKind() {
 	return useInvalidatingMutation(
-		({ id, removeName }: { id: string; removeName: boolean }) =>
-			unexcludeCompany(id, removeName),
-		excludeInvalidations,
+		({ ids, kind }: { ids: string[]; kind: "agency" | "direct" }) =>
+			setCompaniesKind(ids, kind),
+		[keys.companies.all, keys.jobs.all],
 	);
 }
 

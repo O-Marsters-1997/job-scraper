@@ -35,10 +35,10 @@ export function RecomputeControls(props: {
 			<Button
 				variant="outline"
 				size="sm"
-				disabled={recompute.isPending}
+				loading={recompute.isPending}
 				onClick={handleRecompute}
 			>
-				{recompute.isPending ? "Recomputing…" : "Recompute scores"}
+				Recompute scores
 			</Button>
 		</>
 	);

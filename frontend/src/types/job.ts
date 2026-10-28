@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { companyKindSchema } from "./company";
 import { GRADES } from "./grade";
 
-export const BANDS = ["great", "good", "fair", "poor"] as const;
+const BANDS = ["great", "good", "fair", "poor"] as const;
 export type Band = (typeof BANDS)[number];
 export const bandSchema = z.enum(BANDS).or(z.literal(""));
 
@@ -27,7 +28,7 @@ export const scoreRowSchema = z.object({
 
 export type ScoreRow = z.infer<typeof scoreRowSchema>;
 
-export const jobListingSchema = z.object({
+const jobListingSchema = z.object({
 	source: z.string(),
 	url: z.string(),
 	first_seen_at: z.string(),
@@ -43,7 +44,9 @@ export const jobSchema = z.object({
 	CompanySlug: z.string(),
 	CompanyID: z.string().optional(),
 	Source: z.string(),
-	UpdatedAt: z.string(),
+	PostedAt: z.string().nullable(),
+	PostedAfter: z.string().nullable().optional(),
+	RepostedAt: z.string().nullable().optional(),
 	ScrapedAt: z.string(),
 	FirstDiscoveredAt: z.string().optional(),
 	DaysInOffice: z.number().nullable().optional(),
@@ -54,9 +57,10 @@ export const jobSchema = z.object({
 	Grade: z.enum(GRADES).or(z.literal("")).optional(),
 	Seen: z.boolean().optional(),
 	CompanyFavourite: z.boolean().optional(),
+	CompanyKind: companyKindSchema.optional(),
+	DiscoveredVia: z.string().optional(),
 	Breakdown: z.array(scoreRowSchema).nullable().optional(),
 	Listings: z.array(jobListingSchema).nullable().optional(),
-	// Optional rich fields — populated in demo mode; absent from the live backend
 	Description: z.string().optional(),
 	Skills: z.array(z.string()).optional(),
 	EmploymentType: z.string().optional(),
@@ -67,3 +71,31 @@ export const jobSchema = z.object({
 });
 
 export type Job = z.infer<typeof jobSchema>;
+
+export const jobOverviewSchema = z.object({
+	total: z.number(),
+	sources: z.number(),
+	newToday: z.number(),
+	todaySources: z.number(),
+	top: jobSchema.array(),
+});
+
+export type JobOverview = z.infer<typeof jobOverviewSchema>;
+
+export const jobInsightsSchema = z.object({
+	total: z.number(),
+	scored: z.number(),
+	daily: z.object({ day: z.string(), count: z.number() }).array(),
+	sources: z
+		.object({
+			source: z.string(),
+			count: z.number(),
+			scored: z.number(),
+			avgScore: z.number(),
+		})
+		.array(),
+	scoreBands: z.number().array(),
+	foundBy: z.object({ name: z.string(), count: z.number() }).array(),
+});
+
+export type JobInsights = z.infer<typeof jobInsightsSchema>;

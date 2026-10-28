@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/term"
 
 	"log/slog"
@@ -17,13 +16,17 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
+	"github.com/ollymarsters/job-scraper/internal/services/notify"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/services/tasks"
+	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: admin create-user <username>")
 	fmt.Fprintln(os.Stderr, "       admin reset-password <username>")
 	fmt.Fprintln(os.Stderr, "       admin set-role <username> <user|admin>")
+	fmt.Fprintln(os.Stderr, "       admin reencrypt")
 	fmt.Fprintln(os.Stderr, "       admin options add <id> <dimension> <label> <question>")
 	fmt.Fprintln(os.Stderr, "       admin options reword <id> <question>")
 	fmt.Fprintln(os.Stderr, "       admin options retire <id>")
@@ -31,6 +34,9 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "       admin scoring-feedback clear <username>")
 	fmt.Fprintln(os.Stderr, "       admin scoring replay <username>")
 	fmt.Fprintln(os.Stderr, "       admin scoring fit <username>")
+	fmt.Fprintln(os.Stderr, "       admin profile-attempts export <username>")
+	fmt.Fprintln(os.Stderr, "       admin resolve-domains <file>")
+	fmt.Fprintln(os.Stderr, "       admin notify-test <username> <job-id>")
 	os.Exit(1)
 }
 
@@ -48,12 +54,20 @@ func main() {
 		runResetPassword(os.Args[2:])
 	case "set-role":
 		runSetRole(os.Args[2:])
+	case "reencrypt":
+		runReencrypt(os.Args[2:])
 	case "options":
 		runOptions(os.Args[2:])
 	case "scoring-feedback":
 		runScoringFeedback(os.Args[2:])
 	case "scoring":
 		runScoring(os.Args[2:])
+	case "profile-attempts":
+		runProfileAttempts(os.Args[2:])
+	case "resolve-domains":
+		runResolveDomains(os.Args[2:])
+	case "notify-test":
+		runNotifyTest(os.Args[2:])
 	default:
 		usage()
 	}
@@ -77,23 +91,15 @@ func runCreateUser(args []string) {
 	username := args[0]
 
 	passwordBytes := readPassword("Password: ")
-	if len(passwordBytes) == 0 {
-		fmt.Fprintln(os.Stderr, "password must not be empty")
-		os.Exit(1)
-	}
-
-	hash, err := bcrypt.GenerateFromPassword(passwordBytes, 12)
-	if err != nil {
-		fatal("hash password", err)
-	}
 
 	ctx := context.Background()
 	pool := connectDB(ctx)
 	defer pool.Close()
 
-	apps := applications.New(pool, events.New(pool, scoring.NewFacade(pool)))
-	idm := identity.NewFacade(pool, apps)
-	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, PasswordHash: string(hash)})
+	taskFacade := tasks.NewFacade(pool)
+	apps := applications.New(pool, events.New(pool, scoring.NewFacade(pool)), taskFacade)
+	idm := identity.NewFacade(pool, []identity.Seeder{apps, taskFacade})
+	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, Password: string(passwordBytes)})
 	if err != nil {
 		fatal("create user", err)
 	}
@@ -147,6 +153,30 @@ func runSetRole(args []string) {
 		fatal("set role", err)
 	}
 	fmt.Printf("User %q is now %s\n", username, role)
+}
+
+func runReencrypt(args []string) {
+	if len(args) != 0 {
+		usage()
+	}
+	credCipher, err := tokencrypt.FromEnv("AI_CREDENTIAL_ENC_KEY")
+	if err != nil {
+		fatal("load credential key", err)
+	}
+	googleCipher, err := tokencrypt.FromEnv("GOOGLE_TOKEN_ENC_KEY")
+	if err != nil {
+		fatal("load google token key", err)
+	}
+
+	ctx := context.Background()
+	pool := connectDB(ctx)
+	defer pool.Close()
+
+	credentials, googleTokens, err := identity.ReencryptTokens(ctx, pool, credCipher, googleCipher)
+	if err != nil {
+		fatal("reencrypt", err)
+	}
+	fmt.Printf("Re-encrypted %d AI credentials and %d Google tokens\n", credentials, googleTokens)
 }
 
 func runOptions(args []string) {
@@ -249,6 +279,34 @@ func runScoring(args []string) {
 		fatal(args[0], err)
 	}
 	fmt.Print(report)
+}
+
+func runNotifyTest(args []string) {
+	if len(args) != 2 {
+		usage()
+	}
+	username, jobID := args[0], args[1]
+	ntfyURL := os.Getenv("NTFY_URL")
+
+	ctx := context.Background()
+	pool, err := db.Connect(ctx)
+	if err != nil {
+		fatal("db connect", err)
+	}
+	defer pool.Close()
+
+	userID, err := identity.NewFacade(pool, nil).UserIDByUsername(ctx, username)
+	if err != nil {
+		fatal("find user", err)
+	}
+	if err := notify.New(pool, notify.Ntfy{URL: ntfyURL, Token: os.Getenv("NTFY_TOKEN")}).NewJobByID(ctx, userID, jobID); err != nil {
+		fatal("notify", err)
+	}
+	if ntfyURL == "" {
+		fmt.Println("Notification recorded; NTFY_URL is empty, so nothing was sent to the phone")
+		return
+	}
+	fmt.Println("Notification recorded and sent to ntfy")
 }
 
 func fatal(what string, err error) {

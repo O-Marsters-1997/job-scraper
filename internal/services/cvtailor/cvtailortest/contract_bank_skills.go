@@ -41,6 +41,7 @@ func runBankSkillContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 
 	t.Run("create appends and update renames and recategorises", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		add(t, f, f.UserID, "Go", "Languages")
 		sk := add(t, f, f.UserID, "Postgress", "")
@@ -57,6 +58,7 @@ func runBankSkillContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a duplicate name ignoring case is a conflict", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		add(t, f, f.UserID, "Go", "")
 		other := add(t, f, f.UserID, "Rust", "")
@@ -70,6 +72,7 @@ func runBankSkillContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("reorder moves skills and rejects an incomplete list", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		a := add(t, f, f.UserID, "A", "")
 		b := add(t, f, f.UserID, "B", "")
@@ -84,6 +87,7 @@ func runBankSkillContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("delete removes a skill", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		sk := add(t, f, f.UserID, "Go", "")
 		if err := f.Store.DeleteBankSkill(ctx, f.UserID, sk.ID); err != nil {
@@ -95,7 +99,39 @@ func runBankSkillContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		wantKind(t, "DeleteBankSkill", f.Store.DeleteBankSkill(ctx, f.UserID, sk.ID), apperr.KindNotFound)
 	})
 
+	t.Run("bulk set category and delete are all or nothing", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		a := add(t, f, f.UserID, "Go", "")
+		b := add(t, f, f.UserID, "Rust", "")
+		foreign := add(t, f, f.Other, "Zig", "")
+		if err := f.Store.SetBankSkillsCategory(ctx, f.UserID, []string{a.ID, b.ID}, "Languages"); err != nil {
+			t.Fatal(err)
+		}
+		got, err := f.Store.ListBankSkills(ctx, f.UserID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range got {
+			if s.Category != "Languages" {
+				t.Fatalf("%s category = %q, want Languages", s.Name, s.Category)
+			}
+		}
+		wantKind(t, "SetBankSkillsCategory(foreign)", f.Store.SetBankSkillsCategory(ctx, f.UserID, []string{a.ID, foreign.ID}, "X"), apperr.KindNotFound)
+		wantKind(t, "DeleteBankSkills(foreign)", f.Store.DeleteBankSkills(ctx, f.UserID, []string{b.ID, foreign.ID}), apperr.KindNotFound)
+		if diff := cmp.Diff([]string{"Go", "Rust"}, names(t, f, f.UserID)); diff != "" {
+			t.Fatalf("names after rejected bulk (-want +got):\n%s", diff)
+		}
+		if err := f.Store.DeleteBankSkills(ctx, f.UserID, []string{a.ID, b.ID}); err != nil {
+			t.Fatal(err)
+		}
+		if got := names(t, f, f.UserID); len(got) != 0 {
+			t.Fatalf("names after bulk delete = %v, want empty", got)
+		}
+	})
+
 	t.Run("another user's skills are invisible and untouchable", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		sk := add(t, f, f.UserID, "Go", "")
 		if got := names(t, f, f.Other); len(got) != 0 {

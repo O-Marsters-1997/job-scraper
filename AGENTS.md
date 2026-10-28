@@ -7,6 +7,8 @@
 - No sycophantic openers or closing fluff. Be concise in output, thorough in reasoning.
 - Before a structural/architectural decision (new package boundary, naming ambiguity), check
   `CONTEXT.md` (domain glossary) and `docs/adr/` (past decisions) — not needed for routine work.
+- Global skills (go-idiomatic, go-testing, postgres-best-practices) override ADRs. When one conflicts
+  with an ADR, follow the skill and amend the ADR.
 - For JS/TS packages, use only the package manager named in each `package.json`'s `packageManager` field.
 
 ## Layout
@@ -20,6 +22,8 @@ full layout, port and enforcement rules): `jobsearch`, `scoring`, `applications`
   generated `sqlc/`) is imported only by its own context (`<ctx>-store` depguard rule).
 - `internal/api/`: HTTP shell only, used by `cmd/api`. `internal/worker/`: used by `cmd/worker`; imports
   context roots, never `internal/api` (ADR 0009).
+- `ios/`: SwiftUI app, a plain client of the HTTP API (`ios/FastTrack.xcodeproj`). Its Swift models mirror
+  `internal/dto` JSON by hand, so a renamed or retyped dto field breaks it silently.
 - Everything else under `internal/` is the shared kernel and imports no context, `internal/api` or
   `internal/worker`. `internal/data/db` connects and migrates; `internal/data` holds only genuinely
   reusable pieces (e.g. `ErrNotFound`).
@@ -73,7 +77,8 @@ Use the `schema-change` skill for the full migration → sqlc → store procedur
 ## Tests
 
 Load the `testing-policy` skill before writing or changing any test: it maps each kind of code to its
-test, doubles and assertions ([ADR 0012](docs/adr/0012-test-seams-and-double-packages.md)).
+test, doubles and assertions ([ADR 0012](docs/adr/0012-test-seams-and-double-packages.md)). It decides
+*what* to test, never *how* a test is written: go-testing owns that.
 
 ## Commands
 

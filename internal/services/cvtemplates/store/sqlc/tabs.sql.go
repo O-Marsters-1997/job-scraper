@@ -29,7 +29,7 @@ func (q *Queries) EnsureTabs(ctx context.Context, arg EnsureTabsParams) error {
 }
 
 const listTabs = `-- name: ListTabs :many
-SELECT id, tracked_doc_id, tab_id, title, visible, created_at
+SELECT id, tracked_doc_id, tab_id, title, visible, is_default, created_at
 FROM tracked_doc_tabs
 WHERE tracked_doc_id = $1
 ORDER BY created_at
@@ -50,6 +50,7 @@ func (q *Queries) ListTabs(ctx context.Context, trackedDocID pgtype.UUID) ([]Tra
 			&i.TabID,
 			&i.Title,
 			&i.Visible,
+			&i.IsDefault,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -62,9 +63,39 @@ func (q *Queries) ListTabs(ctx context.Context, trackedDocID pgtype.UUID) ([]Tra
 	return items, nil
 }
 
+const setTabDefault = `-- name: SetTabDefault :execrows
+WITH target AS (
+    SELECT t.id
+    FROM tracked_doc_tabs t
+    JOIN tracked_docs d ON t.tracked_doc_id = d.id
+    WHERE d.user_id = $1 AND d.doc_id = $2 AND t.tab_id = $3 AND t.visible
+)
+UPDATE tracked_doc_tabs t
+SET is_default = t.id IN (SELECT id FROM target)
+FROM tracked_docs d
+WHERE t.tracked_doc_id = d.id
+  AND d.user_id = $1
+  AND EXISTS (SELECT 1 FROM target)
+  AND (t.is_default OR t.id IN (SELECT id FROM target))
+`
+
+type SetTabDefaultParams struct {
+	UserID pgtype.UUID
+	DocID  string
+	TabID  string
+}
+
+func (q *Queries) SetTabDefault(ctx context.Context, arg SetTabDefaultParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setTabDefault, arg.UserID, arg.DocID, arg.TabID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setTabVisible = `-- name: SetTabVisible :execrows
 UPDATE tracked_doc_tabs t
-SET visible = $4
+SET visible = $4, is_default = t.is_default AND $4
 FROM tracked_docs d
 WHERE t.tracked_doc_id = d.id
   AND d.user_id = $1 AND d.doc_id = $2 AND t.tab_id = $3

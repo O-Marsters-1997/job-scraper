@@ -10,6 +10,7 @@ func toTrackedDocDTO(t sqlc.TrackedDoc) dto.TrackedDoc {
 		ID:      t.ID.String(),
 		UserID:  t.UserID.String(),
 		DocID:   t.DocID,
+		Kind:    dto.TrackedDocKind(t.Kind),
 		AddedAt: t.AddedAt.Time,
 	}
 }
@@ -21,6 +22,7 @@ func toTabDTO(t sqlc.TrackedDocTab) dto.Tab {
 		TabID:        t.TabID,
 		Title:        t.Title,
 		Visible:      t.Visible,
+		IsDefault:    t.IsDefault,
 		CreatedAt:    t.CreatedAt.Time,
 	}
 }

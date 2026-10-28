@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,6 +18,23 @@ import (
 
 const residentialAttempts = 3
 
+const defaultRetryBackoff = 3 * time.Second
+
+func (t *residentialTransport) backoffFor(attempt int) time.Duration {
+	return time.Duration((0.5 + t.jitter()) * float64(t.backoff) * float64(attempt+1))
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // ErrBlocked is returned when every residential attempt for a request was blocked.
 var ErrBlocked = errors.New("residential fetch blocked on every attempt")
 
@@ -25,6 +43,8 @@ type sessionKey struct{}
 type residentialTransport struct {
 	residential *http.Transport
 	cache       Cache
+	backoff     time.Duration
+	jitter      func() float64
 
 	session   atomic.Value
 	rotations atomic.Int64
@@ -44,7 +64,6 @@ func (t *residentialTransport) rotate(ctx context.Context, stale, reason string,
 			slog.Int64(logger.KeyCount, t.rotations.Add(1)),
 		)
 	}
-	t.residential.CloseIdleConnections()
 }
 
 func newResidential(cache Cache, source string) (*residentialTransport, error) {
@@ -60,9 +79,19 @@ func newResidential(cache Cache, source string) (*residentialTransport, error) {
 		pu.User = url.UserPassword(u.User.Username()+"-session-"+session, password)
 		return &pu, nil
 	}
+	dial := tr.DialContext
+	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := dial(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+		return newCountingConn(conn, source, routeResidential), nil
+	}
 	t := &residentialTransport{
 		residential: tr,
 		cache:       cache,
+		backoff:     defaultRetryBackoff,
+		jitter:      rand.Float64,
 		source:      source,
 	}
 	t.session.Store(newSession())
@@ -105,6 +134,11 @@ func (t *residentialTransport) fetch(req *http.Request) (*http.Response, error) 
 		if attempt == residentialAttempts-1 {
 			break
 		}
+		if wasBlocked := lastErr == nil; wasBlocked {
+			if err := sleep(req.Context(), t.backoffFor(attempt)); err != nil {
+				return nil, err
+			}
+		}
 		if req, err = rewound(req); err != nil {
 			return nil, err
 		}
@@ -121,7 +155,7 @@ func (t *residentialTransport) residentialAttempt(req *http.Request) (*http.Resp
 	attempt := req.WithContext(context.WithValue(req.Context(), sessionKey{}, session))
 	start := time.Now()
 	resp, err := t.residential.RoundTrip(attempt)
-	logger.LogFetch(req.Context(), req.URL.String(), resp, err, time.Since(start))
+	logger.LogFetch(req.Context(), req.URL, resp, err, time.Since(start))
 	record(req, t.source, routeResidential, resp, err)
 	if err != nil {
 		if req.Context().Err() == nil {

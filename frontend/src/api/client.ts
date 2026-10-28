@@ -1,15 +1,8 @@
 import type { z } from "zod";
+import { ApiError } from "./apiError";
 import { API_BASE } from "./config";
 
-export class ApiError extends Error {
-	constructor(
-		readonly status: number,
-		path: string,
-		readonly body: unknown,
-	) {
-		super(`${path}: ${status}`);
-	}
-}
+export { ApiError };
 
 export const jsonInit = (method: string, body: unknown): RequestInit => ({
 	method,

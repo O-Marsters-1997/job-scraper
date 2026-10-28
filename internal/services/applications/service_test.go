@@ -3,6 +3,7 @@ package applications_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,6 +82,18 @@ func TestCreateErrors(t *testing.T) {
 	}
 }
 
+func TestDeleteApplications(t *testing.T) {
+	t.Parallel()
+	t.Run("requires ids", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		_, err := svc.DeleteApplications(t.Context(), userID, dto.DeleteApplicationsInput{})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("DeleteApplications(no ids) err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+}
+
 func TestUpdate(t *testing.T) {
 	svc, st := newService(t)
 	created, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: "job-1"})
@@ -88,12 +101,12 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("seed CreateApplication err = %v", err)
 	}
 
-	got, err := svc.Update(t.Context(), userID, dto.UpdateApplicationInput{ID: created.ID, Notes: "followed up"})
+	got, err := svc.Update(t.Context(), userID, dto.UpdateApplicationInput{ID: created.ID, SalaryInfo: "60k"})
 	if err != nil {
 		t.Fatalf("Update(...) err = %v", err)
 	}
-	if got.Notes != "followed up" {
-		t.Errorf("Update(...) notes = %q, want %q", got.Notes, "followed up")
+	if got.SalaryInfo != "60k" {
+		t.Errorf("Update(...) salary = %q, want %q", got.SalaryInfo, "60k")
 	}
 }
 
@@ -167,7 +180,7 @@ func TestCreateStatusReplyWindowBounds(t *testing.T) {
 
 func TestUpdateStatusRejectsOutOfRangeWindow(t *testing.T) {
 	svc, st := newService(t)
-	created, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
+	created, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil, false)
 	if err != nil {
 		t.Fatalf("seed CreateApplicationStatus err = %v", err)
 	}
@@ -201,7 +214,7 @@ func TestCreateStatusErrors(t *testing.T) {
 func TestDeleteStatus(t *testing.T) {
 	t.Run("refuses a status in use", func(t *testing.T) {
 		svc, st := newService(t)
-		status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
+		status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil, false)
 		if err != nil {
 			t.Fatalf("seed CreateApplicationStatus err = %v", err)
 		}
@@ -227,6 +240,74 @@ func TestDeleteStatus(t *testing.T) {
 			t.Errorf("DeleteStatus(unused) err = %v", err)
 		}
 	})
+}
+
+func seededStatus(t *testing.T, st *applicationstest.FakeStore, key string) dto.ApplicationStatus {
+	t.Helper()
+	if err := st.SeedDefaultStatuses(t.Context(), nil, userID); err != nil {
+		t.Fatalf("SeedDefaultStatuses err = %v", err)
+	}
+	all, err := st.ListApplicationStatusesByUser(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ListApplicationStatusesByUser err = %v", err)
+	}
+	for _, s := range all {
+		if s.SystemKey == key {
+			return s
+		}
+	}
+	t.Fatalf("no seeded status with key %q", key)
+	return dto.ApplicationStatus{}
+}
+
+func TestSystemStatuses(t *testing.T) {
+	t.Parallel()
+	t.Run("cannot be deleted", func(t *testing.T) {
+		t.Parallel()
+		svc, st := newService(t)
+		draft := seededStatus(t, st, "draft")
+		if err := svc.DeleteStatus(t.Context(), userID, draft.ID); !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("DeleteStatus(draft) err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+
+	t.Run("cannot be renamed", func(t *testing.T) {
+		t.Parallel()
+		svc, st := newService(t)
+		applied := seededStatus(t, st, "applied")
+		in := dto.ApplicationStatusInput{ID: applied.ID, Name: "Sent", Colour: "#6366f1"}
+		if _, err := svc.UpdateStatus(t.Context(), userID, in); !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("UpdateStatus(rename applied) err = %v, want kind %v", err, apperr.KindInvalid)
+		}
+	})
+
+	t.Run("can be recoloured", func(t *testing.T) {
+		t.Parallel()
+		svc, st := newService(t)
+		applied := seededStatus(t, st, "applied")
+		in := dto.ApplicationStatusInput{ID: applied.ID, Name: applied.Name, Colour: "#000000"}
+		got, err := svc.UpdateStatus(t.Context(), userID, in)
+		if err != nil {
+			t.Fatalf("UpdateStatus(recolour applied) err = %v", err)
+		}
+		if got.Colour != "#000000" {
+			t.Errorf("UpdateStatus(recolour applied) Colour = %q, want #000000", got.Colour)
+		}
+	})
+}
+
+func TestCreateDefaultsToDraft(t *testing.T) {
+	t.Parallel()
+	svc, st := newService(t)
+	draft := seededStatus(t, st, "draft")
+
+	got, err := svc.Create(t.Context(), userID, dto.CreateApplicationInput{JobID: "job-1"})
+	if err != nil {
+		t.Fatalf("Create(no status) err = %v", err)
+	}
+	if got.StatusID != draft.ID {
+		t.Errorf("Create(no status) StatusID = %q, want draft %q", got.StatusID, draft.ID)
+	}
 }
 
 func TestSetChase(t *testing.T) {
@@ -274,6 +355,131 @@ func TestSetChaseErrors(t *testing.T) {
 			_, err := svc.SetChase(t.Context(), userID, tt.in)
 			if !apperr.IsKind(err, tt.wantKind) {
 				t.Errorf("SetChase(%+v) err = %v, want kind %v", tt.in, err, tt.wantKind)
+			}
+		})
+	}
+}
+
+func TestPutJobNote(t *testing.T) {
+	t.Parallel()
+	t.Run("saves the note", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		got, err := svc.PutJobNote(t.Context(), userID, dto.PutJobNoteInput{JobID: "job-1", Body: "call back Friday"})
+		if err != nil {
+			t.Fatalf("PutJobNote(...) err = %v", err)
+		}
+		want := dto.JobNote{JobID: "job-1", Body: "call back Friday"}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("PutJobNote(...) mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("oversize body is rejected", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		_, err := svc.PutJobNote(t.Context(), userID, dto.PutJobNoteInput{JobID: "job-1", Body: strings.Repeat("é", 10001)})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("PutJobNote(10001 chars) err = %v, want invalid", err)
+		}
+	})
+
+	t.Run("empty body clears the note", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		if _, err := svc.PutJobNote(t.Context(), userID, dto.PutJobNoteInput{JobID: "job-1", Body: ""}); err != nil {
+			t.Errorf("PutJobNote(empty) err = %v", err)
+		}
+	})
+
+	t.Run("10000 characters is accepted", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		if _, err := svc.PutJobNote(t.Context(), userID, dto.PutJobNoteInput{JobID: "job-1", Body: strings.Repeat("é", 10000)}); err != nil {
+			t.Errorf("PutJobNote(10000 chars) err = %v", err)
+		}
+	})
+}
+
+func TestCreateJobComment(t *testing.T) {
+	t.Parallel()
+	t.Run("keeps the quote", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		quote := dto.CommentQuote{Exact: strings.Repeat("é", 2000), Prefix: strings.Repeat("é", 64), Suffix: "after"}
+		got, err := svc.CreateJobComment(t.Context(), userID, dto.CreateJobCommentInput{JobID: "job-1", Body: "why", Quote: quote})
+		if err != nil {
+			t.Fatalf("CreateJobComment(...) err = %v", err)
+		}
+		if diff := cmp.Diff(quote, got.Quote); diff != "" {
+			t.Errorf("CreateJobComment(...) quote mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	for name, in := range map[string]dto.CreateJobCommentInput{
+		"empty body":      {Body: "", Quote: dto.CommentQuote{Exact: "x"}},
+		"oversize body":   {Body: strings.Repeat("é", 10001), Quote: dto.CommentQuote{Exact: "x"}},
+		"empty quote":     {Body: "why"},
+		"oversize quote":  {Body: "why", Quote: dto.CommentQuote{Exact: strings.Repeat("é", 2001)}},
+		"oversize prefix": {Body: "why", Quote: dto.CommentQuote{Exact: "x", Prefix: strings.Repeat("é", 65)}},
+		"oversize suffix": {Body: "why", Quote: dto.CommentQuote{Exact: "x", Suffix: strings.Repeat("é", 65)}},
+	} {
+		t.Run(name+" is rejected", func(t *testing.T) {
+			t.Parallel()
+			svc, _ := newService(t)
+			in.JobID = "job-1"
+			_, err := svc.CreateJobComment(t.Context(), userID, in)
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("CreateJobComment(%s) err = %v, want invalid", name, err)
+			}
+		})
+	}
+}
+
+func TestUpdateJobComment(t *testing.T) {
+	t.Parallel()
+	svc, _ := newService(t)
+	created, err := svc.CreateJobComment(t.Context(), userID, dto.CreateJobCommentInput{JobID: "job-1", Body: "before", Quote: dto.CommentQuote{Exact: "x"}})
+	if err != nil {
+		t.Fatalf("CreateJobComment(...) err = %v", err)
+	}
+	if _, err := svc.UpdateJobComment(t.Context(), userID, dto.UpdateJobCommentInput{ID: created.ID, Body: ""}); !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Errorf("UpdateJobComment(empty body) err = %v, want invalid", err)
+	}
+	got, err := svc.UpdateJobComment(t.Context(), userID, dto.UpdateJobCommentInput{ID: created.ID, Body: "after"})
+	if err != nil || got.Body != "after" {
+		t.Errorf("UpdateJobComment(...) = %+v, %v, want body after", got, err)
+	}
+}
+
+func TestLogRecruiterContact(t *testing.T) {
+	valid := dto.LogRecruiterContactInput{JobID: "job-1", ContactedOn: "2026-10-01", Channel: dto.ChannelEmail, Outcome: dto.OutcomeSpoke}
+
+	t.Run("records the contact", func(t *testing.T) {
+		svc, _ := newService(t)
+		got, err := svc.LogRecruiterContact(t.Context(), userID, valid)
+		if err != nil {
+			t.Fatalf("LogRecruiterContact(...) err = %v", err)
+		}
+		want := dto.RecruiterContact{JobID: "job-1", ContactedOn: "2026-10-01", Channel: dto.ChannelEmail, Outcome: dto.OutcomeSpoke}
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.RecruiterContact{}, "ID", "CreatedAt")); diff != "" {
+			t.Errorf("LogRecruiterContact(...) mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	invalid := map[string]func(*dto.LogRecruiterContactInput){
+		"bad date":    func(in *dto.LogRecruiterContactInput) { in.ContactedOn = "yesterday" },
+		"bad channel": func(in *dto.LogRecruiterContactInput) { in.Channel = "carrier_pigeon" },
+		"bad outcome": func(in *dto.LogRecruiterContactInput) { in.Outcome = "ghosted" },
+	}
+	for name, mutate := range invalid {
+		t.Run(name+" is rejected", func(t *testing.T) {
+			svc, _ := newService(t)
+			in := valid
+			mutate(&in)
+			_, err := svc.LogRecruiterContact(t.Context(), userID, in)
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("LogRecruiterContact(%s) err = %v, want invalid", name, err)
 			}
 		})
 	}

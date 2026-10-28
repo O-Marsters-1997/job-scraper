@@ -23,6 +23,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	r := newTestRouter()
 
 	handlerstest.RequiresAuth(t, r,
+		"GET /due",
 		"GET /application-statuses/",
 		"POST /application-statuses/",
 		"PATCH /application-statuses/{id}",
@@ -31,13 +32,22 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"POST /applications/",
 		"PATCH /applications/{id}",
 		"DELETE /applications/{id}",
+		"POST /applications/delete",
 		"PUT /applications/{id}/chase",
 		"DELETE /applications/{id}/chase",
 		"GET /applications/for-jobs",
+		"GET /recruiter-contacts/summaries",
+		"GET /jobs/{id}/recruiter-contacts",
+		"POST /jobs/{id}/recruiter-contacts",
+		"GET /jobs/{id}/note", "PUT /jobs/{id}/note",
+		"GET /jobs/{id}/comments",
+		"POST /jobs/{id}/comments", "PATCH /comments/{id}", "DELETE /comments/{id}",
 	)
 	handlerstest.RejectsMalformedBody(t, r,
 		"POST /application-statuses/", "PATCH /application-statuses/{id}",
-		"POST /applications/", "PATCH /applications/{id}", "PUT /applications/{id}/chase",
+		"POST /applications/", "PATCH /applications/{id}", "POST /applications/delete", "PUT /applications/{id}/chase",
+		"POST /jobs/{id}/recruiter-contacts", "PUT /jobs/{id}/note",
+		"POST /jobs/{id}/comments", "PATCH /comments/{id}",
 	)
 	handlerstest.RejectsBadPathID(t, r, "PATCH /applications/{id}")
 }
@@ -71,9 +81,9 @@ func TestRoutesHappyPaths(t *testing.T) {
 	}
 
 	updated := handlerstest.Do[dto.Application](t, r, http.StatusOK,
-		"PATCH /applications/"+app.ID, `{"notes":"followed up"}`)
-	if updated.Notes != "followed up" {
-		t.Fatalf("updated notes = %q, want followed up", updated.Notes)
+		"PATCH /applications/"+app.ID, `{"salary_info":"60k"}`)
+	if updated.SalaryInfo != "60k" {
+		t.Fatalf("updated salary = %q, want 60k", updated.SalaryInfo)
 	}
 
 	chased := handlerstest.Do[dto.Application](t, r, http.StatusOK,
@@ -99,6 +109,51 @@ func TestRoutesHappyPaths(t *testing.T) {
 		t.Fatalf("for-jobs = %+v, want job-1 present", summaries)
 	}
 
+	logged := handlerstest.Do[dto.RecruiterContact](t, r, http.StatusCreated, "POST /jobs/job-1/recruiter-contacts",
+		`{"contacted_on":"2026-10-01","channel":"email","outcome":"spoke"}`)
+	if logged.JobID != "job-1" {
+		t.Fatalf("logged job_id = %q, want job-1", logged.JobID)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusBadRequest, "POST /jobs/job-1/recruiter-contacts",
+		`{"contacted_on":"2026-10-01","channel":"fax","outcome":"spoke"}`)
+	if got := handlerstest.Do[[]dto.RecruiterContact](t, r, http.StatusOK, "GET /jobs/job-1/recruiter-contacts", ""); len(got) != 1 {
+		t.Fatalf("got %d recruiter contacts, want 1", len(got))
+	}
+	sums := handlerstest.Do[map[string]dto.RecruiterContactSummary](t, r, http.StatusOK, "GET /recruiter-contacts/summaries?job_ids=job-1,job-2", "")
+	if sums["job-1"].Count != 1 || sums["job-1"].BestOutcome != dto.OutcomeSpoke || len(sums) != 1 {
+		t.Fatalf("summaries = %+v, want only job-1 with 1 spoke contact", sums)
+	}
+
+	if got := handlerstest.Do[dto.JobNote](t, r, http.StatusOK, "GET /jobs/job-1/note", ""); got.Body != "" {
+		t.Fatalf("note before put = %+v, want empty body", got)
+	}
+	note := handlerstest.Do[dto.JobNote](t, r, http.StatusOK, "PUT /jobs/job-1/note", `{"body":"hello"}`)
+	if note.JobID != "job-1" || note.Body != "hello" {
+		t.Fatalf("put note = %+v, want job-1/hello", note)
+	}
+	if got := handlerstest.Do[dto.JobNote](t, r, http.StatusOK, "GET /jobs/job-1/note", ""); got.Body != "hello" {
+		t.Fatalf("note after put = %+v, want hello", got)
+	}
+
+	comment := handlerstest.Do[dto.JobComment](t, r, http.StatusCreated, "POST /jobs/job-1/comments",
+		`{"body":"ask","quote":{"exact":"Go","prefix":"we use ","suffix":" daily"}}`)
+	if comment.JobID != "job-1" || comment.Quote.Exact != "Go" {
+		t.Fatalf("created comment = %+v, want job-1 quoting Go", comment)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusBadRequest, "POST /jobs/job-1/comments", `{"body":"ask"}`)
+	if got := handlerstest.Do[[]dto.JobComment](t, r, http.StatusOK, "GET /jobs/job-1/comments", ""); len(got) != 1 {
+		t.Fatalf("got %d comments, want 1", len(got))
+	}
+	handlerstest.Do[dto.JobComment](t, r, http.StatusOK, "PATCH /comments/"+comment.ID, `{"body":"changed"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /comments/"+comment.ID, "")
+	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "DELETE /comments/"+comment.ID, "")
+
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /applications/"+app.ID, "")
+	other := handlerstest.Do[dto.Application](t, r, http.StatusCreated,
+		"POST /applications/", `{"job_id":"job-2","status_id":"`+status.ID+`"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /applications/delete", `{"ids":["`+other.ID+`"]}`)
+	if got := handlerstest.Do[[]dto.ApplicationWithDetails](t, r, http.StatusOK, "GET /applications/", ""); len(got) != 0 {
+		t.Fatalf("after bulk delete listed %d applications, want 0", len(got))
+	}
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /application-statuses/"+status.ID, "")
 }

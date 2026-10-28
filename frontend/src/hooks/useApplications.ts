@@ -1,13 +1,18 @@
-import { createQuery, queryOptions } from "@tanstack/solid-query";
+import {
+	createQuery,
+	keepPreviousData,
+	queryOptions,
+} from "@tanstack/solid-query";
 import {
 	clearChase,
 	createApplication,
-	deleteApplication,
+	deleteApplications,
 	fetchApplications,
 	setChase,
 	updateApplication,
 } from "../api/applications";
 import { keys } from "../api/keys";
+import { cvStage, isCvStageBusy } from "../lib/cvStage";
 import type { UpdateApplicationPayload } from "../types/application";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
@@ -27,15 +32,21 @@ export function useApplications(
 	statusId?: () => string | undefined,
 	chase?: () => boolean,
 ) {
-	return createQuery(() =>
-		applicationsQueryOptions(statusId?.(), chase?.() ?? false),
-	);
+	return createQuery(() => ({
+		...applicationsQueryOptions(statusId?.(), chase?.() ?? false),
+		placeholderData: keepPreviousData,
+		refetchInterval: (query) =>
+			query.state.data?.some((a) => isCvStageBusy(cvStage(a.Draft)))
+				? 3000
+				: false,
+	}));
 }
 
 export function useCreateApplication() {
 	return useInvalidatingMutation(createApplication, [
 		keys.applications.all,
 		keys.jobs.all,
+		keys.tasks.all,
 	]);
 }
 
@@ -43,12 +54,12 @@ export function useUpdateApplication() {
 	return useInvalidatingMutation(
 		({ id, data }: { id: string; data: UpdateApplicationPayload }) =>
 			updateApplication(id, data),
-		[keys.applications.all, keys.jobs.all],
+		[keys.applications.all, keys.jobs.all, keys.tasks.all],
 	);
 }
 
-export function useDeleteApplication() {
-	return useInvalidatingMutation(deleteApplication, [
+export function useDeleteApplications() {
+	return useInvalidatingMutation(deleteApplications, [
 		keys.applications.all,
 		keys.jobs.all,
 	]);

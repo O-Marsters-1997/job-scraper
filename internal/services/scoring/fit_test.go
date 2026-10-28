@@ -56,22 +56,4 @@ func TestComputeUsesParams(t *testing.T) {
 	if heavy <= base {
 		t.Errorf("score with tech weight 10 = %d, want above the default's %d", heavy, base)
 	}
-
-	_, band, _ := compute(picks, nil, "", nil, false, &dto.ScoringParams{Bands: &dto.BandCuts{Great: 10, Good: 5, Fair: 1}})
-	if band != "great" {
-		t.Errorf("band with Great from 10 = %q, want great", band)
-	}
-}
-
-func TestCalibrateBands(t *testing.T) {
-	scores := []int{90, 88, 70, 66, 30, 20}
-	grades := []string{"great", "great", "ok", "ok", "no", "no"}
-
-	got := calibrateBands(scores, grades)
-
-	for i, sc := range scores {
-		if !bandAgrees(grades[i], bandFor(sc, got)) {
-			t.Errorf("calibrateBands() = %+v puts score %d in %s for a %s grade", got, sc, bandFor(sc, got), grades[i])
-		}
-	}
 }

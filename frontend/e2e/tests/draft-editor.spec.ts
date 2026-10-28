@@ -18,6 +18,39 @@ test.describe("Draft editor", () => {
 		});
 	});
 
+	test("Enter at the end of a bullet adds one below and Backspace removes it", async ({
+		page,
+		draftPage,
+	}) => {
+		const bullets = page.getByRole("textbox", {
+			name: /Senior Backend Engineer bullet|New bullet/,
+		});
+		const before = await bullets.count();
+		await draftPage.line(BULLET).click();
+		await draftPage.line(BULLET).evaluate((el) => {
+			const caret = document.createRange();
+			caret.selectNodeContents(el);
+			caret.collapse(false);
+			window.getSelection()?.removeAllRanges();
+			window.getSelection()?.addRange(caret);
+		});
+		await page.keyboard.press("Enter");
+		await expect(bullets).toHaveCount(before + 1);
+		await expect(
+			page.getByRole("textbox", { name: "New bullet" }),
+		).toBeFocused();
+		await page.keyboard.type("Mentored two engineers");
+		await expect(draftPage.saveStatus).toHaveText("Saved", {
+			timeout: SAVED_TIMEOUT_MS,
+		});
+		await page.getByRole("textbox", { name: "New bullet" }).click();
+		await page.keyboard.press("ControlOrMeta+A");
+		await page.keyboard.press("Backspace");
+		await page.keyboard.press("Backspace");
+		await expect(bullets).toHaveCount(before);
+		await expect(draftPage.line(BULLET)).toBeFocused();
+	});
+
 	test("keeps the caret while typing", async ({ page, draftPage }) => {
 		await draftPage.line(BULLET).click();
 		await page.keyboard.press("Home");
@@ -46,13 +79,12 @@ test.describe("Draft editor", () => {
 		});
 	});
 
-	test("is read-only once the draft is kept", async ({ draftPage }) => {
+	test("stays editable once the draft is kept", async ({ draftPage }) => {
 		await draftPage.goto("draft-kept");
-		await expect(draftPage.line(BULLET)).toHaveAttribute(
-			"contenteditable",
-			"false",
-		);
-		await expect(draftPage.saveStatus).toHaveCount(0);
+		await draftPage.type(BULLET, " again");
+		await expect(draftPage.saveStatus).toHaveText("Saved", {
+			timeout: SAVED_TIMEOUT_MS,
+		});
 	});
 
 	test("shows an edit in the line's card", async ({ draftPage }) => {

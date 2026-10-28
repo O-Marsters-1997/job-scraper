@@ -10,16 +10,19 @@ import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { parseReplyWindow } from "@/lib/replyWindow";
 import { STATUS_FALLBACK_COLOUR, STATUS_PALETTE } from "@/lib/status";
 import {
+	applicationStatusesQueryOptions,
 	useApplicationStatuses,
 	useCreateApplicationStatus,
 	useDeleteApplicationStatus,
 	useUpdateApplicationStatus,
 } from "../../../hooks/useApplicationStatuses";
+import { queryClient } from "../../../lib/queryClient";
 import type { ApplicationStatus } from "../../../types/applicationStatus";
 import { AddStatusForm } from "./-statuses/AddStatusForm";
 import { StatusRow } from "./-statuses/StatusRow";
 
 export const Route = createFileRoute("/_auth/settings/statuses")({
+	loader: () => queryClient.prefetchQuery(applicationStatusesQueryOptions),
 	component: StatusesPage,
 });
 
@@ -41,6 +44,7 @@ function StatusesPage() {
 	const [editName, setEditName] = createSignal("");
 	const [editColour, setEditColour] = createSignal("");
 	const [editReplyWindow, setEditReplyWindow] = createSignal("");
+	const [editCountsAsReply, setEditCountsAsReply] = createSignal(false);
 
 	const [deleteError, setDeleteError] = createSignal<string | null>(null);
 
@@ -64,6 +68,7 @@ function StatusesPage() {
 		setEditName(s.Name);
 		setEditColour(s.Colour);
 		setEditReplyWindow(s.ReplyWindowDays?.toString() ?? "");
+		setEditCountsAsReply(s.CountsAsReply);
 	};
 
 	const editForm = useFormSubmit(async () => {
@@ -75,6 +80,7 @@ function StatusesPage() {
 			name: editName().trim(),
 			colour: editColour(),
 			replyWindowDays: window.days,
+			countsAsReply: editCountsAsReply(),
 		});
 		setEditingId(null);
 	});
@@ -119,10 +125,12 @@ function StatusesPage() {
 										name={editName()}
 										colour={editColour()}
 										replyWindow={editReplyWindow()}
+										countsAsReply={editCountsAsReply()}
 										pending={editForm.pending()}
 										onName={setEditName}
 										onColour={setEditColour}
 										onReplyWindow={setEditReplyWindow}
+										onCountsAsReply={setEditCountsAsReply}
 										onEdit={() => startEdit(status)}
 										onCancel={() => setEditingId(null)}
 										onDelete={() => handleDelete(status.ID)}

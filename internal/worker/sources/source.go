@@ -18,6 +18,7 @@ import (
 
 const (
 	DefaultTimeout       = 15 * time.Second
+	ResidentialTimeout   = 60 * time.Second
 	maxRetryAfterSeconds = 24 * 60 * 60
 	userAgent            = "Mozilla/5.0 (compatible; job-scraper/1.0)"
 )
@@ -35,6 +36,8 @@ type Config struct {
 	Header      http.Header // overrides the default request headers for a host that rejects them
 	Cookies     bool
 	NewestFirst bool
+
+	RedirectRetires bool
 }
 
 // SnapshotSource is implemented by any source that has snapshot-testable parsers.
@@ -54,7 +57,7 @@ type Source interface {
 }
 
 type DetailFetcher interface {
-	GetDetails(ctx context.Context, url string) (dto.Job, error)
+	GetDetails(ctx context.Context, card dto.Job) (dto.Job, error)
 }
 
 // StatusError is returned by Get and PostJSON for any non-200 response other than 404 or 410.
@@ -84,6 +87,12 @@ type BoardPoller interface {
 // ErrGone is returned by Get and PostJSON for a 404 or 410 response.
 var ErrGone = errors.New("gone")
 
+var ErrMoved = errors.New("moved")
+
+var ErrNotRemote = errors.New("not remote")
+
+var ErrUnparseable = errors.New("unparseable")
+
 // ErrSourceKeyRejected is returned by a keyed Source when the provider refuses
 // its API key, so every Target of that Source will fail until the key changes.
 var ErrSourceKeyRejected = errors.New("source key rejected")
@@ -100,10 +109,14 @@ func NewBase(cfg Config) PaginatedBase {
 	if cfg.Cookies {
 		jar, _ = cookiejar.New(nil)
 	}
+	timeout := DefaultTimeout
+	if cfg.Route == RouteResidential {
+		timeout = ResidentialTimeout
+	}
 	return PaginatedBase{
 		cfg:     cfg,
 		initErr: err,
-		client: &http.Client{Jar: jar, Timeout: DefaultTimeout, Transport: logger.OutboundSpans(transport), CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		client: &http.Client{Jar: jar, Timeout: timeout, Transport: logger.OutboundSpans(transport), CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("too many redirects")
 			}
@@ -160,6 +173,9 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte,
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if b.cfg.RedirectRetires && resp.Request != nil && resp.Request.URL.Host != req.URL.Host {
+		return nil, fmt.Errorf("%w: redirected to %s", ErrMoved, resp.Request.URL.Host)
+	}
 	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
 		return nil, fmt.Errorf("%w: status %s", ErrGone, resp.Status)
 	}

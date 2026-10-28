@@ -7,6 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
@@ -32,6 +33,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	}
 
 	t.Run("claim on an empty queue returns not found", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		_, err := st.ClaimAnswerEffect(t.Context())
 		if !errors.Is(err, data.ErrNotFound) {
@@ -40,6 +42,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("get job for scoring on an unknown id returns not found", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		_, err := st.GetJobForScoring(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -48,6 +51,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("get job for scoring on a malformed id returns not found", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		_, err := st.GetJobForScoring(t.Context(), "not-a-uuid")
 		if !errors.Is(err, data.ErrNotFound) {
@@ -56,6 +60,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("get company profile on an unknown company returns not found", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		_, err := st.GetCompanyProfile(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -64,6 +69,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("get search config on an unknown user returns not found", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		_, err := st.GetSearchConfig(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -72,6 +78,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("excluding a company adds it once and keeps other entries", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		ctx := t.Context()
 		user := f.NewUser()
@@ -98,6 +105,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("excluding a company for a user with no config creates one", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		user := f.NewUser()
 		added, err := f.Store.AddExcludedCompany(t.Context(), user, "acme")
@@ -114,6 +122,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("removing an excluded company leaves the others", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		ctx := t.Context()
 		user := f.NewUser()
@@ -135,6 +144,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("reword an unknown option returns not found", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		err := st.RewordScoringOption(t.Context(), missingID, "question")
 		if !errors.Is(err, data.ErrNotFound) {
@@ -143,6 +153,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("retire an unknown option returns not found", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		err := st.RetireScoringOption(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -151,6 +162,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("add, reword then retire an option round trips", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		ctx := t.Context()
 		if err := st.AddScoringOption(ctx, optionID, "tech", "Go", "Does the role use Go?"); err != nil {
@@ -179,6 +191,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("retire an already retired option returns not found", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		ctx := t.Context()
 		if err := st.AddScoringOption(ctx, optionID, "tech", "Go", "Does the role use Go?"); err != nil {
@@ -193,6 +206,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("ops state on an empty store reports nothing", func(t *testing.T) {
+		t.Parallel()
 		st := newStore(t)
 		state, err := st.OpsState(t.Context())
 		if err != nil {
@@ -205,6 +219,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("score feedback lists newest first, pages, and filters by kind", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		ctx := t.Context()
 		user := f.NewUser()
@@ -249,6 +264,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("score feedback flags drift from the current Picks and model", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		ctx := t.Context()
 		user := f.NewUser()
@@ -316,6 +332,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("score feedback under no Picks stays current when the config stores none", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		ctx := t.Context()
 		user := f.NewUser()
@@ -333,6 +350,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("delete score feedback removes only the caller's entry", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		ctx := t.Context()
 		user, other := f.NewUser(), f.NewUser()
@@ -357,6 +375,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("grades upsert in place, list newest first and stay per user", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		ctx := t.Context()
 		user, other := f.NewUser(), f.NewUser()
@@ -390,6 +409,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("delete grade removes it and tolerates an ungraded job", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		ctx := t.Context()
 		user, job := f.NewUser(), f.NewJob()
@@ -408,6 +428,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("job score for feedback missing returns not found", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		_, err := f.Store.GetJobScoreForFeedback(t.Context(), f.NewUser(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -416,6 +437,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("collection scores for unknown jobs returns nothing", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		got, err := f.Store.ListJobScoresForCollection(t.Context(), f.NewUser(), []string{missingID})
 		if err != nil || len(got) != 0 {
@@ -424,6 +446,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	})
 
 	t.Run("clear score feedback deletes only that user's rows and counts them", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		ctx := t.Context()
 		user, other := f.NewUser(), f.NewUser()
@@ -441,6 +464,30 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		left, err := f.Store.ListScoreFeedback(ctx, other, dto.ScoreFeedbackFilter{Model: "m"}, 10, 0)
 		if err != nil || len(left) != 1 {
 			t.Fatalf("ListScoreFeedback(other) = %+v, %v, want the other user's one entry", left, err)
+		}
+	})
+
+	t.Run("upserting another user's push endpoint conflicts and changes nothing", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		ctx := t.Context()
+		owner, other := f.NewUser(), f.NewUser()
+		sub := dto.PushSubscriptionInput{Endpoint: "https://push.example/a", Keys: dto.PushKeys{P256dh: "p1", Auth: "a1"}}
+		if err := f.Store.UpsertPushSubscription(ctx, owner, sub); err != nil {
+			t.Fatalf("UpsertPushSubscription(owner) = %v", err)
+		}
+
+		hijack := dto.PushSubscriptionInput{Endpoint: sub.Endpoint, Keys: dto.PushKeys{P256dh: "p2", Auth: "a2"}}
+		if err := f.Store.UpsertPushSubscription(ctx, other, hijack); !apperr.IsKind(err, apperr.KindConflict) {
+			t.Fatalf("UpsertPushSubscription(other) err = %v, want a conflict", err)
+		}
+
+		got, err := f.Store.ListPushSubscriptions(ctx, owner)
+		if diff := cmp.Diff([]dto.PushSubscriptionInput{sub}, got); err != nil || diff != "" {
+			t.Errorf("ListPushSubscriptions(owner) = %v (-want +got):\n%s", err, diff)
+		}
+		if got, err := f.Store.ListPushSubscriptions(ctx, other); err != nil || len(got) != 0 {
+			t.Errorf("ListPushSubscriptions(other) = %+v, %v, want none", got, err)
 		}
 	})
 }

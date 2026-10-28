@@ -12,6 +12,11 @@ import {
 	useUpdateAchievement,
 	useUpdatePosition,
 } from "../../hooks/useExperience";
+import {
+	type AchievementSort,
+	sortAchievements,
+	statLine,
+} from "../../lib/achievementStats";
 import type { Achievement, Position } from "../../types/experience";
 import { PositionForm } from "./PositionForm";
 
@@ -40,6 +45,7 @@ function move<T>(items: T[], from: number, to: number): T[] {
 
 export function PositionCard(props: {
 	position: Position;
+	sort: AchievementSort;
 	index: number;
 	positionIds: string[];
 }) {
@@ -137,12 +143,12 @@ export function PositionCard(props: {
 				</div>
 			</Show>
 
-			<AchievementList position={props.position} />
+			<AchievementList position={props.position} sort={props.sort} />
 		</Card>
 	);
 }
 
-function AchievementList(props: { position: Position }) {
+function AchievementList(props: { position: Position; sort: AchievementSort }) {
 	const reorder = useReorderAchievements();
 	const create = useCreateAchievement();
 	const [draft, setDraft] = createSignal("");
@@ -161,13 +167,13 @@ function AchievementList(props: { position: Position }) {
 	return (
 		<div class="mt-3 border-t border-border pt-3">
 			<ul class="space-y-1.5">
-				<For each={props.position.achievements}>
+				<For each={sortAchievements(props.position.achievements, props.sort)}>
 					{(achievement, i) => (
 						<AchievementRow
 							achievement={achievement}
 							first={i() === 0}
 							last={i() === props.position.achievements.length - 1}
-							busy={reorder.isPending}
+							busy={reorder.isPending || props.sort !== "bank"}
 							onMove={(delta) =>
 								reorder.mutate({
 									positionId: props.position.id,
@@ -230,9 +236,22 @@ function AchievementRow(props: {
 							aria-hidden="true"
 							class="mt-2 size-1 shrink-0 rounded-full bg-faint"
 						/>
-						<p class="flex-1 text-sm text-foreground">
-							{props.achievement.text}
-						</p>
+						<div class="flex-1">
+							<p class="text-sm text-foreground">{props.achievement.text}</p>
+							<Show when={statLine(props.achievement.stats)}>
+								<p
+									class="mt-0.5 font-mono text-xs tabular-nums text-faint"
+									data-testid="achievement-stats"
+								>
+									{statLine(props.achievement.stats)}
+								</p>
+							</Show>
+							<Show when={props.achievement.context}>
+								<p class="mt-0.5 text-sm text-muted" data-testid="context">
+									{props.achievement.context}
+								</p>
+							</Show>
+						</div>
 						<div class="flex shrink-0 items-center">
 							<button
 								type="button"

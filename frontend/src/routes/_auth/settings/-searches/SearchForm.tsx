@@ -277,9 +277,10 @@ export function SearchForm(props: {
 				<Button
 					type="submit"
 					size="sm"
-					disabled={form.pending() || !value().trim() || !!scheduleError()}
+					loading={form.pending()}
+					disabled={!value().trim() || !!scheduleError()}
 				>
-					{form.pending() ? "Adding…" : "Add search"}
+					Add search
 				</Button>
 			</div>
 		</form>

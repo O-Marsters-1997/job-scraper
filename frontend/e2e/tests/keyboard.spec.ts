@@ -8,14 +8,19 @@ test.describe("Keyboard operability", () => {
 		await draftPage.goto();
 
 		await draftPage.line("Profile").focus();
+		const role = page.getByRole("button", {
+			name: "Choose Achievements for this role",
+		});
 		const order = [
-			"Senior Backend Engineer bullet 1",
-			"Senior Backend Engineer bullet 2",
-			"Software Engineer bullet 1",
+			role.nth(0),
+			draftPage.line("Senior Backend Engineer bullet 1"),
+			draftPage.line("Senior Backend Engineer bullet 2"),
+			role.nth(1),
+			draftPage.line("Software Engineer bullet 1"),
 		];
-		for (const label of order) {
+		for (const stop of order) {
 			await page.keyboard.press("Tab");
-			await expect(draftPage.line(label)).toBeFocused();
+			await expect(stop).toBeFocused();
 		}
 
 		await page.keyboard.press("Enter");
@@ -29,24 +34,8 @@ test.describe("Keyboard operability", () => {
 		).not.toBeFocused();
 	});
 
-	test("sorts the jobs table and opens a job with the keyboard", async ({
-		page,
-		jobsPage,
-	}) => {
+	test("opens a job with the keyboard", async ({ page, jobsPage }) => {
 		await jobsPage.goto();
-
-		const suitabilityHeader = page.getByRole("columnheader", {
-			name: /suitability/i,
-		});
-		const sortButton = suitabilityHeader.getByRole("button");
-		await expect(suitabilityHeader).toHaveAttribute("aria-sort", "none");
-
-		await sortButton.focus();
-		await page.keyboard.press("Enter");
-		await expect(suitabilityHeader).toHaveAttribute("aria-sort", "descending");
-
-		await page.keyboard.press("Enter");
-		await expect(suitabilityHeader).toHaveAttribute("aria-sort", "ascending");
 
 		const firstLink = jobsPage.firstJobTitleLink();
 		const title = (await firstLink.textContent())?.trim() ?? "";

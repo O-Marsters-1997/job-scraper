@@ -1,0 +1,74 @@
+import Observation
+import SwiftUI
+
+@Observable
+final class NotificationsModel {
+    private(set) var notifications: [AppNotification] = []
+    private(set) var loadState: LoadState<Void> = .idle
+
+    private let client: APIClient
+    private let now: () -> Date
+
+    init(client: APIClient, now: @escaping () -> Date = { .now }) {
+        self.client = client
+        self.now = now
+    }
+
+    var badge: Int { notifications.filter(\.isUnread).count }
+
+    var groups: [(String, [AppNotification])] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now())
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today) ?? today
+        let newest = notifications.sorted { $0.createdAt > $1.createdAt }
+        return [
+            ("Today", newest.filter { $0.createdAt >= today }),
+            ("Yesterday", newest.filter { $0.createdAt >= yesterday && $0.createdAt < today }),
+            ("Earlier", newest.filter { $0.createdAt < yesterday }),
+        ].filter { !$0.1.isEmpty }
+    }
+
+    func load() async {
+        if notifications.isEmpty { loadState = .loading }
+        do {
+            notifications = try await client.notifications()
+            loadState = .loaded(())
+        } catch is CancellationError {
+            return
+        } catch {
+            if notifications.isEmpty { loadState = .failed(error) }
+        }
+    }
+
+    func markRead(_ id: String) async {
+        let previous = notifications
+        guard let index = notifications.firstIndex(where: { $0.id == id }), notifications[index].isUnread else {
+            try? await client.markNotificationRead(id)
+            return
+        }
+        notifications[index] = notifications[index].markedRead()
+        do {
+            try await client.markNotificationRead(id)
+        } catch {
+            notifications = previous
+        }
+    }
+
+    func markAllRead() async {
+        let previous = notifications
+        notifications = notifications.map { $0.markedRead() }
+        do {
+            try await client.markAllNotificationsRead()
+        } catch {
+            notifications = previous
+        }
+    }
+}
+
+private extension AppNotification {
+    func markedRead() -> AppNotification {
+        AppNotification(
+            id: id, kind: kind, jobID: jobID, title: title, body: body, job: job, createdAt: createdAt,
+            readAt: readAt ?? .now)
+    }
+}

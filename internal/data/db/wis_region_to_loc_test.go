@@ -9,6 +9,7 @@ import (
 )
 
 func TestWisRegionToLocMigration(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	userID := pgtest.InsertUser(t, pool)

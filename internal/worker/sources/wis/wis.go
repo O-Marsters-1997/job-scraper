@@ -35,7 +35,6 @@ const (
 	selTitle       = `h1`
 	selCompany     = `.ui-company`
 	selLocation    = `.ui-location`
-	selTime        = `time[datetime]`
 	selDescription = `.adp-body`
 	selBadge       = `.inline-flex.flex-wrap span`
 )
@@ -53,7 +52,7 @@ var browserHeader = http.Header{
 	"Upgrade-Insecure-Requests": {"1"},
 }
 
-var limiter = sources.NewGate(wisGap, wisDefaultBlock)
+func NewGate() *sources.Gate { return sources.NewGate(wisGap, wisDefaultBlock) }
 
 // DetectWorkArrangement checks the REMOTE badge first — it's the authoritative signal —
 // then falls back to detecting hybrid/onsite from the description text.
@@ -74,19 +73,31 @@ type Search struct {
 
 const recencyMargin = time.Hour
 
-// Recency returns the smallest f value (days) covering the time since lastSucceeded
-// plus a margin. It returns "" on a first run or when more than 7 days have passed.
-func Recency(lastSucceeded *time.Time, now time.Time) string {
+func Recency(configured string, lastSucceeded *time.Time, now time.Time) string {
 	if lastSucceeded == nil {
 		return ""
 	}
 	elapsed := max(now.Sub(*lastSucceeded), 0) + recencyMargin
 	for _, days := range []int{1, 3, 7} {
-		if elapsed <= time.Duration(days)*24*time.Hour {
-			return strconv.Itoa(days)
+		if elapsed > time.Duration(days)*24*time.Hour {
+			continue
 		}
+		if n, err := strconv.Atoi(configured); err == nil && days >= n {
+			return ""
+		}
+		return strconv.Itoa(days)
 	}
 	return ""
+}
+
+func sortParams(sort string) (sb, sd string, newestFirst bool) {
+	switch sort {
+	case "salary_high":
+		return "salary", "down", false
+	case "salary_low":
+		return "salary", "up", false
+	}
+	return "date", "down", true
 }
 
 func (s Search) startURL() string {
@@ -95,7 +106,7 @@ func (s Search) startURL() string {
 	fields, _ := sourcespec.LookupFilterFields("wis")
 	for _, f := range fields {
 		value := s.Filters[f.Name]
-		if value == "" {
+		if value == "" || f.Param == "" {
 			continue
 		}
 		if !sourcespec.ValidFilterValue("wis", f.Name, value) {
@@ -104,8 +115,9 @@ func (s Search) startURL() string {
 		}
 		v.Set(f.Param, value)
 	}
-	v.Set("sb", "date")
-	v.Set("sd", "down")
+	sb, sd, _ := sortParams(s.Filters["sort"])
+	v.Set("sb", sb)
+	v.Set("sd", sd)
 	if s.Recency != "" {
 		v.Set("f", s.Recency)
 	}
@@ -123,22 +135,25 @@ func pageURL(s Search, page int) string {
 type Scraper struct {
 	sources.PaginatedBase
 	search      Search
+	gate        *sources.Gate
 	lastListing atomic.Pointer[string]
 }
 
 var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 
-func New(search Search) *Scraper {
+func New(search Search, gate *sources.Gate) *Scraper {
+	_, _, newestFirst := sortParams(search.Filters["sort"])
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:        "wis",
 			Route:       sources.RouteResidential,
 			Header:      browserHeader,
 			Cookies:     true,
-			NewestFirst: true,
+			NewestFirst: newestFirst,
 		}),
 		search: search,
+		gate:   gate,
 	}
 }
 
@@ -151,7 +166,7 @@ func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 }
 
 func (s *Scraper) get(ctx context.Context, url, referer string) ([]byte, error) {
-	if err := limiter.Wait(ctx); err != nil {
+	if err := s.gate.Wait(ctx); err != nil {
 		return nil, err
 	}
 	header := http.Header{"Sec-Fetch-Site": {"none"}}
@@ -162,7 +177,7 @@ func (s *Scraper) get(ctx context.Context, url, referer string) ([]byte, error) 
 	body, err := s.GetHeader(ctx, url, header)
 	var statusErr *sources.StatusError
 	if errors.As(err, &statusErr) && statusErr.Code == http.StatusTooManyRequests {
-		limiter.Block(statusErr.RetryAfter)
+		s.gate.Block(statusErr.RetryAfter)
 	}
 	return body, err
 }
@@ -201,16 +216,16 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 	return jobs, fmt.Sprintf("%d:%d", page+1, totalPages), nil
 }
 
-func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
+func (s *Scraper) GetDetails(ctx context.Context, card dto.Job) (dto.Job, error) {
 	referer := ""
 	if last := s.lastListing.Load(); last != nil {
 		referer = *last
 	}
-	body, err := s.get(ctx, url, referer)
+	body, err := s.get(ctx, card.URL, referer)
 	if err != nil {
 		return dto.Job{}, err
 	}
-	return ParseJobDetail(bytes.NewReader(body), url)
+	return ParseJobDetail(bytes.NewReader(body), card.URL)
 }
 
 func ParseTotalCount(r io.Reader) (int, error) {
@@ -285,17 +300,6 @@ func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 
 	location := strings.TrimSpace(doc.Find(selLocation).First().Text())
 
-	updatedAt := time.Now().UTC()
-	if dt, ok := doc.Find(selTime).First().Attr("datetime"); ok && dt != "" {
-		if t, err := time.Parse(time.RFC3339, dt); err == nil {
-			updatedAt = t
-		} else if t, err := time.Parse("2006-01-02", dt); err == nil {
-			updatedAt = t.UTC()
-		}
-	} else {
-		sources.WarnDefaulted("wis", "UpdatedAt", url)
-	}
-
 	descNode := doc.Find(selDescription).First()
 	desc, _ := descNode.Html()
 	description := strings.TrimSpace(desc)
@@ -318,7 +322,6 @@ func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 		URL:             url,
 		CompanySlug:     slug.Company(company),
 		Source:          "wis",
-		UpdatedAt:       updatedAt,
 		Description:     description,
 		SalaryRaw:       salaryRaw,
 		WorkArrangement: workArrangement,

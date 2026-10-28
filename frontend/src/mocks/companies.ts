@@ -2,11 +2,15 @@ import { faker } from "@faker-js/faker";
 import type { CompanyPageParams } from "@/api/companies";
 import { DEFAULT_RUN_WINDOW } from "@/lib/runWindow";
 import type {
+	ATSCount,
+	CompaniesExclusion,
 	Company,
 	CompanyBoard,
 	CompanyExclusion,
+	CompanyPage,
 	CompanyTracking,
 	NewCompany,
+	NewCompanyPage,
 	ReviewState,
 	TrackedCompany,
 } from "@/types/company";
@@ -81,34 +85,75 @@ export function getCompanies(): Company[] {
 	return companies.map(withFavourite);
 }
 
-export function getCompanyPage(params: CompanyPageParams): {
-	items: Company[];
-	total: number;
-} {
+export function getCompanyAtsCounts(): ATSCount[] {
+	failIfRequested("getCompanies");
+	const bySource = new Map<string, Set<string>>();
+	for (const b of companyBoards) {
+		if (b.Status !== "verified" || b.Source === "wttj") continue;
+		bySource.set(
+			b.Source,
+			(bySource.get(b.Source) ?? new Set()).add(b.CompanyID),
+		);
+	}
+	return [...bySource]
+		.map(([source, ids]) => ({ source, companies: ids.size }))
+		.sort((a, b) => a.source.localeCompare(b.source));
+}
+
+export function getCompanyPage(params: CompanyPageParams): CompanyPage {
 	failIfRequested("getCompanies");
 	const q = (params.q ?? "").toLowerCase();
 	const boardedCompanyIds = new Set(companyBoards.map((b) => b.CompanyID));
 	const byName = (a: Company, b: Company) =>
 		a.Name.localeCompare(b.Name) || a.ID.localeCompare(b.ID);
 	const rank = (first: boolean) => (first ? 0 : 1);
+	const byJobs = (a: Company, b: Company) =>
+		b.JobCount - a.JobCount || byName(a, b);
 	const byRelevance = (a: Company, b: Company) =>
+		rank(Boolean(a.Favourite)) - rank(Boolean(b.Favourite)) ||
 		rank(a.Tracked) - rank(b.Tracked) ||
-		rank(Boolean(a.Favourite) && a.Tracked) -
-			rank(Boolean(b.Favourite) && b.Tracked) ||
-		byName(a, b);
+		byJobs(a, b);
 	const matches = getCompanies()
 		.filter((c) => !params.tracked || c.Tracked)
 		.filter((c) => !params.favourite || c.Favourite)
 		.filter((c) => !params.noBoard || !boardedCompanyIds.has(c.ID))
 		.filter(
 			(c) =>
+				!params.ats?.length ||
+				companyBoards.some(
+					(b) =>
+						b.CompanyID === c.ID &&
+						b.Status === "verified" &&
+						params.ats?.includes(b.Source),
+				),
+		)
+		.filter(
+			(c) =>
+				!params.poster ||
+				(params.poster === "agency") ===
+					(c.Kind === "agency" || c.Kind === "likely_agency"),
+		)
+		.filter(
+			(c) =>
 				c.Name.toLowerCase().includes(q) || c.Slug.toLowerCase().includes(q),
 		)
-		.sort(params.sort === "alphabetical" ? byName : byRelevance);
+		.sort(
+			params.sort === "alphabetical"
+				? byName
+				: params.sort === "open_jobs"
+					? byJobs
+					: byRelevance,
+		);
 	const start = params.offset ?? 0;
 	return {
 		items: matches.slice(start, start + (params.limit ?? 50)),
 		total: matches.length,
+		allCompanies: companies.length,
+		verifiedBoardCompanies: new Set(
+			companyBoards
+				.filter((b) => b.Status === "verified" && b.Source !== "wttj")
+				.map((b) => b.CompanyID),
+		).size,
 	};
 }
 
@@ -132,6 +177,7 @@ export function addCompany(url: string, track: boolean): Company | null {
 		ATSSource: "",
 		ATSToken: "",
 		FirstSeenAt: new Date().toISOString(),
+		Kind: "unclassified",
 		JobCount: 0,
 		Tracked: track,
 		ReviewState: track ? "kept" : "",
@@ -174,11 +220,15 @@ export function getTrackedCompanies(): TrackedCompany[] {
 		.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function getNewCompanies(): NewCompany[] {
+export function getNewCompanies(
+	page: number,
+	pageSize: number,
+): NewCompanyPage {
 	failIfRequested("getNewCompanies");
-	return getTrackedCompanies()
-		.filter((c) => c.review_state === "new")
-		.map((c) => {
+	const all = getTrackedCompanies().filter((c) => c.review_state === "new");
+	const items = all
+		.slice((page - 1) * pageSize, page * pageSize)
+		.map((c): NewCompany => {
 			const scores = getJobs()
 				.filter((j) => j.CompanyID === c.id && j.SuitabilityScore != null)
 				.map((j) => j.SuitabilityScore as number);
@@ -191,11 +241,12 @@ export function getNewCompanies(): NewCompany[] {
 				best_suitability: scores.length ? Math.max(...scores) : null,
 				rollup: [
 					{ dimension: "tech", label: "Go", yes: 2, known: 3, total: 4 },
-					{ dimension: "domain", label: "Fintech", yes: 0, known: 0, total: 4 },
 				],
+				rollup_unknown: 1,
 				profile: null,
 			};
 		});
+	return { items, total: all.length };
 }
 
 export function untrackCompany(id: string): void {
@@ -209,12 +260,32 @@ export function setCompanyFavourite(id: string, favourite: boolean): Company {
 	const company = companies.find((c) => c.ID === id);
 	if (!company) throw new Error("Company not found");
 	setCompanyFavouriteFlag(id, favourite);
-	const updated: Company =
-		favourite && company.ReviewState === "new"
-			? { ...company, ReviewState: "kept" }
+	const hourly = favourite && company.ATSSource !== "";
+	if (hourly) trackedCompanyIds.add(id);
+	const updated: Company = hourly
+		? {
+				...company,
+				Tracked: true,
+				CheckIntervalMinutes: 60,
+				ReviewState: "kept",
+			}
+		: !favourite && trackedCompanyIds.has(id)
+			? { ...company, CheckIntervalMinutes: 360 }
 			: company;
 	companies = companies.map((c) => (c.ID === id ? updated : c));
 	return withFavourite(updated);
+}
+
+export function setCompanyKind(id: string, kind: "agency" | "direct"): Company {
+	const company = companies.find((c) => c.ID === id);
+	if (!company) throw new Error("Company not found");
+	const updated: Company = { ...company, Kind: kind };
+	companies = companies.map((c) => (c.ID === id ? updated : c));
+	return withFavourite(updated);
+}
+
+export function getCompanyKind(id: string | undefined): Company["Kind"] {
+	return companies.find((c) => c.ID === id)?.Kind ?? "unclassified";
 }
 
 export function setCompanyReview(
@@ -256,6 +327,37 @@ export function unexcludeCompany(
 	if (removeName) unexcludeCompanyName(company.Name);
 	if (trackedCompanyIds.has(id)) setCompanyReview(id, "new");
 	return { name: company.Name, added: false };
+}
+
+export function excludeCompanies(ids: string[]): CompaniesExclusion {
+	return {
+		companies: [...new Set(ids)].map((id) => ({
+			companyId: id,
+			...excludeCompany(id),
+		})),
+	};
+}
+
+export function unexcludeCompanies(
+	companies: { companyId: string; removeName: boolean }[],
+): CompaniesExclusion {
+	return {
+		companies: [
+			...new Map(companies.map((c) => [c.companyId, c])).values(),
+		].map((c) => ({
+			companyId: c.companyId,
+			...unexcludeCompany(c.companyId, c.removeName),
+		})),
+	};
+}
+
+export function setCompaniesKind(
+	ids: string[],
+	kind: "agency" | "direct",
+): { updated: number } {
+	const distinct = [...new Set(ids)];
+	for (const id of distinct) setCompanyKind(id, kind);
+	return { updated: distinct.length };
 }
 
 export function getCompanyBoards(companyID: string): CompanyBoard[] {

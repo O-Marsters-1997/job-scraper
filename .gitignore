@@ -11,6 +11,14 @@ bin/
 !.claude/skills/new-handler/
 !.claude/skills/schema-change/
 !.claude/skills/testing-policy/
+!.claude/skills/k6/
+!.claude/skills/loki/
+!.claude/skills/promql/
+!.claude/skills/tempo/
+!.claude/skills/GRAFANA-LICENSE
+!.claude/skills/THIRD_PARTY.md
+!.claude/perf/
+.perf-reports/
 .idea
 .vscode
 */**/node_modules
@@ -37,9 +45,17 @@ ideas
 # Plans and PRDs are local working files
 plans/
 docs/plans/
+docs/prds/
 docs/prd-*.md
 worker.log
+internal/services/cvtailor/eval/local/
 
 # Local schema diagram (regenerate with python3 docs/diagrams/build.py)
 docs/diagrams/
 .codegraph/
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+ios/Local.xcconfig
+ios/build/

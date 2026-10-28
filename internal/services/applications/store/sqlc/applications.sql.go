@@ -28,16 +28,26 @@ func (q *Queries) ClearApplicationChase(ctx context.Context, arg ClearApplicatio
 }
 
 const createApplication = `-- name: CreateApplication :one
-INSERT INTO applications (user_id, job_id, status_id, notes, applied_at, salary_info)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at, chase_by
+INSERT INTO applications (user_id, job_id, status_id, applied_at, salary_info, chase_by)
+SELECT p.user_id, p.job_id, p.status_id, p.applied_at, p.salary_info,
+       (SELECT CURRENT_DATE + s.reply_window_days FROM application_statuses s WHERE s.id = p.status_id)
+FROM (
+    SELECT $1::uuid AS user_id, $2::uuid AS job_id,
+           COALESCE($3::uuid,
+                    (SELECT d.id FROM application_statuses d
+                     WHERE d.user_id = $1::uuid AND d.system_key = 'draft')) AS status_id,
+           $4::date AS applied_at, $5::text AS salary_info
+) p
+WHERE $3::uuid IS NULL
+   OR EXISTS (SELECT 1 FROM application_statuses s
+              WHERE s.id = $3::uuid AND s.user_id = $1::uuid)
+RETURNING id, user_id, job_id, status_id, applied_at, salary_info, created_at, updated_at, chase_by
 `
 
 type CreateApplicationParams struct {
 	UserID     pgtype.UUID
 	JobID      pgtype.UUID
 	StatusID   pgtype.UUID
-	Notes      pgtype.Text
 	AppliedAt  pgtype.Date
 	SalaryInfo pgtype.Text
 }
@@ -47,7 +57,6 @@ func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationPa
 		arg.UserID,
 		arg.JobID,
 		arg.StatusID,
-		arg.Notes,
 		arg.AppliedAt,
 		arg.SalaryInfo,
 	)
@@ -57,7 +66,6 @@ func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationPa
 		&i.UserID,
 		&i.JobID,
 		&i.StatusID,
-		&i.Notes,
 		&i.AppliedAt,
 		&i.SalaryInfo,
 		&i.CreatedAt,
@@ -79,6 +87,21 @@ type DeleteApplicationParams struct {
 
 func (q *Queries) DeleteApplication(ctx context.Context, arg DeleteApplicationParams) error {
 	_, err := q.db.Exec(ctx, deleteApplication, arg.ID, arg.UserID)
+	return err
+}
+
+const deleteApplications = `-- name: DeleteApplications :exec
+DELETE FROM applications
+WHERE user_id = $1 AND id = ANY($2::uuid[])
+`
+
+type DeleteApplicationsParams struct {
+	UserID pgtype.UUID
+	Ids    []pgtype.UUID
+}
+
+func (q *Queries) DeleteApplications(ctx context.Context, arg DeleteApplicationsParams) error {
+	_, err := q.db.Exec(ctx, deleteApplications, arg.UserID, arg.Ids)
 	return err
 }
 
@@ -155,20 +178,46 @@ func (q *Queries) GetApplicationsForJobs(ctx context.Context, arg GetApplication
 	return items, nil
 }
 
+const isAppliedStatus = `-- name: IsAppliedStatus :one
+SELECT EXISTS (
+    SELECT 1 FROM application_statuses s
+    WHERE s.id = $1::uuid AND s.system_key = 'applied'
+)
+`
+
+func (q *Queries) IsAppliedStatus(ctx context.Context, id pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, isAppliedStatus, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listApplications = `-- name: ListApplications :many
 SELECT
     a.id, a.user_id, a.job_id, a.status_id,
-    a.notes, a.applied_at, a.salary_info, a.created_at, a.updated_at, a.chase_by,
+    a.applied_at, a.salary_info, a.created_at, a.updated_at, a.chase_by,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
     j.location     AS job_location,
     j.url          AS job_url,
     j.closed_at    AS job_closed_at,
     s.name         AS status_name,
-    s.colour       AS status_colour
+    s.colour       AS status_colour,
+    d.id           AS draft_id,
+    COALESCE(d.status, '')     AS draft_status,
+    d.outcome                  AS draft_outcome,
+    COALESCE(d.last_error, '') AS draft_last_error
 FROM applications a
 JOIN jobs j ON a.job_id = j.id
 LEFT JOIN application_statuses s ON a.status_id = s.id
+LEFT JOIN LATERAL (
+    SELECT c.id, c.status, c.outcome, c.last_error
+    FROM tailored_cvs c
+    WHERE c.user_id = a.user_id AND c.job_id = a.job_id
+      AND (c.outcome = 'kept' OR c.outcome IS NULL)
+    ORDER BY (c.outcome = 'kept') DESC NULLS LAST
+    LIMIT 1
+) d ON TRUE
 WHERE a.user_id = $1
   AND ($2::uuid IS NULL OR a.status_id = $2)
   AND (NOT $3::boolean OR a.chase_by IS NOT NULL)
@@ -188,7 +237,6 @@ type ListApplicationsRow struct {
 	UserID         pgtype.UUID
 	JobID          pgtype.UUID
 	StatusID       pgtype.UUID
-	Notes          pgtype.Text
 	AppliedAt      pgtype.Date
 	SalaryInfo     pgtype.Text
 	CreatedAt      pgtype.Timestamptz
@@ -201,6 +249,10 @@ type ListApplicationsRow struct {
 	JobClosedAt    pgtype.Timestamptz
 	StatusName     pgtype.Text
 	StatusColour   pgtype.Text
+	DraftID        pgtype.UUID
+	DraftStatus    string
+	DraftOutcome   pgtype.Text
+	DraftLastError string
 }
 
 func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsParams) ([]ListApplicationsRow, error) {
@@ -217,7 +269,6 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 			&i.UserID,
 			&i.JobID,
 			&i.StatusID,
-			&i.Notes,
 			&i.AppliedAt,
 			&i.SalaryInfo,
 			&i.CreatedAt,
@@ -230,6 +281,10 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 			&i.JobClosedAt,
 			&i.StatusName,
 			&i.StatusColour,
+			&i.DraftID,
+			&i.DraftStatus,
+			&i.DraftOutcome,
+			&i.DraftLastError,
 		); err != nil {
 			return nil, err
 		}
@@ -241,11 +296,48 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 	return items, nil
 }
 
+const markApplicationApplied = `-- name: MarkApplicationApplied :one
+WITH applied AS (
+    SELECT s.id, s.reply_window_days FROM application_statuses s
+    WHERE s.user_id = $2::uuid AND s.system_key = 'applied'
+), target AS (
+    SELECT a.id, a.status_id AS from_status_id FROM applications a
+    WHERE a.user_id = $2::uuid AND a.job_id = $3::uuid
+)
+UPDATE applications a
+SET status_id = applied.id,
+    applied_at = COALESCE(a.applied_at, $1::timestamptz::date),
+    chase_by = $1::timestamptz::date + applied.reply_window_days,
+    updated_at = $1::timestamptz
+FROM applied, target
+WHERE a.id = target.id AND a.status_id IS DISTINCT FROM applied.id
+RETURNING a.id, target.from_status_id, applied.id AS to_status_id
+`
+
+type MarkApplicationAppliedParams struct {
+	Now    pgtype.Timestamptz
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+}
+
+type MarkApplicationAppliedRow struct {
+	ID           pgtype.UUID
+	FromStatusID pgtype.UUID
+	ToStatusID   pgtype.UUID
+}
+
+func (q *Queries) MarkApplicationApplied(ctx context.Context, arg MarkApplicationAppliedParams) (MarkApplicationAppliedRow, error) {
+	row := q.db.QueryRow(ctx, markApplicationApplied, arg.Now, arg.UserID, arg.JobID)
+	var i MarkApplicationAppliedRow
+	err := row.Scan(&i.ID, &i.FromStatusID, &i.ToStatusID)
+	return i, err
+}
+
 const setApplicationChase = `-- name: SetApplicationChase :one
 UPDATE applications
 SET chase_by = $3
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at, chase_by
+RETURNING id, user_id, job_id, status_id, applied_at, salary_info, created_at, updated_at, chase_by
 `
 
 type SetApplicationChaseParams struct {
@@ -262,7 +354,6 @@ func (q *Queries) SetApplicationChase(ctx context.Context, arg SetApplicationCha
 		&i.UserID,
 		&i.JobID,
 		&i.StatusID,
-		&i.Notes,
 		&i.AppliedAt,
 		&i.SalaryInfo,
 		&i.CreatedAt,
@@ -273,18 +364,21 @@ func (q *Queries) SetApplicationChase(ctx context.Context, arg SetApplicationCha
 }
 
 const updateApplication = `-- name: UpdateApplication :one
-UPDATE applications
-SET status_id = $3, notes = $4, applied_at = $5, salary_info = $6, updated_at = NOW(),
-    chase_by = CASE WHEN status_id IS DISTINCT FROM $3 THEN NULL ELSE chase_by END
-WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at, chase_by
+UPDATE applications a
+SET status_id = $3, applied_at = $4, salary_info = $5, updated_at = NOW(),
+    chase_by = CASE WHEN a.status_id IS DISTINCT FROM $3
+                    THEN (SELECT CURRENT_DATE + s.reply_window_days FROM application_statuses s WHERE s.id = $3::uuid)
+                    ELSE a.chase_by END
+WHERE a.id = $1 AND a.user_id = $2
+  AND ($3::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM application_statuses s WHERE s.id = $3::uuid AND s.user_id = $2))
+RETURNING id, user_id, job_id, status_id, applied_at, salary_info, created_at, updated_at, chase_by
 `
 
 type UpdateApplicationParams struct {
 	ID         pgtype.UUID
 	UserID     pgtype.UUID
 	StatusID   pgtype.UUID
-	Notes      pgtype.Text
 	AppliedAt  pgtype.Date
 	SalaryInfo pgtype.Text
 }
@@ -294,7 +388,6 @@ func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationPa
 		arg.ID,
 		arg.UserID,
 		arg.StatusID,
-		arg.Notes,
 		arg.AppliedAt,
 		arg.SalaryInfo,
 	)
@@ -304,7 +397,6 @@ func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationPa
 		&i.UserID,
 		&i.JobID,
 		&i.StatusID,
-		&i.Notes,
 		&i.AppliedAt,
 		&i.SalaryInfo,
 		&i.CreatedAt,

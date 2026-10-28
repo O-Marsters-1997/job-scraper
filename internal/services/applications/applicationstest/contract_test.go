@@ -15,6 +15,6 @@ func TestFakeStoreSatisfiesContract(t *testing.T) {
 			jobs++
 			return fmt.Sprintf("job-extra-%d", jobs)
 		}
-		return applicationstest.Fixture{Store: applicationstest.NewFakeStore(), UserID: "user-1", JobID: "job-1", NewJob: newJob}
+		return applicationstest.Fixture{Store: applicationstest.NewFakeStore(), UserID: "user-1", OtherUserID: "user-2", JobID: "job-1", NewJob: newJob}
 	})
 }

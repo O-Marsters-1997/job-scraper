@@ -16,7 +16,7 @@ it builds a `sources.BoardSpec` and calls `sources.NewBoardSource`, implementing
 
 **HTML source** — a listing page with no API. Copy `internal/worker/sources/wis/wis.go`:
 it embeds `sources.PaginatedBase` and implements `FetchPage` plus `DetailFetcher`
-(`CanHandle`/`GetDetails`). Load the `goquery-parsing` skill before writing any
+(`GetDetails`). Load the `goquery-parsing` skill before writing any
 selectors — see `references/html-parsing.md` for when.
 
 ## 2. Register it
@@ -37,9 +37,10 @@ listing card is already the full job and no detail fetch is needed. `cmd/worker`
 Processor read the registry, so nothing else lists sources. Skip this step and the source is
 registered but silently never runs; `TestBuildSource_EveryRegisteredSourceInstantiates` catches it.
 
-ATS sources: save a real API response to `snapshots/<name>.json` and test `parse` with
-`sourcetest.RunGolden(t, "<name>.json", "<token>", parse)`. Create or refresh the
-`<name>.golden.json` with `go test ./internal/worker/sources/<source> -update` and review the diff.
+ATS sources: save a real API response to `snapshots/<fixture>.json` and test the source with
+`sourcetest.RunGolden(t, "<fixture>.json", <pkg>.New("<token>"))`, which serves the fixture as the
+API response and compares `FetchPage` to `snapshots/<fixture>.golden.json`. Create or refresh the
+golden file with `go test ./internal/worker/sources/<source> -update` and review the diff.
 
 ## 4. HTML sources only
 

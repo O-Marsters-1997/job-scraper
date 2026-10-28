@@ -17,11 +17,11 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	ctx := t.Context()
 
 	input := func(f Fixture) dto.DraftInput {
-		return dto.DraftInput{JobID: f.JobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}}
+		return dto.DraftInput{JobID: f.JobID, DocID: "doc", TabID: "t.0"}
 	}
 	create := func(t *testing.T, f Fixture) dto.Draft {
 		t.Helper()
-		d, err := f.Store.CreateDraft(ctx, f.UserID, input(f), nil)
+		d, err := f.Store.CreateDraft(ctx, f.UserID, input(f))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -37,6 +37,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 
 	t.Run("a created Draft is pending and private to its owner", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		if d.Status != "pending" {
@@ -51,11 +52,73 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("Profile Attempts are recorded only for the owner's Draft", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		d := create(t, f)
+		attempts := []dto.ProfileAttempt{{Text: "a", PromptKey: "k", Model: "m"}, {Text: "b", PromptKey: "k", Model: "m", Rejection: "no"}}
+		if err := f.Store.AddProfileAttempts(ctx, f.UserID, d.ID, attempts); err != nil {
+			t.Errorf("AddProfileAttempts(owner) err = %v, want nil", err)
+		}
+		if err := f.Store.AddProfileAttempts(ctx, f.Other, d.ID, attempts); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("AddProfileAttempts(other user) err = %v, want not found", err)
+		}
+		if err := f.Store.AddProfileAttempts(ctx, f.UserID, missingID, attempts); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("AddProfileAttempts(missing draft) err = %v, want not found", err)
+		}
+	})
+
+	t.Run("Profile captures are the owner's kept Drafts with Attempts, final from the edits or the base", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		kept := create(t, f)
+		if err := f.Store.CompleteDraft(ctx, claim(t, f), dto.DraftResult{EditSet: json.RawMessage(`{"positions":[],"profile":"edited"}`), BaseContent: json.RawMessage(`{"profile":"base"}`), DraftDocID: "doc-copy"}); err != nil {
+			t.Fatal(err)
+		}
+		first, second := dto.ProfileAttempt{Text: "a", PromptKey: "k", Model: "m"}, dto.ProfileAttempt{Text: "b", PromptKey: "k", Model: "m", Rejection: "no"}
+		if err := f.Store.AddProfileAttempts(ctx, f.UserID, kept.ID, []dto.ProfileAttempt{first, second}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, kept.ID, dto.OutcomeKept); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := f.Store.ListProfileCaptures(ctx, f.UserID)
+		if err != nil || len(got) != 1 {
+			t.Fatalf("ListProfileCaptures() = %+v, %v, want one capture", got, err)
+		}
+		if got[0].DraftID != kept.ID || got[0].BaseProfile != "base" || got[0].FinalProfile != "edited" {
+			t.Errorf("capture = %+v, want kept Draft with base and edited profiles", got[0])
+		}
+		if diff := cmp.Diff([]dto.ProfileAttempt{first, second}, got[0].Attempts); diff != "" {
+			t.Errorf("capture Attempts oldest first (-want +got):\n%s", diff)
+		}
+
+		if err := f.Store.SetDraftEdits(ctx, f.UserID, kept.ID, json.RawMessage(`{"positions":[]}`), nil, []string{}); err != nil {
+			t.Fatal(err)
+		}
+		got, err = f.Store.ListProfileCaptures(ctx, f.UserID)
+		if err != nil || len(got) != 1 || got[0].FinalProfile != "base" {
+			t.Errorf("ListProfileCaptures() with no profile edit = %+v, %v, want final = base", got, err)
+		}
+
+		if other, err := f.Store.ListProfileCaptures(ctx, f.Other); err != nil || len(other) != 0 {
+			t.Errorf("ListProfileCaptures(other user) = %+v, %v, want none", other, err)
+		}
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, kept.ID, dto.OutcomeDiscarded); err != nil {
+			t.Fatal(err)
+		}
+		if gone, err := f.Store.ListProfileCaptures(ctx, f.UserID); err != nil || len(gone) != 0 {
+			t.Errorf("ListProfileCaptures() after discard = %+v, %v, want none", gone, err)
+		}
+	})
+
 	t.Run("a Draft is claimed once and carries its request", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
-		if c.ID != d.ID || c.UserID != f.UserID || c.DocID != "doc" || c.TabID != "t.0" || len(c.AchievementIDs) != 1 || c.Attempts != 1 {
+		if c.ID != d.ID || c.UserID != f.UserID || c.DocID != "doc" || c.TabID != "t.0" || c.Attempts != 1 {
 			t.Errorf("ClaimDraft() = %+v, want the created Draft on attempt 1", c)
 		}
 		if _, err := f.Store.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
@@ -67,19 +130,8 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
-	t.Run("a claim carries the Draft's skill swaps", func(t *testing.T) {
-		f := newStore(t)
-		in := input(f)
-		in.SkillSwaps = []dto.SkillSwap{{BankSkillID: "b1", Line: 1, Replaces: "SQL"}}
-		if _, err := f.Store.CreateDraft(ctx, f.UserID, in, nil); err != nil {
-			t.Fatal(err)
-		}
-		if diff := cmp.Diff(in.SkillSwaps, claim(t, f).SkillSwaps); diff != "" {
-			t.Errorf("ClaimDraft().SkillSwaps mismatch (-want +got):\n%s", diff)
-		}
-	})
-
 	t.Run("completing records the result and the Doc", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
@@ -105,6 +157,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("saving edits replaces the edit set and findings for the owner only", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		if err := f.Store.CompleteDraft(ctx, claim(t, f), dto.DraftResult{EditSet: json.RawMessage(`{"positions":[]}`), DraftDocID: "doc-copy"}); err != nil {
@@ -112,13 +165,16 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 		finding := dto.DraftFinding{Check: "page_count", Severity: "block", Message: "over a page"}
 		edited := json.RawMessage(`{"positions":[{"positionId":"p","bullets":[]}]}`)
-		if err := f.Store.SetDraftEdits(ctx, f.Other, d.ID, edited, nil); !apperr.IsKind(err, apperr.KindNotFound) {
+		if err := f.Store.SetDraftEdits(ctx, f.Other, d.ID, edited, nil, nil); !apperr.IsKind(err, apperr.KindNotFound) {
 			t.Errorf("SetDraftEdits(other user) err = %v, want not found", err)
 		}
-		if err := f.Store.SetDraftEdits(ctx, f.UserID, d.ID, edited, []dto.DraftFinding{finding}); err != nil {
+		if err := f.Store.SetDraftEdits(ctx, f.UserID, d.ID, edited, []dto.DraftFinding{finding}, []string{}); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
+		if len(got.AchievementIDs) != 0 {
+			t.Errorf("GetDraft().AchievementIDs = %v, want the saved (empty) set", got.AchievementIDs)
+		}
 		if diff := cmp.Diff([]dto.DraftFinding{finding}, got.Findings); diff != "" {
 			t.Errorf("GetDraft().Findings mismatch (-want +got):\n%s", diff)
 		}
@@ -132,7 +188,28 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("insights are stored with their hash for the owner only", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		d := create(t, f)
+		lines := json.RawMessage(`[{"slotId":"s1"}]`)
+		if err := f.Store.SetDraftInsights(ctx, f.Other, d.ID, lines, "h1"); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("SetDraftInsights(other user) err = %v, want not found", err)
+		}
+		if got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID); len(got.InsightLines) != 0 || got.InsightsFor != "" {
+			t.Errorf("GetDraft() before Explain = %s / %q, want none", got.InsightLines, got.InsightsFor)
+		}
+		if err := f.Store.SetDraftInsights(ctx, f.UserID, d.ID, lines, "h1"); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
+		if !jsonEqual(t, lines, got.InsightLines) || got.InsightsFor != "h1" {
+			t.Errorf("GetDraft() = %s / %q, want %s / h1", got.InsightLines, got.InsightsFor, lines)
+		}
+	})
+
 	t.Run("a terminal failure is failed with its reason and no Doc", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
@@ -149,6 +226,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a retryable failure backs off instead of being re-claimed at once", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
@@ -165,8 +243,13 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a Job's Drafts list newest first and only for their owner", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
-		first, second := create(t, f), create(t, f)
+		first := create(t, f)
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeDiscarded); err != nil {
+			t.Fatal(err)
+		}
+		second := create(t, f)
 		got, err := f.Store.ListJobDrafts(ctx, f.UserID, f.JobID)
 		if err != nil || len(got) != 2 {
 			t.Fatalf("ListJobDrafts() = %+v, %v, want two Drafts", got, err)
@@ -180,13 +263,39 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
-	t.Run("a Job keeps at most one Draft", func(t *testing.T) {
+	t.Run("a Job has one open Draft until it is discarded", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
-		first, second := create(t, f), create(t, f)
+		asIs := input(f)
+		asIs.Mode = dto.DraftModeAsIs
+		first, err := f.Store.CreateDraft(ctx, f.UserID, asIs)
+		if err != nil || first.Mode != dto.DraftModeAsIs {
+			t.Fatalf("CreateDraft(as_is) = %+v, %v, want an as_is Draft", first, err)
+		}
+		if c := claim(t, f); c.ID != first.ID || c.Mode != dto.DraftModeAsIs {
+			t.Errorf("ClaimDraft() = %+v, want the as_is Draft with its mode", c)
+		}
+		_, err = f.Store.CreateDraft(ctx, f.UserID, input(f))
+		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindConflict.Status() {
+			t.Errorf("second CreateDraft() err = %v, want a conflict", err)
+		}
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeDiscarded); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Store.CreateDraft(ctx, f.UserID, input(f)); err != nil {
+			t.Errorf("CreateDraft() after discarding err = %v, want nil", err)
+		}
+	})
+
+	t.Run("a Job keeps at most one Draft", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		first := create(t, f)
 		kept, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeKept)
 		if err != nil || kept.Outcome == nil || *kept.Outcome != dto.OutcomeKept {
 			t.Fatalf("SetDraftOutcome(kept) = %+v, %v", kept, err)
 		}
+		second := create(t, f)
 		_, err = f.Store.SetDraftOutcome(ctx, f.UserID, second.ID, dto.OutcomeKept)
 		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindConflict.Status() {
 			t.Errorf("second SetDraftOutcome(kept) err = %v, want a conflict", err)
@@ -200,6 +309,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("discarding drops the Doc id and keeps the row", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
@@ -229,6 +339,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 
 	t.Run("keeping a ready Draft queues it and the claim completes the keep", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := ready(t, f)
 		queued, err := f.Store.QueueKeep(ctx, f.UserID, d.ID)
@@ -245,7 +356,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if _, err := f.Store.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
 			t.Errorf("ClaimDraft() while leased err = %v, want ErrNotFound", err)
 		}
-		if err := f.Store.CompleteKeep(ctx, c); err != nil {
+		if err := f.Store.CompleteKeep(ctx, c, nil); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
@@ -258,6 +369,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a failed keep backs off instead of being re-claimed at once", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := ready(t, f)
 		if _, err := f.Store.QueueKeep(ctx, f.UserID, d.ID); err != nil {
@@ -277,6 +389,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("a terminal keep failure returns the Draft to ready unkept with the error", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		d := ready(t, f)
 		if _, err := f.Store.QueueKeep(ctx, f.UserID, d.ID); err != nil {
@@ -290,4 +403,16 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Errorf("GetDraft() = %+v, want ready, unkept, last error set", got)
 		}
 	})
+}
+
+func jsonEqual(t *testing.T, a, b json.RawMessage) bool {
+	t.Helper()
+	var x, y any
+	if err := json.Unmarshal(a, &x); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &y); err != nil {
+		t.Fatal(err)
+	}
+	return cmp.Equal(x, y)
 }

@@ -114,7 +114,7 @@ func parse(token string, body []byte) ([]dto.Job, error) {
 			Description:       a.fullDescription(),
 			SalaryRaw:         a.salaryRaw(),
 			WorkArrangement:   a.workArrangement(),
-			UpdatedAt:         sources.RFC3339OrNow(a.PublishedAt),
+			PostedAt:          sources.RFC3339OrNil(a.PublishedAt),
 		})
 	}
 	return jobs, nil

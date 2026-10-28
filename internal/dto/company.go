@@ -12,6 +12,7 @@ type Company struct {
 	LinkedInCompanyID string
 	LastCrawledAt     *time.Time
 	FirstSeenAt       time.Time
+	Kind              CompanyKind
 
 	JobCount             int
 	Tracked              bool
@@ -27,6 +28,7 @@ type CompanySort string
 const (
 	CompanySortRelevance    CompanySort = "relevance"
 	CompanySortAlphabetical CompanySort = "alphabetical"
+	CompanySortOpenJobs     CompanySort = "open_jobs"
 )
 
 type CompaniesQuery struct {
@@ -37,6 +39,8 @@ type CompaniesQuery struct {
 	Favourite string `json:"favourite"`
 	NoBoard   string `json:"no_board"`
 	Sort      string `json:"sort"`
+	Poster    string `json:"poster"`
+	ATS       string `json:"ats"`
 }
 
 type CompanyPageOptions struct {
@@ -47,11 +51,21 @@ type CompanyPageOptions struct {
 	FavouriteOnly bool
 	NoBoardOnly   bool
 	Sort          CompanySort
+	Poster        Poster // empty means all
+	ATSSources    []string
+}
+
+type ATSCount struct {
+	Source    string `json:"source"`
+	Companies int    `json:"companies"`
 }
 
 type CompanyPage struct {
 	Items []Company `json:"items"`
 	Total int       `json:"total"`
+
+	AllCompanies           int `json:"allCompanies"`
+	VerifiedBoardCompanies int `json:"verifiedBoardCompanies"`
 }
 
 type CompanyTracking struct {

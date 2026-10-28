@@ -1,14 +1,18 @@
 package events_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/client"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/events/eventstest"
@@ -86,6 +90,35 @@ func TestRecord(t *testing.T) {
 		got := props(t, only(t, st))
 		if got["reason"] != "wrong seniority" || got["score"] != float64(72) || got["breakdown"] == nil {
 			t.Errorf("props = %v, want reason, score and breakdown", got)
+		}
+	})
+
+	t.Run("marks an undone dismissal", func(t *testing.T) {
+		st := eventstest.NewFakeStore()
+		svc := events.NewService(st, eventstest.ScoresAs(scored))
+
+		in := dto.EventInput{Type: events.JobDismissed, SubjectID: jobID, Undone: true}
+		if _, err := svc.Record(t.Context(), userID, in); err != nil {
+			t.Fatalf("Record() err = %v", err)
+		}
+
+		got := props(t, only(t, st))
+		if got["undone"] != true || got["score"] != nil || got["breakdown"] != nil {
+			t.Errorf("props = %v, want undone with no score stamp", got)
+		}
+	})
+
+	t.Run("ignores undone on other event types", func(t *testing.T) {
+		st := eventstest.NewFakeStore()
+		svc := events.NewService(st, eventstest.ScoresAs(scored))
+
+		in := dto.EventInput{Type: events.JobOpened, SubjectID: jobID, Undone: true}
+		if _, err := svc.Record(t.Context(), userID, in); err != nil {
+			t.Fatalf("Record() err = %v", err)
+		}
+
+		if got := props(t, only(t, st)); got["undone"] != nil {
+			t.Errorf("props = %v, want no undone", got)
 		}
 	})
 
@@ -178,4 +211,59 @@ func TestApplicationEventRecording(t *testing.T) {
 			t.Errorf("Snapshot() = %+v, want nil", snap)
 		}
 	})
+}
+
+func TestClientStamp(t *testing.T) {
+	t.Parallel()
+	t.Run("a client-reported event takes the request's client", func(t *testing.T) {
+		t.Parallel()
+		st := eventstest.NewFakeStore()
+		svc := events.NewService(st, eventstest.Unscored())
+		ctx := iosContext(t)
+
+		if _, err := svc.Record(ctx, userID, dto.EventInput{Type: events.AlertOpened}); err != nil {
+			t.Fatalf("Record() err = %v", err)
+		}
+		if got := only(t, st).Client; got != "ios" {
+			t.Errorf("Record() stored client %q, want ios", got)
+		}
+	})
+
+	t.Run("a server-recorded event defaults to web", func(t *testing.T) {
+		t.Parallel()
+		st := eventstest.NewFakeStore()
+		m := events.Build(events.Deps{Store: st, Snapshots: eventstest.Unscored()})
+
+		if err := m.RecordApplicationCreated(t.Context(), nil, userID, "app-1", jobID, nil); err != nil {
+			t.Fatalf("RecordApplicationCreated() err = %v", err)
+		}
+		if got := only(t, st).Client; got != "web" {
+			t.Errorf("RecordApplicationCreated() stored client %q, want web", got)
+		}
+	})
+
+	t.Run("a server-recorded event takes the request's client", func(t *testing.T) {
+		t.Parallel()
+		st := eventstest.NewFakeStore()
+		m := events.Build(events.Deps{Store: st, Snapshots: eventstest.Unscored()})
+		ctx := iosContext(t)
+
+		if err := m.RecordApplicationCreated(ctx, nil, userID, "app-1", jobID, nil); err != nil {
+			t.Fatalf("RecordApplicationCreated() err = %v", err)
+		}
+		if got := only(t, st).Client; got != "ios" {
+			t.Errorf("RecordApplicationCreated() stored client %q, want ios", got)
+		}
+	})
+}
+
+func iosContext(t *testing.T) context.Context {
+	t.Helper()
+	var ctx context.Context
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", nil)
+	req.Header.Set(client.Header, string(client.IOS))
+	client.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		ctx = r.Context()
+	})).ServeHTTP(httptest.NewRecorder(), req)
+	return ctx
 }

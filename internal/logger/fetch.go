@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -33,13 +34,13 @@ type fetchLogTransport struct {
 func (t fetchLogTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 	resp, err := t.base.RoundTrip(req)
-	LogFetch(req.Context(), req.URL.String(), resp, err, time.Since(start))
+	LogFetch(req.Context(), req.URL, resp, err, time.Since(start))
 	return resp, err
 }
 
 // LogFetch is FetchTransport's line, for a caller with its own RoundTrip
 // (retries, proxy zones) that can't just wrap a base transport.
-func LogFetch(ctx context.Context, url string, resp *http.Response, err error, duration time.Duration) {
+func LogFetch(ctx context.Context, u *url.URL, resp *http.Response, err error, duration time.Duration) {
 	if !slog.Default().Enabled(ctx, slog.LevelDebug) {
 		return
 	}
@@ -48,7 +49,7 @@ func LogFetch(ctx context.Context, url string, resp *http.Response, err error, d
 		status = resp.StatusCode
 	}
 	attrs := []any{
-		slog.String(KeyURL, url),
+		slog.String(KeyURL, redactedURL(u)),
 		slog.Int(KeyStatus, status),
 		slog.Int64(KeyDurationMS, duration.Milliseconds()),
 	}
@@ -56,4 +57,11 @@ func LogFetch(ctx context.Context, url string, resp *http.Response, err error, d
 		attrs = append(attrs, slog.Any(KeyErr, err))
 	}
 	slog.DebugContext(ctx, "outbound fetch", attrs...)
+}
+
+func redactedURL(u *url.URL) string {
+	if u == nil {
+		return ""
+	}
+	return (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path}).String()
 }

@@ -7,12 +7,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
 func (m *Module) Routes(r chi.Router) {
 	r.Route("/cv-templates", func(r chi.Router) {
-		r.Get("/", handlers.GetAll(m.svc.List))
+		r.Get("/", handlers.Query(func(ctx context.Context, userID string, q dto.TrackedDocKindQuery) ([]CV, error) {
+			return m.svc.List(ctx, userID, q.Kind)
+		}))
 		r.Get("/{docId}/{tabId}/pdf", exportCV(m.svc))
 	})
 
@@ -21,6 +24,7 @@ func (m *Module) Routes(r chi.Router) {
 		r.Delete("/{id}", handlers.Delete(m.store.RemoveTrackedDoc))
 		r.Post("/{docId}/tabs/{tabId}/hide", handlers.Update(m.svc.HideTab))
 		r.Post("/{docId}/tabs/{tabId}/show", handlers.Update(m.svc.ShowTab))
+		r.Post("/{docId}/tabs/{tabId}/default", handlers.Update(m.svc.SetDefaultTab))
 	})
 }
 

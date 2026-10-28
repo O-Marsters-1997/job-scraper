@@ -1,16 +1,20 @@
 import type {
+	BulletLean,
 	CVHeading,
 	Draft,
 	DraftContent,
 	DraftInput,
+	DraftInsights,
 	DraftLayout,
+	DraftPositionEdit,
 	DraftProvenance,
 	DraftRef,
+	DraftRoles,
 	ExperienceMatch,
-	Explanation,
 	HeadingMapping,
 	LayoutBlock,
 	LayoutRun,
+	ProfileRedraftInput,
 	SkillGroup,
 	SkillSuggestions,
 	SlotEdit,
@@ -21,6 +25,7 @@ import type {
 import { KeptDraftExistsError } from "../lib/tailoring";
 import { getExperience } from "./experience";
 import { getJobs } from "./jobs";
+import { seed } from "./seed";
 
 const savedHeadings = new Map<string, HeadingMapping[]>();
 
@@ -52,6 +57,51 @@ export function saveHeadings(
 ): HeadingMapping[] {
 	savedHeadings.set(`${docId}/${tabId}`, mappings);
 	return mappings;
+}
+
+export function getDraftLean(): BulletLean[] {
+	return [];
+}
+
+export function getDraftRoles(): DraftRoles {
+	const role = (
+		positionId: string,
+		title: string,
+		employer: string,
+		budget: number,
+		used: number,
+	) => ({
+		positionId,
+		employer,
+		title,
+		budget,
+		bullets: [
+			{
+				slotId: `${positionId}-s1`,
+				achievementId: null,
+				text: title,
+				lines: used,
+				lean: null,
+				state: null,
+				onSource: true,
+				replacedFrom: null,
+			},
+		],
+		bank: [],
+	});
+	return {
+		draftId: "draft-ready",
+		kept: false,
+		spills: false,
+		roles: [
+			role("position-1", "Senior Backend Engineer", "Acme Ltd", 4, 6),
+			role("position-2", "Software Engineer", "Globex", 3, 2),
+		],
+	};
+}
+
+export function getDraftInsights(): DraftInsights {
+	return { lines: [], stale: false };
 }
 
 export function getExperienceMatch(): ExperienceMatch {
@@ -111,6 +161,7 @@ export function getSuggestions(): Suggestion[] {
 			text: a.text,
 			score: scores[i] ?? 0.1,
 			preselected: i < slots,
+			lines: 1 + (i % 2),
 			state: i === 2 ? "unclear" : i > 2 ? "low" : "fit",
 		}));
 	});
@@ -125,17 +176,17 @@ const MOCK_PROFILE =
 
 const MOCK_ACHIEVEMENTS = [
 	{
-		id: "ach-1",
+		id: "achievement-1",
 		positionId: "position-1",
 		text: "Cut p99 latency of the billing API from 900ms to 240ms.",
 	},
 	{
-		id: "ach-2",
+		id: "achievement-2",
 		positionId: "position-1",
 		text: "Led the migration of twelve services to Kubernetes, reducing deploy time and the pager load for a team of eight across two time zones.",
 	},
 	{
-		id: "ach-3",
+		id: "achievement-3",
 		positionId: "position-2",
 		text: "Built the internal ledger service in Go and Postgres.",
 	},
@@ -183,9 +234,29 @@ function mockContent(): Pick<Draft, "content" | "base"> {
 		profile,
 		skills: skillGroups.flatMap((g) => g.items),
 		skillGroups,
-		positions: p ? [{ positionId: p.id, bullets: bullets.map(bullet) }] : [],
+		positions: p
+			? [
+					{
+						positionId: p.id,
+						headingText: "",
+						linked: true,
+						bullets: bullets.map(bullet),
+					},
+				]
+			: [],
 	});
 	const [first = "", second = "", third = ""] = texts;
+	const generated = (positionId: string, slotIds: string[]) => ({
+		positionId,
+		headingText: "",
+		linked: true,
+		bullets: slotIds.map((slotId) => ({
+			text: MOCK_BULLET_TEXT[slotId] ?? "",
+			achievementIds: MOCK_ACHIEVEMENTS.filter(
+				(a) => a.text === MOCK_BULLET_TEXT[slotId],
+			).map((a) => a.id),
+		})),
+	});
 	return {
 		base: content(
 			[first, second, third],
@@ -195,14 +266,26 @@ function mockContent(): Pick<Draft, "content" | "base"> {
 			],
 			"Backend engineer with six years of experience.",
 		),
-		content: content(
-			[third, `${first} using Kubernetes`, "Led the on-call rota"],
-			[
-				{ label: "Languages", items: ["Go", "SQL"] },
-				{ label: "Tools", items: ["Postgres", "Kubernetes"] },
+		content: {
+			...content(
+				[],
+				[
+					{ label: "Languages", items: ["Go", "SQL"] },
+					{ label: "Tools", items: ["Postgres", "Kubernetes"] },
+				],
+				"Backend engineer with six years of experience in platform work.",
+			),
+			positions: [
+				generated("position-1", ["s1", "s2"]),
+				generated("position-2", ["s3"]),
+				{
+					positionId: "",
+					headingText: "Contractor, Initech",
+					linked: false,
+					bullets: [],
+				},
 			],
-			"Backend engineer with six years of experience in platform work.",
-		),
+		},
 	};
 }
 
@@ -212,6 +295,7 @@ export function createDraft(input: DraftInput): DraftRef {
 		draft: {
 			id,
 			jobId: input.jobId,
+			mode: input.mode,
 			status: "pending",
 			outcome: null,
 			keptAs: "",
@@ -223,6 +307,7 @@ export function createDraft(input: DraftInput): DraftRef {
 			content: null,
 			base: null,
 			skillsEditable: false,
+			insights: null,
 			baseDocId: input.docId,
 			baseTabId: input.tabId,
 		},
@@ -255,6 +340,7 @@ export function getDraft(id: string): Draft {
 			draftDocUrl: MOCK_DOC_URL,
 			provenance: mockProvenance(),
 			skillsEditable: true,
+			insights: null,
 			...mockContent(),
 			findings: [
 				{
@@ -299,15 +385,39 @@ export function discardDraft(id: string): Draft {
 	return entry.draft;
 }
 
+export const MOCK_REDRAFT_REJECTED =
+	"the redraft was rejected by the guardrails";
+
+export function redraftProfile(id: string, input: ProfileRedraftInput): Draft {
+	const entry = mockEntry(id);
+	const { content } = entry.draft;
+	if (!content) throw new Error(`mock draft ${id} is not ready`);
+	if (input.steer?.includes("reject")) throw new Error(MOCK_REDRAFT_REJECTED);
+	const steer = input.steer ? ` (${input.steer})` : "";
+	entry.draft = {
+		...entry.draft,
+		content: { ...content, profile: `Redrafted profile${steer}.` },
+	};
+	return entry.draft;
+}
+
 const MOCK_TWO_PAGES_CHARS = 1500;
 
 export function saveDraftSlots(
 	id: string,
 	slots: SlotEdit[],
 	skills?: SkillGroup[],
+	positions: DraftPositionEdit[] = [],
+	roles?: string[],
 ): Draft {
 	const entry = mockEntry(id);
 	if (!entry.draft.provenance) throw new Error(`mock draft ${id} is not ready`);
+	for (const { positionId } of positions) addMockRole(entry, positionId);
+	if (!entry.draft.provenance) throw new Error(`mock draft ${id} is not ready`);
+	const order =
+		roles ?? entry.draft.provenance.positions.map((p) => p.positionId);
+	const byRole = <T extends { positionId: string }>(positions: T[]) =>
+		order.flatMap((r) => positions.filter((p) => p.positionId === r));
 	const chars = slots.reduce((n, s) => n + s.text.length, 0);
 	const findings = entry.draft.findings.filter((f) => f.check !== "page_count");
 	if (chars > MOCK_TWO_PAGES_CHARS)
@@ -316,14 +426,18 @@ export function saveDraftSlots(
 			severity: "block",
 			message: "the Draft is 2 pages; the base CV is 1",
 		});
-	const provenance = mockProvenance();
+	const replaced = replaceProvenance(entry.draft.provenance, positions);
+	const provenance = { ...replaced, positions: byRole(replaced.positions) };
 	const { content } = entry.draft;
+	const edited =
+		content && applySlots(replaceContent(content, positions), replaced, slots);
 	entry.draft = {
 		...entry.draft,
 		findings,
 		provenance,
-		content: content && {
-			...applySlots(content, provenance, slots),
+		content: edited && {
+			...edited,
+			positions: byRole(edited.positions),
 			...(skills && {
 				skills: skills.flatMap((g) => g.items),
 				skillGroups: skills,
@@ -331,6 +445,75 @@ export function saveDraftSlots(
 		},
 	};
 	return entry.draft;
+}
+
+function addMockRole(entry: ReturnType<typeof mockEntry>, positionId: string) {
+	const { provenance, content } = entry.draft;
+	const position = getExperience().find((p) => p.id === positionId);
+	if (
+		!provenance ||
+		!position ||
+		provenance.positions.some((p) => p.positionId === positionId)
+	)
+		return;
+	entry.draft = {
+		...entry.draft,
+		provenance: {
+			...provenance,
+			positions: [
+				...provenance.positions,
+				{
+					positionId,
+					employer: position.employer,
+					title: position.title,
+					bullets: [],
+				},
+			],
+		},
+		content: content && {
+			...content,
+			positions: [
+				...content.positions,
+				{ positionId, headingText: "", linked: true, bullets: [] },
+			],
+		},
+	};
+}
+
+function replaceContent(
+	content: DraftContent,
+	positions: DraftPositionEdit[],
+): DraftContent {
+	return {
+		...content,
+		positions: content.positions.map((p) => {
+			const replaced = positions.find((r) => r.positionId === p.positionId);
+			return replaced ? { ...p, ...replaced } : p;
+		}),
+	};
+}
+
+function replaceProvenance(
+	provenance: DraftProvenance,
+	positions: DraftPositionEdit[],
+): DraftProvenance {
+	return {
+		...provenance,
+		positions: provenance.positions.map((p) => {
+			const replaced = positions.find((r) => r.positionId === p.positionId);
+			if (!replaced) return p;
+			return {
+				...p,
+				bullets: replaced.bullets.map((b, i) => ({
+					slotId: p.bullets[i]?.slotId ?? `s-${p.positionId}-${i}`,
+					achievements: getExperience()
+						.flatMap((position) => position.achievements)
+						.filter((a) => b.achievementIds.includes(a.id))
+						.map(({ id, positionId, text }) => ({ id, positionId, text })),
+				})),
+			};
+		}),
+	};
 }
 
 function applySlots(
@@ -357,12 +540,13 @@ function applySlots(
 	};
 }
 
-function seedDraft(id: string, outcome: Draft["outcome"]) {
+function seedDraft(id: string, outcome: Draft["outcome"], jobId?: string) {
 	mockDrafts.set(id, {
 		polls: 0,
 		draft: {
 			id,
-			jobId: getJobs().at(-1)?.ID ?? "",
+			jobId: jobId ?? getJobs().at(-1)?.ID ?? "",
+			mode: "generate",
 			status: "ready",
 			outcome,
 			keptAs: outcome === "kept" ? "doc" : "",
@@ -389,6 +573,7 @@ function seedDraft(id: string, outcome: Draft["outcome"]) {
 			],
 			provenance: mockProvenance(),
 			skillsEditable: true,
+			insights: null,
 			baseDocId: "mock-doc",
 			baseTabId: "mock-tab",
 			...mockContent(),
@@ -415,7 +600,7 @@ function seedUnsettled(id: string, status: Draft["status"], lastError = "") {
 seedDraft("draft-ready", null);
 seedUnsettled("draft-pending", "pending");
 seedUnsettled("draft-failed", "failed", "the model timed out");
-seedDraft("draft-kept", "kept");
+seedDraft("draft-kept", "kept", seed.applications.at(-1)?.JobID);
 
 const mockRun = (text: string, over: Partial<LayoutRun> = {}): LayoutRun => ({
 	text,
@@ -556,13 +741,4 @@ export async function streamSuggestion(
 	}
 	signal.throwIfAborted();
 	return { text, findings: [] };
-}
-
-export async function explainAchievement(
-	_achievementId: string,
-): Promise<Explanation> {
-	await new Promise((resolve) => setTimeout(resolve, MOCK_WORD_MS * 10));
-	return {
-		text: "The job asks for on-call ownership; this bullet doesn't show it.",
-	};
 }

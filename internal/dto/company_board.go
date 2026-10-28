@@ -21,6 +21,7 @@ type CompanyBoard struct {
 	VerifiedAt         *time.Time
 	LastLinkedAt       *time.Time
 	RetiredAt          *time.Time
+	UKJobsSeenAt       *time.Time
 	LastCompletedAt    *time.Time
 	// LastReportedTotal is how many jobs the ATS said the Board held on its last poll; 0 means unknown.
 	LastReportedTotal int
@@ -34,4 +35,5 @@ type CardBoard struct {
 	Source      string
 	BoardToken  string
 	Tracked     bool
+	Polled      bool
 }

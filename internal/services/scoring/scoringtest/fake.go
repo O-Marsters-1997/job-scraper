@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
@@ -25,6 +26,8 @@ type CompletedEffect struct {
 	Effect  dto.AnswerEffect
 	Answers map[string]dto.Answer
 	Scores  []dto.JobScore
+
+	Rejections []dto.JobRejection
 }
 
 // QueuedMissing is one recorded QueueMissingAnswers call.
@@ -240,10 +243,10 @@ func (f *FakeStore) markScored(jobID string, scores []dto.JobScore) {
 	}
 }
 
-func (f *FakeStore) CompleteAnswerEffect(_ context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
+func (f *FakeStore) CompleteAnswerEffect(_ context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore, rejections []dto.JobRejection) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.completed = append(f.completed, CompletedEffect{Effect: effect, Answers: answers, Scores: scores})
+	f.completed = append(f.completed, CompletedEffect{Effect: effect, Answers: answers, Scores: scores, Rejections: rejections})
 	f.markScored(effect.JobID, scores)
 	saved := make([]string, len(scores))
 	for i, s := range scores {
@@ -504,6 +507,11 @@ var _ scoring.Store = (*FakeStore)(nil)
 func (f *FakeStore) UpsertPushSubscription(_ context.Context, userID string, sub dto.PushSubscriptionInput) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	for owner, subs := range f.pushes {
+		if owner != userID && slices.ContainsFunc(subs, func(s dto.PushSubscriptionInput) bool { return s.Endpoint == sub.Endpoint }) {
+			return apperr.Conflict("push endpoint belongs to another user")
+		}
+	}
 	f.deletePush(sub.Endpoint)
 	f.pushes[userID] = append(f.pushes[userID], sub)
 	return nil

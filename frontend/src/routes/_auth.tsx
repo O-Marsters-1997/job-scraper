@@ -1,9 +1,11 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/solid-router";
-import { createSignal } from "solid-js";
+import { createSignal, Suspense } from "solid-js";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { PushBanner } from "../components/PushBanner";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import TweaksPanel from "../components/TweaksPanel";
+import { FullPageSpinner } from "../components/ui/spinner";
 import { meQueryOptions } from "../hooks/useAuth";
 import {
 	createUsageWarning,
@@ -19,6 +21,7 @@ export const Route = createFileRoute("/_auth")({
 			throw redirect({ to: "/login" });
 		}
 	},
+	pendingComponent: FullPageSpinner,
 	component: AuthLayout,
 });
 
@@ -47,7 +50,9 @@ function AuthLayout() {
 						</div>
 						<div class="relative z-10">
 							<PushBanner />
-							<Outlet />
+							<Suspense fallback={<PageSkeleton />}>
+								<Outlet />
+							</Suspense>
 						</div>
 					</main>
 				</div>

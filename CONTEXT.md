@@ -71,7 +71,7 @@ An applicant tracking system (Greenhouse, Lever, Ashby, Workable, Recruitee, Per
 _Avoid_: Platform (when ambiguous), provider
 
 **Aggregator**:
-A discovery-only Source (LinkedIn, Indeed) used to find job URLs, never to extract content; a discovered URL is re-classified and extracted from its underlying ATS where possible.
+A discovery-only Source (LinkedIn, Indeed) used to find job URLs, never to extract content; a discovered URL is re-classified and extracted from its underlying ATS where possible. Welcome to the Jungle (WTTJ) is also an Aggregator, not an ATS: a Company may have a WTTJ Board alongside its ATS Board (ADR 0007), and the UI labels it an aggregator.
 _Avoid_: Board — an Aggregator is not a Source of content
 
 **ATSType**:
@@ -120,8 +120,22 @@ A user's tracked pursuit of a Job, moving through Statuses.
 _Avoid_: Submission, app
 
 **Status**:
-A stage in the application pipeline (saved, applied, phone, interview, offer, rejected, plus custom). Each user has their own set.
+A stage in the application pipeline, seeded as Draft, Applied, Interviewing, Rejected and Offer, plus custom. Each user has their own set. Draft and Applied are fixed (they carry a system key): they can be recoloured but not renamed or deleted. Tracking a Job creates its Application in Draft.
 _Avoid_: Stage, state, step
+
+### Tasks
+
+**Task**:
+A user's own to-do on their job search. It has a Task type, may relate to a Job (set only at creation), and may carry a link and notes. Open until marked done. A Task relates to a Job but does not belong to one.
+_Avoid_: Todo, reminder, action
+
+**Task type**:
+A label for what kind of Task it is (Apply, Follow up, Reach out, Prep by default, plus custom). Each user has their own set, seeded at signup.
+_Avoid_: Category, kind
+
+**Due list**:
+The iOS tab of what needs acting on now: chases due, open Tasks and ready CV drafts (ADR 0035).
+_Avoid_: Agenda, today, inbox — Tasks have no due date, only chases do
 
 ### Scoring & criteria
 
@@ -207,6 +221,18 @@ The one-tap "Not for me" that saves Grade `no` and hides the Job from that User'
 blocked row. Undo clears the Grade.
 _Avoid_: Hide, archive, delete — nothing is removed and the Job page still opens
 
+**Triage queue**:
+The iOS app's stack of a User's unseen scored Jobs, drained by Shortlist, Dismiss or skip (ADR 0035).
+_Avoid_: Inbox, feed — and keep distinct from Review state, which is about Tracked Companies
+
+**Shortlist**:
+The iOS right swipe that tracks a Job, creating its Application in Draft and its Apply Task.
+_Avoid_: Save, like, favourite (favourites are Companies)
+
+**Shortlisted list**:
+The iOS screen, pushed from Due, of Shortlisted Jobs with an open Apply Task, in two categories: **Not drafted** (no CV draft) and **Ready to apply** (a kept CV, not yet applied) (ADR 0037).
+_Avoid_: Backlog, pre-application list
+
 **Replay**:
 A report of where a User's labelled Jobs rank under their current Picks, re-scored from cached Answers
 without calling Jev. Positives are Grade `great`/`ok`, an application or a kept tailored CV; negatives
@@ -243,7 +269,7 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 ### CV tailoring
 
 **Draft**:
-A CV tailored for one Job from a base CV, edited and reviewed in the app until the user keeps or discards it. Its content is owned by the app; once kept it becomes a Tab nested under its base CV and can no longer be edited in the app.
+A CV tailored for one Job from a base CV, edited and reviewed in the app until the user keeps or discards it. Its content is owned by the app; once kept it becomes a named Doc (`kept_as = 'doc'`) and stays editable, while a discarded Draft is read-only ([ADR 0038](docs/adr/0038-kept-drafts-stay-editable.md)).
 _Avoid_: Tailored CV, copy, version
 
 **Profile**:
@@ -257,6 +283,14 @@ _Avoid_: Keywords, tech stack
 **Bank Skill**:
 A technology or skill in the user's Experience Bank, with a free-text category, kept in the user's own order. Names are unique per user, ignoring case.
 _Avoid_: Tag, keyword, tech option — not the seeded scoring options
+
+**Profile Redraft**:
+A model-written rewrite of a Draft's Profile for its Job, made from the base Profile, the Job's description and the user's Bank Skill names. Made only when the user asks, optionally with a steer, and never as part of generating the Draft. A redraft that breaks the guardrails is never shown; the Profile stays as it was.
+_Avoid_: Summary, description tailoring, Profile suggestion (a suggestion is an inline edit of one line)
+
+**Profile Attempt**:
+One Profile Redraft as generated, with its steer and whether the guardrails rejected it. A kept Draft's Attempts, set against its final Profile, are what Profile generation is tuned against.
+_Avoid_: Sample, version
 
 ## Relationships
 

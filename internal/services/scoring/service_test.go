@@ -6,9 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +21,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/openrouter"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
@@ -98,6 +102,25 @@ func (f *failingAnswerer) Answer(context.Context, string, dto.Job, []string) (ma
 	return nil, dto.Usage{}, errors.New("jev boom")
 }
 
+type errAnswerer struct{ err error }
+
+func (e errAnswerer) Answer(context.Context, string, dto.Job, []string) (map[string]dto.Answer, dto.Usage, error) {
+	return nil, dto.Usage{}, e.err
+}
+
+type panicOnceAnswerer struct {
+	once sync.Once
+}
+
+func (p *panicOnceAnswerer) Answer(ctx context.Context, key string, job dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
+	panicked := false
+	p.once.Do(func() { panicked = true })
+	if panicked {
+		panic("boom")
+	}
+	return (&fakeAnswerer{}).Answer(ctx, key, job, questions)
+}
+
 type fakeCredentials struct{ key string }
 
 func (f *fakeCredentials) Get(context.Context, string, string) (string, error) {
@@ -112,6 +135,20 @@ type fakeAlerter struct{ notified []string }
 func (f *fakeAlerter) NotifyNewJob(_ context.Context, _ dto.Job, email string) error {
 	f.notified = append(f.notified, email)
 	return nil
+}
+
+type fakeNotifications struct {
+	users []string
+	err   error
+}
+
+func (f *fakeNotifications) NewJob(_ context.Context, userID string, _ dto.Job) error {
+	f.users = append(f.users, userID)
+	return f.err
+}
+
+func withNotifications(n scoring.Notifications) depsOpt {
+	return func(d *scoring.Deps) { d.Notifications = n }
 }
 
 type fakeProfiles struct{ emails map[string]string }
@@ -286,13 +323,37 @@ func TestRunTick(t *testing.T) {
 		st := newFakeStore()
 		seedEffect(st, false, picking("user-1", "tech:go"))
 
-		runTick(t, st, withAnswerer(&failingAnswerer{}))
+		svc := newService(t, st, withKey("sk-or-test"), withAnswerer(&failingAnswerer{}))
+		err := svc.RunTick(t.Context())
 
+		if err == nil {
+			t.Error("RunTick() err = nil, want the joined effect error")
+		}
 		if lines := scoreCallLines(t, buf); len(lines) != 0 {
 			t.Errorf("score.call lines = %v, want none after a failed Answer call", lines)
 		}
 		if failed := st.Failed(); len(failed) != 1 {
 			t.Errorf("failed effects = %d, want 1", len(failed))
+		}
+	})
+
+	t.Run("a panicking effect is failed and the others still run", func(t *testing.T) {
+		st := newFakeStore()
+		seedEffect(st, false, picking("user-1", "tech:go"))
+		st.SeedEffect(dto.AnswerEffect{ID: "effect-2", JobID: testJob.ID, Fingerprint: testJob.ContentFingerprint, Attempts: 1})
+		answerer := &panicOnceAnswerer{}
+
+		svc := newService(t, st, withKey("sk-or-test"), withAnswerer(answerer))
+		err := svc.RunTick(t.Context())
+
+		if err == nil || !strings.Contains(err.Error(), "panicked") {
+			t.Errorf("RunTick() err = %v, want a panicked effect error", err)
+		}
+		if failed := st.Failed(); len(failed) != 1 || !strings.Contains(failed[0].Reason, "boom") {
+			t.Errorf("failed effects = %+v, want 1 carrying the panic value", failed)
+		}
+		if completed := st.Completed(); len(completed) != 1 {
+			t.Errorf("completed effects = %d, want 1 (the non-panicking one)", len(completed))
 		}
 	})
 
@@ -344,7 +405,8 @@ func TestRunTick(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			st := newFakeStore()
 			job := testJob
-			job.UpdatedAt = time.Now().Add(-tt.postedAgo)
+			posted := time.Now().Add(-tt.postedAgo)
+			job.PostedAt = &posted
 			cfg := picking("user-1", "tech:go")
 			cfg.MaxJobAgeDays = tt.maxAgeDays
 			st.SeedJob(job, []dto.SearchConfig{cfg})
@@ -420,9 +482,13 @@ func TestRunTick(t *testing.T) {
 				if err := st.UpsertPushSubscription(t.Context(), "user-1", dto.PushSubscriptionInput{Endpoint: "https://push.example/a"}); err != nil {
 					t.Fatal(err)
 				}
-				alerter, pusher := &fakeAlerter{}, &fakePusher{}
+				alerter, pusher, notes := &fakeAlerter{}, &fakePusher{}, &fakeNotifications{err: errors.New("notify down")}
 
-				runTick(t, st, withAlerter(alerter), withPusher(pusher), withProfiles(&fakeProfiles{emails: map[string]string{"user-1": "user@example.com"}}))
+				runTick(t, st, withAlerter(alerter), withPusher(pusher), withNotifications(notes), withProfiles(&fakeProfiles{emails: map[string]string{"user-1": "user@example.com"}}))
+
+				if got := len(notes.users) == 1; got != tt.wantPush {
+					t.Errorf("notified users = %v, want alert %v", notes.users, tt.wantPush)
+				}
 
 				if got := len(pusher.msgs) == 1; got != tt.wantPush {
 					t.Errorf("pushed = %v, want %v", pusher.msgs, tt.wantPush)
@@ -459,8 +525,8 @@ func (f *flakyClaimStore) ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffe
 	return f.FakeStore.ClaimAnswerEffect(ctx)
 }
 
-func (f *flakyClaimStore) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
-	saved, err := f.FakeStore.CompleteAnswerEffect(ctx, effect, answers, scores)
+func (f *flakyClaimStore) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore, rejections []dto.JobRejection) ([]string, error) {
+	saved, err := f.FakeStore.CompleteAnswerEffect(ctx, effect, answers, scores, rejections)
 	f.completed <- struct{}{}
 	return saved, err
 }
@@ -1148,7 +1214,7 @@ func TestBandFor(t *testing.T) {
 	for score, want := range map[int]string{
 		100: "great", 80: "great", 79: "good", 65: "good", 64: "fair", 45: "fair", 44: "poor", 0: "poor",
 	} {
-		if got := scoring.BandFor(score, dto.BandCuts{Great: 80, Good: 65, Fair: 45}); got != want {
+		if got := scoring.BandFor(score); got != want {
 			t.Errorf("BandFor(%d) = %q, want %q", score, got, want)
 		}
 	}
@@ -1243,6 +1309,28 @@ func TestAsk(t *testing.T) {
 		ae, ok := errors.AsType[*apperr.Error](err)
 		if !ok || ae.Kind() != apperr.KindUnprocessable {
 			t.Fatalf("Ask(...) err = %v, want an unprocessable apperr", err)
+		}
+	})
+
+	t.Run("an OpenRouter refusal is unprocessable, other failures are not", func(t *testing.T) {
+		t.Parallel()
+		for _, tt := range []struct {
+			name string
+			err  error
+			want bool
+		}{
+			{"402", fmt.Errorf("jev: %w", &openrouter.StatusError{Code: http.StatusPaymentRequired}), true},
+			{"500", &openrouter.StatusError{Code: http.StatusInternalServerError}, false},
+			{"plain", errors.New("boom"), false},
+		} {
+			st := newFakeStore()
+			st.SeedJob(job, nil)
+			svc := newService(t, st, withAnswerer(errAnswerer{tt.err}), withKey("sk-or-test"))
+			_, err := svc.Ask(ctx, "user-1", job.ID, []string{"Is it remote?"})
+			ae, ok := errors.AsType[*apperr.Error](err)
+			if got := ok && ae.Kind() == apperr.KindUnprocessable; got != tt.want {
+				t.Errorf("%s: Ask err = %v, unprocessable = %v, want %v", tt.name, err, got, tt.want)
+			}
 		}
 	})
 
@@ -1740,6 +1828,63 @@ func TestRunTick_CompanyProfileAnswers(t *testing.T) {
 
 		if len(answerer.calls) != 1 || len(answerer.calls[0]) != 6 {
 			t.Errorf("Answer calls = %v, want one call with all six questions", answerer.calls)
+		}
+	})
+}
+
+func TestRunTick_RecordsRejections(t *testing.T) {
+	version := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+
+	t.Run("a filtered-out user is recorded with the reason and config version while others are scored", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		rejecting := picking("user-1", "tech:go")
+		rejecting.ExcludedCompanies = []string{"monzo"}
+		rejecting.UpdatedAt = version
+		seedEffect(st, false, rejecting, picking("user-2", "tech:go"))
+
+		runTick(t, st)
+
+		completed := st.Completed()
+		if len(completed) != 1 || len(completed[0].Scores) != 1 || completed[0].Scores[0].UserID != "user-2" {
+			t.Fatalf("completed = %+v, want user-2 scored alone", completed)
+		}
+		want := []dto.JobRejection{{
+			JobID: testJob.ID, UserID: "user-1", Kind: dto.RejectionKindFilter, Reason: "company: monzo", ConfigVersion: version,
+		}}
+		if diff := cmp.Diff(want, completed[0].Rejections); diff != "" {
+			t.Errorf("rejections (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("nobody surviving still records every rejection", func(t *testing.T) {
+		st := newFakeStore()
+		rejecting := picking("user-1", "tech:go")
+		rejecting.ExcludedTitleKeywords = []string{"backend"}
+		seedEffect(st, false, rejecting)
+
+		runTick(t, st)
+
+		completed := st.Completed()
+		if len(completed) != 1 || len(completed[0].Rejections) != 1 || completed[0].Rejections[0].Reason != "title keyword: backend" {
+			t.Errorf("completed = %+v, want one title-keyword rejection", completed)
+		}
+	})
+
+	t.Run("a job past the age cutoff is recorded as an age rejection", func(t *testing.T) {
+		st := newFakeStore()
+		old := testJob
+		old.PostedAt = ptr(time.Now().AddDate(0, 0, -30))
+		cfg := picking("user-1", "tech:go")
+		cfg.MaxJobAgeDays = 7
+		st.SeedJob(old, []dto.SearchConfig{cfg})
+		st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: old.ID, Fingerprint: old.ContentFingerprint, Attempts: 1})
+
+		runTick(t, st)
+
+		completed := st.Completed()
+		if len(completed) != 1 || len(completed[0].Rejections) != 1 || completed[0].Rejections[0].Kind != dto.RejectionKindAge {
+			t.Errorf("completed = %+v, want one age rejection", completed)
 		}
 	})
 }

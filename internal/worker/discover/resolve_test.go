@@ -56,6 +56,53 @@ func TestResolveDomain(t *testing.T) {
 			wantGets:  2,
 		},
 		{
+			name: "widened careers link",
+			pages: map[string]string{
+				"https://acme.com":         `<a href="/join-us">Join us</a>`,
+				"https://acme.com/join-us": `<a href="https://jobs.lever.co/acme">Apply</a>`,
+			},
+			want:      discover.Board{Source: "lever", Token: "acme"},
+			wantFound: true,
+			wantGets:  2,
+		},
+		{
+			name: "careers path link beats earlier text-only link",
+			pages: map[string]string{
+				"https://acme.com":         `<a href="/contact">Join us</a><a href="/careers">Work</a>`,
+				"https://acme.com/careers": `<a href="https://jobs.lever.co/acme">Apply</a>`,
+			},
+			want:      discover.Board{Source: "lever", Token: "acme"},
+			wantFound: true,
+			wantGets:  2,
+		},
+		{
+			name: "seed path hit",
+			pages: map[string]string{
+				"https://acme.com":      `<p>Welcome</p>`,
+				"https://acme.com/jobs": `<a href="https://jobs.ashbyhq.com/acme">Apply</a>`,
+			},
+			want:      discover.Board{Source: "ashby", Token: "acme"},
+			wantFound: true,
+			wantGets:  3,
+		},
+		{
+			name: "embedded widget on seed path",
+			pages: map[string]string{
+				"https://acme.com":         `<p>Welcome</p>`,
+				"https://acme.com/careers": `<script src="https://acme.pinpointhq.com/widget.js"></script>`,
+			},
+			want:      discover.Board{Source: "pinpoint", Token: "acme"},
+			wantFound: true,
+			wantGets:  2,
+		},
+		{
+			name: "no seed path resolves",
+			pages: map[string]string{
+				"https://acme.com": `<p>Welcome</p>`,
+			},
+			wantGets: 6,
+		},
+		{
 			name: "nothing found",
 			pages: map[string]string{
 				"https://acme.com":         `<a href="/careers">Careers</a>`,

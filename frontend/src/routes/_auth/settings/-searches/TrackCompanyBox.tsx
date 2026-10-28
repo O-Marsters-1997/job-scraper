@@ -70,10 +70,8 @@ export function TrackCompanyBox(props: {
 			/>
 			<Show when={board()}>
 				{(info) => (
-					<Button size="sm" onClick={track} disabled={addMutation.isPending}>
-						{addMutation.isPending
-							? "Tracking…"
-							: `Track company (${info().label})`}
+					<Button size="sm" onClick={track} loading={addMutation.isPending}>
+						{`Track company (${info().label})`}
 					</Button>
 				)}
 			</Show>

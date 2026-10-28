@@ -9,8 +9,8 @@ import (
 )
 
 // Every runs fn immediately, then once per d, logging any error under name.
-// It returns when ctx is cancelled.
-func Every(ctx context.Context, name string, d time.Duration, fn func(context.Context) error) {
+// It returns nil when ctx is cancelled.
+func Every(ctx context.Context, name string, d time.Duration, fn func(context.Context) error) error {
 	ticker := time.NewTicker(d)
 	defer ticker.Stop()
 	for {
@@ -19,7 +19,7 @@ func Every(ctx context.Context, name string, d time.Duration, fn func(context.Co
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-ticker.C:
 		}
 	}

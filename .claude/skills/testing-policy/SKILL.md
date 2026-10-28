@@ -5,15 +5,14 @@ description: >
   asserts. TRIGGER — load BEFORE writing, editing or reviewing any _test.go file, a fake, a stub,
   a `*test` package, pgtest, a snapshot golden or a fuzz target; or when the prompt says "write a
   test", "add tests", "cover this", "fix this test", or implements a feature with TDD. Load it
-  alongside go-idiomatic, which owns generic Go test style. SKIP for frontend tests.
+  alongside go-testing, which owns how a Go test is written. SKIP for frontend tests.
 ---
 
 # Testing policy
 
 Decision record: [ADR 0012](../../../docs/adr/0012-test-seams-and-double-packages.md).
-Background: `docs/research/go-testing-synthesis.md`. Generic style (`cmp.Diff`, `errors.Is`,
-tables only for uniform cases, `t.Helper`, `t.Cleanup`, no `time.Sleep`) is in `go-idiomatic`;
-it isn't repeated here.
+How a test is written (assertions, tables, helpers, waits, goldens, fuzzing) is owned by the global
+`go-testing` skill and isn't repeated here.
 
 ## Before writing a test
 
@@ -80,13 +79,14 @@ change-detector: rewrite it at the output or delete it.
 
 ## Store tests
 
-- `pgtest.New(t)` returns a pool on this test binary's own database, on one container shared
-  machine-wide ([ADR 0025](../../../docs/adr/0025-shared-self-destructing-test-database.md)), with
-  every table truncated. No per-package `TestMain`, no own container.
-- Serial: never `t.Parallel()` in a test that calls `pgtest.New`. Empty tables are guaranteed,
-  so length assertions are safe.
+- `pgtest.New(t)` returns a pool on a fresh database cloned from the migrated template, dropped on
+  cleanup, on one container shared machine-wide
+  ([ADR 0025](../../../docs/adr/0025-shared-self-destructing-test-database.md)). No per-package
+  `TestMain`, no own container. `TEST_DATABASE_URL` selects an existing server instead.
+- Call `t.Parallel()` first in every test that calls `pgtest.New`: the database is never shared, so
+  tables start empty and length assertions are safe. Tests that use `t.Setenv` or `t.Chdir` stay serial.
 - Test transactions go through `pgtest.InTx(t, pool, commit, fn)`, never `pool.Begin`: it registers
-  the rollback as cleanup, so a `t.Fatal` can't leave locks that block the next `TRUNCATE`.
+  the rollback as cleanup, so a `t.Fatal` can't leave an open transaction behind.
 - Run from the repo root (migrations resolve relative to CWD).
 - Beyond the contract suite, cover only what a fake can't: constraints and uniqueness,
   `ON CONFLICT`, joins onto other contexts' tables, rollback of tx-scoped ports, concurrent
@@ -119,7 +119,14 @@ case (e.g. oversized body) is added to `internal/handlers/handlerstest` once, no
 Call the consumer's handling function with a decoded message; don't start RabbitMQ. Every
 consumer covers: a poison message (dead-lettered, not requeued forever), a transient failure
 (requeued), and a redelivery of an already-processed message (no duplicate effect). Broker
-delivery itself is tested once in `internal/queue/broker_integration_test.go`.
+delivery itself is tested once in `internal/queue/broker_integration_test.go`:
+
+- It reuses `job-scraper-rabbitmqtest-v1` with a fresh vhost per run
+  ([ADR 0025](../../../docs/adr/0025-shared-self-destructing-test-database.md)). Don't start
+  another broker container.
+- A subtest that starts `Consume` cancels and drains it before it ends. An unacked message
+  survives a purge and comes back after the source queues' 10s delayed retry, into whichever
+  subtest is running by then.
 
 ## Naming
 

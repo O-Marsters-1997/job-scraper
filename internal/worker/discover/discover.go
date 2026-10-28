@@ -23,6 +23,8 @@ import (
 // Board is an ATS board a harvester found, identified by source and token.
 type Board struct {
 	Source, Token string
+	ListingURL    string
+	ApplyURL      string
 }
 
 // Company is a company a harvester found, with the candidate Board it would be polled through.
@@ -31,11 +33,21 @@ type Company struct {
 	Board              Board
 }
 
+type Check struct {
+	ID    string
+	Board Board
+}
+
+type CheckRecorder interface {
+	RecordChecks(ctx context.Context, ids []string) error
+}
+
 // Harvest is what one harvester run found. Skipped counts candidates that
 // resolved to no board or an unsupported source. Recheck publishes Boards that
 // are already verified; otherwise they are dropped.
 type Harvest struct {
 	Boards    []Board
+	Checks    []Check
 	Companies []Company
 	Skipped   int
 	Recheck   bool
@@ -87,10 +99,14 @@ type Catalog interface {
 	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
 	ListVerifiedCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
 	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
+	DiscoverMissedSince(ctx context.Context, source, token string, since time.Time) (bool, error)
 	UpsertCandidateBoard(ctx context.Context, companyID, source, token string) (dto.CompanyBoard, error)
 }
 
-const gateKeyPrefix = "harvest:"
+const (
+	gateKeyPrefix = "harvest:"
+	missWindow    = 30 * 24 * time.Hour
+)
 
 // Runner publishes a board_discover task per harvested board, and records each
 // harvested Company that has no verified Board, with a candidate Board and a
@@ -152,23 +168,71 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 			if !errors.Is(err, data.ErrNotFound) {
 				log.WarnContext(ctx, "could not check board verified, publishing", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
 			}
+			if r.discoverMissed(ctx, log, b) {
+				found.Skipped++
+				continue
+			}
 		}
-		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.Token, Via: h.Name()}
-		if err := r.publisher.Publish(ctx, task); err != nil {
+		if err := r.publisher.Publish(ctx, discoverTask(b, h.Name())); err != nil {
 			log.ErrorContext(ctx, "publish failed", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
 			continue
 		}
 		published++
 	}
+	published += r.publishChecks(ctx, log, h, found.Checks)
 	recorded := r.recordUndiscovered(ctx, log, h.Name(), found.Companies, verified)
 	log.InfoContext(ctx, "harvest: completed", slog.String("event", "harvest.run"),
-		slog.Int("candidates", len(found.Boards)+len(found.Companies)), slog.Int("resolved", published+recorded),
+		slog.Int("candidates", len(found.Boards)+len(found.Checks)+len(found.Companies)), slog.Int("resolved", published+recorded),
 		slog.Int("skipped", found.Skipped))
 
 	if err := r.gate.SetLastScraped(ctx, key); err != nil {
 		log.ErrorContext(ctx, "could not set last harvested", slog.Any(logger.KeyErr, err))
 	}
 	return nil
+}
+
+func discoverTask(b Board, via string) queue.Task {
+	return queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.Token, Via: via, ListingURL: b.ListingURL, ApplyURL: b.ApplyURL, RequireUK: true}
+}
+
+func (r *Runner) discoverMissed(ctx context.Context, log *slog.Logger, b Board) bool {
+	missed, err := r.catalog.DiscoverMissedSince(ctx, b.Source, b.Token, time.Now().Add(-missWindow))
+	if err != nil {
+		log.WarnContext(ctx, "could not check board missed, publishing", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
+	}
+	return missed
+}
+
+func (r *Runner) publishChecks(ctx context.Context, log *slog.Logger, h Harvester, checks []Check) int {
+	via := h.Name()
+	published := 0
+	var handled []string
+	for _, c := range checks {
+		b := c.Board
+		task := discoverTask(b, via)
+		boardID, err := r.catalog.GetVerifiedBoardID(ctx, b.Source, b.Token)
+		switch {
+		case err == nil:
+			task = queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardCheckTask, BoardID: boardID, Via: via, ListingURL: b.ListingURL, ApplyURL: b.ApplyURL, Urgent: true, Manual: true}
+		case !errors.Is(err, data.ErrNotFound):
+			log.WarnContext(ctx, "could not check board verified, publishing", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
+		case r.discoverMissed(ctx, log, b):
+			handled = append(handled, c.ID)
+			continue
+		}
+		if err := r.publisher.Publish(ctx, task); err != nil {
+			log.ErrorContext(ctx, "publish failed", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
+			continue
+		}
+		handled = append(handled, c.ID)
+		published++
+	}
+	if rec, ok := h.(CheckRecorder); ok && len(handled) > 0 {
+		if err := rec.RecordChecks(ctx, handled); err != nil {
+			log.ErrorContext(ctx, "could not record checks", slog.Any(logger.KeyErr, err))
+		}
+	}
+	return published
 }
 
 func (r *Runner) verifiedSlugs(ctx context.Context, companies []Company) (map[string]bool, error) {
@@ -203,7 +267,7 @@ func (r *Runner) recordUndiscovered(ctx context.Context, log *slog.Logger, via s
 }
 
 func (r *Runner) recordCompany(ctx context.Context, via string, c Company) error {
-	company, err := r.catalog.UpsertCompany(ctx, dto.CompanyUpsert{Slug: c.Slug, Name: c.Name, Domain: c.Domain})
+	company, err := r.catalog.UpsertCompany(ctx, dto.CompanyUpsert{Slug: c.Slug, Name: c.Name, Domain: c.Domain, Kind: dto.KindDirect})
 	if err != nil {
 		return err
 	}
@@ -216,6 +280,6 @@ func (r *Runner) recordCompany(ctx context.Context, via string, c Company) error
 	}
 	return r.publisher.Publish(ctx, queue.Task{
 		Version: 1, ID: uuid.NewString(), Source: board.Source, Kind: queue.BoardDiscoverTask,
-		CompanyID: company.ID, BoardToken: board.BoardToken, Via: via,
+		CompanyID: company.ID, BoardToken: board.BoardToken, Via: via, RequireUK: true,
 	})
 }

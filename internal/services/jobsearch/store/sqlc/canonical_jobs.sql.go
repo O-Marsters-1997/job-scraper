@@ -11,6 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const applyPostedDate = `-- name: ApplyPostedDate :exec
+UPDATE jobs SET
+    reposted_at = CASE WHEN $1::timestamptz > posted_at + INTERVAL '2 days'
+        THEN GREATEST(reposted_at, $1::timestamptz) ELSE reposted_at END,
+    posted_at = LEAST(posted_at, $1::timestamptz)
+WHERE id = $2::uuid
+`
+
+type ApplyPostedDateParams struct {
+	PostedAt pgtype.Timestamptz
+	ID       pgtype.UUID
+}
+
+func (q *Queries) ApplyPostedDate(ctx context.Context, arg ApplyPostedDateParams) error {
+	_, err := q.db.Exec(ctx, applyPostedDate, arg.PostedAt, arg.ID)
+	return err
+}
+
 const backfillCompanyJobFingerprints = `-- name: BackfillCompanyJobFingerprints :exec
 UPDATE jobs j SET content_fingerprint = encode(sha256(convert_to(
     replace(replace(replace(replace(replace(to_json(ARRAY[
@@ -26,6 +44,29 @@ WHERE c.id = $1::uuid AND (j.company_id = c.id OR j.company_slug = c.slug)
 
 func (q *Queries) BackfillCompanyJobFingerprints(ctx context.Context, dollar_1 pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, backfillCompanyJobFingerprints, dollar_1)
+	return err
+}
+
+const deleteBoardObservations = `-- name: DeleteBoardObservations :exec
+DELETE FROM board_job_observations WHERE board_id = $1
+`
+
+func (q *Queries) DeleteBoardObservations(ctx context.Context, boardID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteBoardObservations, boardID)
+	return err
+}
+
+const deleteJobURLAlias = `-- name: DeleteJobURLAlias :exec
+DELETE FROM job_urls WHERE normalized_url = $1 AND job_id = $2
+`
+
+type DeleteJobURLAliasParams struct {
+	NormalizedUrl string
+	JobID         pgtype.UUID
+}
+
+func (q *Queries) DeleteJobURLAlias(ctx context.Context, arg DeleteJobURLAliasParams) error {
+	_, err := q.db.Exec(ctx, deleteJobURLAlias, arg.NormalizedUrl, arg.JobID)
 	return err
 }
 
@@ -80,13 +121,100 @@ func (q *Queries) FindCanonicalJob(ctx context.Context, arg FindCanonicalJobPara
 	return i, err
 }
 
+const findJobByPosting = `-- name: FindJobByPosting :one
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after,
+    j.reposted_at, j.scraped_at, j.first_discovered_at, j.description, j.salary_raw,
+    j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint
+FROM jobs j
+WHERE ($1::text <> '' AND j.provider_posting_id = $1::text
+        AND j.primary_board_id = (SELECT b.id FROM company_boards b
+            WHERE b.source = $2::text AND b.board_token = $3::text))
+    OR j.url = $4::text
+    OR EXISTS (SELECT 1 FROM job_urls u WHERE u.job_id = j.id AND u.normalized_url = $4::text)
+ORDER BY j.first_discovered_at
+LIMIT 1
+`
+
+type FindJobByPostingParams struct {
+	PostingID string
+	Source    string
+	Token     string
+	Url       string
+}
+
+type FindJobByPostingRow struct {
+	ID                 pgtype.UUID
+	Title              string
+	Location           string
+	Url                string
+	CompanySlug        string
+	Source             string
+	PostedAt           pgtype.Timestamptz
+	PostedAfter        pgtype.Timestamptz
+	RepostedAt         pgtype.Timestamptz
+	ScrapedAt          pgtype.Timestamptz
+	FirstDiscoveredAt  pgtype.Timestamptz
+	Description        string
+	SalaryRaw          string
+	WorkArrangement    string
+	CompanyID          pgtype.UUID
+	PrimaryBoardID     pgtype.UUID
+	ProviderPostingID  pgtype.Text
+	ContentFingerprint pgtype.Text
+}
+
+func (q *Queries) FindJobByPosting(ctx context.Context, arg FindJobByPostingParams) (FindJobByPostingRow, error) {
+	row := q.db.QueryRow(ctx, findJobByPosting,
+		arg.PostingID,
+		arg.Source,
+		arg.Token,
+		arg.Url,
+	)
+	var i FindJobByPostingRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Location,
+		&i.Url,
+		&i.CompanySlug,
+		&i.Source,
+		&i.PostedAt,
+		&i.PostedAfter,
+		&i.RepostedAt,
+		&i.ScrapedAt,
+		&i.FirstDiscoveredAt,
+		&i.Description,
+		&i.SalaryRaw,
+		&i.WorkArrangement,
+		&i.CompanyID,
+		&i.PrimaryBoardID,
+		&i.ProviderPostingID,
+		&i.ContentFingerprint,
+	)
+	return i, err
+}
+
+const findJobIDByURL = `-- name: FindJobIDByURL :one
+SELECT id FROM jobs WHERE url = $1
+UNION ALL
+SELECT job_id FROM job_urls WHERE normalized_url = $1
+LIMIT 1
+`
+
+func (q *Queries) FindJobIDByURL(ctx context.Context, url string) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, findJobIDByURL, url)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const findMatchCandidates = `-- name: FindMatchCandidates :many
 SELECT id, url, COALESCE(match_location, '') AS match_location, primary_board_id
 FROM jobs
 WHERE match_title = $1
     AND (company_slug = $2 OR company_id = $3::uuid)
     AND closed_at IS NULL
-    AND updated_at > NOW() - INTERVAL '90 days'
+    AND COALESCE(posted_at, posted_after, first_discovered_at) > NOW() - INTERVAL '90 days'
 FOR UPDATE
 `
 
@@ -128,15 +256,35 @@ func (q *Queries) FindMatchCandidates(ctx context.Context, arg FindMatchCandidat
 	return items, nil
 }
 
+const getJobURLAlias = `-- name: GetJobURLAlias :one
+SELECT job_id, source FROM job_urls WHERE normalized_url = $1
+`
+
+type GetJobURLAliasRow struct {
+	JobID  pgtype.UUID
+	Source string
+}
+
+func (q *Queries) GetJobURLAlias(ctx context.Context, normalizedUrl string) (GetJobURLAliasRow, error) {
+	row := q.db.QueryRow(ctx, getJobURLAlias, normalizedUrl)
+	var i GetJobURLAliasRow
+	err := row.Scan(&i.JobID, &i.Source)
+	return i, err
+}
+
 const insertCanonicalJob = `-- name: InsertCanonicalJob :one
-INSERT INTO jobs (title, location, url, company_slug, source, updated_at, description,
-    salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id,
-    content_fingerprint, content_changed_at, match_title, match_location)
+INSERT INTO jobs (title, location, url, company_slug, source, posted_at, posted_after, description,
+    salary_raw, salary_min, salary_max, work_arrangement, company_id, primary_board_id, provider_posting_id,
+    content_fingerprint, content_changed_at, match_title, match_location, discovered_via)
 VALUES ($1, $2, $3, $4,
-    $5, $6, $7, $8,
-    $9, COALESCE($10::uuid, (SELECT id FROM companies WHERE slug = $4)),
-    $11::uuid, $12,
-    $13, NOW(), $14, $15)
+    $5, $6::timestamptz,
+    (SELECT last_completed_at FROM board_poll_state WHERE board_id = $7::uuid),
+    $8, $9,
+    $10::float8, $11::float8,
+    $12, COALESCE($13::uuid, (SELECT id FROM companies WHERE slug = $4)),
+    $7::uuid, $14,
+    $15, NOW(), $16, $17,
+    NULLIF($18::text, ''))
 RETURNING id
 `
 
@@ -146,16 +294,19 @@ type InsertCanonicalJobParams struct {
 	Url             string
 	CompanySlug     string
 	Source          string
-	UpdatedAt       pgtype.Timestamptz
+	PostedAt        pgtype.Timestamptz
+	BoardID         pgtype.UUID
 	Description     string
 	SalaryRaw       string
+	SalaryMin       pgtype.Float8
+	SalaryMax       pgtype.Float8
 	WorkArrangement string
 	CompanyID       pgtype.UUID
-	BoardID         pgtype.UUID
 	PostingID       pgtype.Text
 	Fingerprint     pgtype.Text
 	MatchTitle      pgtype.Text
 	MatchLocation   pgtype.Text
+	DiscoveredVia   string
 }
 
 func (q *Queries) InsertCanonicalJob(ctx context.Context, arg InsertCanonicalJobParams) (pgtype.UUID, error) {
@@ -165,16 +316,19 @@ func (q *Queries) InsertCanonicalJob(ctx context.Context, arg InsertCanonicalJob
 		arg.Url,
 		arg.CompanySlug,
 		arg.Source,
-		arg.UpdatedAt,
+		arg.PostedAt,
+		arg.BoardID,
 		arg.Description,
 		arg.SalaryRaw,
+		arg.SalaryMin,
+		arg.SalaryMax,
 		arg.WorkArrangement,
 		arg.CompanyID,
-		arg.BoardID,
 		arg.PostingID,
 		arg.Fingerprint,
 		arg.MatchTitle,
 		arg.MatchLocation,
+		arg.DiscoveredVia,
 	)
 	var id pgtype.UUID
 	err := row.Scan(&id)
@@ -187,6 +341,37 @@ SELECT pg_advisory_xact_lock(hashtextextended($1, 0))
 
 func (q *Queries) LockCanonicalJob(ctx context.Context, hashtextextended string) error {
 	_, err := q.db.Exec(ctx, lockCanonicalJob, hashtextextended)
+	return err
+}
+
+const moveBoardObservations = `-- name: MoveBoardObservations :exec
+INSERT INTO board_job_observations (board_id, job_id, last_seen_at, last_snapshot_version)
+SELECT $1, o.job_id, o.last_seen_at, o.last_snapshot_version
+FROM board_job_observations o WHERE o.board_id = $2
+ON CONFLICT ON CONSTRAINT board_job_observations_pkey DO NOTHING
+`
+
+type MoveBoardObservationsParams struct {
+	OwnerID     pgtype.UUID
+	DuplicateID pgtype.UUID
+}
+
+func (q *Queries) MoveBoardObservations(ctx context.Context, arg MoveBoardObservationsParams) error {
+	_, err := q.db.Exec(ctx, moveBoardObservations, arg.OwnerID, arg.DuplicateID)
+	return err
+}
+
+const rehomeBoardJobs = `-- name: RehomeBoardJobs :exec
+UPDATE jobs SET primary_board_id = $1 WHERE primary_board_id = $2
+`
+
+type RehomeBoardJobsParams struct {
+	OwnerID     pgtype.UUID
+	DuplicateID pgtype.UUID
+}
+
+func (q *Queries) RehomeBoardJobs(ctx context.Context, arg RehomeBoardJobsParams) error {
+	_, err := q.db.Exec(ctx, rehomeBoardJobs, arg.OwnerID, arg.DuplicateID)
 	return err
 }
 
@@ -213,23 +398,28 @@ func (q *Queries) SaveCanonicalJobAlias(ctx context.Context, arg SaveCanonicalJo
 
 const updateChangedCanonicalJob = `-- name: UpdateChangedCanonicalJob :exec
 UPDATE jobs SET title = $1, location = $2,
-    updated_at = $3, description = $4,
-    salary_raw = $5, work_arrangement = $6,
-    content_fingerprint = $7, content_changed_at = NOW(),
-    match_title = $8, match_location = $9,
-    company_id = COALESCE($10::uuid, company_id, (SELECT id FROM companies WHERE slug = $11)),
-    primary_board_id = COALESCE($12::uuid, primary_board_id),
-    provider_posting_id = COALESCE($13, provider_posting_id),
+    reposted_at = CASE WHEN $3::timestamptz > posted_at + INTERVAL '2 days'
+        THEN GREATEST(reposted_at, $3::timestamptz) ELSE reposted_at END,
+    posted_at = LEAST(posted_at, $3::timestamptz), description = $4,
+    salary_raw = $5, salary_min = $6::float8,
+    salary_max = $7::float8, work_arrangement = $8,
+    content_fingerprint = $9, content_changed_at = NOW(),
+    match_title = $10, match_location = $11,
+    company_id = COALESCE($12::uuid, company_id, (SELECT id FROM companies WHERE slug = $13)),
+    primary_board_id = COALESCE($14::uuid, primary_board_id),
+    provider_posting_id = COALESCE($15, provider_posting_id),
     scraped_at = NOW()
-WHERE id = $14::uuid
+WHERE id = $16::uuid
 `
 
 type UpdateChangedCanonicalJobParams struct {
 	Title           string
 	Location        string
-	UpdatedAt       pgtype.Timestamptz
+	PostedAt        pgtype.Timestamptz
 	Description     string
 	SalaryRaw       string
+	SalaryMin       pgtype.Float8
+	SalaryMax       pgtype.Float8
 	WorkArrangement string
 	Fingerprint     pgtype.Text
 	MatchTitle      pgtype.Text
@@ -245,9 +435,11 @@ func (q *Queries) UpdateChangedCanonicalJob(ctx context.Context, arg UpdateChang
 	_, err := q.db.Exec(ctx, updateChangedCanonicalJob,
 		arg.Title,
 		arg.Location,
-		arg.UpdatedAt,
+		arg.PostedAt,
 		arg.Description,
 		arg.SalaryRaw,
+		arg.SalaryMin,
+		arg.SalaryMax,
 		arg.WorkArrangement,
 		arg.Fingerprint,
 		arg.MatchTitle,
@@ -265,8 +457,11 @@ const updateUnchangedCanonicalJob = `-- name: UpdateUnchangedCanonicalJob :exec
 UPDATE jobs SET company_id = COALESCE($1::uuid, company_id, (SELECT id FROM companies WHERE slug = $2)),
     primary_board_id = COALESCE($3::uuid, primary_board_id),
     provider_posting_id = COALESCE($4, provider_posting_id),
-    content_fingerprint = COALESCE(content_fingerprint, $5)
-WHERE id = $6::uuid
+    content_fingerprint = COALESCE(content_fingerprint, $5),
+    reposted_at = CASE WHEN $6::timestamptz > posted_at + INTERVAL '2 days'
+        THEN GREATEST(reposted_at, $6::timestamptz) ELSE reposted_at END,
+    posted_at = LEAST(posted_at, $6::timestamptz)
+WHERE id = $7::uuid
 `
 
 type UpdateUnchangedCanonicalJobParams struct {
@@ -275,6 +470,7 @@ type UpdateUnchangedCanonicalJobParams struct {
 	BoardID     pgtype.UUID
 	PostingID   pgtype.Text
 	Fingerprint pgtype.Text
+	PostedAt    pgtype.Timestamptz
 	ID          pgtype.UUID
 }
 
@@ -285,6 +481,7 @@ func (q *Queries) UpdateUnchangedCanonicalJob(ctx context.Context, arg UpdateUnc
 		arg.BoardID,
 		arg.PostingID,
 		arg.Fingerprint,
+		arg.PostedAt,
 		arg.ID,
 	)
 	return err
@@ -292,14 +489,18 @@ func (q *Queries) UpdateUnchangedCanonicalJob(ctx context.Context, arg UpdateUnc
 
 const upgradeCanonicalJob = `-- name: UpgradeCanonicalJob :exec
 UPDATE jobs SET title = $1, location = $2, url = $3,
-    source = $4, updated_at = $5, description = $6,
-    salary_raw = $7, work_arrangement = $8,
-    content_fingerprint = $9, content_changed_at = NOW(),
-    match_title = $10, match_location = $11,
-    company_id = COALESCE($12::uuid, company_id, (SELECT id FROM companies WHERE slug = $13)),
-    primary_board_id = $14::uuid, provider_posting_id = $15,
+    source = $4,
+    reposted_at = CASE WHEN $5::timestamptz > posted_at + INTERVAL '2 days'
+        THEN GREATEST(reposted_at, $5::timestamptz) ELSE reposted_at END,
+    posted_at = LEAST(posted_at, $5::timestamptz), description = $6,
+    salary_raw = $7, salary_min = $8::float8,
+    salary_max = $9::float8, work_arrangement = $10,
+    content_fingerprint = $11, content_changed_at = NOW(),
+    match_title = $12, match_location = $13,
+    company_id = COALESCE($14::uuid, company_id, (SELECT id FROM companies WHERE slug = $15)),
+    primary_board_id = $16::uuid, provider_posting_id = $17,
     scraped_at = NOW()
-WHERE id = $16::uuid
+WHERE id = $18::uuid
 `
 
 type UpgradeCanonicalJobParams struct {
@@ -307,9 +508,11 @@ type UpgradeCanonicalJobParams struct {
 	Location        string
 	Url             string
 	Source          string
-	UpdatedAt       pgtype.Timestamptz
+	PostedAt        pgtype.Timestamptz
 	Description     string
 	SalaryRaw       string
+	SalaryMin       pgtype.Float8
+	SalaryMax       pgtype.Float8
 	WorkArrangement string
 	Fingerprint     pgtype.Text
 	MatchTitle      pgtype.Text
@@ -327,9 +530,11 @@ func (q *Queries) UpgradeCanonicalJob(ctx context.Context, arg UpgradeCanonicalJ
 		arg.Location,
 		arg.Url,
 		arg.Source,
-		arg.UpdatedAt,
+		arg.PostedAt,
 		arg.Description,
 		arg.SalaryRaw,
+		arg.SalaryMin,
+		arg.SalaryMax,
 		arg.WorkArrangement,
 		arg.Fingerprint,
 		arg.MatchTitle,

@@ -8,8 +8,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useSources } from "@/hooks/useSources";
-import { formatDate } from "@/lib/datetime";
 import { otherListings, sourceLabel } from "@/lib/listings";
+import { postedLabel } from "@/lib/postedLabel";
+import { loadedData } from "@/lib/queryData";
 import { titleCase } from "@/lib/utils";
 import type {
 	ApplicationWithDetails,
@@ -32,6 +33,7 @@ export function JobHeader(props: {
 	app: ApplicationWithDetails | undefined;
 	appSummary: JobApplicationSummary | undefined;
 	onTrack: () => void;
+	onAddTask: () => void;
 }) {
 	const navigate = useNavigate();
 	const sources = useSources();
@@ -47,7 +49,14 @@ export function JobHeader(props: {
 
 					<div class="min-w-0 flex-1">
 						<h1 class="text-xl font-bold tracking-tight text-foreground">
-							{props.job.Title}
+							<a
+								href={props.job.URL}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="hover:underline"
+							>
+								{props.job.Title}
+							</a>
 						</h1>
 						<p class="mt-0.5 text-sm text-muted">
 							{titleCase(props.job.CompanySlug)} · {props.job.Location}
@@ -66,7 +75,7 @@ export function JobHeader(props: {
 												rel="noopener noreferrer"
 												class="font-medium text-muted transition-colors hover:text-foreground hover:underline"
 											>
-												{sourceLabel(listing.source, sources.data)}
+												{sourceLabel(listing.source, loadedData(sources))}
 											</a>
 										</>
 									)}
@@ -122,27 +131,39 @@ export function JobHeader(props: {
 							</Show>
 							<SourceBadge source={props.job.Source} />
 							<span class="font-mono text-xs tabular-nums text-faint">
-								{formatDate(props.job.ScrapedAt)}
+								{postedLabel(props.job).detail}
 							</span>
+							<Show when={postedLabel(props.job).detailRepost}>
+								{(repost) => (
+									<span class="font-mono text-xs tabular-nums text-faint">
+										{repost()}
+									</span>
+								)}
+							</Show>
 						</div>
 					</div>
 
 					<div class="flex shrink-0 items-start gap-2">
-						<Button
-							size="sm"
-							onClick={() =>
-								navigate({
-									to: "/jobs/$id/tailor",
-									params: { id: props.job.ID },
-								})
-							}
-						>
-							Tailor CV
-						</Button>
+						<Show when={props.app}>
+							{(a) => (
+								<Button
+									size="sm"
+									onClick={() =>
+										navigate({
+											to: "/applications/$id",
+											params: { id: a().ID },
+										})
+									}
+								>
+									Open application
+								</Button>
+							)}
+						</Show>
 						<JobActionsMenu
 							job={props.job}
 							appSummary={props.appSummary}
 							onTrack={props.onTrack}
+							onAddTask={props.onAddTask}
 						/>
 					</div>
 				</div>

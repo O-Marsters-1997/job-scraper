@@ -22,6 +22,10 @@ type Alerter interface {
 	NotifyNewJob(ctx context.Context, job dto.Job, email string) error
 }
 
+type Notifications interface {
+	NewJob(ctx context.Context, userID string, job dto.Job) error
+}
+
 // PushSender delivers one Web Push message; it returns
 // notify.ErrSubscriptionGone when the subscription no longer exists.
 type PushSender interface {
@@ -44,4 +48,14 @@ type Extractor interface {
 // updated Search Config.
 type Reconsiderer interface {
 	Reconsider(ctx context.Context, config dto.SearchConfig) error
+}
+
+// RecruiterClassifier asks Jev whether companyName is a recruitment agency,
+// from one of its jobs, billed to apiKey.
+type RecruiterClassifier interface {
+	ClassifyRecruiter(ctx context.Context, apiKey, companyName string, job dto.Job) (dto.CompanyKind, dto.Usage, error)
+}
+
+type CompanyKinds interface {
+	SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error)
 }

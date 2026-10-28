@@ -5,6 +5,7 @@ package identity
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,6 +32,7 @@ type googleClient interface {
 	FileMeta(ctx context.Context, userID, docID string) (google.FileMeta, error)
 	GetDocument(ctx context.Context, userID, docID, tabID string) (json.RawMessage, error)
 	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
+	AddTab(ctx context.Context, userID, docID, title string) (string, error)
 	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
 	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
 	DeleteFile(ctx context.Context, userID, fileID string) error
@@ -41,25 +43,36 @@ type googleClient interface {
 // Tests call Build directly with fakes (ADR 0012).
 type Deps struct {
 	Store        Store
-	Seeder       StatusSeeder
+	Seeders      []Seeder
 	GoogleClient googleClient
 	Cipher       *tokencrypt.Cipher
 	KeyUsage     KeyUsageFetcher
 	Now          func() time.Time
+
+	SessionSecret []byte
 }
 
 type Module struct {
-	store   Store
-	service *Service
+	store     Store
+	service   *Service
+	ipLimiter *attemptLimiter
 }
 
 func Build(deps Deps) *Module {
-	return &Module{store: deps.Store, service: NewService(deps)}
+	svc := NewService(deps)
+	return &Module{
+		store:     deps.Store,
+		service:   svc,
+		ipLimiter: newAttemptLimiter(svc.now, ipAttemptEvery, ipAttemptBurst),
+	}
 }
 
 // New wires the full identity context, including the Google Link and AI
 // credentials.
-func New(pool *pgxpool.Pool, seeder StatusSeeder, googleClientID, googleClientSecret, googleRedirectURL string) (*Module, error) {
+func New(pool *pgxpool.Pool, seeders []Seeder, sessionSecret, googleClientID, googleClientSecret, googleRedirectURL string) (*Module, error) {
+	if sessionSecret == "" {
+		return nil, errors.New("identity.New: session secret is empty")
+	}
 	credCipher, err := tokencrypt.FromEnv("AI_CREDENTIAL_ENC_KEY")
 	if err != nil {
 		return nil, fmt.Errorf("identity.New: %w", err)
@@ -70,19 +83,20 @@ func New(pool *pgxpool.Pool, seeder StatusSeeder, googleClientID, googleClientSe
 	}
 	st := store.New(pool)
 	return Build(Deps{
-		Store:        st,
-		Seeder:       seeder,
-		GoogleClient: google.NewClient(googleClientID, googleClientSecret, googleRedirectURL, st, googleCipher),
-		Cipher:       credCipher,
+		Store:         st,
+		Seeders:       seeders,
+		GoogleClient:  google.NewClient(googleClientID, googleClientSecret, googleRedirectURL, st, googleCipher),
+		Cipher:        credCipher,
+		SessionSecret: []byte(sessionSecret),
 	}), nil
 }
 
 // NewFacade wires only identity's user/session store, for cmd/admin and the
 // worker's daily cleanup (ADR 0011). Routes, PublicRoutes and the Google/AI
 // facade methods panic on a Module built this way.
-func NewFacade(pool *pgxpool.Pool, seeder StatusSeeder) *Module {
+func NewFacade(pool *pgxpool.Pool, seeders []Seeder) *Module {
 	st := store.New(pool)
-	return Build(Deps{Store: st, Seeder: seeder})
+	return Build(Deps{Store: st, Seeders: seeders})
 }
 
 // Middleware authenticates requests using the session_id cookie.
@@ -96,9 +110,9 @@ func (m *Module) DeleteExpiredSessions(ctx context.Context) error {
 }
 
 // CreateUser is called by cmd/admin's create-user command; it does not seed
-// default application statuses or start a session.
+// default application statuses or task types or start a session.
 func (m *Module) CreateUser(ctx context.Context, in dto.CreateUserInput) (dto.User, error) {
-	return m.store.CreateUser(ctx, in.Username, in.PasswordHash, in.Email)
+	return m.service.CreateUser(ctx, in)
 }
 
 // UserIDByUsername resolves a username to its user ID for cmd/admin's
@@ -129,7 +143,11 @@ func (m *Module) ResetPassword(ctx context.Context, username, password string) e
 // Get returns userID's decrypted AI provider key, satisfying scoring's
 // Credentials port.
 func (m *Module) Get(ctx context.Context, userID, provider string) (string, error) {
-	return m.service.GetCredential(ctx, userID, provider)
+	p, err := dto.ParseProvider(provider)
+	if err != nil {
+		return "", err
+	}
+	return m.service.GetCredential(ctx, userID, p)
 }
 
 // GetProfile satisfies scoring's ProfileReader port.

@@ -17,6 +17,9 @@ const (
 	KindUpstream
 	KindUnavailable
 	KindForbidden
+	KindTooLarge
+	KindUnsupportedMedia
+	KindTooManyRequests
 )
 
 func (k Kind) Status() int {
@@ -27,6 +30,12 @@ func (k Kind) Status() int {
 		return http.StatusUnauthorized
 	case KindForbidden:
 		return http.StatusForbidden
+	case KindTooLarge:
+		return http.StatusRequestEntityTooLarge
+	case KindUnsupportedMedia:
+		return http.StatusUnsupportedMediaType
+	case KindTooManyRequests:
+		return http.StatusTooManyRequests
 	case KindNotFound:
 		return http.StatusNotFound
 	case KindConflict:
@@ -53,14 +62,21 @@ type Error struct {
 func (e *Error) Error() string { return e.msg }
 func (e *Error) Kind() Kind    { return e.kind }
 
-func Invalid(msg string) error       { return &Error{kind: KindInvalid, msg: msg} }
-func Unauthorized(msg string) error  { return &Error{kind: KindUnauthorized, msg: msg} }
-func Forbidden(msg string) error     { return &Error{kind: KindForbidden, msg: msg} }
+func Invalid(msg string) error      { return &Error{kind: KindInvalid, msg: msg} }
+func Unauthorized(msg string) error { return &Error{kind: KindUnauthorized, msg: msg} }
+func Forbidden(msg string) error    { return &Error{kind: KindForbidden, msg: msg} }
+func TooManyRequests(msg string) error {
+	return &Error{kind: KindTooManyRequests, msg: msg}
+}
 func NotFound(msg string) error      { return &Error{kind: KindNotFound, msg: msg} }
 func Conflict(msg string) error      { return &Error{kind: KindConflict, msg: msg} }
 func Unprocessable(msg string) error { return &Error{kind: KindUnprocessable, msg: msg} }
 func Upstream(msg string) error      { return &Error{kind: KindUpstream, msg: msg} }
 func Unavailable(msg string) error   { return &Error{kind: KindUnavailable, msg: msg} }
+func TooLarge(msg string) error      { return &Error{kind: KindTooLarge, msg: msg} }
+func UnsupportedMedia(msg string) error {
+	return &Error{kind: KindUnsupportedMedia, msg: msg}
+}
 
 // StatusFor reports the HTTP status for err's kind, found via errors.As so a
 // wrapped apperr.Error is still detected.
@@ -70,6 +86,14 @@ func StatusFor(err error) (status int, ok bool) {
 		return 0, false
 	}
 	return ae.kind.Status(), true
+}
+
+func MessageFor(err error) string {
+	ae, ok := errors.AsType[*Error](err)
+	if !ok {
+		return ""
+	}
+	return ae.msg
 }
 
 type fielded struct {

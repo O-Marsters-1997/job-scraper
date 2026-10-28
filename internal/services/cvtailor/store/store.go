@@ -74,7 +74,30 @@ func toPosition(p sqlc.Position) dto.Position {
 }
 
 func toAchievement(a sqlc.Achievement) dto.Achievement {
-	return dto.Achievement{ID: a.ID.String(), PositionID: a.PositionID.String(), Text: a.Text}
+	return dto.Achievement{ID: a.ID.String(), PositionID: a.PositionID.String(), Text: a.Text, Context: a.Context}
+}
+
+func (s *Store) SetAchievementContexts(ctx context.Context, userID string, ids, contexts []string) error {
+	uid, err := parseID(userID, ErrAchievementNotFound)
+	if err != nil {
+		return err
+	}
+	uuids := make([]pgtype.UUID, len(ids))
+	for i, id := range ids {
+		if uuids[i], err = parseID(id, ErrAchievementNotFound); err != nil {
+			return err
+		}
+	}
+	return s.inTx(ctx, func(q *sqlc.Queries) error {
+		n, err := q.SetAchievementContexts(ctx, sqlc.SetAchievementContextsParams{UserID: uid, Ids: uuids, Contexts: contexts})
+		if err != nil {
+			return fmt.Errorf("store.SetAchievementContexts: %w", err)
+		}
+		if int(n) != len(uuids) {
+			return ErrAchievementNotFound
+		}
+		return nil
+	})
 }
 
 // ListPositions returns userID's Positions in sort order, each with its
@@ -96,6 +119,16 @@ func listPositions(ctx context.Context, q *sqlc.Queries, uid pgtype.UUID) ([]dto
 	if err != nil {
 		return nil, fmt.Errorf("store.ListPositions achievements: %w", err)
 	}
+	stats, err := q.ListAchievementStats(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListPositions stats: %w", err)
+	}
+	statsOf := make(map[pgtype.UUID]*dto.AchievementStats, len(stats))
+	for _, st := range stats {
+		statsOf[st.AchievementID] = &dto.AchievementStats{
+			InCVs: int(st.InCvs), LeftOut: int(st.LeftOut), Applied: int(st.Applied), Replied: int(st.Replied),
+		}
+	}
 	out := make([]dto.Position, len(positions))
 	byID := make(map[pgtype.UUID]int, len(positions))
 	for i, p := range positions {
@@ -104,7 +137,9 @@ func listPositions(ctx context.Context, q *sqlc.Queries, uid pgtype.UUID) ([]dto
 	}
 	for _, a := range achievements {
 		if i, ok := byID[a.PositionID]; ok {
-			out[i].Achievements = append(out[i].Achievements, toAchievement(a))
+			ach := toAchievement(a)
+			ach.Stats = statsOf[a.ID]
+			out[i].Achievements = append(out[i].Achievements, ach)
 		}
 	}
 	return out, nil

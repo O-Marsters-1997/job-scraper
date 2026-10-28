@@ -27,6 +27,37 @@ test.describe("Companies", () => {
 			.toBe(true);
 	});
 
+	test("keeps focus and every character while each keystroke's search runs", async ({
+		page,
+		companiesPage,
+	}) => {
+		await companiesPage.searchInput.click();
+		await companiesPage.searchInput.pressSequentially("ab cd", {
+			delay: 400,
+		});
+
+		await expect(page).toHaveURL(/q=ab(\+|%20)cd/);
+		await expect(companiesPage.searchInput).toBeFocused();
+		await expect(companiesPage.searchInput).toHaveValue("ab cd");
+	});
+
+	test("moves the active row with j/k and opens it in a new tab with Enter", async ({
+		page,
+		companiesPage,
+	}) => {
+		await expect(companiesPage.rows.first()).toBeVisible();
+		await page.keyboard.press("j");
+		await expect(companiesPage.rows.first()).toHaveAttribute("data-active", "");
+		await page.keyboard.press("j");
+		await expect(companiesPage.rows.nth(1)).toHaveAttribute("data-active", "");
+		await page.keyboard.press("k");
+		await expect(companiesPage.rows.first()).toHaveAttribute("data-active", "");
+
+		const popup = page.waitForEvent("popup");
+		await page.keyboard.press("Enter");
+		expect((await popup).url()).toMatch(/\/companies\/.+/);
+	});
+
 	test("should navigate to company detail when clicking a company name", async ({
 		page,
 		companiesPage,
@@ -97,19 +128,22 @@ test.describe("Companies", () => {
 		await withJobs.first().getByRole("link").first().click();
 		await expect(page).toHaveURL(/\/companies\/.+/);
 
-		const jobRow = page
+		const jobRows = page
 			.getByRole("row")
-			.filter({ hasNot: page.getByRole("columnheader") })
-			.first();
-		await expect(jobRow).toBeVisible();
-		await jobRow.getByRole("button", { name: "Job actions" }).click();
-		await page.getByRole("menuitem", { name: "Track application" }).click();
-		const dialog = page.getByRole("dialog");
-		await dialog.getByLabel("Status").selectOption({ label: "Applied" });
-		await dialog.getByRole("button", { name: "Save" }).click();
+			.filter({ hasNot: page.getByRole("columnheader") });
+		await expect(jobRows.first()).toBeVisible();
+		const track = page.getByRole("menuitem", { name: "Track application" });
+		let jobRow = jobRows.first();
+		for (let i = 0; i < (await jobRows.count()); i++) {
+			jobRow = jobRows.nth(i);
+			await jobRow.getByRole("button", { name: "Job actions" }).click();
+			await expect(page.getByRole("menuitem").first()).toBeVisible();
+			if ((await track.count()) > 0) break;
+			await page.keyboard.press("Escape");
+		}
+		await track.click();
 
-		await expect(dialog).toBeHidden();
-		await expect(jobRow.getByText("Applied")).toBeVisible();
+		await expect(jobRow.getByText("Draft")).toBeVisible();
 	});
 
 	test.describe("at 375px", () => {

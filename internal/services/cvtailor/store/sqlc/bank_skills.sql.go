@@ -58,6 +58,23 @@ func (q *Queries) DeleteBankSkill(ctx context.Context, arg DeleteBankSkillParams
 	return result.RowsAffected(), nil
 }
 
+const deleteBankSkills = `-- name: DeleteBankSkills :execrows
+DELETE FROM bank_skills WHERE user_id = $1 AND id = ANY($2::uuid[])
+`
+
+type DeleteBankSkillsParams struct {
+	UserID pgtype.UUID
+	Ids    []pgtype.UUID
+}
+
+func (q *Queries) DeleteBankSkills(ctx context.Context, arg DeleteBankSkillsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteBankSkills, arg.UserID, arg.Ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listBankSkills = `-- name: ListBankSkills :many
 SELECT id, user_id, name, category, sort_order, created_at, updated_at FROM bank_skills
 WHERE user_id = $1
@@ -106,6 +123,26 @@ type ReorderBankSkillsParams struct {
 
 func (q *Queries) ReorderBankSkills(ctx context.Context, arg ReorderBankSkillsParams) (int64, error) {
 	result, err := q.db.Exec(ctx, reorderBankSkills, arg.UserID, arg.Ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setBankSkillsCategory = `-- name: SetBankSkillsCategory :execrows
+UPDATE bank_skills
+SET category = $1, updated_at = NOW()
+WHERE user_id = $2 AND id = ANY($3::uuid[])
+`
+
+type SetBankSkillsCategoryParams struct {
+	Category string
+	UserID   pgtype.UUID
+	Ids      []pgtype.UUID
+}
+
+func (q *Queries) SetBankSkillsCategory(ctx context.Context, arg SetBankSkillsCategoryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setBankSkillsCategory, arg.Category, arg.UserID, arg.Ids)
 	if err != nil {
 		return 0, err
 	}

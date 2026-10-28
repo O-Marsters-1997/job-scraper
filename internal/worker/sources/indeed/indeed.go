@@ -211,11 +211,12 @@ func parse(body []byte) ([]dto.Job, string, error) {
 			company = j.Employer.Name
 		}
 		url := jobURL + j.Key
-		updatedAt := time.Now().UTC()
+		var postedAt *time.Time
 		if j.DatePublished > 0 {
-			updatedAt = time.UnixMilli(j.DatePublished).UTC()
+			t := time.UnixMilli(j.DatePublished).UTC()
+			postedAt = &t
 		} else {
-			sources.WarnDefaulted("indeed", "UpdatedAt", url)
+			sources.WarnDefaulted("indeed", "PostedAt", url)
 		}
 		jobs = append(jobs, dto.Job{
 			Title:           j.Title,
@@ -225,7 +226,7 @@ func parse(body []byte) ([]dto.Job, string, error) {
 			Description:     j.Description.HTML,
 			SalaryRaw:       formatSalary(j),
 			WorkArrangement: sources.DetectWorkArrangement(j.Title + " " + j.Location.Formatted.Long + " " + j.Description.HTML),
-			UpdatedAt:       updatedAt,
+			PostedAt:        postedAt,
 		})
 	}
 	return jobs, search.PageInfo.NextCursor, nil

@@ -57,21 +57,22 @@ function oklchToRgb(L: number, C: number, H: number): [number, number, number] {
 	];
 }
 
-// Accepts: oklch(L C H) or oklch(L C H / a)
+const NUM = String.raw`(\d*\.?\d+)`;
+const OKLCH_RE = new RegExp(
+	String.raw`^oklch\(\s*${NUM}(%?)\s+${NUM}\s+${NUM}(?:\s*/\s*${NUM}(%?))?\s*\)$`,
+	"i",
+);
+
 function parseOklch(
 	css: string,
 ): { L: number; C: number; H: number; alpha: number } | null {
-	const m = css
-		.trim()
-		.match(
-			/^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)$/i,
-		);
+	const m = css.trim().match(OKLCH_RE);
 	if (!m) return null;
 	return {
-		L: Number(m[1]),
-		C: Number(m[2]),
-		H: Number(m[3]),
-		alpha: m[4] !== undefined ? Number(m[4]) : 1,
+		L: m[2] ? Number(m[1]) / 100 : Number(m[1]),
+		C: Number(m[3]),
+		H: Number(m[4]),
+		alpha: m[5] === undefined ? 1 : m[6] ? Number(m[5]) / 100 : Number(m[5]),
 	};
 }
 

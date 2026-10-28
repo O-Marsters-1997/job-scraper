@@ -1,0 +1,5 @@
+DEVELOPMENT_TEAM = <your team ID>
+
+API_SCHEME[config=Release] = https
+API_HOST[config=Release] = fast-track.<tailnet>.ts.net
+API_PATH[config=Release] = /api

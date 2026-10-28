@@ -29,17 +29,17 @@ func Detect(rawURL string) ATSType {
 	}
 	host := strings.ToLower(u.Hostname())
 	switch {
-	case strings.Contains(host, "greenhouse.io"):
+	case hostMatches(host, "greenhouse.io"):
 		return Greenhouse
 	case host == "jobs.lever.co":
 		return Lever
 	case host == "jobs.ashbyhq.com":
 		return Ashby
-	case strings.Contains(host, "workable.com"):
+	case hostMatches(host, "workable.com"):
 		return Workable
-	case strings.Contains(host, "recruitee.com"):
+	case hostMatches(host, "recruitee.com"):
 		return Recruitee
-	case strings.Contains(host, "personio.de") || strings.Contains(host, "personio.com"):
+	case hostMatches(host, "personio.de") || hostMatches(host, "personio.com"):
 		return Personio
 	case strings.HasSuffix(host, ".pinpointhq.com"):
 		return Pinpoint
@@ -49,7 +49,7 @@ func Detect(rawURL string) ATSType {
 		return HiBob
 	case host == "jobs.smartrecruiters.com" || host == "careers.smartrecruiters.com":
 		return SmartRecruiters
-	case strings.Contains(host, "linkedin.com") || strings.Contains(host, "indeed.com"):
+	case hostMatches(host, "linkedin.com") || hostMatches(host, "indeed.com"):
 		return Aggregator
 	default:
 		return UnknownHTML
@@ -129,9 +129,9 @@ func RewriteToATS(rawURL string) (string, ATSType, bool) {
 
 	var dest string
 	switch {
-	case strings.Contains(host, "linkedin.com"):
+	case hostMatches(host, "linkedin.com"):
 		dest = u.Query().Get("externalUrl")
-	case strings.Contains(host, "indeed.com"):
+	case hostMatches(host, "indeed.com"):
 		dest, _ = neturl.QueryUnescape(u.Query().Get("url"))
 	}
 	if t := Detect(dest); dest != "" && t != Aggregator && t != UnknownHTML {

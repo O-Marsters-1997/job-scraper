@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
@@ -17,7 +18,7 @@ import (
 func newScraper(tb testing.TB, search wis.Search) *wis.Scraper {
 	tb.Helper()
 	tb.Setenv("DECODO_PROXY_URL", "http://user:pass@localhost:7000")
-	return wis.New(search)
+	return wis.New(search, sources.NewGate(0, time.Hour))
 }
 
 func TestSnapshots(t *testing.T) {
@@ -48,6 +49,16 @@ func TestSearchURL(t *testing.T) {
 			want: "https://workinstartups.com/search?cat=2&cti=full_time&cty=permanent&loc=86384&per_page=50&q=go&remote_only=1&sb=date&sd=down&sf=30000",
 		},
 		{
+			name:   "saved date posted is sent",
+			search: wis.Search{Keywords: "go", Filters: map[string]string{"date_posted": "3", "sort": "date"}},
+			want:   "https://workinstartups.com/search?f=3&per_page=50&q=go&sb=date&sd=down",
+		},
+		{
+			name:   "salary sort replaces newest first",
+			search: wis.Search{Keywords: "go", Filters: map[string]string{"sort": "salary_low"}},
+			want:   "https://workinstartups.com/search?per_page=50&q=go&sb=salary&sd=up",
+		},
+		{
 			name:   "invalid value is dropped",
 			search: wis.Search{Keywords: "go", Filters: map[string]string{"loc": "nowhere", "hours": "full_time"}},
 			want:   "https://workinstartups.com/search?cti=full_time&per_page=50&q=go&sb=date&sd=down",
@@ -62,6 +73,28 @@ func TestSearchURL(t *testing.T) {
 	}
 }
 
+func TestScraper_NewestFirst(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		sort string
+		want bool
+	}{
+		{"", true},
+		{"date", true},
+		{"salary_high", false},
+		{"salary_low", false},
+	}
+	for _, tt := range tests {
+		t.Run("sort "+tt.sort, func(t *testing.T) {
+			t.Parallel()
+			src := wis.New(wis.Search{Filters: map[string]string{"sort": tt.sort}}, wis.NewGate())
+			if got := src.Cfg().NewestFirst; got != tt.want {
+				t.Errorf("Cfg().NewestFirst = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRecency(t *testing.T) {
 	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 	ago := func(d time.Duration) *time.Time {
@@ -69,21 +102,26 @@ func TestRecency(t *testing.T) {
 		return &at
 	}
 	tests := []struct {
-		name string
-		last *time.Time
-		want string
+		name       string
+		configured string
+		last       *time.Time
+		want       string
 	}{
-		{"first run", nil, ""},
-		{"two hours ago", ago(2 * time.Hour), "1"},
-		{"thirty hours ago", ago(30 * time.Hour), "3"},
-		{"four days ago", ago(4 * 24 * time.Hour), "7"},
-		{"nine days ago", ago(9 * 24 * time.Hour), ""},
-		{"margin pushes a boundary up a tier", ago(23*time.Hour + 30*time.Minute), "3"},
-		{"future last run still keeps the margin", ago(-time.Hour), "1"},
+		{"first run", "", nil, ""},
+		{"saved window caps a long gap", "3", ago(4 * 24 * time.Hour), ""},
+		{"saved window equal to the gap keeps stored value", "1", ago(2 * time.Hour), ""},
+		{"recent run narrows the saved window", "7", ago(2 * time.Hour), "1"},
+		{"recent run narrows the saved window to 3 days", "7", ago(30 * time.Hour), "3"},
+		{"two hours ago", "", ago(2 * time.Hour), "1"},
+		{"thirty hours ago", "", ago(30 * time.Hour), "3"},
+		{"four days ago", "", ago(4 * 24 * time.Hour), "7"},
+		{"nine days ago", "", ago(9 * 24 * time.Hour), ""},
+		{"margin pushes a boundary up a tier", "", ago(23*time.Hour + 30*time.Minute), "3"},
+		{"future last run still keeps the margin", "", ago(-time.Hour), "1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := wis.Recency(tt.last, now); got != tt.want {
+			if got := wis.Recency(tt.configured, tt.last, now); got != tt.want {
 				t.Errorf("Recency = %q, want %q", got, tt.want)
 			}
 		})
@@ -139,14 +177,13 @@ func (c *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 }
 
 func TestRequests_BrowserHeaders(t *testing.T) {
-	wis.ResetLimiter()
 	src := newScraper(t, wis.Search{Keywords: "go"})
 	tr := &countingTransport{status: http.StatusOK}
 	src.Client().Transport = tr
 	if _, _, err := src.FetchPage(t.Context(), ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := src.GetDetails(t.Context(), "https://workinstartups.com/details/1"); err == nil {
+	if _, err := src.GetDetails(t.Context(), dto.Job{URL: "https://workinstartups.com/details/1"}); err == nil {
 		t.Fatal("GetDetails on a listing body = nil error, want a parse error")
 	}
 	list, detail := tr.requests[0].Header, tr.requests[1].Header
@@ -167,7 +204,6 @@ func TestRateLimit(t *testing.T) {
 		{"429 without Retry-After blocks later requests", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			wis.ResetLimiter()
 			src := newScraper(t, wis.Search{Keywords: "go"})
 			tr := &countingTransport{status: http.StatusTooManyRequests, retryAfter: tt.retryAfter}
 			src.Client().Transport = tr
@@ -180,7 +216,7 @@ func TestRateLimit(t *testing.T) {
 			if _, _, err := src.FetchPage(t.Context(), ""); !errors.Is(err, sources.ErrDeferred) {
 				t.Errorf("listing after 429 = %v, want ErrDeferred", err)
 			}
-			if _, err := src.GetDetails(t.Context(), "https://workinstartups.com/details/1"); !errors.Is(err, sources.ErrDeferred) {
+			if _, err := src.GetDetails(t.Context(), dto.Job{URL: "https://workinstartups.com/details/1"}); !errors.Is(err, sources.ErrDeferred) {
 				t.Errorf("detail after 429 = %v, want ErrDeferred", err)
 			}
 			if len(tr.requests) != 1 {

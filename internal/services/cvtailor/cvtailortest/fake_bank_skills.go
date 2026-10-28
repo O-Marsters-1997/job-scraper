@@ -86,6 +86,39 @@ func (f *FakeStore) DeleteBankSkill(_ context.Context, userID, id string) error 
 	return nil
 }
 
+func (f *FakeStore) ownsAll(userID string, ids []string) bool {
+	for _, id := range ids {
+		if s, ok := f.skills[id]; !ok || s.userID != userID {
+			return false
+		}
+	}
+	return true
+}
+
+func (f *FakeStore) SetBankSkillsCategory(_ context.Context, userID string, ids []string, category string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.ownsAll(userID, ids) {
+		return errBankSkillNotFound
+	}
+	for _, id := range ids {
+		f.skills[id].Category = category
+	}
+	return nil
+}
+
+func (f *FakeStore) DeleteBankSkills(_ context.Context, userID string, ids []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.ownsAll(userID, ids) {
+		return errBankSkillNotFound
+	}
+	for _, id := range ids {
+		delete(f.skills, id)
+	}
+	return nil
+}
+
 func (f *FakeStore) ReorderBankSkills(_ context.Context, userID string, ids []string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

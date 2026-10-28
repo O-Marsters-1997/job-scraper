@@ -17,13 +17,25 @@
       "source": "O-Marsters-1997/skills",
       "sourceType": "github",
       "skillPath": "skills/code/go-idiomatic/SKILL.md",
-      "computedHash": "3475d8109802323e00682e57a8397b417fd3271213faa948b05681d8a8aa5b35"
+      "computedHash": "28106132a1a646899431b6349a44382c4d53cde5c78dea8947cf50064f4b4d6c"
+    },
+    "go-testing": {
+      "source": "O-Marsters-1997/my-claude-code",
+      "sourceType": "github",
+      "skillPath": "skills/code/go-testing/SKILL.md",
+      "computedHash": "7686208c623095bf79a92afac59601891c9205cbe8111229c6b2b165139417c9"
     },
     "goquery-parsing": {
       "source": "O-Marsters-1997/skills",
       "sourceType": "github",
       "skillPath": "skills/code/goquery-parsing/SKILL.md",
       "computedHash": "8501b532e55a47eed8a525585dca8952b9a0dbef9cd7f3e437d8a8502cee9d04"
+    },
+    "htmx-go-templates": {
+      "source": "O-Marsters-1997/my-claude-code",
+      "sourceType": "github",
+      "skillPath": "skills/code/htmx-go-templates/SKILL.md",
+      "computedHash": "bbe523c4a247fd91881d0bc4fe9cfe6f29bdc4d8c631915ab48acff1539293a8"
     },
     "playwright-ci": {
       "source": "testdino-hq/playwright-skill",
@@ -42,6 +54,24 @@
       "sourceType": "github",
       "skillPath": "pom/SKILL.md",
       "computedHash": "b7bf9f8cec29b3878cf503c6dbf19cafe181ac4eb0c63e94168d16942345707f"
+    },
+    "postgres-best-practices": {
+      "source": "O-Marsters-1997/my-claude-code",
+      "sourceType": "github",
+      "skillPath": "skills/code/postgres-best-practices/SKILL.md",
+      "computedHash": "d27f618e7583e72b57f26bca0d8b572fb70158db80de3d455c2d78c099f04089"
+    },
+    "swift-ios": {
+      "source": "O-Marsters-1997/my-claude-code",
+      "sourceType": "github",
+      "skillPath": "skills/code/swift-ios/SKILL.md",
+      "computedHash": "2e3fd62599fa690d3a5404084a048b40cb4cdf9a641a2cf5bc8ba25b0a1344cc"
+    },
+    "swift-testing": {
+      "source": "O-Marsters-1997/my-claude-code",
+      "sourceType": "github",
+      "skillPath": "skills/code/swift-testing/SKILL.md",
+      "computedHash": "0163a4163cb5282d5f7cc18abfdb6bb4fb35b5758c301d89984012f9d316447e"
     },
     "tailwind-shadcn": {
       "source": "O-Marsters-1997/my-claude-code",

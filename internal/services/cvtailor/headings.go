@@ -2,6 +2,7 @@ package cvtailor
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -45,6 +46,35 @@ func (s *Service) headings(ctx context.Context, userID string, q dto.CVTabQuery,
 		out = append(out, heading)
 	}
 	return out, nil
+}
+
+func (s *Service) linkedMappings(ctx context.Context, userID, docID, tabID string, ds docparse.DocStructure, positions []dto.Position) ([]dto.HeadingMapping, error) {
+	mappings, err := s.store.ListHeadingMappings(ctx, userID, docID, tabID)
+	if err != nil {
+		return nil, err
+	}
+	mappings = slices.DeleteFunc(mappings, func(m dto.HeadingMapping) bool { return m.PositionID == nil })
+	known := make(map[string]bool, len(mappings))
+	for _, m := range mappings {
+		known[m.HeadingText] = true
+	}
+	var added []dto.HeadingMapping
+	for _, h := range roleHeadings(ds) {
+		if known[h.Text] {
+			continue
+		}
+		known[h.Text] = true
+		if pid := autoMatch(h.Text, positions); pid != nil {
+			added = append(added, dto.HeadingMapping{HeadingText: h.Text, PositionID: pid})
+		}
+	}
+	if len(added) == 0 {
+		return mappings, nil
+	}
+	if err := s.store.SaveHeadingMappings(ctx, userID, docID, tabID, added); err != nil {
+		return nil, err
+	}
+	return append(mappings, added...), nil
 }
 
 func (s *Service) SaveHeadings(ctx context.Context, userID string, in dto.HeadingMappingsInput) ([]dto.HeadingMapping, error) {

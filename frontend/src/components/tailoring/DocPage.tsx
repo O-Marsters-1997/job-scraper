@@ -23,11 +23,13 @@ import {
 import { cn } from "@/lib/utils";
 import type { WordOp } from "@/lib/wordDiff";
 import type {
+	BulletLean,
 	DraftLayout,
 	LayoutBlock,
 	LayoutBorder,
 	LayoutRun,
 } from "@/types/tailoring";
+import { Lean } from "./Lean";
 
 const INK = "#000000";
 const LINK_INK = "#1155cc";
@@ -60,12 +62,17 @@ export type PageEditor = {
 	onHover: (slotId: string, over: boolean) => void;
 	text: (slotId: string) => string;
 	label: (slotId: string) => string;
+	lean?: ((slotId: string) => BulletLean | undefined) | undefined;
 	diffFor: (slotId: string) => WordOp[] | null;
 	onInput: (slotId: string, text: string) => void;
 	onFocus: (slotId: string) => void;
 	onDismissSuggestion: (slotId: string) => void;
 	onBlur: (slotId: string) => void;
+	onEnter?: ((slotId: string) => void) | undefined;
+	onBackspaceEmpty?: ((slotId: string) => boolean) | undefined;
 	onEditSkills?: (() => void) | undefined;
+	roleFor?: ((block: LayoutBlock) => string | undefined) | undefined;
+	onEditRole?: ((positionId: string) => void) | undefined;
 };
 
 const ALIGN: Record<string, JSX.CSSProperties["text-align"]> = {
@@ -187,6 +194,14 @@ function measureFit(el: HTMLElement): LineFit {
 	};
 }
 
+function heightWithoutGhosts(content: HTMLElement) {
+	const ghosts = content.querySelectorAll<HTMLElement>("[data-diff-removed]");
+	for (const g of ghosts) g.style.display = "none";
+	const px = content.offsetHeight;
+	for (const g of ghosts) g.style.display = "";
+	return px;
+}
+
 function sameMetrics(a: PageMetrics, b: PageMetrics) {
 	const ids = Object.keys(b.fits);
 	return (
@@ -205,6 +220,16 @@ function sameMetrics(a: PageMetrics, b: PageMetrics) {
 			);
 		})
 	);
+}
+
+function caretAtEnd(el: HTMLElement): boolean {
+	const sel = window.getSelection();
+	if (!sel?.isCollapsed || !sel.focusNode || !el.contains(sel.focusNode))
+		return false;
+	const tail = document.createRange();
+	tail.selectNodeContents(el);
+	tail.setStart(sel.focusNode, sel.focusOffset);
+	return tail.toString() === "";
 }
 
 function EditableLine(props: {
@@ -287,7 +312,17 @@ function EditableLine(props: {
 					document.execCommand("insertText", false, singleLine(pasted));
 				}}
 				onKeyDown={(e) => {
-					if (e.key === "Enter") e.preventDefault();
+					if (e.key === "Enter") {
+						e.preventDefault();
+						if (caretAtEnd(e.currentTarget))
+							props.editor.onEnter?.(props.slotId);
+					}
+					if (
+						e.key === "Backspace" &&
+						!e.currentTarget.textContent &&
+						props.editor.onBackspaceEmpty?.(props.slotId)
+					)
+						e.preventDefault();
 					if (e.key === "Escape") e.currentTarget.blur();
 				}}
 				onFocus={() => {
@@ -424,6 +459,11 @@ function Block(props: {
 		props.block.slotId && !props.block.section ? props.editor : undefined;
 	const onEditSkills = () =>
 		props.block.section === "skills" ? props.editor?.onEditSkills : undefined;
+	const onEditRole = () => {
+		const positionId = props.editor?.roleFor?.(props.block);
+		const open = props.editor?.onEditRole;
+		return positionId && open ? () => open(positionId) : undefined;
+	};
 	return (
 		<div
 			data-slot-id={props.block.slotId || undefined}
@@ -459,6 +499,17 @@ function Block(props: {
 					/>
 				)}
 			</Show>
+			<Show when={onEditRole()}>
+				{(open) => (
+					<button
+						type="button"
+						aria-label="Choose Achievements for this role"
+						title="Choose Achievements for this role"
+						class="absolute inset-0 z-10 cursor-pointer rounded-sm hover:bg-accent-subtle/60 focus-visible:outline-2 focus-visible:outline-primary"
+						onClick={() => open()()}
+					/>
+				)}
+			</Show>
 			<Show when={editor()}>
 				{(ed) => (
 					<>
@@ -467,6 +518,9 @@ function Block(props: {
 								aria-hidden="true"
 								class="absolute -left-2 inset-y-0 w-1.5 rounded-full bg-primary"
 							/>
+						</Show>
+						<Show when={ed().lean?.(props.block.slotId)}>
+							{(lean) => <Lean lean={lean()} />}
 						</Show>
 						<Show when={ed().showCounts && props.fit}>
 							{(fit) => (
@@ -546,10 +600,7 @@ export function DocPage(props: {
 			bodyLinePx ||= Number.parseFloat(getComputedStyle(el).lineHeight);
 		}
 		setFits(reconcile(next));
-		const ghosts = content.querySelectorAll<HTMLElement>("[data-diff-removed]");
-		for (const g of ghosts) g.style.display = "none";
-		const contentPx = content.offsetHeight;
-		for (const g of ghosts) g.style.display = "";
+		const contentPx = heightWithoutGhosts(content);
 		const metrics: PageMetrics = {
 			contentPt: contentPx / PX_PER_PT,
 			availablePt: page().height - page().marginTop - page().marginBottom,

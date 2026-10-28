@@ -3,7 +3,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o worker ./cmd/worker && go build -o api ./cmd/api && go build -o queue ./cmd/queue
+RUN go build -o worker ./cmd/worker && go build -o api ./cmd/api && go build -o queue ./cmd/queue && go build -o admin ./cmd/admin
 
 FROM golang:1.26-alpine AS goose
 RUN go install github.com/pressly/goose/v3/cmd/goose@v3.27.0
@@ -18,5 +18,6 @@ COPY scripts/migrate.sh ./migrate.sh
 CMD ["./migrate.sh"]
 
 FROM alpine:latest
+RUN apk add --no-cache chromium
 WORKDIR /app
-COPY --from=builder /app/worker /app/api /app/queue ./
+COPY --from=builder /app/worker /app/api /app/queue /app/admin ./

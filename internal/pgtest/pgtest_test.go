@@ -116,30 +116,44 @@ func TestNew(t *testing.T) {
 		}
 	})
 
-	t.Run("returns the same pool across calls", func(t *testing.T) {
+	t.Run("gives each call a database of its own", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
 		first := pgtest.New(t)
 		second := pgtest.New(t)
-		if first != second {
-			t.Errorf("New returned different pools across calls, want the same shared pool")
-		}
-	})
 
-	t.Run("truncates tables between calls", func(t *testing.T) {
-		ctx := t.Context()
-		pool := pgtest.New(t)
-
-		if _, err := pool.Exec(ctx, "INSERT INTO companies (slug, name) VALUES ('pgtest-check', 'Pgtest Check')"); err != nil {
+		if _, err := first.Exec(ctx, "INSERT INTO companies (slug, name) VALUES ('pgtest-check', 'Pgtest Check')"); err != nil {
 			t.Fatalf("insert: %v", err)
 		}
 
-		pool = pgtest.New(t)
-
 		var count int
-		if err := pool.QueryRow(ctx, "SELECT count(*) FROM companies WHERE slug = 'pgtest-check'").Scan(&count); err != nil {
+		if err := second.QueryRow(ctx, "SELECT count(*) FROM companies WHERE slug = 'pgtest-check'").Scan(&count); err != nil {
 			t.Fatalf("count: %v", err)
 		}
 		if count != 0 {
-			t.Errorf("count = %d, want 0 after truncation", count)
+			t.Errorf("count in second database = %d, want 0", count)
 		}
+	})
+
+	t.Run("drops the database when its test ends", func(t *testing.T) {
+		t.Parallel()
+		observer := pgtest.New(t)
+		var name string
+		t.Cleanup(func() {
+			var exists bool
+			if err := observer.QueryRow(context.WithoutCancel(t.Context()), "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)", name).Scan(&exists); err != nil {
+				t.Errorf("find %s: %v", name, err)
+				return
+			}
+			if exists {
+				t.Errorf("database %s exists after its test ended, want dropped", name)
+			}
+		})
+		t.Run("create", func(t *testing.T) {
+			t.Parallel()
+			if err := pgtest.New(t).QueryRow(t.Context(), "SELECT current_database()").Scan(&name); err != nil {
+				t.Fatalf("query current_database: %v", err)
+			}
+		})
 	})
 }

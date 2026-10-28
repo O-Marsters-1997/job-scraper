@@ -14,7 +14,16 @@ export const ACTION_LABEL: Record<SuggestAction, string> = {
 	tighten: "Tighten",
 	verb: "Stronger verb",
 	ask: "Ask",
+	tailor: "Tailor to JD",
 };
+
+const SOURCE_HINT = {
+	jd: "job description",
+	note: "your note",
+	comment: "comment",
+} as const;
+
+export type TailorQuote = { quote: string; source: keyof typeof SOURCE_HINT };
 
 function AskForm(props: {
 	onSend: (prompt: string) => void;
@@ -57,9 +66,10 @@ function AskForm(props: {
 export function WandMenu(props: {
 	top: number;
 	canFit: boolean;
+	tailor: TailorQuote | undefined;
 	askOpen: boolean;
 	onAskOpen: (open: boolean) => void;
-	onAction: (action: SuggestAction, prompt?: string) => void;
+	onAction: (action: SuggestAction, prompt?: string, quote?: string) => void;
 }) {
 	return (
 		<div
@@ -93,6 +103,20 @@ export function WandMenu(props: {
 							<DropdownMenuItem onSelect={() => props.onAction("verb")}>
 								{ACTION_LABEL.verb}
 							</DropdownMenuItem>
+							<Show when={props.tailor}>
+								{(t) => (
+									<DropdownMenuItem
+										onSelect={() =>
+											props.onAction("tailor", undefined, t().quote)
+										}
+									>
+										{ACTION_LABEL.tailor}
+										<span class="ml-auto pl-3 text-2xs text-muted">
+											{SOURCE_HINT[t().source]}
+										</span>
+									</DropdownMenuItem>
+								)}
+							</Show>
 							<DropdownMenuSeparator />
 							<DropdownMenuItem onSelect={() => props.onAskOpen(true)}>
 								{ACTION_LABEL.ask}

@@ -7,6 +7,7 @@ import (
 	"io"
 	"iter"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -14,19 +15,42 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
+const (
+	suggestWriteWindow  = 30 * time.Second
+	scaffoldWriteWindow = 3 * time.Minute
+)
+
+func withWriteWindow(d time.Duration, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(d))
+		h(w, r)
+	}
+}
+
 func (m *Module) tailorRoutes(r chi.Router) {
 	r.Route("/tailoring", func(r chi.Router) {
 		r.Get("/cvs/{docId}/{tabId}/headings", handlers.Query(m.svc.Headings))
 		r.Put("/cvs/{docId}/{tabId}/headings", handlers.Update(m.svc.SaveHeadings))
+		r.Get("/letter-skeleton", handlers.GetAll(m.store.GetLetterSkeleton))
+		r.Put("/letter-skeleton", handlers.Update(m.store.SaveLetterSkeleton))
 		r.Get("/jobs/{jobId}/suggestions", handlers.Query(m.svc.Suggestions))
 		r.Get("/jobs/{jobId}/skill-suggestions", handlers.Query(m.svc.SkillSuggestions))
 		r.Get("/jobs/{jobId}/experience-match", handlers.Query(m.svc.ExperienceMatch))
 		r.Post("/jobs/{jobId}/achievements/{achievementId}/explain", handlers.Update(m.Explain))
+		r.Post("/jobs/{jobId}/cover-letters", withWriteWindow(scaffoldWriteWindow, handlers.Create(m.Scaffold)))
+		r.Get("/jobs/{jobId}/cover-letters", handlers.Query(m.svc.ListCoverLetters))
+		r.Get("/cover-letters/{id}/check", handlers.Query(m.CheckCoverLetter))
+		r.Post("/cover-letters/{id}/done", handlers.GetByID(m.store.MarkCoverLetterDone))
 		r.Post("/drafts", m.createDraft())
 		r.Get("/jobs/{jobId}/drafts", handlers.Query(m.svc.ListJobDrafts))
 		r.Get("/drafts/{id}", handlers.Query(m.svc.GetDraft))
 		r.Get("/drafts/{id}/layout", handlers.Query(m.svc.DraftLayout))
+		r.Get("/drafts/{id}/lean", handlers.Query(m.svc.DraftLean))
+		r.Get("/drafts/{id}/roles", handlers.Query(m.svc.DraftRoles))
+		r.Get("/drafts/{id}/insights", handlers.Query(m.svc.DraftInsights))
+		r.Post("/drafts/{id}/insights", withWriteWindow(scaffoldWriteWindow, handlers.Update(m.ExplainDraft)))
 		r.Get("/drafts/{id}/pdf", m.draftPDF())
+		r.Post("/drafts/{id}/profile/redraft", withWriteWindow(scaffoldWriteWindow, handlers.Update(m.RedraftProfile)))
 		r.Put("/drafts/{id}/slots", handlers.Update(m.svc.SaveDraftSlots))
 		r.Post("/drafts/{id}/slots/{slotId}/suggest", m.suggest())
 		r.Post("/drafts/{id}/keep", handlers.Update(m.svc.KeepDraft))
@@ -100,9 +124,12 @@ func (m *Module) suggest() http.HandlerFunc {
 		func(w http.ResponseWriter, _ *http.Request, events iter.Seq[SuggestEvent]) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
-			w.WriteHeader(http.StatusOK)
 			rc := http.NewResponseController(w)
+			_ = rc.SetWriteDeadline(time.Now().Add(suggestWriteWindow))
+			w.WriteHeader(http.StatusOK)
+			_ = rc.Flush()
 			for ev := range events {
+				_ = rc.SetWriteDeadline(time.Now().Add(suggestWriteWindow))
 				switch {
 				case ev.Err != nil:
 					writeEvent(w, "error", map[string]string{"message": ev.Err.Error()})
@@ -111,7 +138,9 @@ func (m *Module) suggest() http.HandlerFunc {
 				default:
 					writeEvent(w, "delta", map[string]string{"text": ev.Delta})
 				}
-				_ = rc.Flush()
+				if rc.Flush() != nil {
+					return
+				}
 			}
 		},
 	)

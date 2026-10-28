@@ -52,6 +52,7 @@ type Suggestion struct {
 	Score         float64         `json:"score"`
 	State         SuggestionState `json:"state"`
 	Preselected   bool            `json:"preselected"`
+	Lines         int             `json:"lines"`
 }
 
 // ExperienceMatchQuery selects the Job to measure the Experience Bank against.

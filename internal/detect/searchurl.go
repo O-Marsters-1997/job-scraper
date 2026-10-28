@@ -2,6 +2,7 @@ package detect
 
 import (
 	neturl "net/url"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -48,7 +49,7 @@ var searchBoards = []boardSpec{
 		paths:         []string{"/search"},
 		canonical:     "https://workinstartups.com/search",
 		keywordsParam: "q",
-		silent:        []string{"p", "per_page", "sb", "sd", "sorting", "f"},
+		silent:        []string{"p", "per_page", "sorting"},
 	},
 	{
 		source:        "indeed",
@@ -59,6 +60,14 @@ var searchBoards = []boardSpec{
 		dropped:       []string{"vjk", "from", "advn", "vjs", "sc"},
 		silent:        []string{"start"},
 	},
+	{
+		source:        "hiringcafe",
+		hosts:         []string{"hiringcafe.com", "hiring.cafe"},
+		paths:         []string{"", "/classic"},
+		canonical:     "https://hiringcafe.com/",
+		keywordsParam: "searchState",
+		silent:        []string{"page"},
+	},
 }
 
 var unsupportedBoards = []struct {
@@ -67,6 +76,42 @@ var unsupportedBoards = []struct {
 }{
 	{"RemoteOK", []string{"remoteok.com", "remoteok.io"}},
 	{"Remotive", []string{"remotive.com", "remotive.io"}},
+}
+
+var wellfoundSlug = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+func parseWellfound(u *neturl.URL) (SearchURL, bool) {
+	if !hostMatches(u.Hostname(), "wellfound.com") {
+		return SearchURL{}, false
+	}
+	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+	var role, location string
+	switch {
+	case len(segs) == 4 && segs[0] == "role" && segs[1] == "l":
+		role, location = segs[2], segs[3]
+	case len(segs) == 2 && segs[0] == "role":
+		role = segs[1]
+	case len(segs) == 2 && segs[0] == "location":
+		location = segs[1]
+	default:
+		return SearchURL{}, false
+	}
+	for _, slug := range []string{role, location} {
+		if slug != "" && !wellfoundSlug.MatchString(slug) {
+			return SearchURL{}, false
+		}
+	}
+	out := SearchURL{Source: "wellfound", Value: role, Filters: map[string]string{}, Dropped: []string{}}
+	if location != "" {
+		out.Filters["location"] = location
+	}
+	for param := range u.Query() {
+		if param != "page" {
+			out.Dropped = append(out.Dropped, param)
+		}
+	}
+	slices.Sort(out.Dropped)
+	return out, true
 }
 
 func parseHTTP(raw string) (*neturl.URL, bool) {
@@ -92,9 +137,11 @@ func (b boardSpec) matchesPath(path string) bool {
 
 func (b boardSpec) paramSpecs() []paramSpec {
 	fields, _ := sourcespec.LookupFilterFields(b.source)
-	specs := make([]paramSpec, len(fields))
-	for i, f := range fields {
-		specs[i] = paramSpec{param: f.Param, filter: f.Name}
+	specs := make([]paramSpec, 0, len(fields))
+	for _, f := range fields {
+		if f.Param != "" {
+			specs = append(specs, paramSpec{param: f.Param, filter: f.Name})
+		}
 	}
 	return specs
 }
@@ -130,13 +177,16 @@ func UnsupportedBoard(raw string) (label string, ok bool) {
 	return "", false
 }
 
-// ParseSearchURL reduces a pasted LinkedIn, Indeed or Work in Startups search
+// ParseSearchURL reduces a pasted LinkedIn, Indeed, hiring.cafe or Work in Startups search
 // URL to its source, keyword query and named filters. Params the adapter would
 // not use are reported in Dropped; paging params are discarded silently.
 func ParseSearchURL(raw string) (SearchURL, bool) {
 	u, ok := parseHTTP(raw)
 	if !ok {
 		return SearchURL{}, false
+	}
+	if out, ok := parseWellfound(u); ok {
+		return out, true
 	}
 	for _, b := range searchBoards {
 		if !b.matchesHost(u.Hostname()) || !b.matchesPath(u.Path) {
@@ -154,6 +204,7 @@ func (b boardSpec) parse(u *neturl.URL) SearchURL {
 		value := values[0]
 		switch {
 		case param == b.keywordsParam, slices.Contains(b.silent, param), value == "":
+		case b.source == "wis" && (param == "sb" || param == "sd"):
 		case slices.Contains(b.dropped, param), strings.HasPrefix(param, "utm_"):
 			out.Dropped = append(out.Dropped, param)
 		default:
@@ -165,15 +216,61 @@ func (b boardSpec) parse(u *neturl.URL) SearchURL {
 			out.Filters[filter] = value
 		}
 	}
+	if b.source == "wis" {
+		out.parseWISSort(query)
+	}
 	slices.Sort(out.Dropped)
 
 	out.Value = query.Get(b.keywordsParam)
 	return out
 }
 
+func wisSorts() map[string][2]string {
+	return map[string][2]string{
+		"date":        {"date", "down"},
+		"salary_high": {"salary", "down"},
+		"salary_low":  {"salary", "up"},
+	}
+}
+
+func (s *SearchURL) parseWISSort(query neturl.Values) {
+	sb, sd := query.Get("sb"), query.Get("sd")
+	if sb == "" && sd == "" {
+		return
+	}
+	for name, pair := range wisSorts() {
+		if pair == [2]string{sb, sd} {
+			s.Filters["sort"] = name
+			return
+		}
+	}
+	if sb != "" {
+		s.Dropped = append(s.Dropped, "sb")
+	}
+	if sd != "" {
+		s.Dropped = append(s.Dropped, "sd")
+	}
+}
+
+func buildWellfound(role, location string) string {
+	const base = "https://wellfound.com"
+	switch {
+	case role != "" && location != "":
+		return base + "/role/l/" + role + "/" + location
+	case role != "":
+		return base + "/role/" + role
+	case location != "":
+		return base + "/location/" + location
+	}
+	return ""
+}
+
 // BuildSearchURL returns the board page for a search, or "" for a source with
 // no search page. It inverts ParseSearchURL.
 func BuildSearchURL(source, value string, filters map[string]string) string {
+	if source == "wellfound" {
+		return buildWellfound(value, filters["location"])
+	}
 	for _, b := range searchBoards {
 		if b.source != source {
 			continue
@@ -186,6 +283,10 @@ func BuildSearchURL(source, value string, filters map[string]string) string {
 			if f := filters[p.filter]; f != "" {
 				v.Set(p.param, f)
 			}
+		}
+		if pair, ok := wisSorts()[filters["sort"]]; ok && source == "wis" {
+			v.Set("sb", pair[0])
+			v.Set("sd", pair[1])
 		}
 		if len(v) == 0 {
 			return b.canonical

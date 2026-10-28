@@ -18,10 +18,11 @@ import (
 const missingID = "00000000-0000-0000-0000-000000000000"
 
 type Fixture struct {
-	Store  applications.Store
-	UserID string
-	JobID  string
-	NewJob func() string
+	Store       applications.Store
+	UserID      string
+	OtherUserID string
+	JobID       string
+	NewJob      func() string
 }
 
 func createApp(t *testing.T, f Fixture, in dto.CreateApplicationInput) dto.Application {
@@ -34,9 +35,23 @@ func createApp(t *testing.T, f Fixture, in dto.CreateApplicationInput) dto.Appli
 	return got
 }
 
+func createWindowStatus(t *testing.T, f Fixture, days int) dto.ApplicationStatus {
+	t.Helper()
+	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, "Window", "#6366f1", &days, false)
+	if err != nil {
+		t.Fatalf("CreateApplicationStatus(window=%d) err = %v", days, err)
+	}
+	return got
+}
+
+func daysFromToday(days int) time.Time {
+	y, m, d := time.Now().UTC().Date()
+	return time.Date(y, m, d+days, 0, 0, 0, 0, time.UTC)
+}
+
 func createStatus(t *testing.T, f Fixture, name string) dto.ApplicationStatus {
 	t.Helper()
-	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, name, "#6366f1", nil)
+	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, name, "#6366f1", nil, false)
 	if err != nil {
 		t.Fatalf("CreateApplicationStatus(%q) err = %v", name, err)
 	}
@@ -59,9 +74,10 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
 
 	t.Run("create returns the application", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
-		got := createApp(t, f, dto.CreateApplicationInput{Notes: "referred by a friend"})
-		want := dto.Application{UserID: f.UserID, JobID: f.JobID, Notes: "referred by a friend"}
+		got := createApp(t, f, dto.CreateApplicationInput{SalaryInfo: "50k"})
+		want := dto.Application{UserID: f.UserID, JobID: f.JobID, SalaryInfo: "50k"}
 		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.Application{}, "ID", "CreatedAt", "UpdatedAt")); diff != "" {
 			t.Errorf("CreateApplication(...) mismatch (-want +got):\n%s", diff)
 		}
@@ -71,6 +87,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("create keeps applied_at", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		got := createApp(t, f, dto.CreateApplicationInput{AppliedAt: new("2026-01-02")})
 		want := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
@@ -80,6 +97,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("list returns the user's applications", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createApp(t, f, dto.CreateApplicationInput{})
 		got, err := f.Store.ListApplications(t.Context(), f.UserID, dto.ApplicationsQuery{})
@@ -92,6 +110,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("set chase stores the date", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createApp(t, f, dto.CreateApplicationInput{})
 		want := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
@@ -105,6 +124,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("set chase on a missing application returns not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		_, err := f.Store.SetChase(t.Context(), f.UserID, missingID, time.Now())
 		if !errors.Is(err, data.ErrNotFound) {
@@ -113,6 +133,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("clear chase nulls the date and is idempotent", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createApp(t, f, dto.CreateApplicationInput{})
 		if _, err := f.Store.SetChase(t.Context(), f.UserID, created.ID, time.Now()); err != nil {
@@ -133,6 +154,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("list with chase keeps chased rows, oldest first, narrowed by status", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		applied := createStatus(t, f, "Applied")
 		offer := createStatus(t, f, "Offer")
@@ -179,19 +201,21 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
-	t.Run("update changes notes", func(t *testing.T) {
+	t.Run("update changes salary info", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createApp(t, f, dto.CreateApplicationInput{})
-		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{Notes: "followed up"})
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{SalaryInfo: "60k"})
 		if err != nil {
 			t.Fatalf("UpdateApplication(...) err = %v", err)
 		}
-		if got.Notes != "followed up" {
-			t.Errorf("UpdateApplication(...) notes = %q, want %q", got.Notes, "followed up")
+		if got.SalaryInfo != "60k" {
+			t.Errorf("UpdateApplication(...) salary = %q, want %q", got.SalaryInfo, "60k")
 		}
 	})
 
 	t.Run("update that changes the status clears the chase", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		applied := createStatus(t, f, "Applied")
 		offer := createStatus(t, f, "Offer")
@@ -206,12 +230,35 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("create with a reply window sets the chase date", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		got := createApp(t, f, dto.CreateApplicationInput{StatusID: createWindowStatus(t, f, 7).ID})
+		if want := daysFromToday(7); got.ChaseBy == nil || !got.ChaseBy.Equal(want) {
+			t.Errorf("CreateApplication(7-day status) ChaseBy = %v, want %v", got.ChaseBy, want)
+		}
+	})
+
+	t.Run("update to a status with a reply window sets the chase date", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: createWindowStatus(t, f, 3).ID})
+		if err != nil {
+			t.Fatalf("UpdateApplication(status change) err = %v", err)
+		}
+		if want := daysFromToday(3); got.ChaseBy == nil || !got.ChaseBy.Equal(want) {
+			t.Errorf("UpdateApplication(3-day status) ChaseBy = %v, want %v", got.ChaseBy, want)
+		}
+	})
+
 	t.Run("update that keeps the status keeps the chase", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		applied := createStatus(t, f, "Applied")
 		created := createApp(t, f, dto.CreateApplicationInput{StatusID: applied.ID})
 		want := chaseSet(t, f, created.ID)
-		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: applied.ID, Notes: "followed up"})
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: applied.ID, SalaryInfo: "60k"})
 		if err != nil {
 			t.Fatalf("UpdateApplication(same status) err = %v", err)
 		}
@@ -221,6 +268,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("update that clears the status clears the chase", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		applied := createStatus(t, f, "Applied")
 		created := createApp(t, f, dto.CreateApplicationInput{StatusID: applied.ID})
@@ -235,6 +283,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("update missing application returns not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		_, err := f.Store.UpdateApplication(t.Context(), f.UserID, missingID, dto.UpdateApplicationInput{})
 		if !errors.Is(err, data.ErrNotFound) {
@@ -242,7 +291,35 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("create with another user's status returns not found", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		theirs, err := f.Store.CreateApplicationStatus(t.Context(), f.OtherUserID, "Theirs", "#6366f1", nil, false)
+		if err != nil {
+			t.Fatalf("CreateApplicationStatus(other user) err = %v", err)
+		}
+		_, err = f.Store.CreateApplication(t.Context(), f.UserID, dto.CreateApplicationInput{JobID: f.JobID, StatusID: theirs.ID})
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("CreateApplication(other user's status) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("update with another user's status returns not found", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		theirs, err := f.Store.CreateApplicationStatus(t.Context(), f.OtherUserID, "Theirs", "#6366f1", nil, false)
+		if err != nil {
+			t.Fatalf("CreateApplicationStatus(other user) err = %v", err)
+		}
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		_, err = f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: theirs.ID})
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("UpdateApplication(other user's status) err = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("delete removes the application", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createApp(t, f, dto.CreateApplicationInput{})
 		if err := f.Store.DeleteApplication(t.Context(), f.UserID, created.ID); err != nil {
@@ -257,7 +334,35 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("delete many removes only the caller's applications", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		mine := createApp(t, f, dto.CreateApplicationInput{})
+		theirs, err := f.Store.CreateApplication(t.Context(), f.OtherUserID, dto.CreateApplicationInput{JobID: f.JobID})
+		if err != nil {
+			t.Fatalf("CreateApplication(other user) err = %v", err)
+		}
+		if err := f.Store.DeleteApplications(t.Context(), f.UserID, []string{mine.ID, theirs.ID}); err != nil {
+			t.Fatalf("DeleteApplications(...) err = %v", err)
+		}
+		got, err := f.Store.ListApplications(t.Context(), f.UserID, dto.ApplicationsQuery{})
+		if err != nil {
+			t.Fatalf("ListApplications(...) err = %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("ListApplications after delete = %+v, want empty", got)
+		}
+		left, err := f.Store.ListApplications(t.Context(), f.OtherUserID, dto.ApplicationsQuery{})
+		if err != nil {
+			t.Fatalf("ListApplications(other user) err = %v", err)
+		}
+		if len(left) != 1 || left[0].ID != theirs.ID {
+			t.Errorf("other user's applications = %+v, want only %s", left, theirs.ID)
+		}
+	})
+
 	t.Run("get applications for jobs keys by job id", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createApp(t, f, dto.CreateApplicationInput{})
 		got, err := f.Store.GetApplicationsForJobs(t.Context(), f.UserID, []string{f.JobID, missingID})
@@ -271,6 +376,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("create returns the status", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		got := createStatus(t, f, "Offer")
 		want := dto.ApplicationStatus{UserID: f.UserID, Name: "Offer", Colour: "#6366f1"}
@@ -283,9 +389,10 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("update changes name and colour", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createStatus(t, f, "Offer")
-		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Offer!", "#22c55e", nil)
+		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Offer!", "#22c55e", nil, false)
 		if err != nil {
 			t.Fatalf("UpdateApplicationStatus(...) err = %v", err)
 		}
@@ -295,17 +402,18 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("update sets and clears the reply window", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createStatus(t, f, "Applied")
 		days := 7
-		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", &days)
+		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", &days, false)
 		if err != nil {
 			t.Fatalf("UpdateApplicationStatus(set window) err = %v", err)
 		}
 		if got.ReplyWindowDays == nil || *got.ReplyWindowDays != days {
 			t.Errorf("UpdateApplicationStatus(set window) ReplyWindowDays = %v, want %d", got.ReplyWindowDays, days)
 		}
-		got, err = f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", nil)
+		got, err = f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", nil, false)
 		if err != nil {
 			t.Fatalf("UpdateApplicationStatus(clear window) err = %v", err)
 		}
@@ -314,7 +422,21 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("update persists counts as reply", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		created := createStatus(t, f, "Applied")
+		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", nil, true)
+		if err != nil {
+			t.Fatalf("UpdateApplicationStatus(counts as reply) err = %v", err)
+		}
+		if !got.CountsAsReply {
+			t.Errorf("UpdateApplicationStatus(counts as reply) CountsAsReply = false, want true")
+		}
+	})
+
 	t.Run("list returns the created status", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createStatus(t, f, "Applied")
 		got, err := f.Store.ListApplicationStatusesByUser(t.Context(), f.UserID)
@@ -327,6 +449,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("delete removes the status", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createStatus(t, f, "Offer")
 		if err := f.Store.DeleteApplicationStatus(t.Context(), created.ID, f.UserID); err != nil {
@@ -342,6 +465,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("count for unused status is zero", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createStatus(t, f, "Applied")
 		count, err := f.Store.CountApplicationsUsingStatus(t.Context(), created.ID, f.UserID)
@@ -354,6 +478,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("count for a status in use is the number of applications", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		created := createStatus(t, f, "Applied")
 		createApp(t, f, dto.CreateApplicationInput{StatusID: created.ID})
@@ -363,6 +488,169 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 		if count != 1 {
 			t.Errorf("CountApplicationsUsingStatus(in use) = %d, want 1", count)
+		}
+	})
+
+	t.Run("recruiter contacts list newest first and a second adds a row", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		for _, c := range []struct {
+			on      string
+			outcome dto.ContactOutcome
+		}{{"2026-10-01", dto.OutcomeNoReply}, {"2026-10-05", dto.OutcomeSpoke}} {
+			in := dto.LogRecruiterContactInput{JobID: f.JobID, ContactedOn: c.on, Channel: dto.ChannelEmail, Outcome: c.outcome}
+			if _, err := f.Store.CreateRecruiterContact(t.Context(), f.UserID, in); err != nil {
+				t.Fatalf("CreateRecruiterContact(%+v) err = %v", in, err)
+			}
+		}
+		got, err := f.Store.ListRecruiterContacts(t.Context(), f.UserID, f.JobID)
+		if err != nil {
+			t.Fatalf("ListRecruiterContacts(...) err = %v", err)
+		}
+		var dates []string
+		for _, c := range got {
+			dates = append(dates, c.ContactedOn)
+		}
+		if diff := cmp.Diff([]string{"2026-10-05", "2026-10-01"}, dates); diff != "" {
+			t.Errorf("ListRecruiterContacts(...) dates mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("recruiter contacts are scoped to the user", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		in := dto.LogRecruiterContactInput{JobID: f.JobID, ContactedOn: "2026-10-01", Channel: dto.ChannelCall, Outcome: dto.OutcomeSpoke}
+		if _, err := f.Store.CreateRecruiterContact(t.Context(), f.UserID, in); err != nil {
+			t.Fatalf("CreateRecruiterContact(...) err = %v", err)
+		}
+		got, err := f.Store.ListRecruiterContacts(t.Context(), missingID, f.JobID)
+		if err != nil {
+			t.Fatalf("ListRecruiterContacts(other user) err = %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("ListRecruiterContacts(other user) = %+v, want none", got)
+		}
+	})
+
+	t.Run("recruiter contact summaries roll up per job and rank the best outcome", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		for _, c := range []struct {
+			on      string
+			outcome dto.ContactOutcome
+		}{{"2026-10-05", dto.OutcomeSpoke}, {"2026-10-01", dto.OutcomeSubmitted}, {"2026-10-03", dto.OutcomeNoReply}} {
+			in := dto.LogRecruiterContactInput{JobID: f.JobID, ContactedOn: c.on, Channel: dto.ChannelEmail, Outcome: c.outcome}
+			if _, err := f.Store.CreateRecruiterContact(t.Context(), f.UserID, in); err != nil {
+				t.Fatalf("CreateRecruiterContact(%+v) err = %v", in, err)
+			}
+		}
+		got, err := f.Store.GetRecruiterContactSummaries(t.Context(), f.UserID, []string{f.JobID, missingID})
+		if err != nil {
+			t.Fatalf("GetRecruiterContactSummaries(...) err = %v", err)
+		}
+		want := map[string]dto.RecruiterContactSummary{
+			f.JobID: {Count: 3, LastContactedOn: "2026-10-05", BestOutcome: dto.OutcomeSubmitted},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("GetRecruiterContactSummaries(...) mismatch (-want +got):\n%s", diff)
+		}
+		other, err := f.Store.GetRecruiterContactSummaries(t.Context(), missingID, []string{f.JobID})
+		if err != nil {
+			t.Fatalf("GetRecruiterContactSummaries(other user) err = %v", err)
+		}
+		if len(other) != 0 {
+			t.Errorf("GetRecruiterContactSummaries(other user) = %+v, want none", other)
+		}
+	})
+
+	t.Run("job comments round-trip their quote and stay out of the note", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		quote := dto.CommentQuote{Exact: "Go", Prefix: "we use ", Suffix: " daily"}
+		if _, err := f.Store.PutJobNote(t.Context(), f.UserID, dto.PutJobNoteInput{JobID: f.JobID, Body: "general"}); err != nil {
+			t.Fatalf("PutJobNote(...) err = %v", err)
+		}
+		created, err := f.Store.CreateJobComment(t.Context(), f.UserID, dto.CreateJobCommentInput{JobID: f.JobID, Body: "ask about Go", Quote: quote})
+		if err != nil {
+			t.Fatalf("CreateJobComment(...) err = %v", err)
+		}
+		got, err := f.Store.ListJobComments(t.Context(), f.UserID, f.JobID)
+		if err != nil {
+			t.Fatalf("ListJobComments(...) err = %v", err)
+		}
+		if len(got) != 1 || got[0].ID != created.ID || got[0].Body != "ask about Go" {
+			t.Fatalf("ListJobComments(...) = %+v, want only %+v", got, created)
+		}
+		if diff := cmp.Diff(quote, got[0].Quote); diff != "" {
+			t.Errorf("ListJobComments(...) quote mismatch (-want +got):\n%s", diff)
+		}
+		note, err := f.Store.GetJobNote(t.Context(), f.UserID, f.JobID)
+		if err != nil || note.Body != "general" {
+			t.Errorf("GetJobNote(...) = %+v, %v, want the general note", note, err)
+		}
+		other, err := f.Store.ListJobComments(t.Context(), missingID, f.JobID)
+		if err != nil || len(other) != 0 {
+			t.Errorf("ListJobComments(other user) = %+v, %v, want none", other, err)
+		}
+	})
+
+	t.Run("job comment update and delete are scoped to the user", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		comment, err := f.Store.CreateJobComment(t.Context(), f.UserID, dto.CreateJobCommentInput{JobID: f.JobID, Body: "before", Quote: dto.CommentQuote{Exact: "Go"}})
+		if err != nil {
+			t.Fatalf("CreateJobComment(...) err = %v", err)
+		}
+		if _, err := f.Store.UpdateJobComment(t.Context(), missingID, dto.UpdateJobCommentInput{ID: comment.ID, Body: "hijack"}); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("UpdateJobComment(other user) err = %v, want ErrNotFound", err)
+		}
+		if err := f.Store.DeleteJobComment(t.Context(), missingID, comment.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteJobComment(other user) err = %v, want ErrNotFound", err)
+		}
+		got, err := f.Store.UpdateJobComment(t.Context(), f.UserID, dto.UpdateJobCommentInput{ID: comment.ID, Body: "after"})
+		if err != nil {
+			t.Fatalf("UpdateJobComment(...) err = %v", err)
+		}
+		if got.Body != "after" || got.Quote.Exact != "Go" {
+			t.Errorf("UpdateJobComment(...) = %+v, want body after and quote kept", got)
+		}
+		if err := f.Store.DeleteJobComment(t.Context(), f.UserID, comment.ID); err != nil {
+			t.Fatalf("DeleteJobComment(...) err = %v", err)
+		}
+		if err := f.Store.DeleteJobComment(t.Context(), f.UserID, comment.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteJobComment(again) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("job note is empty until put, then overwritten in place and scoped to the user", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		got, err := f.Store.GetJobNote(t.Context(), f.UserID, f.JobID)
+		if err != nil || got.Body != "" || got.JobID != f.JobID {
+			t.Fatalf("GetJobNote(before put) = %+v, %v, want empty note for the job", got, err)
+		}
+		for _, body := range []string{"first", "second"} {
+			if _, err := f.Store.PutJobNote(t.Context(), f.UserID, dto.PutJobNoteInput{JobID: f.JobID, Body: body}); err != nil {
+				t.Fatalf("PutJobNote(%q) err = %v", body, err)
+			}
+		}
+		got, err = f.Store.GetJobNote(t.Context(), f.UserID, f.JobID)
+		if err != nil || got.Body != "second" {
+			t.Errorf("GetJobNote(...) = %+v, %v, want body second", got, err)
+		}
+		if _, err := f.Store.PutJobNote(t.Context(), f.UserID, dto.PutJobNoteInput{JobID: f.JobID, Body: ""}); err != nil {
+			t.Fatalf("PutJobNote(empty) err = %v", err)
+		}
+		got, err = f.Store.GetJobNote(t.Context(), f.UserID, f.JobID)
+		if err != nil || got.Body != "" {
+			t.Errorf("GetJobNote(after clearing) = %+v, %v, want empty body", got, err)
+		}
+		if _, err := f.Store.PutJobNote(t.Context(), f.UserID, dto.PutJobNoteInput{JobID: f.JobID, Body: "mine"}); err != nil {
+			t.Fatalf("PutJobNote(mine) err = %v", err)
+		}
+		other, err := f.Store.GetJobNote(t.Context(), missingID, f.JobID)
+		if err != nil || other.Body != "" {
+			t.Errorf("GetJobNote(other user) = %+v, %v, want empty note", other, err)
 		}
 	})
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -18,11 +19,17 @@ type APIExporter struct {
 	token          string
 	client         *http.Client
 	initialBackoff time.Duration
+	log            *slog.Logger
 }
 
 func NewAPIExporter(baseURL, token string) *APIExporter {
 	client := &http.Client{Timeout: 30 * time.Second, Transport: logger.Transport(nil)}
-	return &APIExporter{baseURL: baseURL, token: token, client: client, initialBackoff: time.Second}
+	return &APIExporter{baseURL: baseURL, token: token, client: client, initialBackoff: time.Second, log: slog.New(slog.DiscardHandler)}
+}
+
+func (p *APIExporter) WithLogger(log *slog.Logger) *APIExporter {
+	p.log = log
+	return p
 }
 
 func (p *APIExporter) WithInitialBackoff(d time.Duration) *APIExporter {
@@ -30,7 +37,8 @@ func (p *APIExporter) WithInitialBackoff(d time.Duration) *APIExporter {
 	return p
 }
 
-func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) error {
+func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) (dto.IngestTally, error) {
+	var tally dto.IngestTally
 	for len(jobs) > 0 {
 		count := min(len(jobs), 100)
 		var body []byte
@@ -40,42 +48,50 @@ func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) error {
 				Jobs []dto.Job `json:"jobs"`
 			}{Jobs: jobs[:count]})
 			if err != nil {
-				return fmt.Errorf("api_exporter: marshal batch: %w", err)
+				return tally, fmt.Errorf("api_exporter: marshal batch: %w", err)
 			}
 			if len(body) <= 2<<20 {
 				break
 			}
 			if count == 1 {
-				return fmt.Errorf("api_exporter: job exceeds 2 MiB")
+				return tally, fmt.Errorf("api_exporter: job exceeds 2 MiB")
 			}
 			count = max(1, count/2)
 		}
 		batch := jobs[:count]
 		response, err := p.post(ctx, "/ingest/batch", body)
 		if err != nil {
-			return err
+			return tally, err
 		}
 		var result struct {
 			Results []struct {
 				Status string `json:"status"`
 				Reason string `json:"reason"`
+				JobID  string `json:"job_id"`
 			} `json:"results"`
 		}
 		if err := json.Unmarshal(response, &result); err != nil || len(result.Results) != len(batch) {
-			return fmt.Errorf("api_exporter: invalid batch response")
+			return tally, fmt.Errorf("api_exporter: invalid batch response")
 		}
 		for idx, item := range result.Results {
 			switch item.Status {
-			case "new", "changed", "unchanged", "merged", "upgraded":
+			case "new":
+				tally.NewJobIDs = append(tally.NewJobIDs, item.JobID)
+			case "merged":
+				tally.Merged++
+			case "upgraded":
+				tally.Upgraded++
+			case "changed", "unchanged":
 			case "rejected":
-				return fmt.Errorf("api_exporter: job %s rejected: %s", batch[idx].URL, item.Reason)
+				tally.Rejected++
+				p.warnRejected(ctx, batch[idx], item.Reason)
 			default:
-				return fmt.Errorf("api_exporter: unknown outcome %q", item.Status)
+				return tally, fmt.Errorf("api_exporter: unknown outcome %q", item.Status)
 			}
 		}
 		jobs = jobs[count:]
 	}
-	return nil
+	return tally, nil
 }
 
 func (p *APIExporter) Export(ctx context.Context, job dto.Job) error {
@@ -98,10 +114,17 @@ func (p *APIExporter) Export(ctx context.Context, job dto.Job) error {
 	case "new", "changed", "unchanged", "merged", "upgraded":
 		return nil
 	case "rejected":
-		return fmt.Errorf("api_exporter: job %s rejected: %s", job.URL, result.Reason)
+		p.warnRejected(ctx, job, result.Reason)
+		return nil
 	default:
 		return fmt.Errorf("api_exporter: unknown outcome %q", result.Status)
 	}
+}
+
+func (p *APIExporter) warnRejected(ctx context.Context, job dto.Job, reason string) {
+	p.log.WarnContext(ctx, "api_exporter: job rejected",
+		slog.String("url", job.URL), slog.String("source", job.Source),
+		slog.String("board_id", job.BoardID), slog.String("reason", reason))
 }
 
 func (p *APIExporter) post(ctx context.Context, path string, body []byte) ([]byte, error) {

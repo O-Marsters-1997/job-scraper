@@ -3,10 +3,13 @@ package cvtailor
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
+	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/tabcopy"
 )
 
 const (
@@ -50,7 +53,56 @@ func (s *Service) Suggestions(ctx context.Context, userID string, q dto.Suggesti
 	if err != nil {
 		return nil, err
 	}
-	return rankSuggestions(positions, answers, slots), nil
+	out := rankSuggestions(positions, answers, slots)
+	if err := s.fillSuggestionLines(ctx, userID, q, out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *Service) fillSuggestionLines(ctx context.Context, userID string, q dto.SuggestionsQuery, out []dto.Suggestion) error {
+	if q.DocID == "" || q.TabID == "" || len(out) == 0 {
+		return nil
+	}
+	raw, err := s.docs.GetDocument(ctx, userID, q.DocID, q.TabID)
+	if err != nil {
+		return fmt.Errorf("load CV tab: %w", err)
+	}
+	doc, err := tabcopy.Layout(raw)
+	if errors.Is(err, tabcopy.ErrUnsupported) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("lay out CV tab: %w", err)
+	}
+	ds, err := docparse.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("parse CV tab: %w", err)
+	}
+	positions, err := s.store.ListPositions(ctx, userID)
+	if err != nil {
+		return err
+	}
+	mappings, err := s.linkedMappings(ctx, userID, q.DocID, q.TabID, ds, positions)
+	if err != nil {
+		return err
+	}
+	blockAt := make(map[int]*tabcopy.Block, len(doc.Blocks))
+	for i := range doc.Blocks {
+		blockAt[doc.Blocks[i].StartIndex] = &doc.Blocks[i]
+	}
+	geo := pageGeometry{page: doc.Page}
+	slotsOf := slotsByPosition(ds, mappings)
+	for i := range out {
+		slots := slotsOf[out[i].PositionID]
+		if len(slots) == 0 {
+			continue
+		}
+		if b := blockAt[slots[0].StartIndex]; b != nil {
+			out[i].Lines = geo.lines(out[i].Text, b)
+		}
+	}
+	return nil
 }
 
 func (s *Service) slotCounts(ctx context.Context, userID string, q dto.SuggestionsQuery, positions []dto.Position) (map[string]int, error) {
@@ -73,6 +125,9 @@ func (s *Service) slotCounts(ctx context.Context, userID string, q dto.Suggestio
 func rankSuggestions(positions []dto.Position, answers map[string]dto.Answer, slots map[string]int) []dto.Suggestion {
 	out := []dto.Suggestion{}
 	for _, p := range positions {
+		if _, mapped := slots[p.ID]; slots != nil && !mapped {
+			continue
+		}
 		ranked := make([]dto.Suggestion, len(p.Achievements))
 		for i, a := range p.Achievements {
 			ans := answers[achievementQuestion(a.Text)]

@@ -3,12 +3,16 @@ package scraper_test
 import (
 	"testing"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
+
+func noSources(dto.SourceTarget) (sources.Source, bool) { return nil, false }
 
 func TestVerifyBoardRejectsUnsupportedBoards(t *testing.T) {
 	for _, pair := range [][2]string{{"missing", "acme"}, {"remoteok", "acme"}, {"greenhouse", ""}, {"greenhouse", "a/b"}} {
-		if _, err := scraper.VerifyBoard(t.Context(), pair[0], pair[1]); err == nil {
+		if _, err := scraper.VerifyBoard(t.Context(), noSources, pair[0], pair[1]); err == nil {
 			t.Errorf("VerifyBoard(%q, %q) = nil, want error", pair[0], pair[1])
 		}
 	}

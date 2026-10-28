@@ -24,7 +24,9 @@ const (
 	detailWorkers = 8
 )
 
-var postings = &postingCache{byToken: map[string]map[string]dto.Job{}}
+func NewPostingCache() *postingCache {
+	return &postingCache{byToken: map[string]map[string]dto.Job{}}
+}
 
 // postingCache remembers, per Board token, every posting already read in full, keyed by id and
 // release date, so a repeat poll fetches details only for new or re-released postings.
@@ -49,7 +51,8 @@ func (c *postingCache) put(token string, jobs map[string]dto.Job) {
 // case the API preserves in URLs (e.g. "Wise").
 type Source struct {
 	sources.PaginatedBase
-	token string
+	token    string
+	postings *postingCache
 }
 
 var (
@@ -57,8 +60,8 @@ var (
 	_ sources.BoardPoller = (*Source)(nil)
 )
 
-func New(token string) *Source {
-	return &Source{PaginatedBase: sources.NewBase(sources.Config{Name: name}), token: token}
+func New(token string, postings *postingCache) *Source {
+	return &Source{PaginatedBase: sources.NewBase(sources.Config{Name: name}), token: token, postings: postings}
 }
 
 func (s *Source) FetchPage(ctx context.Context, cursor string) ([]dto.Job, string, error) {
@@ -92,7 +95,7 @@ func (s *Source) PollBoard(ctx context.Context) (sources.BoardResult, error) {
 		return sources.BoardResult{}, err
 	}
 
-	known := postings.get(s.token)
+	known := s.postings.get(s.token)
 	current := make(map[string]dto.Job, len(listed))
 	var missing []listing
 	for _, l := range listed {
@@ -106,11 +109,11 @@ func (s *Source) PollBoard(ctx context.Context) (sources.BoardResult, error) {
 
 	fetched, err := s.fetchDetails(ctx, missing)
 	if err != nil {
-		postings.put(s.token, mergeMaps(known, fetched))
+		s.postings.put(s.token, mergeMaps(known, fetched))
 		return sources.BoardResult{}, err
 	}
 	maps.Copy(current, fetched)
-	postings.put(s.token, current)
+	s.postings.put(s.token, current)
 
 	jobs := make([]dto.Job, 0, len(current))
 	for _, l := range listed {
@@ -279,7 +282,7 @@ func (s *Source) parseDetail(body []byte) (dto.Job, error) {
 		Description:       d.description(),
 		SalaryRaw:         d.salaryRaw(),
 		WorkArrangement:   d.workArrangement(),
-		UpdatedAt:         sources.RFC3339OrNow(d.ReleasedDate),
+		PostedAt:          sources.RFC3339OrNil(d.ReleasedDate),
 	}, nil
 }
 

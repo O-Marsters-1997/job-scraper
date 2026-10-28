@@ -31,12 +31,27 @@ func toApplicationDTO(a sqlc.Application) dto.Application {
 		UserID:     a.UserID.String(),
 		JobID:      a.JobID.String(),
 		StatusID:   a.StatusID.String(),
-		Notes:      a.Notes.String,
 		AppliedAt:  fromOptionalDate(a.AppliedAt),
 		SalaryInfo: a.SalaryInfo.String,
 		CreatedAt:  a.CreatedAt.Time,
 		UpdatedAt:  a.UpdatedAt.Time,
 		ChaseBy:    fromOptionalDate(a.ChaseBy),
+	}
+}
+
+func toLinkedDraft(r sqlc.ListApplicationsRow) *dto.LinkedDraft {
+	if !r.DraftID.Valid {
+		return nil
+	}
+	var outcome *string
+	if r.DraftOutcome.Valid {
+		outcome = &r.DraftOutcome.String
+	}
+	return &dto.LinkedDraft{
+		ID:        r.DraftID.String(),
+		Status:    r.DraftStatus,
+		Outcome:   outcome,
+		LastError: r.DraftLastError,
 	}
 }
 
@@ -53,12 +68,12 @@ func toApplicationWithDetailsDTO(r sqlc.ListApplicationsRow) dto.ApplicationWith
 		StatusID:       r.StatusID.String(),
 		StatusName:     r.StatusName.String,
 		StatusColour:   r.StatusColour.String,
-		Notes:          r.Notes.String,
 		AppliedAt:      fromOptionalDate(r.AppliedAt),
 		SalaryInfo:     r.SalaryInfo.String,
 		CreatedAt:      r.CreatedAt.Time,
 		UpdatedAt:      r.UpdatedAt.Time,
 		ChaseBy:        fromOptionalDate(r.ChaseBy),
+		Draft:          toLinkedDraft(r),
 	}
 }
 
@@ -69,6 +84,8 @@ func toApplicationStatusDTO(s sqlc.ApplicationStatus) dto.ApplicationStatus {
 		Name:            s.Name,
 		Colour:          s.Colour,
 		ReplyWindowDays: fromInt4(s.ReplyWindowDays),
+		CountsAsReply:   s.CountsAsReply,
+		SystemKey:       s.SystemKey.String,
 		CreatedAt:       s.CreatedAt.Time,
 	}
 }
@@ -95,4 +112,33 @@ func fromInt4(n pgtype.Int4) *int {
 	}
 	v := int(n.Int32)
 	return &v
+}
+
+func toJobNoteDTO(n sqlc.JobNote) dto.JobNote {
+	return dto.JobNote{
+		JobID: n.JobID.String(),
+		Body:  n.Body,
+	}
+}
+
+func toJobCommentDTO(c sqlc.JobComment) dto.JobComment {
+	return dto.JobComment{
+		ID:        c.ID.String(),
+		JobID:     c.JobID.String(),
+		Body:      c.Body,
+		Quote:     dto.CommentQuote{Exact: c.Quote, Prefix: c.QuotePrefix, Suffix: c.QuoteSuffix},
+		CreatedAt: c.CreatedAt.Time,
+		UpdatedAt: c.UpdatedAt.Time,
+	}
+}
+
+func toRecruiterContactDTO(c sqlc.RecruiterContact) dto.RecruiterContact {
+	return dto.RecruiterContact{
+		ID:          c.ID.String(),
+		JobID:       c.JobID.String(),
+		ContactedOn: c.ContactedOn.Time.Format(time.DateOnly),
+		Channel:     dto.ContactChannel(c.Channel),
+		Outcome:     dto.ContactOutcome(c.Outcome),
+		CreatedAt:   c.CreatedAt.Time,
+	}
 }

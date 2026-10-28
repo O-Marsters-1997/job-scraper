@@ -10,10 +10,10 @@ import (
 )
 
 // Cloudflare 429s apply.workable.com's v3 API after about 150 requests in 90s, for a Retry-After of 24h.
-var limiter = sources.NewGate(3*time.Second, time.Hour)
+func NewGate() *sources.Gate { return sources.NewGate(3*time.Second, time.Hour) }
 
 // New builds a Workable source for one company slug (e.g. "acmecorp").
-func New(token string) *sources.BoardSource {
+func New(token string, gate *sources.Gate) *sources.BoardSource {
 	return sources.NewBoardSource(sources.BoardSpec{
 		Name:        "workable",
 		Post:        true, // Workable's list API 404s on GET; only POST responds.
@@ -22,7 +22,7 @@ func New(token string) *sources.BoardSource {
 		Parse:       func(body []byte) ([]dto.Job, error) { return parse(body, token) },
 		Count:       count,
 		NextPage:    nextPage,
-		Gate:        limiter,
+		Gate:        gate,
 	})
 }
 
@@ -37,6 +37,7 @@ type jobResult struct {
 	Location  jobLocation `json:"location"`
 	Remote    bool        `json:"remote"`
 	Workplace string      `json:"workplace"`
+	Published string      `json:"published"`
 }
 
 type jobLocation struct {
@@ -94,7 +95,7 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 			URL:               fmt.Sprintf("https://apply.workable.com/%s/j/%s/", token, r.Shortcode),
 			ProviderPostingID: r.Shortcode,
 			WorkArrangement:   workArrangement(r),
-			UpdatedAt:         time.Now().UTC(),
+			PostedAt:          sources.RFC3339OrNil(r.Published),
 		})
 	}
 	return jobs, nil

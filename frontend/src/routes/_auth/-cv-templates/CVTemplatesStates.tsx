@@ -1,26 +1,8 @@
 import { Link } from "@tanstack/solid-router";
-import { For } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 
 const panel = "rounded-xl border border-border bg-surface p-10 text-center";
-
-export function CVTemplatesLoading() {
-	return (
-		<Card class="overflow-hidden divide-y divide-border">
-			<For each={[1, 2, 3]}>
-				{() => (
-					<div class="flex items-center gap-4 px-4 py-3">
-						<div class="h-4 w-48 animate-pulse rounded bg-surface-muted" />
-						<div class="h-4 w-32 animate-pulse rounded bg-surface-muted" />
-						<div class="ml-auto h-4 w-24 animate-pulse rounded bg-surface-muted" />
-					</div>
-				)}
-			</For>
-		</Card>
-	);
-}
 
 export function CVTemplatesNotConnected() {
 	return (

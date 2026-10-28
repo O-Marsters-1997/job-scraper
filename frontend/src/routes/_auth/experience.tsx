@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
 import { BankSkills } from "@/components/experience/BankSkills";
+import { GrillContext } from "@/components/experience/GrillContext";
 import { ImportFromCV } from "@/components/experience/ImportFromCV";
 import { PositionCard } from "@/components/experience/PositionCard";
 import { PositionForm } from "@/components/experience/PositionForm";
@@ -13,6 +14,7 @@ import {
 	useCreatePosition,
 	useExperience,
 } from "../../hooks/useExperience";
+import type { AchievementSort } from "../../lib/achievementStats";
 import { queryClient } from "../../lib/queryClient";
 
 export const Route = createFileRoute("/_auth/experience")({
@@ -25,6 +27,8 @@ function ExperiencePage() {
 	const create = useCreatePosition();
 	const [adding, setAdding] = createSignal(false);
 	const [importing, setImporting] = createSignal(false);
+	const [grilling, setGrilling] = createSignal(false);
+	const [sort, setSort] = createSignal<AchievementSort>("bank");
 
 	return (
 		<div class="px-7 py-6">
@@ -33,6 +37,9 @@ function ExperiencePage() {
 				subtitle="Your Positions and Achievements, the source for tailored CVs"
 			>
 				<div class="flex shrink-0 gap-2">
+					<Button variant="outline" onClick={() => setGrilling(true)}>
+						Add context
+					</Button>
 					<Button variant="outline" onClick={() => setImporting(true)}>
 						Import from CV
 					</Button>
@@ -42,6 +49,10 @@ function ExperiencePage() {
 					</Button>
 				</div>
 			</PageHeading>
+
+			<Show when={grilling()}>
+				<GrillContext onDone={() => setGrilling(false)} />
+			</Show>
 
 			<Show when={importing()}>
 				<ImportFromCV onDone={() => setImporting(false)} />
@@ -77,10 +88,25 @@ function ExperiencePage() {
 						}
 					>
 						<div class="space-y-4">
+							<label class="flex items-center justify-end gap-2 text-sm text-muted">
+								Order achievements
+								<select
+									class="rounded-md border border-border bg-surface px-2 py-1 text-foreground"
+									value={sort()}
+									onChange={(e) =>
+										setSort(e.currentTarget.value as AchievementSort)
+									}
+								>
+									<option value="bank">Bank order</option>
+									<option value="usage">Most used</option>
+									<option value="rate">Reply rate (5+ applied)</option>
+								</select>
+							</label>
 							<For each={positions()}>
 								{(position, i) => (
 									<PositionCard
 										position={position}
+										sort={sort()}
 										index={i()}
 										positionIds={positions().map((p) => p.id)}
 									/>

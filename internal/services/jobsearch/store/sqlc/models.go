@@ -154,6 +154,21 @@ type Achievement struct {
 	SortOrder  int32
 	CreatedAt  pgtype.Timestamptz
 	UpdatedAt  pgtype.Timestamptz
+	Context    string
+}
+
+type AchievementOutcome struct {
+	DraftID                 pgtype.UUID
+	AchievementID           pgtype.UUID
+	UserID                  pgtype.UUID
+	JobID                   pgtype.UUID
+	PYes                    pgtype.Float8
+	PNo                     pgtype.Float8
+	OnSourceCv              bool
+	InFinalCv               bool
+	OutscoredKeptButLeftOut bool
+	Reworded                bool
+	CreatedAt               pgtype.Timestamptz
 }
 
 type AnswerCorrection struct {
@@ -169,7 +184,6 @@ type Application struct {
 	UserID     pgtype.UUID
 	JobID      pgtype.UUID
 	StatusID   pgtype.UUID
-	Notes      pgtype.Text
 	AppliedAt  pgtype.Date
 	SalaryInfo pgtype.Text
 	CreatedAt  pgtype.Timestamptz
@@ -184,6 +198,8 @@ type ApplicationStatus struct {
 	Colour          string
 	CreatedAt       pgtype.Timestamptz
 	ReplyWindowDays pgtype.Int4
+	CountsAsReply   bool
+	SystemKey       pgtype.Text
 }
 
 type BankSkill struct {
@@ -194,6 +210,12 @@ type BankSkill struct {
 	SortOrder int32
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+}
+
+type BoardDiscoverMiss struct {
+	Source     string
+	BoardToken string
+	MissedAt   pgtype.Timestamptz
 }
 
 type BoardJobObservation struct {
@@ -216,6 +238,7 @@ type BoardPollState struct {
 	LeaseOwner               pgtype.Text
 	LeaseUntil               pgtype.Timestamptz
 	NextDueAt                pgtype.Timestamptz
+	CheckPublishedAt         pgtype.Timestamptz
 }
 
 type CandidateAssessment struct {
@@ -244,6 +267,7 @@ type Company struct {
 	FirstSeenAt       pgtype.Timestamptz
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
+	Kind              string
 }
 
 type CompanyBoard struct {
@@ -258,6 +282,7 @@ type CompanyBoard struct {
 	RetiredAt          pgtype.Timestamptz
 	SupersededAt       pgtype.Timestamptz
 	DiscoveredVia      pgtype.Text
+	UkJobsSeenAt       pgtype.Timestamptz
 	CreatedAt          pgtype.Timestamptz
 }
 
@@ -272,6 +297,20 @@ type CompanyProfile struct {
 	Source    string
 	Data      []byte
 	FetchedAt pgtype.Timestamptz
+}
+
+type CoverLetter struct {
+	ID             pgtype.UUID
+	UserID         pgtype.UUID
+	JobID          pgtype.UUID
+	SourceDocID    string
+	SourceTabID    string
+	ScaffoldTabID  string
+	AchievementIds []pgtype.UUID
+	Model          string
+	Cost           float32
+	CreatedAt      pgtype.Timestamptz
+	DoneAt         pgtype.Timestamptz
 }
 
 type CvHeadingMapping struct {
@@ -303,6 +342,7 @@ type Event struct {
 	UserID    pgtype.UUID
 	Type      EventType
 	SubjectID pgtype.UUID
+	Client    string
 	Props     []byte
 	CreatedAt pgtype.Timestamptz
 }
@@ -332,6 +372,13 @@ type HarvestRun struct {
 	LastSucceededAt pgtype.Timestamptz
 }
 
+type HarvestSeenID struct {
+	Source      string
+	ExternalID  string
+	Outcome     string
+	FirstSeenAt pgtype.Timestamptz
+}
+
 type Job struct {
 	ID                 pgtype.UUID
 	Title              string
@@ -339,7 +386,7 @@ type Job struct {
 	Url                string
 	CompanySlug        string
 	Source             string
-	UpdatedAt          pgtype.Timestamptz
+	PostedAt           pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
 	Description        string
 	SalaryRaw          string
@@ -353,6 +400,11 @@ type Job struct {
 	FirstDiscoveredAt  pgtype.Timestamptz
 	MatchTitle         pgtype.Text
 	MatchLocation      pgtype.Text
+	PostedAfter        pgtype.Timestamptz
+	RepostedAt         pgtype.Timestamptz
+	SalaryMin          pgtype.Float8
+	SalaryMax          pgtype.Float8
+	DiscoveredVia      pgtype.Text
 }
 
 type JobCandidate struct {
@@ -363,10 +415,23 @@ type JobCandidate struct {
 	CardCompany   string
 	CardLocation  string
 	Card          []byte
+	PostedAt      pgtype.Timestamptz
 	FirstSeenAt   pgtype.Timestamptz
 	LastSeenAt    pgtype.Timestamptz
 	ExpiresAt     pgtype.Timestamptz
 	DetailState   string
+}
+
+type JobComment struct {
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+	JobID       pgtype.UUID
+	Body        string
+	Quote       string
+	QuotePrefix string
+	QuoteSuffix string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type JobGrade struct {
@@ -380,6 +445,25 @@ type JobGrade struct {
 	UpdatedAt    pgtype.Timestamptz
 }
 
+type JobNote struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	JobID     pgtype.UUID
+	Body      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type JobRejection struct {
+	UserID              pgtype.UUID
+	JobID               pgtype.UUID
+	Kind                string
+	Reason              string
+	SearchConfigVersion pgtype.Timestamptz
+	ContentFingerprint  string
+	RejectedAt          pgtype.Timestamptz
+}
+
 type JobScore struct {
 	ID               pgtype.UUID
 	JobID            pgtype.UUID
@@ -387,6 +471,7 @@ type JobScore struct {
 	SuitabilityScore pgtype.Int4
 	Band             pgtype.Text
 	Breakdown        []byte
+	Blocked          bool
 	Cost             pgtype.Numeric
 	ScoreFingerprint pgtype.Text
 	ScoreModel       pgtype.Text
@@ -406,6 +491,25 @@ type JobView struct {
 	UserID pgtype.UUID
 	JobID  pgtype.UUID
 	SeenAt pgtype.Timestamptz
+}
+
+type LetterSkeleton struct {
+	UserID     pgtype.UUID
+	Intro      string
+	Conclusion string
+	Sections   []string
+	UpdatedAt  pgtype.Timestamptz
+}
+
+type Notification struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	JobID     pgtype.UUID
+	Title     string
+	Body      string
+	CreatedAt pgtype.Timestamptz
+	ReadAt    pgtype.Timestamptz
+	Kind      string
 }
 
 type NotificationDigest struct {
@@ -438,21 +542,16 @@ type Position struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
-type PreferenceLabel struct {
-	ID            pgtype.UUID
-	UserID        pgtype.UUID
-	JobID         pgtype.UUID
-	DraftID       pgtype.UUID
-	Kind          string
-	AchievementID pgtype.UUID
-	PYes          pgtype.Float8
-	PNo           pgtype.Float8
-	PNotStated    pgtype.Float8
-	Confidence    pgtype.Float8
-	Preselected   bool
-	Kept          bool
-	Position      pgtype.Int4
-	CreatedAt     pgtype.Timestamptz
+type ProfileAttempt struct {
+	ID        pgtype.UUID
+	DraftID   pgtype.UUID
+	Text      string
+	Steer     string
+	Rejection string
+	PromptKey string
+	Model     string
+	Cost      pgtype.Numeric
+	CreatedAt pgtype.Timestamptz
 }
 
 type PushSubscription struct {
@@ -462,6 +561,16 @@ type PushSubscription struct {
 	P256dh    string
 	Auth      string
 	CreatedAt pgtype.Timestamptz
+}
+
+type RecruiterContact struct {
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+	JobID       pgtype.UUID
+	ContactedOn pgtype.Date
+	Channel     string
+	Outcome     string
+	CreatedAt   pgtype.Timestamptz
 }
 
 type ScoreFeedback struct {
@@ -485,6 +594,43 @@ type ScoringOption struct {
 	RetiredAt pgtype.Timestamptz
 }
 
+type ScrapeRun struct {
+	ID             pgtype.UUID
+	Kind           string
+	Source         string
+	SourceTargetID pgtype.UUID
+	Trigger        string
+	StartedAt      pgtype.Timestamptz
+	FinishedAt     pgtype.Timestamptz
+	StopReason     pgtype.Text
+	Pages          int32
+	Listings       int32
+	NewListings    int32
+	Elsewhere      int32
+	RepeatListings int32
+	Deferred       int32
+	Retries        int32
+	BoardID        pgtype.UUID
+	Removed        int32
+	Reopened       int32
+}
+
+type ScrapeRunError struct {
+	ID      int64
+	RunID   pgtype.UUID
+	Page    int32
+	Attempt int32
+	Message string
+	At      pgtype.Timestamptz
+}
+
+type ScrapeRunJobChange struct {
+	RunID    pgtype.UUID
+	JobID    pgtype.UUID
+	Change   string
+	Snapshot []byte
+}
+
 type SearchConfig struct {
 	ID                    pgtype.UUID
 	UserID                pgtype.UUID
@@ -505,6 +651,7 @@ type Session struct {
 	UserID    pgtype.UUID
 	CreatedAt pgtype.Timestamptz
 	ExpiresAt pgtype.Timestamptz
+	TokenHash []byte
 }
 
 type SourceTarget struct {
@@ -550,6 +697,7 @@ type TailoredCv struct {
 	DraftDocID     pgtype.Text
 	Status         string
 	Outcome        pgtype.Text
+	Mode           string
 	KeptAs         pgtype.Text
 	KeepNote       string
 	Attempts       int32
@@ -557,6 +705,29 @@ type TailoredCv struct {
 	LeaseUntil     pgtype.Timestamptz
 	LastError      string
 	CreatedAt      pgtype.Timestamptz
+	Insights       []byte
+	InsightsFor    string
+}
+
+type Task struct {
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+	TypeID      pgtype.UUID
+	JobID       pgtype.UUID
+	Link        pgtype.Text
+	Notes       pgtype.Text
+	CompletedAt pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type TaskType struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Name      string
+	Colour    string
+	CreatedAt pgtype.Timestamptz
+	SystemKey pgtype.Text
 }
 
 type TrackedCompany struct {
@@ -573,6 +744,7 @@ type TrackedDoc struct {
 	ID      pgtype.UUID
 	UserID  pgtype.UUID
 	DocID   string
+	Kind    string
 	AddedAt pgtype.Timestamptz
 }
 
@@ -582,6 +754,7 @@ type TrackedDocTab struct {
 	TabID        string
 	Title        string
 	Visible      bool
+	IsDefault    bool
 	CreatedAt    pgtype.Timestamptz
 }
 

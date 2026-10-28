@@ -54,10 +54,87 @@ export interface FilterChip {
 	display: string;
 }
 
+const HIRINGCAFE_TITLE = "hiring.cafe search";
+
+interface HiringCafeState {
+	jobTitleQuery?: unknown;
+	searchQuery?: unknown;
+	searchText?: unknown;
+	locations?: unknown;
+	sortBy?: unknown;
+	dateFetchedPastNDays?: unknown;
+}
+
+function hiringCafeState(
+	target: Pick<SourceTarget, "Source" | "Value">,
+): HiringCafeState | undefined {
+	if (target.Source !== "hiringcafe") return undefined;
+	try {
+		const state: unknown = JSON.parse(target.Value);
+		return state && typeof state === "object" ? state : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function trimmed(value: unknown): string {
+	return typeof value === "string" ? value.trim() : "";
+}
+
+function hiringCafeKeyword(state: HiringCafeState): string {
+	return trimmed(state.searchQuery) || trimmed(state.searchText);
+}
+
+export function searchTitle(
+	target: Pick<SourceTarget, "Source" | "Value">,
+): string {
+	const state = hiringCafeState(target);
+	if (!state) return target.Value;
+	return (
+		trimmed(state.jobTitleQuery) || hiringCafeKeyword(state) || HIRINGCAFE_TITLE
+	);
+}
+
+function describeHiringCafe(state: HiringCafeState): FilterChip[] {
+	const chips: FilterChip[] = [];
+	const add = (key: string, label: string, value: string) =>
+		chips.push({ key, label, display: `${label}: ${value}` });
+	const title = trimmed(state.jobTitleQuery);
+	if (title) add("jobTitleQuery", "Title", title);
+	const keyword = hiringCafeKeyword(state);
+	if (keyword) add("searchText", "Keyword", keyword);
+	if (Array.isArray(state.locations)) {
+		for (const loc of state.locations) {
+			const name = loc?.formatted_address ?? loc?.name;
+			if (typeof name === "string" && name) {
+				add(`location:${name}`, "Location", name);
+			}
+		}
+	}
+	if (typeof state.sortBy === "string" && state.sortBy) {
+		add(
+			"sortBy",
+			"Sort",
+			state.sortBy === "date" ? "Newest first" : state.sortBy,
+		);
+	}
+	const days = state.dateFetchedPastNDays;
+	if (typeof days === "number" && days > 0) {
+		add(
+			"dateFetchedPastNDays",
+			"Posted",
+			`Past ${days} ${days === 1 ? "day" : "days"}`,
+		);
+	}
+	return chips;
+}
+
 export function describeFilters(
 	target: SourceTarget,
 	info: SourceInfo | undefined,
 ): FilterChip[] {
+	const state = hiringCafeState(target);
+	if (state) return describeHiringCafe(state);
 	return Object.entries(target.Filters)
 		.filter(([, value]) => value !== "")
 		.map(([key, value]) => {
@@ -76,7 +153,7 @@ export function matchesSearch(
 	const needle = params.q?.trim().toLowerCase();
 	if (needle) {
 		const haystack = [
-			target.Value,
+			searchTitle(target),
 			...describeFilters(target, info).map((f) => f.display),
 		]
 			.join(" ")
@@ -104,7 +181,8 @@ export function sortTargets(
 	if (sort !== "search" && sort !== "lastRun") return targets;
 	const by =
 		sort === "search"
-			? (a: SourceTarget, b: SourceTarget) => a.Value.localeCompare(b.Value)
+			? (a: SourceTarget, b: SourceTarget) =>
+					searchTitle(a).localeCompare(searchTitle(b))
 			: (a: SourceTarget, b: SourceTarget) =>
 					new Date(a.LastRunAt ?? 0).getTime() -
 					new Date(b.LastRunAt ?? 0).getTime();

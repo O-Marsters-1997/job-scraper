@@ -3,6 +3,8 @@ import type {
 	Achievement,
 	BankSkill,
 	BankSkillInput,
+	ContextChange,
+	GrillPrompt,
 	ImportPosition,
 	ImportPreview,
 	ImportSkill,
@@ -22,11 +24,23 @@ let experience: Position[] = [
 				id: "achievement-1",
 				positionId: "position-1",
 				text: "Cut p99 API latency by 40% by moving hot paths to a read-through cache",
+				context: "",
+				stats: { inCvs: 8, leftOut: 1, applied: 6, replied: 3 },
 			},
 			{
 				id: "achievement-2",
 				positionId: "position-1",
 				text: "Led the migration of 12 services from EC2 to Kubernetes",
+				context:
+					"Cost pressure forced the move; we kept Postgres on RDS to limit risk.",
+				stats: { inCvs: 3, leftOut: 4, applied: 2, replied: 0 },
+			},
+			{
+				id: "achievement-4",
+				positionId: "position-1",
+				text: "Mentored three engineers through their first on-call rotation",
+				context: "",
+				stats: null,
 			},
 		],
 	},
@@ -41,6 +55,24 @@ let experience: Position[] = [
 				id: "achievement-3",
 				positionId: "position-2",
 				text: "Built the billing export pipeline used by finance every month",
+				context: "",
+				stats: { inCvs: 5, leftOut: 0, applied: 1, replied: 1 },
+			},
+		],
+	},
+	{
+		id: "position-3",
+		employer: "Initech",
+		title: "Developer",
+		startDate: "2015-09-01",
+		endDate: "2018-05-31",
+		achievements: [
+			{
+				id: "achievement-5",
+				positionId: "position-3",
+				text: "Replaced a nightly batch job with a streaming pipeline",
+				context: "",
+				stats: null,
 			},
 		],
 	},
@@ -121,6 +153,8 @@ export function importExperience(
 				id: `achievement-${faker.string.uuid().slice(0, 8)}`,
 				positionId: id,
 				text,
+				context: "",
+				stats: null,
 			})),
 		};
 	});
@@ -144,6 +178,8 @@ export function createAchievement(
 		id: `achievement-${faker.string.uuid().slice(0, 8)}`,
 		positionId,
 		text,
+		context: "",
+		stats: null,
 	};
 	experience = experience.map((p) =>
 		p.id === positionId
@@ -233,6 +269,54 @@ export function deleteBankSkill(id: string): void {
 	bankSkills = renumber(bankSkills.filter((s) => s.id !== id));
 }
 
+export function setBankSkillsCategory(ids: string[], category: string): void {
+	const picked = new Set(ids);
+	bankSkills = bankSkills.map((s) =>
+		picked.has(s.id) ? { ...s, category: category.trim() } : s,
+	);
+}
+
+export function deleteBankSkills(ids: string[]): void {
+	const picked = new Set(ids);
+	bankSkills = renumber(bankSkills.filter((s) => !picked.has(s.id)));
+}
+
 export function reorderBankSkills(ids: string[]): void {
 	bankSkills = renumber(inOrder(bankSkills, ids));
+}
+
+export function getGrillPrompt(): GrillPrompt {
+	return {
+		text: `Use my grilling skill.\n\n${JSON.stringify(experience, null, 2)}`,
+	};
+}
+
+export function previewContext(output: string): ContextChange[] {
+	const block = [...output.matchAll(/```json\s*([\s\S]*?)```/g)].at(-1)?.[1];
+	if (!block) throw new Error("no json block found in the output");
+	const parsed = JSON.parse(block) as {
+		achievements: { id: string; context: string }[];
+	};
+	const owned = experience.flatMap((p) => p.achievements);
+	return parsed.achievements.map((c) => {
+		const a = owned.find((o) => o.id === c.id);
+		if (!a) throw new Error(`achievement ${c.id} not found`);
+		return {
+			achievementId: a.id,
+			text: a.text,
+			before: a.context,
+			after: c.context.trim(),
+		};
+	});
+}
+
+export function applyContext(changes: ContextChange[]): void {
+	const after = new Map(changes.map((c) => [c.achievementId, c.after]));
+	experience = experience.map((p) => ({
+		...p,
+		achievements: p.achievements.map((a) => ({
+			...a,
+			context: after.get(a.id) ?? a.context,
+		})),
+	}));
 }

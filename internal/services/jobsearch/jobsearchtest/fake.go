@@ -14,6 +14,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/jobmatch"
 	"github.com/ollymarsters/job-scraper/internal/runwindow"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
@@ -21,11 +22,13 @@ import (
 )
 
 type boardPollState struct {
-	leaseOwner   string
-	leaseExpires time.Time
-	version      int64
-	reported     int
-	parsed       int
+	leaseOwner       string
+	leaseExpires     time.Time
+	version          int64
+	reported         int
+	parsed           int
+	completedAt      time.Time
+	checkPublishedAt time.Time
 }
 
 type FakeStore struct {
@@ -50,6 +53,8 @@ type FakeStore struct {
 
 	lastScraped map[string]time.Time
 	fetches     map[string]dto.CachedResponse
+	misses      map[string]time.Time
+	harvestSeen map[string]map[string]string
 	profiles    map[string]dto.CompanyProfile
 
 	sourceTargets map[string]dto.SourceTarget
@@ -57,7 +62,23 @@ type FakeStore struct {
 
 	candidates     map[string]sourcetargets.Candidate
 	candidateByURL map[string]string
+	discoveries    map[string]map[string]discovery
 	detailPending  map[string]bool
+	datedCards     map[string]dto.Job
+
+	insightGroups []dto.JobInsightGroup
+}
+
+func (f *FakeStore) SeedInsightGroups(groups ...dto.JobInsightGroup) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.insightGroups = groups
+}
+
+func (f *FakeStore) JobInsightGroups(context.Context, string, dto.JobInsightsOptions) ([]dto.JobInsightGroup, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.insightGroups), nil
 }
 
 func NewFakeStore() *FakeStore {
@@ -75,18 +96,22 @@ func NewFakeStore() *FakeStore {
 		pollState:      make(map[string]*boardPollState),
 		lastScraped:    make(map[string]time.Time),
 		fetches:        make(map[string]dto.CachedResponse),
+		misses:         make(map[string]time.Time),
+		harvestSeen:    make(map[string]map[string]string),
 		profiles:       make(map[string]dto.CompanyProfile),
 		sourceTargets:  make(map[string]dto.SourceTarget),
 		targetByKey:    make(map[string]string),
 		candidates:     make(map[string]sourcetargets.Candidate),
 		candidateByURL: make(map[string]string),
+		discoveries:    make(map[string]map[string]discovery),
 		detailPending:  make(map[string]bool),
+		datedCards:     make(map[string]dto.Job),
 	}
 }
 
-func (f *FakeStore) nextID(prefix string) string {
+func (f *FakeStore) nextID() string {
 	f.seq++
-	return fmt.Sprintf("%s-%06d", prefix, f.seq)
+	return fmt.Sprintf("00000000-0000-4000-8000-%012d", f.seq)
 }
 
 func lookup[T any](m map[string]T, id string) (T, error) {
@@ -144,6 +169,13 @@ func (f *FakeStore) addListing(jobID string, job dto.Job) {
 	f.listings[jobID] = append(f.listings[jobID], dto.JobListing{Source: job.Source, URL: job.URL, FirstSeenAt: time.Now()})
 }
 
+func (f *FakeStore) addDiscoveryListing(jobID string, job dto.Job) {
+	if job.DiscoveredVia == "" || job.DiscoveryURL == "" {
+		return
+	}
+	f.addListing(jobID, dto.Job{Source: job.DiscoveredVia, URL: normalizeJobURL(job.DiscoveryURL)})
+}
+
 func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -152,12 +184,22 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 	fingerprint := jobFingerprint(job)
 	id, ok := f.jobIdentity(job)
 	if !ok {
-		id = f.nextID("job")
-		job.ID, job.ContentFingerprint = id, fingerprint
+		id = f.nextID()
+		for _, card := range f.datedCards {
+			if cardMatchesJob(card, job) && (job.PostedAt == nil || card.PostedAt.Before(*job.PostedAt)) {
+				job.PostedAt = card.PostedAt
+			}
+		}
+		job.ID, job.ContentFingerprint, job.FirstDiscoveredAt = id, fingerprint, time.Now()
+		if st := f.pollState[job.BoardID]; st != nil && !st.completedAt.IsZero() {
+			completedAt := st.completedAt
+			job.PostedAfter = &completedAt
+		}
 		f.jobs[id] = job
 		f.jobOrder = append(f.jobOrder, id)
 		f.indexJob(job)
 		f.addListing(id, job)
+		f.addDiscoveryListing(id, job)
 		return job, "new", nil
 	}
 
@@ -171,44 +213,79 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 		status = "changed"
 	}
 	f.addListing(id, job)
+	f.addDiscoveryListing(id, job)
+	job.DiscoveredVia = prev.DiscoveredVia
+	job.PostedAt, job.RepostedAt = applyPostedAt(prev, job.PostedAt)
+	job.PostedAfter, job.FirstDiscoveredAt = prev.PostedAfter, prev.FirstDiscoveredAt
 	job.ID, job.ContentFingerprint, job.URL = id, fingerprint, prev.URL
 	f.jobs[id] = job
 	f.indexJob(job)
 	return job, status, nil
 }
 
+func applyPostedAt(prev dto.Job, incoming *time.Time) (postedAt, repostedAt *time.Time) {
+	postedAt, repostedAt = prev.PostedAt, prev.RepostedAt
+	switch {
+	case incoming == nil:
+	case postedAt == nil || incoming.Before(*postedAt):
+		postedAt = incoming
+	case incoming.After(postedAt.Add(2 * 24 * time.Hour)):
+		if repostedAt == nil || incoming.After(*repostedAt) {
+			repostedAt = incoming
+		}
+	}
+	return postedAt, repostedAt
+}
+
 func (f *FakeStore) withUserState(userID string, job dto.Job) dto.Job {
 	job.Seen = f.seen[userID][job.ID]
 	companyID := cmp.Or(job.CompanyID, f.companyBySlug[job.CompanySlug])
 	job.CompanyFavourite = f.favourites[trackingKey(userID, companyID)]
+	job.CompanyKind = cmp.Or(f.companies[companyID].Kind, dto.KindUnclassified)
 	return job
+}
+
+func (f *FakeStore) JobStats(_ context.Context, _ string, options dto.JobStatsOptions) (dto.JobStats, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var stats dto.JobStats
+	sources, todaySources := map[string]bool{}, map[string]bool{}
+	for _, job := range f.jobs {
+		if job.SuitabilityScore == nil || slices.Contains(options.ExcludedCompanySlugs, job.CompanySlug) {
+			continue
+		}
+		stats.Total++
+		sources[job.Source] = true
+		if !job.ScrapedAt.Before(options.DayStart) {
+			stats.NewToday++
+			todaySources[job.Source] = true
+		}
+	}
+	stats.Sources, stats.TodaySources = len(sources), len(todaySources)
+	return stats, nil
 }
 
 func (f *FakeStore) Page(_ context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	items := make([]dto.Job, 0, len(f.jobOrder))
-	skip := options.CursorID != ""
 	for _, id := range f.jobOrder {
-		if skip {
-			if id == options.CursorID {
-				skip = false
-			}
-			continue
-		}
 		job := f.jobs[id]
-		if options.SinceDays > 0 && job.UpdatedAt.Before(time.Now().AddDate(0, 0, -int(options.SinceDays))) {
-			continue
-		}
 		if slices.Contains(options.ExcludedCompanySlugs, job.CompanySlug) {
 			continue
 		}
 		items = append(items, f.withUserState(userID, job))
 	}
+	total := len(items)
+	items = items[min(int(options.Offset), total):]
 	if limit := int(options.Limit); limit > 0 && limit < len(items) {
 		items = items[:limit]
 	}
-	return dto.JobPage{Items: items}, nil
+	page := dto.JobPage{Items: items}
+	if !options.SkipTotal {
+		page.Total = &total
+	}
+	return page, nil
 }
 
 func (f *FakeStore) GetJob(_ context.Context, jobID, userID string) (dto.Job, error) {
@@ -219,6 +296,24 @@ func (f *FakeStore) GetJob(_ context.Context, jobID, userID string) (dto.Job, er
 		return dto.Job{}, err
 	}
 	return f.withUserState(userID, job), nil
+}
+
+func (f *FakeStore) FindJobByPosting(_ context.Context, rawURL, source, token, postingID string) (dto.Job, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if postingID != "" {
+		for _, b := range f.boards {
+			if b.Source == source && b.BoardToken == token {
+				if id, ok := f.byBoard[b.ID+"|"+postingID]; ok {
+					return f.jobs[id], nil
+				}
+			}
+		}
+	}
+	if id, ok := f.byURL[normalizeJobURL(rawURL)]; ok {
+		return f.jobs[id], nil
+	}
+	return dto.Job{}, data.ErrNotFound
 }
 
 func (f *FakeStore) ListJobListings(_ context.Context, jobID string) ([]dto.JobListing, error) {
@@ -246,18 +341,6 @@ func (f *FakeStore) MarkJobsSeen(_ context.Context, userID string, jobIDs []stri
 	return nil
 }
 
-func (f *FakeStore) ListJobs(_ context.Context, userID string, excludedCompanySlugs []string) ([]dto.Job, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	out := make([]dto.Job, 0, len(f.jobOrder))
-	for _, id := range f.jobOrder {
-		if !slices.Contains(excludedCompanySlugs, f.jobs[id].CompanySlug) {
-			out = append(out, f.withUserState(userID, f.jobs[id]))
-		}
-	}
-	return out, nil
-}
-
 func (f *FakeStore) NewURLs(_ context.Context, urls []string) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -282,7 +365,9 @@ func (f *FakeStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.C
 	defer f.mu.Unlock()
 	if id, ok := f.companyBySlug[c.Slug]; ok {
 		existing := f.companies[id]
-		existing.Name = c.Name
+		if c.Kind != "" && existing.Kind != dto.KindAgency {
+			existing.Kind = c.Kind
+		}
 		if existing.ATSSource == "" {
 			existing.ATSSource = c.ATSSource
 		}
@@ -298,10 +383,14 @@ func (f *FakeStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.C
 		f.companies[id] = existing
 		return existing, nil
 	}
-	id := f.nextID("company")
+	id := f.nextID()
 	company := dto.Company{
 		ID: id, Slug: c.Slug, Name: c.Name, ATSSource: c.ATSSource, ATSToken: c.ATSToken,
 		Domain: c.Domain, LinkedInCompanyID: c.LinkedInCompanyID, FirstSeenAt: time.Now(),
+		Kind: dto.KindUnclassified,
+	}
+	if c.Kind != "" {
+		company.Kind = c.Kind
 	}
 	f.companies[id] = company
 	f.companyBySlug[c.Slug] = id
@@ -333,6 +422,12 @@ func (f *FakeStore) PageCompaniesForUser(_ context.Context, userID string, optio
 		if options.NoBoardOnly && f.hasBoard(c.ID) {
 			continue
 		}
+		if len(options.ATSSources) > 0 && !f.hasVerifiedBoardOn(c.ID, options.ATSSources) {
+			continue
+		}
+		if options.Poster != "" && (options.Poster == dto.PosterAgency) != (c.Kind == dto.KindAgency || c.Kind == dto.KindLikelyAgency) {
+			continue
+		}
 		if !strings.Contains(strings.ToLower(c.Name), search) && !strings.Contains(c.Slug, search) {
 			continue
 		}
@@ -350,7 +445,43 @@ func (f *FakeStore) PageCompaniesForUser(_ context.Context, userID string, optio
 	if limit := int(options.Limit); limit > 0 && limit < len(items) {
 		items = items[:limit]
 	}
-	return dto.CompanyPage{Items: items, Total: total}, nil
+	verified := map[string]bool{}
+	for _, b := range f.boards {
+		if b.Status == dto.BoardVerified && b.Source != "wttj" {
+			verified[b.CompanyID] = true
+		}
+	}
+	return dto.CompanyPage{Items: items, Total: total, AllCompanies: len(f.companies), VerifiedBoardCompanies: len(verified)}, nil
+}
+
+func (f *FakeStore) hasVerifiedBoardOn(companyID string, sources []string) bool {
+	for _, b := range f.boards {
+		if b.CompanyID == companyID && b.Status == dto.BoardVerified && slices.Contains(sources, b.Source) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *FakeStore) CountCompaniesByATS(context.Context) ([]dto.ATSCount, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	companies := map[string]map[string]bool{}
+	for _, b := range f.boards {
+		if b.Status != dto.BoardVerified || b.Source == "wttj" {
+			continue
+		}
+		if companies[b.Source] == nil {
+			companies[b.Source] = map[string]bool{}
+		}
+		companies[b.Source][b.CompanyID] = true
+	}
+	counts := make([]dto.ATSCount, 0, len(companies))
+	for source, ids := range companies {
+		counts = append(counts, dto.ATSCount{Source: source, Companies: len(ids)})
+	}
+	slices.SortFunc(counts, func(a, b dto.ATSCount) int { return cmp.Compare(a.Source, b.Source) })
+	return counts, nil
 }
 
 func (f *FakeStore) hasBoard(companyID string) bool {
@@ -383,6 +514,30 @@ func (f *FakeStore) GetCompanyForUser(_ context.Context, userID, id string) (dto
 	return c, nil
 }
 
+func (f *FakeStore) SetCompanyKind(_ context.Context, companyID string, kind dto.CompanyKind) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.companies[companyID]
+	if !ok {
+		return data.ErrNotFound
+	}
+	c.Kind = kind
+	f.companies[companyID] = c
+	return nil
+}
+
+func (f *FakeStore) SuggestCompanyKind(_ context.Context, companyID string, kind dto.CompanyKind) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.companies[companyID]
+	if !ok || c.Kind != dto.KindUnclassified {
+		return false, nil
+	}
+	c.Kind = kind
+	f.companies[companyID] = c
+	return true, nil
+}
+
 func (f *FakeStore) SetCompanyFavourite(_ context.Context, userID, companyID string, favourite bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -390,15 +545,29 @@ func (f *FakeStore) SetCompanyFavourite(_ context.Context, userID, companyID str
 		return data.ErrNotFound
 	}
 	key := trackingKey(userID, companyID)
+	t, tracked := f.tracking[key]
 	if !favourite {
 		delete(f.favourites, key)
+		if tracked {
+			t.CheckIntervalMinutes = 360
+			f.tracking[key] = t
+		}
 		return nil
 	}
 	f.favourites[key] = true
-	if t, ok := f.tracking[key]; ok && t.ReviewState == "new" {
-		t.ReviewState = "kept"
-		f.tracking[key] = t
+	hasATS := false
+	for _, b := range f.boards {
+		role, _ := sourcespec.SourceRole(b.Source)
+		if b.CompanyID == companyID && b.Status == dto.BoardVerified && role == sourcespec.RoleATS {
+			hasATS = true
+		}
 	}
+	if !hasATS {
+		return nil
+	}
+	t.UserID, t.CompanyID, t.Enabled, t.CheckIntervalMinutes = userID, companyID, true, 60
+	t.ReviewState = "kept"
+	f.tracking[key] = t
 	return nil
 }
 
@@ -432,7 +601,7 @@ func (f *FakeStore) ListTrackedCompaniesForUser(_ context.Context, userID string
 	return out, nil
 }
 
-func (f *FakeStore) ListNewCompanies(_ context.Context, userID string) ([]dto.NewCompany, error) {
+func (f *FakeStore) ListNewCompanies(_ context.Context, userID string, limit, offset int32) (dto.NewCompanyPage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := make([]dto.NewCompany, 0)
@@ -453,7 +622,11 @@ func (f *FakeStore) ListNewCompanies(_ context.Context, userID string) ([]dto.Ne
 		out = append(out, nc)
 	}
 	slices.SortFunc(out, func(a, b dto.NewCompany) int { return cmp.Compare(b.ID, a.ID) })
-	return out, nil
+	page := dto.NewCompanyPage{Total: len(out), Items: []dto.NewCompany{}}
+	if start := int(offset); start < len(out) {
+		page.Items = out[start:min(start+int(limit), len(out))]
+	}
+	return page, nil
 }
 
 func (f *FakeStore) SaveCompanyProfile(_ context.Context, companyID, _ string, profile dto.CompanyProfile) error {
@@ -463,12 +636,12 @@ func (f *FakeStore) SaveCompanyProfile(_ context.Context, companyID, _ string, p
 	return nil
 }
 
-func (f *FakeStore) ListNewCompanyJobs(_ context.Context, userID string) ([]dto.Job, error) {
+func (f *FakeStore) ListNewCompanyJobs(_ context.Context, userID string, companyIDs []string) ([]dto.Job, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []dto.Job
 	for _, j := range f.jobs {
-		if f.tracking[trackingKey(userID, j.CompanyID)].ReviewState == "new" {
+		if f.tracking[trackingKey(userID, j.CompanyID)].ReviewState == "new" && slices.Contains(companyIDs, j.CompanyID) {
 			out = append(out, j)
 		}
 	}
@@ -530,6 +703,7 @@ func (f *FakeStore) SetCompanyReviewState(_ context.Context, userID, companyID, 
 }
 
 func (f *FakeStore) VerifyCompanyBoard(_ context.Context, companyID, source, token, method, via string) (dto.CompanyBoard, error) {
+	token = sourcespec.NormalizeBoardToken(source, token)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for id, b := range f.boards {
@@ -588,7 +762,7 @@ func (f *FakeStore) RenameCompany(_ context.Context, id, name string) error {
 	return nil
 }
 
-func (f *FakeStore) ListUntrackedDiscoveredBoards(_ context.Context) ([]dto.CompanyBoard, error) {
+func (f *FakeStore) ListUntrackedDiscoveredBoards(_ context.Context, uk bool, ukSince time.Time) ([]dto.CompanyBoard, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	tracked := make(map[string]bool, len(f.tracking))
@@ -597,7 +771,8 @@ func (f *FakeStore) ListUntrackedDiscoveredBoards(_ context.Context) ([]dto.Comp
 	}
 	out := make([]dto.CompanyBoard, 0)
 	for _, b := range f.boards {
-		if b.Status == dto.BoardVerified && b.VerificationMethod == "discovered" && !tracked[b.CompanyID] {
+		if b.Status == dto.BoardVerified && b.VerificationMethod == "discovered" && !tracked[b.CompanyID] &&
+			(b.UKJobsSeenAt != nil && !b.UKJobsSeenAt.Before(ukSince)) == uk {
 			out = append(out, b)
 		}
 	}
@@ -622,6 +797,7 @@ func (f *FakeStore) ListCompanyBoards(_ context.Context, companyID string) ([]dt
 }
 
 func (f *FakeStore) UpsertCandidateBoard(_ context.Context, companyID, source, token string) (dto.CompanyBoard, error) {
+	token = sourcespec.NormalizeBoardToken(source, token)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for id, b := range f.boards {
@@ -632,13 +808,14 @@ func (f *FakeStore) UpsertCandidateBoard(_ context.Context, companyID, source, t
 			return f.boards[id], nil
 		}
 	}
-	id := f.nextID("board")
+	id := f.nextID()
 	board := dto.CompanyBoard{ID: id, CompanyID: companyID, Source: source, BoardToken: token, Status: dto.BoardCandidate, CreatedAt: time.Now()}
 	f.boards[id] = board
 	return board, nil
 }
 
 func (f *FakeStore) GetBoardCompanyID(_ context.Context, source, token string) (string, error) {
+	token = sourcespec.NormalizeBoardToken(source, token)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, b := range f.boards {
@@ -650,6 +827,7 @@ func (f *FakeStore) GetBoardCompanyID(_ context.Context, source, token string) (
 }
 
 func (f *FakeStore) GetVerifiedBoardID(_ context.Context, source, token string) (string, error) {
+	token = sourcespec.NormalizeBoardToken(source, token)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for id, b := range f.boards {
@@ -673,7 +851,9 @@ func (f *FakeStore) ListVerifiedBoardsBySlug(_ context.Context, slugs []string) 
 		})
 		for _, b := range f.boards {
 			if b.CompanyID == c.ID && b.Status == dto.BoardVerified {
-				out = append(out, dto.CardBoard{CompanySlug: c.Slug, Source: b.Source, BoardToken: b.BoardToken, Tracked: tracked})
+				st := f.pollState[b.ID]
+				polled := st != nil && !st.completedAt.IsZero()
+				out = append(out, dto.CardBoard{CompanySlug: c.Slug, Source: b.Source, BoardToken: b.BoardToken, Tracked: tracked, Polled: polled})
 			}
 		}
 	}
@@ -732,7 +912,7 @@ func (f *FakeStore) ClaimBoard(_ context.Context, id string, manual bool) (dto.B
 	if st.leaseOwner != "" && time.Now().Before(st.leaseExpires) {
 		return dto.BoardPoll{}, store.ErrBoardClaimUnavailable
 	}
-	st.leaseOwner = f.nextID("lease")
+	st.leaseOwner = f.nextID()
 	st.leaseExpires = time.Now().Add(10 * time.Minute)
 	st.version++
 	return dto.BoardPoll{
@@ -757,16 +937,16 @@ func (f *FakeStore) FailBoard(_ context.Context, poll dto.BoardPoll) error {
 	return nil
 }
 
-func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot) error {
+func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot) ([]dto.JobChange, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !snapshot.Complete {
-		return errors.New("incomplete board snapshot")
+		return nil, errors.New("incomplete board snapshot")
 	}
 	poll := snapshot.Poll
 	st := f.pollState[poll.ID]
 	if !leaseHeldBy(st, poll) {
-		return store.ErrBoardClaimUnavailable
+		return nil, store.ErrBoardClaimUnavailable
 	}
 	st.leaseOwner = ""
 	urls := make(map[string]bool, len(snapshot.Jobs))
@@ -774,7 +954,11 @@ func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot)
 		urls[job.URL] = true
 	}
 	st.reported, st.parsed = snapshot.Reported, len(urls)
-	return nil
+	st.completedAt = time.Now()
+	if !poll.Manual {
+		st.checkPublishedAt = time.Time{}
+	}
+	return nil, nil
 }
 
 func boardPollFor(id string, b dto.CompanyBoard) dto.BoardPoll {
@@ -789,13 +973,40 @@ func (f *FakeStore) ListDueBoards(context.Context) ([]dto.BoardPoll, error) {
 		if b.Status != dto.BoardVerified {
 			continue
 		}
-		if st := f.pollState[id]; st != nil && st.leaseOwner != "" {
+		if st := f.pollState[id]; st != nil && (st.leaseOwner != "" || time.Since(st.checkPublishedAt) < 24*time.Hour) {
 			continue
 		}
 		out = append(out, boardPollFor(id, b))
 	}
 	slices.SortFunc(out, func(a, b dto.BoardPoll) int { return cmp.Compare(a.ID, b.ID) })
 	return out, nil
+}
+
+func (f *FakeStore) RetireBoard(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if b, ok := f.boards[id]; ok && b.Status != dto.BoardRetired {
+		now := time.Now()
+		b.Status, b.RetiredAt = dto.BoardRetired, &now
+		f.boards[id] = b
+	}
+	return nil
+}
+
+func (f *FakeStore) MarkBoardCheckPublished(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pollStateFor(id).checkPublishedAt = time.Now()
+	return nil
+}
+
+func (f *FakeStore) ClearBoardCheckPublished(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if st := f.pollState[id]; st != nil {
+		st.checkPublishedAt = time.Time{}
+	}
+	return nil
 }
 
 func (f *FakeStore) ListActiveBoards(context.Context) ([]dto.BoardPoll, error) {
@@ -819,7 +1030,7 @@ func (f *FakeStore) CreateSourceTarget(_ context.Context, userID, source, value 
 	if _, ok := f.targetByKey[key]; ok {
 		return dto.SourceTarget{}, store.ErrSourceTargetExists
 	}
-	id := f.nextID("target")
+	id := f.nextID()
 	manual := runwindow.Default()
 	manual.IntervalMinutes = nil
 	t := dto.SourceTarget{
@@ -903,7 +1114,7 @@ func (f *FakeStore) StartSourceTargetRun(_ context.Context, id string, nextRunAt
 	if !ok {
 		return dto.SourceTarget{}, data.ErrNotFound
 	}
-	t.RunID = f.nextID("run")
+	t.RunID = f.nextID()
 	t.NextRunAt = nextRunAt
 	t.RunStatus, t.LastRunError, t.Enabled, t.DisabledReason = "queued", "", true, ""
 	f.sourceTargets[id] = t
@@ -924,7 +1135,7 @@ func (f *FakeStore) ClaimDueSourceTargets(_ context.Context, limit int, nextRunA
 	slices.SortFunc(due, func(a, b dto.SourceTarget) int { return a.NextRunAt.Compare(*b.NextRunAt) })
 	due = due[:min(limit, len(due))]
 	for i, t := range due {
-		t.RunID = f.nextID("run")
+		t.RunID = f.nextID()
 		t.NextRunAt = nextRunAt(t.RunWindow)
 		t.RunStatus, t.LastRunError = "queued", ""
 		f.sourceTargets[t.ID] = t
@@ -1014,18 +1225,75 @@ func (f *FakeStore) SaveCards(_ context.Context, target dto.SourceTarget, cards 
 		card.URL = normalized
 		id, ok := f.candidateByURL[normalized]
 		if !ok {
-			id = f.nextID("candidate")
+			id = f.nextID()
 			f.candidateByURL[normalized] = id
 		}
 		card.Source = target.Source
 		cand := sourcetargets.Candidate{ID: id, URL: card.URL, Card: card}
 		out = append(out, cand)
-		if !sourcespec.CardComplete(target.Source) {
-			cand.Card = dto.Job{URL: card.URL, Title: card.Title, CompanySlug: card.CompanySlug, Location: card.Location, Source: card.Source}
+		if f.discoveries[id] == nil {
+			f.discoveries[id] = map[string]discovery{}
+		}
+		f.discoveries[id][target.ID] = discovery{userID: target.UserID, filters: target.Filters}
+		if !sourcespec.CardComplete(target.Source) && card.RemoteCheckURL == "" && card.WorkArrangement == "" {
+			cand.Card = dto.Job{URL: card.URL, Title: card.Title, CompanySlug: card.CompanySlug, Location: card.Location, Source: card.Source, PostedAt: card.PostedAt}
 		}
 		f.candidates[id] = cand
+		f.rememberCardDate(card)
+		if jobID, ok := f.byURL[card.URL]; ok && card.PostedAt != nil {
+			f.applyPostedDate(jobID, *card.PostedAt)
+		}
 	}
 	return out, nil
+}
+
+func (f *FakeStore) rememberCardDate(card dto.Job) {
+	if card.PostedAt == nil {
+		return
+	}
+	if prev, ok := f.datedCards[card.URL]; ok && !card.PostedAt.Before(*prev.PostedAt) {
+		return
+	}
+	f.datedCards[card.URL] = card
+}
+
+func (f *FakeStore) applyPostedDate(jobID string, postedAt time.Time) {
+	job := f.jobs[jobID]
+	job.PostedAt, job.RepostedAt = applyPostedAt(job, &postedAt)
+	f.jobs[jobID] = job
+}
+
+func cardMatchesJob(card, job dto.Job) bool {
+	return card.CompanySlug == job.CompanySlug && jobmatch.Title(card.Title) == jobmatch.Title(job.Title) &&
+		jobmatch.LocationsCompatible(jobmatch.Location(card.Location), jobmatch.Location(job.Location))
+}
+
+func (f *FakeStore) ApplyBoardCards(_ context.Context, _ string, cards []dto.Job) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, card := range cards {
+		if card.PostedAt == nil || card.URL == "" {
+			continue
+		}
+		var matches []string
+		for _, id := range f.jobOrder {
+			if cardMatchesJob(card, f.jobs[id]) {
+				matches = append(matches, id)
+			}
+		}
+		switch len(matches) {
+		case 0:
+			normalized, err := store.NormalizeCandidateURL(card.URL)
+			if err != nil {
+				return err
+			}
+			card.URL = normalized
+			f.rememberCardDate(card)
+		case 1:
+			f.applyPostedDate(matches[0], *card.PostedAt)
+		}
+	}
+	return nil
 }
 
 func (f *FakeStore) ListForUser(_ context.Context, _, afterID string, limit int) ([]sourcetargets.Candidate, error) {
@@ -1054,6 +1322,25 @@ func (f *FakeStore) ListForUser(_ context.Context, _, afterID string, limit int)
 	return out, nil
 }
 
+type discovery struct {
+	userID  string
+	filters map[string]string
+}
+
+func (f *FakeStore) DiscoveryFilters(_ context.Context, userID string, candidateIDs []string) (map[string][]map[string]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string][]map[string]string{}
+	for _, id := range candidateIDs {
+		for _, d := range f.discoveries[id] {
+			if d.userID == userID {
+				out[id] = append(out[id], d.filters)
+			}
+		}
+	}
+	return out, nil
+}
+
 func (f *FakeStore) Assess(_ context.Context, candidateID, _ string, _ time.Time, passes bool) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -1069,6 +1356,46 @@ func (f *FakeStore) MarkDetailPending(_ context.Context, candidateID string) err
 
 func (f *FakeStore) DeleteExpiredCandidates(context.Context) error {
 	return nil
+}
+
+func (f *FakeStore) ScrapeRunPageDone(context.Context, string) error { return nil }
+
+func (f *FakeStore) ScrapeRunDeferred(context.Context, string) error { return nil }
+
+func (f *FakeStore) ScrapeRunAttemptFailed(context.Context, string, int, int, string) error {
+	return nil
+}
+
+func (f *FakeStore) FinishScrapeRun(context.Context, string, dto.StopReason) error { return nil }
+
+func (f *FakeStore) BoardRunAttemptFailed(context.Context, dto.BoardRunStart, int, string) error {
+	return nil
+}
+
+func (f *FakeStore) FinishBoardRun(context.Context, dto.BoardRunStart, dto.StopReason, dto.BoardTally) error {
+	return nil
+}
+
+func (f *FakeStore) DeleteExpiredScrapeRuns(context.Context) error { return nil }
+
+func (f *FakeStore) ListScrapeRuns(context.Context, string, dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error) {
+	return nil, nil
+}
+
+func (f *FakeStore) ListScrapeRunJobSnapshots(context.Context, string, string) ([]dto.ScrapeRunJobSnapshot, error) {
+	return nil, nil
+}
+
+func (f *FakeStore) ListSourceHealth(context.Context, string) ([]dto.SourceHealth, error) {
+	return nil, nil
+}
+
+func (f *FakeStore) ListRecentNewJobs(context.Context, string, time.Time) ([]dto.SourceNewJob, error) {
+	return nil, nil
+}
+
+func (f *FakeStore) ScrapeRunSummary(context.Context, string, dto.ScrapeRunSummaryOptions) (dto.ScrapeRunSummary, error) {
+	return dto.ScrapeRunSummary{}, nil
 }
 
 var _ Store = (*FakeStore)(nil)
@@ -1097,3 +1424,57 @@ func (f *FakeStore) ForgetFetches(_ context.Context, urls []string) error {
 }
 
 func (f *FakeStore) DeleteExpiredFetches(context.Context) error { return nil }
+
+func (f *FakeStore) MarkBoardUKJobsSeen(_ context.Context, source, token string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	now := time.Now()
+	for id, b := range f.boards {
+		if b.Source == source && b.BoardToken == token {
+			b.UKJobsSeenAt = &now
+			f.boards[id] = b
+		}
+	}
+	return nil
+}
+
+func (f *FakeStore) RecordDiscoverMiss(_ context.Context, source, token string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.misses[source+"/"+token] = time.Now()
+	return nil
+}
+
+func (f *FakeStore) DiscoverMissedSince(_ context.Context, source, token string, since time.Time) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	at, ok := f.misses[source+"/"+token]
+	return ok && !at.Before(since), nil
+}
+
+func (f *FakeStore) HarvestSeenIDs(_ context.Context, source string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Collect(maps.Keys(f.harvestSeen[source])), nil
+}
+
+func (f *FakeStore) RecordHarvestSeenIDs(_ context.Context, source, outcome string, ids []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.harvestSeen[source] == nil {
+		f.harvestSeen[source] = make(map[string]string)
+	}
+	for _, id := range ids {
+		f.harvestSeen[source][id] = outcome
+	}
+	return nil
+}
+
+func (f *FakeStore) RetireHarvestSeenIDs(_ context.Context, source string, ids []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, id := range ids {
+		delete(f.harvestSeen[source], id)
+	}
+	return nil
+}

@@ -25,6 +25,9 @@ SET status = 'verified', verification_method = $4, verified_at = NOW(), discover
 WHERE company_id = $1 AND source = $2 AND board_token = $3 AND status = 'candidate'
 RETURNING *;
 
+-- name: MarkBoardUKJobsSeen :exec
+UPDATE company_boards SET uk_jobs_seen_at = NOW() WHERE source = $1 AND board_token = $2;
+
 -- name: ListTrackedCompanyBoards :many
 SELECT cb.id, cb.company_id, cb.source, cb.board_token, cb.status
 FROM company_boards cb
@@ -32,9 +35,16 @@ JOIN tracked_companies tc ON tc.company_id = cb.company_id
 WHERE tc.user_id = $1
 ORDER BY cb.created_at, cb.id;
 
+-- name: ListBoardsForCompanies :many
+SELECT id, company_id, source, board_token, status
+FROM company_boards
+WHERE company_id = ANY($1::uuid[])
+ORDER BY created_at, id;
+
 -- name: ListVerifiedBoardsBySlug :many
 SELECT c.slug, cb.source, cb.board_token,
-  EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = c.id AND tc.enabled) AS tracked
+  EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = c.id AND tc.enabled) AS tracked,
+  EXISTS (SELECT 1 FROM board_poll_state ps WHERE ps.board_id = cb.id AND ps.last_completed_at IS NOT NULL) AS polled
 FROM companies c
 JOIN company_boards cb ON cb.company_id = c.id AND cb.status = 'verified'
 WHERE c.slug = ANY($1::text[])
@@ -50,4 +60,15 @@ WHERE c.slug = ANY($1::text[]);
 SELECT cb.* FROM company_boards cb
 WHERE cb.status = 'verified' AND cb.verification_method = 'discovered'
   AND NOT EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = cb.company_id)
+  AND (COALESCE(cb.uk_jobs_seen_at >= @uk_since::timestamptz, FALSE) = @uk::boolean)
 ORDER BY cb.created_at, cb.id;
+
+-- name: GetBoardIdentity :one
+SELECT source, board_token FROM company_boards WHERE id = $1;
+
+-- name: RetireDuplicateBoard :exec
+UPDATE company_boards SET status = 'retired', retired_at = NOW() WHERE id = $1 AND status <> 'retired';
+
+-- name: FindActiveBoardByToken :one
+SELECT * FROM company_boards
+WHERE source = $1 AND lower(board_token) = lower($2) AND status <> 'retired';

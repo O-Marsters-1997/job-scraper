@@ -21,16 +21,30 @@ type Fixture struct {
 	Other  string
 	// JobID is an existing Job; a real store needs a jobs row for it.
 	JobID string
+
+	TrackLetterTab func(t *testing.T, userID, docID, tabID string)
 }
 
 // RunStoreContract proves newStore's cvtailor.Store behaves the same
 // whether it's the fake or the real store (ADR 0012).
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
-	t.Run("positions", func(t *testing.T) { runPositionContract(t, newStore) })
-	t.Run("bank skills", func(t *testing.T) { runBankSkillContract(t, newStore) })
-	t.Run("heading mappings", func(t *testing.T) { runHeadingMappingContract(t, newStore) })
-	t.Run("drafts", func(t *testing.T) { runDraftContract(t, newStore) })
+	for _, group := range []struct {
+		name string
+		run  func(*testing.T, func(t *testing.T) Fixture)
+	}{
+		{"positions", runPositionContract},
+		{"bank skills", runBankSkillContract},
+		{"heading mappings", runHeadingMappingContract},
+		{"drafts", runDraftContract},
+		{"letter skeletons", runLetterSkeletonContract},
+		{"cover letters", runCoverLetterContract},
+	} {
+		t.Run(group.name, func(t *testing.T) {
+			t.Parallel()
+			group.run(t, newStore)
+		})
+	}
 }
 
 func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
@@ -93,6 +107,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 
 	t.Run("list is empty for a user with no positions", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		got, err := f.Store.ListPositions(ctx, f.UserID)
 		if err != nil {
@@ -104,6 +119,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("create stores dates and puts the newest position first", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		start, end := "2020-01-01", "2022-06-30"
 		first, err := f.Store.CreatePosition(ctx, f.UserID, dto.PositionInput{
@@ -122,6 +138,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("update changes a position", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
 		got, err := f.Store.UpdatePosition(ctx, f.UserID, dto.PositionInput{ID: p.ID, Employer: "Acme Ltd", Title: "Lead"})
@@ -134,6 +151,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("achievements append and reorder", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
 		a := achievement(t, f, p.ID, "first")
@@ -151,6 +169,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("import adds positions with achievements above the existing ones in order", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		position(t, f, f.UserID, "Existing")
 		start := "2021-03-01"
@@ -173,6 +192,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("update achievement changes its text", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
 		a := achievement(t, f, p.ID, "before")
@@ -185,7 +205,35 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("set contexts writes context and leaves text, all or nothing", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		p := position(t, f, f.UserID, "Acme")
+		a := achievement(t, f, p.ID, "first")
+		b := achievement(t, f, p.ID, "second")
+		foreign, err := f.Store.CreateAchievement(ctx, f.Other, dto.AchievementInput{PositionID: position(t, f, f.Other, "Theirs").ID, Text: "theirs"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Store.SetAchievementContexts(ctx, f.UserID, []string{a.ID, b.ID}, []string{"why a", "why b"}); err != nil {
+			t.Fatal(err)
+		}
+		wantNotFound(t, "SetAchievementContexts(foreign)", f.Store.SetAchievementContexts(ctx, f.UserID, []string{a.ID, foreign.ID}, []string{"x", "y"}))
+		got, err := f.Store.ListPositions(ctx, f.UserID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []dto.Achievement{
+			{ID: a.ID, PositionID: p.ID, Text: "first", Context: "why a"},
+			{ID: b.ID, PositionID: p.ID, Text: "second", Context: "why b"},
+		}
+		if diff := cmp.Diff(want, got[0].Achievements); diff != "" {
+			t.Fatalf("achievements (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("reorder positions", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		a := position(t, f, f.UserID, "A")
 		b := position(t, f, f.UserID, "B")
@@ -199,6 +247,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("reorder rejects an incomplete or foreign id list", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		a := position(t, f, f.UserID, "A")
 		position(t, f, f.UserID, "B")
@@ -209,6 +258,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("delete position cascades its achievements", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
 		a := achievement(t, f, p.ID, "gone")
@@ -222,6 +272,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("delete achievement removes it", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
 		a := achievement(t, f, p.ID, "keep")
@@ -235,6 +286,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("missing ids return not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		_, err := f.Store.UpdatePosition(ctx, f.UserID, dto.PositionInput{ID: missingID, Employer: "x", Title: "y"})
 		wantNotFound(t, "UpdatePosition(missing)", err)
@@ -248,6 +300,7 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	})
 
 	t.Run("another user's position and achievements return not found", func(t *testing.T) {
+		t.Parallel()
 		f := newStore(t)
 		p := position(t, f, f.Other, "Theirs")
 		a, err := f.Store.CreateAchievement(ctx, f.Other, dto.AchievementInput{PositionID: p.ID, Text: "theirs"})

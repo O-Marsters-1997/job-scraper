@@ -22,10 +22,12 @@ const SEVERITY_DOT = {
 	info: "bg-border-strong",
 };
 
-function EditDiff(props: { from: string; to: string }) {
+export function EditDiff(props: { from: string; to: string; title?: string }) {
 	return (
 		<div>
-			<p class="text-xs font-semibold text-muted">Your changes</p>
+			<p class="text-xs font-semibold text-muted">
+				{props.title ?? "Your changes"}
+			</p>
 			<p class="mt-1 text-xs leading-relaxed" data-testid="card-diff">
 				<For each={wordDiff(props.from, props.to)}>
 					{(part) => (

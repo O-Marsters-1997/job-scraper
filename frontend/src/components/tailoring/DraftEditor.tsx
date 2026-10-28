@@ -3,23 +3,41 @@ import {
 	createEffect,
 	createMemo,
 	createSignal,
+	For,
 	Match,
 	onCleanup,
 	onMount,
 	Show,
 	Switch,
+	untrack,
 } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { inlineMarks } from "@/lib/bulletDiff";
 import { isSparse, maxCharsForFewerLines } from "@/lib/docLayout";
+import { htmlToText } from "@/lib/htmlText";
+import { loadedData } from "@/lib/queryData";
+import { roleBudget } from "@/lib/tailoring";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
 import type { Draft, DraftLayout } from "@/types/tailoring";
-import { createDraftEditor } from "../../hooks/useDraftEditor";
+import { createDraftEditor, PROFILE_SLOT } from "../../hooks/useDraftEditor";
+import { useExperience } from "../../hooks/useExperience";
+import { useJobComments } from "../../hooks/useJobComments";
+import { useJobNote } from "../../hooks/useJobNotes";
 import { useJob } from "../../hooks/useJobs";
 import { createKeepFlow } from "../../hooks/useKeepFlow";
+import { createRolePicks } from "../../hooks/useRolePicks";
 import { createSuggestions } from "../../hooks/useSuggestions";
+import {
+	useSuggestions as useAchievementBank,
+	useDraftInsights,
+	useDraftLean,
+	useDraftRoles,
+	useExplainDraft,
+	useRedraftProfile,
+} from "../../hooks/useTailoring";
+import { AchievementsDrawer } from "./AchievementsDrawer";
 import {
 	DEFAULT_BODY_LINE_PT,
 	DocPage,
@@ -29,10 +47,15 @@ import {
 	PX_PER_PT,
 } from "./DocPage";
 import { PageMeter, SaveIndicator } from "./DraftMeters";
+import { Insights } from "./Insights";
+import type { JobTextBlock } from "./JobText";
 import { KeepControls, KeepNotices } from "./KeepFlow";
 import { MarginCards } from "./MarginCards";
 import { PrintPreview } from "./PrintPreview";
+import { ProfileCard } from "./ProfileCard";
+import { RolesDrawer } from "./RolesDrawer";
 import { SkillsPanel } from "./SkillsPanel";
+import { UnlinkedRoles } from "./UnlinkedRoles";
 import { WandMenu } from "./WandMenu";
 
 const NO_METRICS: PageMetrics = {
@@ -41,6 +64,8 @@ const NO_METRICS: PageMetrics = {
 	bodyLinePt: DEFAULT_BODY_LINE_PT,
 	fits: {},
 };
+
+type View = "document" | "insights";
 
 const RAIL_PX = 320;
 const RAIL_GAP_PX = 48;
@@ -77,8 +102,10 @@ export function DraftEditor(props: {
 	layout: DraftLayout | null;
 	layoutError?: string | undefined;
 }) {
-	// eslint-disable-next-line solid/reactivity -- pedantic: the layout is read once on purpose
-	const ed = createDraftEditor(() => props.draft, props.layout);
+	const ed = createDraftEditor(
+		() => props.draft,
+		() => props.layout,
+	);
 	const flow = createKeepFlow(() => props.draft, ed.flush);
 	const job = useJob(() => props.draft.jobId);
 
@@ -88,6 +115,7 @@ export function DraftEditor(props: {
 		setHovered((cur) => (over ? key : cur === key ? undefined : cur));
 	const [metrics, setMetrics] = createSignal(NO_METRICS);
 	const [showCounts, setShowCounts] = createSignal(true);
+	const [view, setView] = createSignal<View>("document");
 	const [showResolved, setShowResolved] = createSignal(false);
 	const [showDiff, setShowDiff] = createSignal(false);
 	const [preview, setPreview] = createSignal(false);
@@ -100,7 +128,8 @@ export function DraftEditor(props: {
 	let measureLines: (slotId: string, text: string) => number = () => 1;
 
 	const editable = () =>
-		props.draft.status === "ready" && props.draft.outcome === null;
+		props.draft.status === "ready" && props.draft.outcome !== "discarded";
+	const keepable = () => editable() && props.draft.outcome === null;
 	const changes = () => {
 		const { base, content } = props.draft;
 		return base && content ? { base, content } : null;
@@ -126,6 +155,39 @@ export function DraftEditor(props: {
 		return { added, removedAfter };
 	};
 
+	const leanQuery = useDraftLean(
+		() => props.draft.id,
+		() => props.draft.status === "ready",
+	);
+	const insightsQuery = useDraftInsights(
+		() => props.draft.id,
+		() => props.draft.status === "ready",
+	);
+	const explain = useExplainDraft(() => props.draft.id);
+	const note = useJobNote(() => props.draft.jobId);
+	const comments = useJobComments(() => props.draft.jobId);
+	const jobText = () => {
+		const blocks: JobTextBlock[] = [
+			{
+				label: "Job description",
+				source: "jd",
+				text: htmlToText(loadedData(job)?.Description ?? ""),
+			},
+			{ label: "Your note", source: "note", text: note.data?.Body ?? "" },
+			...(comments.data ?? []).map(
+				(c): JobTextBlock => ({
+					label: "Comment",
+					source: "comment",
+					text: c.Body,
+				}),
+			),
+		];
+		return blocks.filter((b) => b.text !== "");
+	};
+	const leanBySlot = createMemo(
+		() => new Map(leanQuery.data?.map((b) => [b.slotId, b])),
+	);
+
 	const pagePx = () => (props.layout?.page.width ?? 0) * PX_PER_PT;
 	const narrow = () =>
 		mainWidth() > 0 &&
@@ -150,16 +212,51 @@ export function DraftEditor(props: {
 		ed.edited(slotId) ||
 		!!suggestions.get(slotId) ||
 		isSparse(metrics().fits[slotId]);
-	const cardKeys = createMemo(() => ed.cardKeys(needsCard));
+	const cardKeys = createMemo(() =>
+		ed.cardKeys(needsCard).filter((k) => k !== PROFILE_SLOT),
+	);
+
+	const redraft = useRedraftProfile(() => props.draft.id);
+	const [lastRedraft, setLastRedraft] = createSignal<{
+		from: string;
+		to: string;
+	}>();
+	const [profileTop, setProfileTop] = createSignal(0);
+	const baseProfile = () => props.draft.base?.profile ?? undefined;
+	const runRedraft = async (steer?: string) => {
+		setLastRedraft(undefined);
+		await ed.flush();
+		const from = ed.text(PROFILE_SLOT);
+		redraft.mutate(steer ? { steer } : {}, {
+			onSuccess: (saved) => {
+				const next = saved.content?.profile;
+				if (next == null || next === from) return;
+				ed.setText(PROFILE_SLOT, next);
+				setLastRedraft({ from, to: ed.text(PROFILE_SLOT) });
+			},
+		});
+	};
+	const revertProfile = () => {
+		const last = lastRedraft();
+		const undo = last && ed.text(PROFILE_SLOT) === last.to;
+		const to = undo ? last.from : baseProfile();
+		setLastRedraft(undefined);
+		redraft.reset();
+		if (to === undefined) return;
+		ed.setText(PROFILE_SLOT, to);
+		void ed.flush();
+	};
 
 	const activeSlot = () => {
 		const key = active();
-		return key && ed.slotIds.includes(key) ? key : undefined;
+		return key && ed.slotIds().includes(key) ? key : undefined;
 	};
 	const wandSlot = () => {
 		const key = activeSlot();
 		return key && editable() && !suggestions.get(key) ? key : undefined;
 	};
+	const tailorQuote = (slotId: string) =>
+		insightsQuery.data?.lines.find((l) => l.slotId === slotId && l.anchored);
 	const askOpen = () => askSlot() !== undefined && askSlot() === activeSlot();
 	const setAskOpen = (open: boolean) =>
 		setAskSlot(open ? activeSlot() : undefined);
@@ -167,16 +264,34 @@ export function DraftEditor(props: {
 		if (key !== active()) setAskSlot(undefined);
 		setActive(key);
 	};
-	const focusLine = (slotId: string) => {
+	const focusLine = (slotId: string, atEnd = false) => {
 		const root = stage();
-		queueMicrotask(() =>
-			root
-				?.querySelector<HTMLElement>(
-					`[data-slot-id="${slotId}"] [role="textbox"]`,
-				)
-				?.focus({ preventScroll: true }),
-		);
+		queueMicrotask(() => {
+			const line = root?.querySelector<HTMLElement>(
+				`[data-slot-id="${slotId}"] [role="textbox"]`,
+			);
+			line?.focus({ preventScroll: true });
+			if (line && atEnd) {
+				const caret = document.createRange();
+				caret.selectNodeContents(line);
+				caret.collapse(false);
+				const sel = window.getSelection();
+				sel?.removeAllRanges();
+				sel?.addRange(caret);
+			}
+		});
 	};
+	const editInDocument = (slotId: string) => {
+		setView("document");
+		activate(slotId);
+		focusLine(slotId, true);
+	};
+	const tabs = (): { id: View; label: string }[] => [
+		{ id: "document", label: "Document" },
+		...(leanQuery.data ? [{ id: "insights" as const, label: "Insights" }] : []),
+	];
+	const current = () =>
+		tabs().some((t) => t.id === view()) ? view() : "document";
 	const fitSlot = (slotId: string) => {
 		activate(slotId);
 		void suggestions.ask(slotId, "fit");
@@ -184,6 +299,70 @@ export function DraftEditor(props: {
 	const openPreview = async () => {
 		if (await ed.flush()) setPreview(true);
 	};
+
+	const [rolePanel, setRolePanel] = createSignal<string>();
+	const [selectedPick, setSelectedPick] = createSignal<string>();
+	const [bankWanted, setBankWanted] = createSignal(false);
+	const bank = useAchievementBank(
+		() => props.draft.jobId,
+		() =>
+			bankWanted()
+				? { docId: props.draft.baseDocId, tabId: props.draft.baseTabId }
+				: undefined,
+	);
+	const rolePicks = createRolePicks({
+		draft: () => props.draft,
+		editor: ed,
+		bank: () => bank.data ?? [],
+		positions: () => rolePositions(),
+	});
+	const rolesQuery = useDraftRoles(
+		() => props.draft.id,
+		() => props.draft.status === "ready",
+	);
+	const budgetOf = (positionId: string) => {
+		const role = rolesQuery.data?.roles.find(
+			(r) => r.positionId === positionId,
+		);
+		return role && roleBudget(role);
+	};
+	const pageLines = (pt: number) =>
+		Math.round(pt / (metrics().bodyLinePt || DEFAULT_BODY_LINE_PT));
+	const [rolesOpen, setRolesOpen] = createSignal(false);
+	const [selectedRole, setSelectedRole] = createSignal<string>();
+	const experience = useExperience();
+	const rolePositions = () =>
+		[...(loadedData(experience) ?? [])].sort((a, b) =>
+			(b.startDate ?? "9999").localeCompare(a.startDate ?? "9999"),
+		);
+	const closeRoles = () => {
+		setSelectedRole(undefined);
+		setRolesOpen(false);
+	};
+	const openRoles = () => {
+		closeRole();
+		setBankWanted(true);
+		setRolesOpen(true);
+	};
+	const openRole = (positionId: string) => {
+		closeRoles();
+		setSelectedPick(undefined);
+		setBankWanted(true);
+		setRolePanel(positionId);
+	};
+	const closeRole = () => {
+		setSelectedPick(undefined);
+		setRolePanel(undefined);
+		activate(undefined);
+	};
+	createEffect(() => {
+		const positionId = rolePanel();
+		if (!positionId) return;
+		const id = selectedPick();
+		const at = id ? rolePicks.picksFor(positionId).indexOf(id) : -1;
+		const slot = at >= 0 ? rolePicks.roleSlots(positionId)[at] : undefined;
+		untrack(() => activate(slot));
+	});
 
 	const pageEditor: PageEditor = {
 		get editable() {
@@ -199,6 +378,7 @@ export function DraftEditor(props: {
 		onHover: hover,
 		text: ed.text,
 		label: ed.label,
+		lean: (slotId) => leanBySlot().get(slotId),
 		diffFor: (slotId) => {
 			const sug = suggestions.get(slotId);
 			if (!sug || sug.error !== undefined) return null;
@@ -213,10 +393,24 @@ export function DraftEditor(props: {
 		onFocus: activate,
 		onDismissSuggestion: suggestions.reject,
 		onBlur: () => void ed.flush(),
+		onEnter: (slotId) => {
+			const added = ed.addBullet(slotId);
+			if (added) focusLine(added);
+		},
+		onBackspaceEmpty: (slotId) => {
+			const previous = ed.removeBullet(slotId);
+			if (previous === undefined) return false;
+			focusLine(previous, true);
+			return true;
+		},
 		get onEditSkills() {
 			return editable() && props.draft.skillsEditable
 				? () => void setSkillsOpen(true)
 				: undefined;
+		},
+		roleFor: (block) => rolePicks.headings().get(block),
+		get onEditRole() {
+			return editable() ? openRole : undefined;
 		},
 	};
 
@@ -231,6 +425,21 @@ export function DraftEditor(props: {
 			setWandTop(
 				line.getBoundingClientRect().top - root.getBoundingClientRect().top,
 			);
+	});
+	createEffect(() => {
+		const root = stage();
+		metrics();
+		scale();
+		ed.text(PROFILE_SLOT);
+		const rect = root
+			?.querySelector(`[data-slot-id="${PROFILE_SLOT}"]`)
+			?.getBoundingClientRect();
+		if (rect && root) {
+			const stageTop = root.getBoundingClientRect().top;
+			setProfileTop(
+				narrow() ? rect.bottom - stageTop + 6 : rect.top - stageTop,
+			);
+		}
 	});
 	onMount(() => {
 		const onKey = (e: KeyboardEvent) => {
@@ -329,7 +538,21 @@ export function DraftEditor(props: {
 					</Show>
 				</div>
 				<div class="ml-auto flex flex-wrap items-center justify-end gap-1.5 lg:ml-0">
-					<Show when={changes()}>
+					<nav aria-label="View" class="flex gap-0.5">
+						<For each={tabs()}>
+							{(tab) => (
+								<Button
+									variant="ghost"
+									size="sm"
+									aria-pressed={current() === tab.id}
+									onClick={() => setView(tab.id)}
+								>
+									{tab.label}
+								</Button>
+							)}
+						</For>
+					</nav>
+					<Show when={editable() && props.layout}>
 						<Button
 							variant="ghost"
 							size="sm"
@@ -337,6 +560,15 @@ export function DraftEditor(props: {
 							onClick={() => setShowDiff((v) => !v)}
 						>
 							Diff
+						</Button>
+						<Button
+							variant="ghost"
+							size="sm"
+							aria-label="Roles"
+							onClick={openRoles}
+						>
+							<Icon name="briefcase" size={14} />
+							<span class="hidden 2xl:inline">Roles</span>
 						</Button>
 					</Show>
 					<Button
@@ -369,16 +601,38 @@ export function DraftEditor(props: {
 				</div>
 			</header>
 
-			<KeepNotices draft={props.draft} editable={editable()} flow={flow} />
+			<KeepNotices draft={props.draft} editable={keepable()} flow={flow} />
+			<Show when={editable()}>
+				<UnlinkedRoles draft={props.draft} />
+			</Show>
 
 			<main
 				ref={(el) => watchSize(el, () => setMainWidth(el.clientWidth))}
-				class="scroll-slim flex-1 overflow-auto bg-border/45"
+				class={cn(
+					"scroll-slim flex-1 overflow-auto bg-border/45",
+					(rolePanel() || rolesOpen()) && "pr-[30rem]",
+				)}
 				onMouseDown={(e) => {
 					if (e.target === e.currentTarget) activate(undefined);
 				}}
 			>
 				<Switch fallback={<LayoutUnavailable reason={props.layoutError} />}>
+					<Match when={current() === "insights" && leanQuery.data}>
+						{(lean) => (
+							<div class="mx-auto max-w-6xl px-6 py-10">
+								<Insights
+									lean={lean()}
+									jobText={jobText()}
+									insights={insightsQuery.data}
+									explaining={explain.isPending}
+									explainError={explain.error?.message}
+									text={ed.text}
+									onEdit={editInDocument}
+									onExplain={() => explain.mutate()}
+								/>
+							</div>
+						)}
+					</Match>
 					<Match when={props.layout}>
 						{(layout) => (
 							<div
@@ -414,7 +668,7 @@ export function DraftEditor(props: {
 										}
 									>
 										<DocPage
-											layout={layout()}
+											layout={{ ...layout(), blocks: ed.blocks() }}
 											editor={pageEditor}
 											diff={pageDiff()}
 											onMetrics={setMetrics}
@@ -428,17 +682,50 @@ export function DraftEditor(props: {
 											<WandMenu
 												top={wandTop()}
 												canFit={(metrics().fits[key()]?.lines ?? 1) > 1}
+												tailor={tailorQuote(key())}
 												askOpen={askOpen()}
 												onAskOpen={setAskOpen}
-												onAction={(action, prompt) =>
-													void suggestions.ask(key(), action, prompt)
+												onAction={(action, prompt, quote) =>
+													void suggestions.ask(key(), action, prompt, quote)
 												}
 											/>
 										)}
 									</Show>
+									<Show
+										when={
+											editable() &&
+											!!baseProfile() &&
+											(narrow()
+												? active() === PROFILE_SLOT
+												: !rolePanel() && !rolesOpen())
+										}
+									>
+										<div
+											class={cn(
+												"absolute top-0",
+												narrow()
+													? "inset-x-2 z-20"
+													: "left-[calc(100%+3rem)] w-80",
+											)}
+										>
+											<ProfileCard
+												base={baseProfile() ?? ""}
+												text={ed.text(PROFILE_SLOT)}
+												top={profileTop()}
+												pending={redraft.isPending}
+												{...(redraft.error && {
+													error: redraft.error.message,
+												})}
+												onRedraft={(steer) => void runRedraft(steer)}
+												onRevert={revertProfile}
+											/>
+										</div>
+									</Show>
 									<Show when={narrow()}>{marginCards(true)}</Show>
 								</div>
-								<Show when={!narrow()}>{marginCards(false)}</Show>
+								<Show when={!narrow() && !rolePanel() && !rolesOpen()}>
+									{marginCards(false)}
+								</Show>
 							</div>
 						)}
 					</Match>
@@ -447,6 +734,44 @@ export function DraftEditor(props: {
 			<div class="sr-only" aria-live="polite">
 				{suggestions.announcement()}
 			</div>
+			<Show when={rolesOpen()}>
+				<RolesDrawer
+					positions={rolePositions()}
+					picked={rolePicks.order()}
+					usedLines={pageLines(metrics().contentPt)}
+					budgetLines={pageLines(metrics().availablePt)}
+					budgetOf={budgetOf}
+					selected={selectedRole()}
+					onSelect={setSelectedRole}
+					onToggle={rolePicks.toggleRole}
+					onChooseAchievements={openRole}
+					onMove={rolePicks.moveRole}
+					onClose={closeRoles}
+				/>
+			</Show>
+			<Show when={rolePanel()}>
+				{(positionId) => {
+					const role = () => rolePicks.role(positionId());
+					return (
+						<AchievementsDrawer
+							title={`${role()?.title ?? ""}, ${role()?.employer ?? ""}`}
+							bank={rolePicks.bankFor(positionId())}
+							emptyText="No Achievements found for this role."
+							loading={bank.isPending}
+							picked={rolePicks.picksFor(positionId())}
+							usedLines={pageLines(metrics().contentPt)}
+							budgetLines={pageLines(metrics().availablePt)}
+							roleBudget={budgetOf(positionId())}
+							selected={selectedPick()}
+							onSelect={setSelectedPick}
+							onToggle={(id) => rolePicks.toggle(positionId(), id)}
+							onMove={(id, place) => rolePicks.move(positionId(), id, place)}
+							onClear={() => rolePicks.clear(positionId())}
+							onClose={closeRole}
+						/>
+					);
+				}}
+			</Show>
 			<Show when={props.draft.skillsEditable}>
 				<SkillsPanel
 					draft={props.draft}

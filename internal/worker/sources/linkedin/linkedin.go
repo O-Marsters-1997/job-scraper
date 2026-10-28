@@ -3,6 +3,8 @@ package linkedin
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -18,6 +20,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/slug"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
+	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
@@ -38,20 +41,41 @@ const (
 	selCardTitleAlt = `span.sr-only`
 	selCardCompany  = `h4.base-search-card__subtitle a`
 	selCardLocation = `span.job-search-card__location`
+	selCardListDate = `time[class*="job-search-card__listdate"]`
 
 	selDetailTitle        = `.top-card-layout__title.topcard__title`
 	selDetailCompany      = `a.topcard__org-name-link`
 	selDetailFlavorRow    = `.topcard__flavor-row`
 	selDetailFlavorBullet = `.topcard__flavor--bullet`
+	selDetailPostedAgo    = `span.posted-time-ago__text`
 	selDescription        = `div.show-more-less-html__markup`
 	selCriteriaItem       = `li.description__job-criteria-item`
 	selCriteriaHeader     = `h3.description__job-criteria-subheader`
 	selCriteriaText       = `span.description__job-criteria-text`
 	selSalary             = `div.compensation__salary-range div.salary.compensation__salary`
 	selApplyURLCode       = `code#applyUrl`
+	selJSONLD             = `script[type="application/ld+json"]`
 )
 
 var applyURLRe = regexp.MustCompile(`\?url=([^"]+)`)
+
+const (
+	requestGap = 2500 * time.Millisecond
+	blockedFor = time.Minute
+)
+
+func NewGate() *sources.Gate { return sources.NewGate(requestGap, blockedFor) }
+
+func (s *Scraper) get(ctx context.Context, url string) ([]byte, error) {
+	if err := s.gate.Wait(ctx); err != nil {
+		return nil, err
+	}
+	body, err := s.Get(ctx, url)
+	if errors.Is(err, proxy.ErrBlocked) {
+		s.gate.Block(blockedFor)
+	}
+	return body, err
+}
 
 func pageURL(keywords string, filters map[string]string, recency string, start int) string {
 	v := url.Values{}
@@ -59,7 +83,7 @@ func pageURL(keywords string, filters map[string]string, recency string, start i
 	fields, _ := sourcespec.LookupFilterFields("linkedin")
 	for _, f := range fields {
 		value := filters[f.Name]
-		if value == "" {
+		if value == "" || f.Local {
 			continue
 		}
 		if !sourcespec.ValidFilterValue("linkedin", f.Name, value) {
@@ -80,6 +104,7 @@ type Scraper struct {
 	keywords string
 	filters  map[string]string
 	recency  string
+	gate     *sources.Gate
 }
 
 const recencyMargin = time.Hour
@@ -103,7 +128,7 @@ var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 var _ sources.SnapshotSource = (*Scraper)(nil)
 
-func New(keywords string, filters map[string]string, recency string) *Scraper {
+func New(keywords string, filters map[string]string, recency string, gate *sources.Gate) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:  "linkedin",
@@ -112,6 +137,7 @@ func New(keywords string, filters map[string]string, recency string) *Scraper {
 		keywords: keywords,
 		filters:  filters,
 		recency:  recency,
+		gate:     gate,
 	}
 }
 
@@ -124,11 +150,11 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 			return nil, "", fmt.Errorf("invalid linkedin cursor %q", cursor)
 		}
 	}
-	body, err := s.Get(ctx, pageURL(s.keywords, s.filters, s.recency, start))
+	body, err := s.get(ctx, pageURL(s.keywords, s.filters, s.recency, start))
 	if err != nil {
 		return nil, "", err
 	}
-	jobs, err := ParseURLs(bytes.NewReader(body))
+	jobs, err := ParseURLsAt(bytes.NewReader(body), time.Now())
 	if err != nil {
 		return nil, "", err
 	}
@@ -138,21 +164,24 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 	return jobs, strconv.Itoa(start + len(jobs)), nil
 }
 
-func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
-	body, err := s.Get(ctx, fragmentURL(url))
+func (s *Scraper) GetDetails(ctx context.Context, card dto.Job) (dto.Job, error) {
+	fetchURL := fragmentURL(card.URL)
+	if card.RemoteCheckURL != "" {
+		fetchURL = card.RemoteCheckURL
+	}
+	body, err := s.get(ctx, fetchURL)
 	if err != nil {
 		return dto.Job{}, err
 	}
-	job, err := ParseJobDetail(bytes.NewReader(body), url)
+	job, telecommute, err := parseDetail(bytes.NewReader(body), card.URL, time.Now())
 	if err != nil {
 		return dto.Job{}, err
 	}
-	// LinkedIn's detail page exposes no machine-readable post date (see
-	// ParseJobDetail), so UpdatedAt is stamped here rather than in the pure parser —
-	// keeps the parser deterministic for snapshot testing.
-	if job.UpdatedAt.IsZero() {
-		sources.WarnDefaulted("linkedin", "UpdatedAt", url)
-		job.UpdatedAt = time.Now().UTC()
+	if card.RemoteCheckURL != "" && !telecommute {
+		return dto.Job{}, sources.ErrNotRemote
+	}
+	if card.WorkArrangement != "" {
+		job.WorkArrangement = card.WorkArrangement
 	}
 	return job, nil
 }
@@ -170,6 +199,10 @@ func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 }
 
 func ParseURLs(r io.Reader) ([]dto.Job, error) {
+	return ParseURLsAt(r, time.Time{})
+}
+
+func ParseURLsAt(r io.Reader, scrapedAt time.Time) ([]dto.Job, error) {
 	doc, err := sources.ParseHTML(r)
 	if err != nil {
 		return nil, err
@@ -190,14 +223,77 @@ func ParseURLs(r io.Reader) ([]dto.Job, error) {
 		company := strings.TrimSpace(card.Find(selCardCompany).First().Text())
 		location := strings.TrimSpace(card.Find(selCardLocation).First().Text())
 
-		jobs = append(jobs, dto.Job{
-			Title:       title,
-			Location:    location,
-			URL:         baseURL + "/jobs/view/" + id,
-			CompanySlug: slug.Company(company),
-		})
+		job := dto.Job{
+			Title:          title,
+			Location:       location,
+			URL:            baseURL + "/jobs/view/" + id,
+			RemoteCheckURL: slugPageURL(card),
+			CompanySlug:    slug.Company(company),
+			PostedAt:       cardPostedAt(card.Find(selCardListDate).First(), scrapedAt),
+		}
+		if isCountryOnly(location) {
+			job.WorkArrangement = "remote"
+		}
+		jobs = append(jobs, job)
 	})
 	return jobs, nil
+}
+
+func isCountryOnly(location string) bool {
+	return location != "" && !strings.Contains(location, ",")
+}
+
+func slugPageURL(card *goquery.Selection) string {
+	href := card.Find(selCardLink).First().AttrOr("href", "")
+	u, err := url.Parse(strings.SplitN(href, "?", 2)[0])
+	if err != nil || u.Scheme != "https" || !strings.HasSuffix(u.Hostname(), ".linkedin.com") {
+		return ""
+	}
+	return u.String()
+}
+
+var relativeAge = regexp.MustCompile(`(?i)^\s*(\d{1,3})\s+(minute|hour|day|week|month)s?\s+ago`)
+
+var relativeUnit = map[string]time.Duration{
+	"minute": time.Minute,
+	"hour":   time.Hour,
+	"day":    24 * time.Hour,
+	"week":   7 * 24 * time.Hour,
+	"month":  30 * 24 * time.Hour,
+}
+
+func relativeEstimate(m []string, now time.Time) time.Time {
+	n, _ := strconv.Atoi(m[1])
+	return now.UTC().Add(-time.Duration(n) * relativeUnit[strings.ToLower(m[2])])
+}
+
+func detailPostedAt(doc *goquery.Document, now time.Time) *time.Time {
+	m := relativeAge.FindStringSubmatch(strings.TrimSpace(doc.Find(selDetailPostedAgo).First().Text()))
+	if m == nil || now.IsZero() {
+		return nil
+	}
+	estimate := relativeEstimate(m, now)
+	return &estimate
+}
+
+func cardPostedAt(el *goquery.Selection, scrapedAt time.Time) *time.Time {
+	day, err := time.Parse(time.DateOnly, strings.TrimSpace(el.AttrOr("datetime", "")))
+	if err != nil {
+		return nil
+	}
+	m := relativeAge.FindStringSubmatch(el.Text())
+	if m == nil || scrapedAt.IsZero() {
+		return &day
+	}
+	estimate := relativeEstimate(m, scrapedAt)
+	end := day.Add(24*time.Hour - time.Second)
+	switch {
+	case estimate.Before(day):
+		estimate = day
+	case estimate.After(end):
+		estimate = end
+	}
+	return &estimate
 }
 
 // cardJobID prefers the structured data-entity-urn attribute (urn:li:jobPosting:{id})
@@ -221,14 +317,38 @@ func cardJobID(card *goquery.Selection) string {
 }
 
 func ParseJobDetail(r io.Reader, jobURL string) (dto.Job, error) {
+	return ParseJobDetailAt(r, jobURL, time.Time{})
+}
+
+func ParseJobDetailAt(r io.Reader, jobURL string, scrapedAt time.Time) (dto.Job, error) {
+	job, _, err := parseDetail(r, jobURL, scrapedAt)
+	return job, err
+}
+
+func isTelecommute(doc *goquery.Document) bool {
+	found := false
+	doc.Find(selJSONLD).EachWithBreak(func(_ int, s *goquery.Selection) bool {
+		var posting struct {
+			Type            string `json:"@type"`
+			JobLocationType string `json:"jobLocationType"`
+		}
+		if json.Unmarshal([]byte(s.Text()), &posting) == nil && posting.Type == "JobPosting" {
+			found = posting.JobLocationType == "TELECOMMUTE"
+		}
+		return !found
+	})
+	return found
+}
+
+func parseDetail(r io.Reader, jobURL string, scrapedAt time.Time) (job dto.Job, telecommute bool, err error) {
 	doc, err := sources.ParseHTML(r)
 	if err != nil {
-		return dto.Job{}, err
+		return dto.Job{}, false, err
 	}
 
 	title := strings.TrimSpace(doc.Find(selDetailTitle).First().Text())
 	if title == "" {
-		return dto.Job{}, fmt.Errorf("title not found (selector: %q)", selDetailTitle)
+		return dto.Job{}, false, fmt.Errorf("title not found (selector: %q)", selDetailTitle)
 	}
 
 	company := strings.TrimSpace(doc.Find(selDetailCompany).First().Text())
@@ -256,6 +376,10 @@ func ParseJobDetail(r io.Reader, jobURL string) (dto.Job, error) {
 	}
 
 	workArrangement := sources.DetectWorkArrangement(title + " " + location + " " + descText)
+	telecommute = isTelecommute(doc)
+	if telecommute {
+		workArrangement = "remote"
+	}
 
 	// ponytail: applyURL is best-effort — LinkedIn only sometimes renders the ATS
 	// destination for guest requests. When it doesn't, url falls back to the
@@ -272,10 +396,11 @@ func ParseJobDetail(r io.Reader, jobURL string) (dto.Job, error) {
 		URL:             resolvedURL,
 		CompanySlug:     slug.Company(company),
 		Source:          "linkedin",
+		PostedAt:        detailPostedAt(doc, scrapedAt),
 		Description:     description,
 		SalaryRaw:       salaryRaw,
 		WorkArrangement: workArrangement,
-	}, nil
+	}, telecommute, nil
 }
 
 // criteriaText returns "" when header isn't present — not every listing renders

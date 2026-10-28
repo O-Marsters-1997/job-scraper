@@ -1,9 +1,13 @@
 package cvtailor_test
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/go-cmp/cmp"
@@ -13,6 +17,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
 )
 
 func newRouter(deps cvtailor.Deps) chi.Router {
@@ -43,6 +48,9 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"DELETE /experience/skills/{id}",
 		"POST /experience/import/preview",
 		"POST /experience/import",
+		"GET /experience/grill-prompt",
+		"POST /experience/context/preview",
+		"POST /experience/context",
 		"GET /tailoring/cvs/{docId}/{tabId}/headings",
 		"PUT /tailoring/cvs/{docId}/{tabId}/headings",
 		"GET /tailoring/jobs/{jobId}/suggestions",
@@ -51,6 +59,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"POST /tailoring/drafts",
 		"GET /tailoring/drafts/{id}",
 		"GET /tailoring/drafts/{id}/layout",
+		"GET /tailoring/drafts/{id}/roles",
 		"POST /tailoring/drafts/{id}/slots/{slotId}/suggest",
 		"GET /tailoring/drafts/{id}/pdf",
 		"POST /tailoring/drafts/{id}/keep",
@@ -92,7 +101,14 @@ func TestBankSkillsJourney(t *testing.T) {
 	if len(got) != 1 || got[0].Name != "Golang" {
 		t.Fatalf("GET /experience/skills = %+v, want the renamed skill", got)
 	}
-	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /experience/skills/"+sk.ID, "")
+	other := handlerstest.Do[dto.BankSkill](t, r, http.StatusCreated, "POST /experience/skills", `{"name":"Rust"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "PATCH /experience/skills", `{"ids":["`+sk.ID+`","`+other.ID+`"],"category":" Languages "}`)
+	got = handlerstest.Do[[]dto.BankSkill](t, r, http.StatusOK, "GET /experience/skills", "")
+	if len(got) != 2 || got[0].Category != "Languages" || got[1].Category != "Languages" {
+		t.Fatalf("GET /experience/skills after bulk category = %+v, want both Languages", got)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /experience/skills/delete", `{"ids":["`+sk.ID+`","`+other.ID+`"]}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "DELETE /experience/skills/"+sk.ID, "")
 }
 
 func TestExperienceJourney(t *testing.T) {
@@ -164,11 +180,12 @@ func TestReviewRoutes(t *testing.T) {
 	t.Run("keeps, lists and discards a Job's Drafts", func(t *testing.T) {
 		e := newDraftEnv(t)
 		r := newRouter(cvtailor.Deps{Store: e.store, Drive: e.drive})
-		ids := e.readyDrafts(t, 2)
+		ids := e.readyDrafts(t, 1)
 
 		handlerstest.Do[dto.Draft](t, r, http.StatusOK, "POST /tailoring/drafts/"+ids[0]+"/keep", "")
-		handlerstest.Do[struct{}](t, r, http.StatusConflict, "POST /tailoring/drafts/"+ids[1]+"/keep", "")
 		e.run(t, tick{})
+		ids = append(ids, e.readyDrafts(t, 1)...)
+		handlerstest.Do[struct{}](t, r, http.StatusConflict, "POST /tailoring/drafts/"+ids[1]+"/keep", "")
 
 		list := handlerstest.Do[[]dto.Draft](t, r, http.StatusOK, "GET /tailoring/jobs/"+jobID+"/drafts", "")
 		var gotIDs []string
@@ -190,7 +207,7 @@ func TestSuggestRoute(t *testing.T) {
 	body := `{"action":"tighten","text":"Cut p99 latency"}`
 
 	t.Run("streams delta events then done as text/event-stream", func(t *testing.T) {
-		r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.Suggesting("Cut ", "latency"), Creds: apiKey})
+		r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(cvtailortest.Suggesting("Cut ", "latency")), Creds: apiKey})
 
 		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", body)
 
@@ -206,7 +223,7 @@ func TestSuggestRoute(t *testing.T) {
 	})
 
 	t.Run("a failure before the stream opens is a JSON error", func(t *testing.T) {
-		r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.Suggesting("x"), Creds: cvtailortest.NoKey{}})
+		r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(cvtailortest.Suggesting("x")), Creds: cvtailortest.NoKey{}})
 
 		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", body)
 
@@ -215,9 +232,65 @@ func TestSuggestRoute(t *testing.T) {
 		}
 	})
 
+	t.Run("tailor", func(t *testing.T) {
+		t.Parallel()
+		const text = "Built REST services in Go for the payments team"
+		tailor := func(reply, quote string, maxChars int) (*cvtailortest.RecordingModel, string) {
+			model := cvtailortest.Suggesting(reply)
+			r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(model), Creds: apiKey})
+			in, err := json.Marshal(dto.SuggestInput{Action: "tailor", Quote: quote, Text: text, MaxChars: maxChars})
+			if err != nil {
+				t.Fatalf("marshal body: %v", err)
+			}
+			w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", string(in))
+			return model, w.Body.String()
+		}
+
+		t.Run("a term swap is done and the quote reaches the model", func(t *testing.T) {
+			t.Parallel()
+			model, body := tailor("Built microservices in Go for the payments team", "microservices in Go", len(text))
+
+			if !strings.Contains(body, "event: done") {
+				t.Errorf("tailor body = %q, want a done event", body)
+			}
+			if len(model.Prompts) != 1 || !strings.Contains(model.Prompts[0].User, "microservices in Go") {
+				t.Errorf("model prompts = %+v, want the quote forwarded", model.Prompts)
+			}
+		})
+
+		for name, tc := range map[string]struct {
+			reply    string
+			maxChars int
+		}{
+			"more words":                        {"Built REST services in Go for the payments team daily", 100},
+			"longer than maxChars":              {"Built microservices in Go for the payments team", 20},
+			"longer than the text, no maxChars": {"Built infrastructure services in Go for the payments team", 0},
+			"too much of it rewritten":          {"Owned reliability of services for payments", 100},
+		} {
+			t.Run("rejects "+name, func(t *testing.T) {
+				t.Parallel()
+				_, body := tailor(tc.reply, "microservices in Go", tc.maxChars)
+
+				if !strings.Contains(body, "event: error") || strings.Contains(body, "event: done") {
+					t.Errorf("tailor body = %q, want an error event and no done", body)
+				}
+			})
+		}
+
+		t.Run("needs a quote", func(t *testing.T) {
+			t.Parallel()
+			r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(cvtailortest.Suggesting("x")), Creds: apiKey})
+
+			w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", `{"action":"tailor","text":"Cut"}`)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("POST suggest tailor without a quote = %d, want 400", w.Code)
+			}
+		})
+	})
+
 	t.Run("the path ids win over the body's", func(t *testing.T) {
-		editor := cvtailortest.Suggesting("x")
-		r := newRouter(cvtailor.Deps{Store: e.store, Editor: editor, Creds: apiKey})
+		r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(cvtailortest.Suggesting("x")), Creds: apiKey})
 
 		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", `{"id":"other","slotId":"nope","action":"tighten","text":"Cut"}`)
 
@@ -225,4 +298,31 @@ func TestSuggestRoute(t *testing.T) {
 			t.Errorf("POST suggest = %d, want 200 using the path ids: %s", w.Code, w.Body)
 		}
 	})
+}
+
+func TestSuggestRouteOutlivesWriteTimeout(t *testing.T) {
+	e := newDraftEnv(t)
+	id := e.readyDrafts(t, 1)[0]
+	slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+	r := newRouter(cvtailor.Deps{Store: e.store, Lines: lineedit.New(cvtailortest.SuggestingEvery(150*time.Millisecond, "a", "b", "c", "d")), Creds: apiKey})
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		r.ServeHTTP(w, handlerstest.Authed(req))
+	}))
+	srv.Config.WriteTimeout = 300 * time.Millisecond
+	srv.Start()
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Post(srv.URL+"/tailoring/drafts/"+id+"/slots/"+slot+"/suggest", "application/json",
+		strings.NewReader(`{"action":"tighten","text":"Cut p99 latency"}`))
+	if err != nil {
+		t.Fatalf("POST suggest: %v", err)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading stream: %v", err)
+	}
+	if !strings.Contains(string(body), "event: done") {
+		t.Errorf("stream body = %q, want it to run to the done event", body)
+	}
 }

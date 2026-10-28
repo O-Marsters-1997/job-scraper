@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/client"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
@@ -26,7 +27,7 @@ const (
 const maxReasonLen = 500
 
 type Store interface {
-	InsertEvent(ctx context.Context, tx pgx.Tx, userID, eventType, subjectID string, props []byte) error
+	InsertEvent(ctx context.Context, tx pgx.Tx, userID, eventType, subjectID string, c client.Kind, props []byte) error
 	ListEvents(ctx context.Context, userID, eventType string) ([]dto.Event, error)
 }
 
@@ -52,6 +53,7 @@ type jobProps struct {
 	ScoreFingerprint string         `json:"score_fingerprint,omitempty"`
 	Breakdown        []dto.ScoreRow `json:"breakdown,omitempty"`
 	Reason           string         `json:"reason,omitempty"`
+	Undone           bool           `json:"undone,omitempty"`
 }
 
 type applicationProps struct {
@@ -81,8 +83,9 @@ func (s *Service) Record(ctx context.Context, userID string, in dto.EventInput) 
 	if len(in.Reason) > maxReasonLen {
 		return struct{}{}, apperr.Invalid("reason too long")
 	}
+	undone := in.Undone && in.Type == JobDismissed
 	var snap *dto.JobScoreEvidence
-	if in.SubjectID != "" {
+	if in.SubjectID != "" && !undone {
 		var err error
 		if snap, err = s.snapshots.ScoreSnapshot(ctx, userID, in.SubjectID); err != nil {
 			return struct{}{}, fmt.Errorf("events.Record: snapshot: %w", err)
@@ -90,6 +93,7 @@ func (s *Service) Record(ctx context.Context, userID string, in dto.EventInput) 
 	}
 	props := stampFrom(snap, in.Type == JobDismissed)
 	props.Reason = in.Reason
+	props.Undone = undone
 	return struct{}{}, s.insert(ctx, nil, userID, in.Type, in.SubjectID, props)
 }
 
@@ -130,5 +134,5 @@ func (s *Service) insert(ctx context.Context, tx pgx.Tx, userID, eventType, subj
 	if err != nil {
 		return fmt.Errorf("events.insert: marshal props: %w", err)
 	}
-	return s.store.InsertEvent(ctx, tx, userID, eventType, subjectID, raw)
+	return s.store.InsertEvent(ctx, tx, userID, eventType, subjectID, client.FromContext(ctx), raw)
 }

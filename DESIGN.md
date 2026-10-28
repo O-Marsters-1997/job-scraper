@@ -186,6 +186,11 @@ states — opacity 0.04–0.07, `mix-blend-mode: multiply`, `pointer-events: non
 Honour `prefers-reduced-motion: reduce` by disabling all aurora and rise animations
 (already handled in `styles.css`).
 
+**Loading**: data that is loading shows a `Skeleton` shaped like the loaded content, never
+"Loading…" text. The `Spinner` (comet variant) appears only where no app shell is on
+screen yet (`FullPageSpinner`) and inside a `Button` while its mutation is pending.
+Refetches keep the stale data on screen with no indicator.
+
 ## 8. Voice & Brand
 
 Product name **FastTrack**. Wordmark = "Fast" + "Track" (Track coloured `var(--bright)`

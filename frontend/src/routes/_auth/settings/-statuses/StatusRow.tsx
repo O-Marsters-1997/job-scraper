@@ -12,10 +12,12 @@ export function StatusRow(props: {
 	name: string;
 	colour: string;
 	replyWindow: string;
+	countsAsReply: boolean;
 	pending: boolean;
 	onName: (name: string) => void;
 	onColour: (hex: string) => void;
 	onReplyWindow: (value: string) => void;
+	onCountsAsReply: (value: boolean) => void;
 	onEdit: () => void;
 	onCancel: () => void;
 	onDelete: () => void;
@@ -37,6 +39,9 @@ export function StatusRow(props: {
 						<span class="flex-1 text-sm font-medium text-foreground">
 							{props.status.Name}
 						</span>
+						<Show when={props.status.CountsAsReply}>
+							<span class="text-xs text-muted-foreground">Positive reply</span>
+						</Show>
 						<Show when={props.status.ReplyWindowDays}>
 							{(days) => (
 								<span class="text-xs text-muted-foreground">
@@ -53,15 +58,17 @@ export function StatusRow(props: {
 						>
 							Edit
 						</Button>
-						<Button
-							type="button"
-							onClick={() => props.onDelete()}
-							variant="ghost"
-							size="sm"
-							class="h-auto px-2 py-1 text-xs text-destructive-strong hover:bg-destructive-subtle hover:text-destructive-strong"
-						>
-							Delete
-						</Button>
+						<Show when={!props.status.SystemKey}>
+							<Button
+								type="button"
+								onClick={() => props.onDelete()}
+								variant="ghost"
+								size="sm"
+								class="h-auto px-2 py-1 text-xs text-destructive-strong hover:bg-destructive-subtle hover:text-destructive-strong"
+							>
+								Delete
+							</Button>
+						</Show>
 					</>
 				}
 			>
@@ -70,6 +77,7 @@ export function StatusRow(props: {
 					<Input
 						class="flex-1"
 						aria-label="Status name"
+						disabled={!!props.status.SystemKey}
 						value={props.name}
 						onInput={(e) => props.onName(e.currentTarget.value)}
 					/>
@@ -78,6 +86,14 @@ export function StatusRow(props: {
 					value={props.replyWindow}
 					onChange={props.onReplyWindow}
 				/>
+				<label class="flex items-center gap-1.5 text-xs text-foreground">
+					<input
+						type="checkbox"
+						checked={props.countsAsReply}
+						onChange={(e) => props.onCountsAsReply(e.currentTarget.checked)}
+					/>
+					Counts as a positive reply
+				</label>
 				<Button
 					type="submit"
 					disabled={

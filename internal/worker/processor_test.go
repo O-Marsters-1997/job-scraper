@@ -3,6 +3,7 @@ package worker_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,8 +30,8 @@ import (
 
 type detailStub struct{ err error }
 
-func (d detailStub) GetDetails(_ context.Context, url string) (dto.Job, error) {
-	return dto.Job{Source: "wis", Title: "Job", URL: url}, d.err
+func (d detailStub) GetDetails(_ context.Context, card dto.Job) (dto.Job, error) {
+	return dto.Job{Source: "wis", Title: "Job", URL: card.URL}, d.err
 }
 
 const fetchedURL = "https://8.8.8.8/job"
@@ -44,7 +45,7 @@ func newFetchingDetailer(cache proxy.Cache) fetchingDetailer {
 	return fetchingDetailer{client: &http.Client{Transport: proxy.NewFetchTransport(upstream, cache)}}
 }
 
-func (d fetchingDetailer) GetDetails(ctx context.Context, url string) (dto.Job, error) {
+func (d fetchingDetailer) GetDetails(ctx context.Context, card dto.Job) (dto.Job, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchedURL, nil)
 	if err != nil {
 		return dto.Job{}, err
@@ -54,7 +55,7 @@ func (d fetchingDetailer) GetDetails(ctx context.Context, url string) (dto.Job, 
 		return dto.Job{}, err
 	}
 	_ = resp.Body.Close()
-	return dto.Job{Source: "wis", Title: "Job", URL: url}, nil
+	return dto.Job{Source: "wis", Title: "Job", URL: card.URL}, nil
 }
 
 type pageSource struct{ next string }
@@ -90,6 +91,19 @@ func (s failingPage) FetchPage(context.Context, string) ([]dto.Job, string, erro
 	return nil, "", s.err
 }
 
+type blockedOnce struct {
+	err     error
+	blocked atomic.Bool
+}
+
+func (*blockedOnce) Cfg() sources.Config { return sources.Config{Name: "linkedin"} }
+func (s *blockedOnce) FetchPage(context.Context, string) ([]dto.Job, string, error) {
+	if s.blocked.CompareAndSwap(false, true) {
+		return nil, "", s.err
+	}
+	return []dto.Job{{URL: "https://example.com/job/1"}}, "", nil
+}
+
 type allNewURLs struct{}
 
 func (allNewURLs) NewURLs(_ context.Context, urls []string) ([]string, error) { return urls, nil }
@@ -115,6 +129,7 @@ func (oneBoardJob) FetchBoard(context.Context, dto.BoardPoll) (sources.BoardResu
 type ingest struct {
 	server   *httptest.Server
 	requests atomic.Int32
+	lastJob  atomic.Pointer[dto.Job]
 }
 
 func newIngest(t *testing.T, status int) *ingest {
@@ -122,6 +137,10 @@ func newIngest(t *testing.T, status int) *ingest {
 	in := &ingest{}
 	in.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		in.requests.Add(1)
+		var job dto.Job
+		if json.NewDecoder(r.Body).Decode(&job) == nil {
+			in.lastJob.Store(&job)
+		}
 		w.WriteHeader(status)
 		if strings.HasSuffix(r.URL.Path, "/batch") {
 			_, _ = w.Write([]byte(`{"results":[{"status":"new"}]}`))
@@ -152,6 +171,7 @@ func newCappedFixture(t *testing.T, ingestStatus int, nextCursor string, maxPage
 	exporter := scraper.NewAPIExporter(in.server.URL, "token").WithInitialBackoff(0)
 	published := queuetest.NewRecorder()
 	page := fetchingPage{client: newFetchingDetailer(store).client}
+	linkedin := &blockedOnce{err: &sources.DeferredError{Until: time.Now().Add(10 * time.Minute)}}
 	build := func(target dto.SourceTarget) (sources.Source, bool) {
 		switch target.Source {
 		case "fetching":
@@ -160,6 +180,10 @@ func newCappedFixture(t *testing.T, ingestStatus int, nextCursor string, maxPage
 			return failingPage{err: fmt.Errorf("indeed: %w", sources.ErrSourceKeyRejected)}, true
 		case "unavailable":
 			return failingPage{err: &sources.StatusError{Code: http.StatusInternalServerError, Status: "500"}}, true
+		case "limited":
+			return failingPage{err: &sources.StatusError{Code: http.StatusTooManyRequests, Status: "429", RetryAfter: time.Minute}}, true
+		case "linkedin":
+			return linkedin, true
 		case "fetchfail":
 			page.err = errors.New("page failed after fetch")
 			return page, true
@@ -173,12 +197,16 @@ func newCappedFixture(t *testing.T, ingestStatus int, nextCursor string, maxPage
 		Boards:       scraper.NewBoardPoller(store, oneBoardJob{}, exporter),
 		Exporter:     exporter,
 		MaxPages:     maxPages,
+		Verify: func(ctx context.Context, source, token string) (scraper.Verification, error) {
+			return scraper.VerifyBoard(ctx, build, source, token)
+		},
 		CardComplete: map[string]bool{"remoteok": true},
 		Detailers: map[string]sources.DetailFetcher{
 			"wis":      detailStub{},
 			"indeed":   newFetchingDetailer(store),
 			"linkedin": detailStub{err: errors.New("page gone")},
 			"gone":     detailStub{err: fmt.Errorf("%w: status 404", sources.ErrGone)},
+			"blocked":  detailStub{err: &sources.DeferredError{Until: time.Now().Add(10 * time.Minute)}},
 		},
 	})
 	return fixture{store: store, processor: processor, ingest: in, published: published}
@@ -247,6 +275,20 @@ func TestProcess(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("detail task exports the card's posted date", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		postedAt := time.Date(2026, 10, 12, 8, 0, 0, 0, time.UTC)
+		task := queuetest.DetailTask("wis")
+		task.Card.PostedAt = &postedAt
+		if err := f.processor.Process(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		job := f.ingest.lastJob.Load()
+		if job == nil || job.PostedAt == nil || !job.PostedAt.Equal(postedAt) {
+			t.Fatalf("exported job = %+v, want PostedAt %v", job, postedAt)
+		}
+	})
 
 	t.Run("gone detail is acked without exporting", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
@@ -449,6 +491,41 @@ func TestProcess(t *testing.T) {
 			}
 		}
 	})
+
+	for _, tt := range []struct {
+		name         string
+		poll         bool
+		wantIngested int32
+	}{
+		{name: "board verify without poll only verifies", poll: false, wantIngested: 0},
+		{name: "board verify with poll verifies then polls the board", poll: true, wantIngested: 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newFixture(t, http.StatusOK, "")
+			company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.store.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme"); err != nil {
+				t.Fatal(err)
+			}
+			task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardVerifyTask, CompanyID: company.ID, BoardToken: "acme", Poll: tt.poll}
+			if err := f.processor.Process(ctx, task); err != nil {
+				t.Fatalf("Process() = %v, want nil", err)
+			}
+			boards, err := f.store.ListCompanyBoards(ctx, company.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(boards) != 1 || boards[0].Status != dto.BoardVerified {
+				t.Fatalf("boards = %+v, want one verified board", boards)
+			}
+			if got := f.ingest.requests.Load(); got != tt.wantIngested {
+				t.Fatalf("ingest requests = %d, want %d", got, tt.wantIngested)
+			}
+		})
+	}
 }
 
 type configsStub []dto.SearchConfig
@@ -523,7 +600,8 @@ func TestProcessBoardDiscover(t *testing.T) {
 		if err := f.discoverProcessor(withProfile, configsStub{match}).Process(ctx, task); err != nil {
 			t.Fatalf("Process() = %v, want nil", err)
 		}
-		got, err := f.store.ListNewCompanies(ctx, "match")
+		page, err := f.store.ListNewCompanies(ctx, "match", 25, 0)
+		got := page.Items
 		if err != nil || len(got) != 1 || got[0].Profile == nil || got[0].Profile.HQ != "London" {
 			t.Fatalf("ListNewCompanies() = %+v, %v, want one company with the London profile", got, err)
 		}
@@ -579,6 +657,93 @@ func TestProcessBoardDiscover(t *testing.T) {
 		}
 	})
 
+	t.Run("a required-UK task with no jobs or a failed fetch records a miss and is not verified", func(t *testing.T) {
+		t.Parallel()
+		empty := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp"}, nil
+		}
+		failing := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{}, errors.New("boom")
+		}
+		for name, fn := range map[string]worker.DiscoverFunc{"no jobs": empty, "failed fetch": failing} {
+			f := newFixture(t, http.StatusOK, "")
+			uk := task
+			uk.RequireUK = true
+			if err := f.discoverProcessor(fn, configsStub{match}).Process(ctx, uk); err != nil {
+				t.Fatalf("%s: Process() = %v, want nil", name, err)
+			}
+			missed, err := f.store.DiscoverMissedSince(ctx, "greenhouse", "acme", time.Now().Add(-time.Minute))
+			if err != nil || !missed {
+				t.Errorf("%s: DiscoverMissedSince = %v, %v, want true", name, missed, err)
+			}
+			if _, err := f.store.GetVerifiedBoardID(ctx, "greenhouse", "acme"); !errors.Is(err, data.ErrNotFound) {
+				t.Errorf("%s: GetVerifiedBoardID err = %v, want ErrNotFound", name, err)
+			}
+		}
+	})
+
+	t.Run("UK gate", func(t *testing.T) {
+		t.Parallel()
+		nonUK := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp", Recheck: true, Jobs: []dto.Job{{Title: "Go Engineer", Location: "Berlin"}}}, nil
+		}
+		for name, tc := range map[string]struct {
+			fn          worker.DiscoverFunc
+			requireUK   bool
+			wantTracked int
+			wantStamped bool
+		}{
+			"required-UK non-UK jobs verify but track nobody": {nonUK, true, 0, false},
+			"ingest-queued non-UK jobs are tracked":           {nonUK, false, 1, false},
+			"required-UK UK jobs are stamped and tracked":     {discover, true, 1, true},
+		} {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				f := newFixture(t, http.StatusOK, "")
+				tk := task
+				tk.RequireUK = tc.requireUK
+				if err := f.discoverProcessor(tc.fn, configsStub{match}).Process(ctx, tk); err != nil {
+					t.Fatalf("Process() = %v, want nil", err)
+				}
+				tracked, err := f.store.ListTrackedCompaniesForUser(ctx, "match")
+				if err != nil || len(tracked) != tc.wantTracked {
+					t.Errorf("ListTrackedCompaniesForUser(match) = %+v, %v, want %d", tracked, err, tc.wantTracked)
+				}
+				company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme Corp"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				boards, err := f.store.ListCompanyBoards(ctx, company.ID)
+				if err != nil || len(boards) != 1 {
+					t.Fatalf("ListCompanyBoards() = %+v, %v, want one board", boards, err)
+				}
+				if boards[0].Status != dto.BoardVerified {
+					t.Errorf("board status = %q, want verified", boards[0].Status)
+				}
+				if got := boards[0].UKJobsSeenAt != nil; got != tc.wantStamped {
+					t.Errorf("UKJobsSeenAt set = %v, want %v", got, tc.wantStamped)
+				}
+			})
+		}
+	})
+
+	t.Run("an ingest-queued task with no jobs records no miss and still verifies", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		empty := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp"}, nil
+		}
+		if err := f.discoverProcessor(empty, configsStub{match}).Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		if missed, _ := f.store.DiscoverMissedSince(ctx, "greenhouse", "acme", time.Now().Add(-time.Minute)); missed {
+			t.Error("DiscoverMissedSince = true, want false")
+		}
+		if _, err := f.store.GetVerifiedBoardID(ctx, "greenhouse", "acme"); err != nil {
+			t.Errorf("GetVerifiedBoardID err = %v, want verified", err)
+		}
+	})
+
 	t.Run("a board that is not worth rechecking is verified wttj-origin", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
 		noRecheck := func(context.Context, string, string) (scraper.Discovery, error) {
@@ -595,7 +760,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 		if err != nil || len(boards) != 1 || boards[0].VerificationMethod != scraper.MethodWTTJOrigin {
 			t.Fatalf("ListCompanyBoards(%s) = %+v, %v, want one board verified wttj-origin", company.ID, boards, err)
 		}
-		untracked, err := f.store.ListUntrackedDiscoveredBoards(ctx)
+		untracked, err := f.store.ListUntrackedDiscoveredBoards(ctx, false, time.Now())
 		if err != nil || len(untracked) != 0 {
 			t.Fatalf("ListUntrackedDiscoveredBoards() = %+v, %v, want none", untracked, err)
 		}
@@ -625,6 +790,23 @@ func TestProcessBoardDiscover(t *testing.T) {
 		}
 		if got := f.ingest.requests.Load(); got != 0 {
 			t.Errorf("ingest requests = %d, want 0", got)
+		}
+	})
+
+	t.Run("a pivot carries the discovering source, listing URL and apply URL", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		viaAshby := func(context.Context, string, string) (scraper.Discovery, error) {
+			job := dto.Job{Title: "Go Engineer", Location: "London", URL: "https://wellfound.com/jobs/1", ApplyURL: "https://jobs.ashbyhq.com/acme/123"}
+			return scraper.Discovery{Name: "Acme Corp", Jobs: []dto.Job{job}}, nil
+		}
+		task := queue.Task{Version: 1, Source: "wttj", Kind: queue.BoardDiscoverTask, BoardToken: "acme", Via: "wellfound"}
+		if err := f.discoverProcessor(viaAshby, configsStub{match}).Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		tasks := f.published.Tasks()
+		if len(tasks) != 1 || tasks[0].Via != "wellfound" || tasks[0].ListingURL != "https://wellfound.com/jobs/1" || tasks[0].ApplyURL != "https://jobs.ashbyhq.com/acme/123" {
+			t.Fatalf("published = %+v, want one task carrying wellfound, its listing URL and the apply URL", tasks)
 		}
 	})
 
@@ -683,6 +865,44 @@ func TestProcessBoardDiscover(t *testing.T) {
 			t.Fatalf("PageCompaniesForUser() = %+v, %v, want none", page, err)
 		}
 	})
+}
+
+func TestProcessLogsDetailFetch(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		err         error
+		remoteCheck bool
+		want        []string
+	}{
+		{"a fragment fetch is exported", nil, false, []string{"remote_check=false", "outcome=exported"}},
+		{"a slug page without TELECOMMUTE is not remote", sources.ErrNotRemote, true, []string{"remote_check=true", "outcome=not_remote"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newFixture(t, http.StatusOK, "")
+			var logs bytes.Buffer
+			p := worker.NewProcessor(worker.Deps{
+				JS:        jobsearch.Build(jobsearchtest.NewDeps(f.store)),
+				Exporter:  scraper.NewAPIExporter(f.ingest.server.URL, "token").WithInitialBackoff(0),
+				Detailers: map[string]sources.DetailFetcher{"linkedin": detailStub{err: tt.err}},
+				Logger:    slog.New(slog.NewTextHandler(&logs, nil)),
+			})
+			task := queuetest.DetailTask("linkedin")
+			if tt.remoteCheck {
+				task.Card.RemoteCheckURL = "https://uk.linkedin.com/jobs/view/engineer-at-acme-1"
+			}
+			if err := p.Process(t.Context(), task); err != nil {
+				t.Fatalf("Process() = %v, want nil", err)
+			}
+			for _, want := range append(tt.want, "source=linkedin") {
+				if !strings.Contains(logs.String(), want) {
+					t.Errorf("logs = %q, want %q", logs.String(), want)
+				}
+			}
+		})
+	}
 }
 
 func TestProcessKeyRejection(t *testing.T) {
@@ -767,6 +987,33 @@ func TestFailRun(t *testing.T) {
 		}
 	})
 
+	t.Run("a dead-lettered scheduled board check makes the board due again", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		board, err := f.store.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.store.VerifyCompanyBoard(ctx, company.ID, "greenhouse", "acme", "discovered", ""); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.store.MarkBoardCheckPublished(ctx, board.ID); err != nil {
+			t.Fatal(err)
+		}
+		task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: board.ID}
+		if err := f.processor.FailRun(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		due, err := f.store.ListDueBoards(ctx)
+		if err != nil || len(due) != 1 || due[0].ID != board.ID {
+			t.Fatalf("ListDueBoards() = %+v, %v, want %s due again", due, err, board.ID)
+		}
+	})
+
 	t.Run("run already gone is not an error", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
 		task := queue.Task{Source: "wis", Kind: queue.ListingPageTask, TargetID: "gone", RunID: "gone"}
@@ -817,6 +1064,125 @@ func TestProcessRateLimit(t *testing.T) {
 		})
 	}
 
+	listings := []struct {
+		name   string
+		source string
+		want   time.Duration
+	}{
+		{"a 429 defers the listing page", "limited", time.Minute},
+		{"a blocked gate defers the listing page", "linkedin", 10 * time.Minute},
+	}
+	for _, tt := range listings {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t, http.StatusOK, "")
+			target := f.target(t, tt.source)
+			task := queuetest.ListingTask(tt.source)
+			task.TargetID, task.RunID = target.ID, target.RunID
+			start := time.Now()
+			err := f.processor.Process(t.Context(), task)
+			var deferred *queue.DeferError
+			if !errors.As(err, &deferred) {
+				t.Fatalf("Process() = %v, want a deferral", err)
+			}
+			if wait := deferred.Until.Sub(start); wait < tt.want-5*time.Second || wait > tt.want+5*time.Second {
+				t.Errorf("deferred for %v, want about %v", wait, tt.want)
+			}
+			got := f.runStatus(t, target)
+			if got.RunStatus != "running" || !strings.HasPrefix(got.LastRunError, "waiting until ") {
+				t.Errorf("run = %q %q, want running and waiting until …", got.RunStatus, got.LastRunError)
+			}
+		})
+	}
+
+	t.Run("a blocked gate defers the detail task", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		err := f.processor.Process(t.Context(), queuetest.DetailTask("blocked"))
+		var deferred *queue.DeferError
+		if !errors.As(err, &deferred) {
+			t.Fatalf("Process() = %v, want a deferral", err)
+		}
+		if got := f.ingest.requests.Load(); got != 0 {
+			t.Errorf("ingest requests = %d, want 0", got)
+		}
+	})
+
+	t.Run("a deferred first page resumes and clears the wait", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		target := f.target(t, "linkedin")
+		task := queuetest.ListingTask("linkedin")
+		task.TargetID, task.RunID = target.ID, target.RunID
+		var deferred *queue.DeferError
+		if err := f.processor.Process(t.Context(), task); !errors.As(err, &deferred) {
+			t.Fatalf("first Process() = %v, want a deferral", err)
+		}
+		if err := f.processor.Process(t.Context(), task); err != nil {
+			t.Fatalf("second Process() = %v, want nil", err)
+		}
+		if got := f.runStatus(t, target); got.RunStatus != "succeeded" || got.LastRunError != "" {
+			t.Errorf("run = %q %q, want succeeded with no message", got.RunStatus, got.LastRunError)
+		}
+	})
+
+	t.Run("an unparseable board is acked, logged and fails its run", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		exporter := scraper.NewAPIExporter(f.ingest.server.URL, "token").WithInitialBackoff(0)
+		unparseable := fmt.Errorf("wttj: no Company in state: %w", sources.ErrUnparseable)
+		var logs bytes.Buffer
+		p := worker.NewProcessor(worker.Deps{
+			JS:     jobsearch.Build(jobsearchtest.NewDeps(f.store)),
+			Boards: scraper.NewBoardPoller(f.store, failingBoard{err: unparseable}, exporter),
+			Logger: slog.New(slog.NewTextHandler(&logs, nil)),
+		})
+		target := f.target(t, "greenhouse")
+		task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: f.board(t), Manual: true, TargetID: target.ID, RunID: target.RunID}
+		if err := p.Process(t.Context(), task); err != nil {
+			t.Fatalf("Process() = %v, want nil so the task is acked", err)
+		}
+		if got := f.runStatus(t, target).RunStatus; got != "failed" {
+			t.Errorf("run status = %q, want failed", got)
+		}
+		if !strings.Contains(logs.String(), "board page unparseable") {
+			t.Errorf("logs = %q, want a board page unparseable warning", logs.String())
+		}
+	})
+
+	for name, cause := range map[string]error{
+		"a 404 board is retired, acked and fails its run":      fmt.Errorf("greenhouse: %w: status 404 Not Found", sources.ErrGone),
+		"a board redirected to another host is retired, acked": fmt.Errorf("recruitee: %w: redirected to other.recruitee.com", sources.ErrMoved),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			f := newFixture(t, http.StatusOK, "")
+			exporter := scraper.NewAPIExporter(f.ingest.server.URL, "token").WithInitialBackoff(0)
+			p := worker.NewProcessor(worker.Deps{
+				JS:     jobsearch.Build(jobsearchtest.NewDeps(f.store)),
+				Boards: scraper.NewBoardPoller(f.store, failingBoard{err: cause}, exporter),
+			})
+			company, err := f.store.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			board, err := f.store.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "acme")
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := f.target(t, "greenhouse")
+			task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: board.ID, Manual: true, TargetID: target.ID, RunID: target.RunID}
+			if err := p.Process(t.Context(), task); err != nil {
+				t.Fatalf("Process() = %v, want nil so the task is not retried", err)
+			}
+			if got := f.runStatus(t, target).RunStatus; got != "failed" {
+				t.Errorf("run status = %q, want failed", got)
+			}
+			boards, err := f.store.ListCompanyBoards(t.Context(), company.ID)
+			if err != nil || len(boards) != 1 || boards[0].Status != dto.BoardRetired {
+				t.Errorf("ListCompanyBoards() = %+v, %v, want one retired board", boards, err)
+			}
+		})
+	}
+
 	boards := []struct {
 		name      string
 		err       error
@@ -840,4 +1206,91 @@ func TestProcessRateLimit(t *testing.T) {
 			}
 		})
 	}
+}
+
+type boardRunLog struct {
+	*jobsearchtest.FakeStore
+	attempts []string
+	finished []dto.BoardRunStart
+	tallies  []dto.BoardTally
+	stops    []dto.StopReason
+}
+
+func (l *boardRunLog) BoardRunAttemptFailed(_ context.Context, _ dto.BoardRunStart, _ int, message string) error {
+	l.attempts = append(l.attempts, message)
+	return nil
+}
+
+func (l *boardRunLog) FinishBoardRun(_ context.Context, run dto.BoardRunStart, stop dto.StopReason, tally dto.BoardTally) error {
+	l.finished, l.stops, l.tallies = append(l.finished, run), append(l.stops, stop), append(l.tallies, tally)
+	return nil
+}
+
+func TestProcess_BoardRuns(t *testing.T) {
+	t.Parallel()
+	const taskID = "6b1f0a52-3d1b-4c77-9a5e-0f0e7b1d2c11"
+	newProcessor := func(f fixture, fetcher scraper.BoardFetcher) (*worker.Processor, *boardRunLog) {
+		log := &boardRunLog{FakeStore: f.store}
+		exporter := scraper.NewAPIExporter(f.ingest.server.URL, "token").WithInitialBackoff(0)
+		return worker.NewProcessor(worker.Deps{
+			JS:     jobsearch.Build(jobsearchtest.NewDeps(log)),
+			Boards: scraper.NewBoardPoller(f.store, fetcher, exporter),
+		}), log
+	}
+
+	t.Run("a completed poll finishes one run keyed by the task", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		p, log := newProcessor(f, oneBoardJob{})
+		task := queue.Task{Version: 1, ID: taskID, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: f.board(t), Manual: true}
+		if err := p.Process(t.Context(), task); err != nil {
+			t.Fatal(err)
+		}
+		if len(log.finished) != 1 {
+			t.Fatalf("finished runs = %d, want 1", len(log.finished))
+		}
+		got := log.finished[0]
+		if got.ID != taskID || got.BoardID != task.BoardID || got.Trigger != dto.TriggerManual || log.stops[0] != dto.StopLastPage || !log.tallies[0].Claimed || log.tallies[0].Listed != 1 {
+			t.Errorf("run = %+v stop = %q tally = %+v, want task-keyed manual last_page run listing 1", got, log.stops[0], log.tallies[0])
+		}
+	})
+
+	t.Run("a check that claims nothing writes no run", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		p, log := newProcessor(f, oneBoardJob{})
+		task := queue.Task{Version: 1, ID: taskID, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: "gone"}
+		if err := p.Process(t.Context(), task); err != nil {
+			t.Fatal(err)
+		}
+		if len(log.finished) != 0 || len(log.attempts) != 0 {
+			t.Errorf("finished = %d, attempts = %d, want no run", len(log.finished), len(log.attempts))
+		}
+	})
+
+	t.Run("a failed delivery records the attempt and leaves the run open", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		p, log := newProcessor(f, failingBoard{err: errors.New("boom")})
+		task := queue.Task{Version: 1, ID: taskID, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: f.board(t)}
+		if err := p.Process(t.Context(), task); err == nil {
+			t.Fatal("Process() = nil, want the fetch error")
+		}
+		if len(log.attempts) != 1 || len(log.finished) != 0 {
+			t.Errorf("attempts = %v, finished = %d, want one attempt and no finish", log.attempts, len(log.finished))
+		}
+	})
+
+	t.Run("FailRun finishes a board check as failed", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		p, log := newProcessor(f, oneBoardJob{})
+		task := queue.Task{Version: 1, ID: taskID, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: f.board(t), Manual: true}
+		if err := p.FailRun(t.Context(), task); err != nil {
+			t.Fatal(err)
+		}
+		if len(log.finished) != 1 || log.stops[0] != dto.StopFailed {
+			t.Errorf("finished = %d stops = %v, want one failed run", len(log.finished), log.stops)
+		}
+	})
 }

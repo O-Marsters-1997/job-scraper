@@ -15,13 +15,16 @@ interface JobActionsMenuProps {
 	job: Job;
 	appSummary: JobApplicationSummary | undefined;
 	onTrack: () => void;
+	onAddTask?: () => void;
 	onGrade?: () => void;
 	onDismiss?: () => void;
 	onExcludeCompany?: () => void;
+	onSetCompanyKind?: (kind: "agency" | "direct") => void;
 }
 
 export function JobActionsMenu(props: JobActionsMenuProps) {
 	const canExclude = () => !!props.onExcludeCompany && !!props.job.CompanyID;
+	const canSetKind = () => !!props.onSetCompanyKind && !!props.job.CompanyID;
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
@@ -64,7 +67,17 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 						</DropdownMenuItem>
 					)}
 				</Show>
-				<Show when={props.onGrade || props.onDismiss || canExclude()}>
+				<Show when={props.onAddTask}>
+					<DropdownMenuItem onSelect={() => props.onAddTask?.()}>
+						<Icon name="plus" size={14} />
+						Add task
+					</DropdownMenuItem>
+				</Show>
+				<Show
+					when={
+						props.onGrade || props.onDismiss || canExclude() || canSetKind()
+					}
+				>
 					<DropdownMenuSeparator />
 				</Show>
 				<Show when={props.onGrade}>
@@ -77,6 +90,18 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 					<DropdownMenuItem onSelect={() => props.onDismiss?.()}>
 						<Icon name="x" size={14} />
 						Not for me
+					</DropdownMenuItem>
+				</Show>
+				<Show when={canSetKind() && props.job.CompanyKind !== "agency"}>
+					<DropdownMenuItem onSelect={() => props.onSetCompanyKind?.("agency")}>
+						<Icon name="x" size={14} />
+						Mark recruiter
+					</DropdownMenuItem>
+				</Show>
+				<Show when={canSetKind() && props.job.CompanyKind !== "direct"}>
+					<DropdownMenuItem onSelect={() => props.onSetCompanyKind?.("direct")}>
+						<Icon name="check" size={14} />
+						Not a recruiter
 					</DropdownMenuItem>
 				</Show>
 				<Show when={canExclude()}>

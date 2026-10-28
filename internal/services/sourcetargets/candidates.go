@@ -25,7 +25,9 @@ type Candidate struct {
 
 type CandidateStore interface {
 	SaveCards(context.Context, dto.SourceTarget, []dto.Job) ([]Candidate, error)
+	ApplyBoardCards(ctx context.Context, source string, cards []dto.Job) error
 	ListForUser(context.Context, string, string, int) ([]Candidate, error)
+	DiscoveryFilters(ctx context.Context, userID string, candidateIDs []string) (map[string][]map[string]string, error)
 	Assess(context.Context, string, string, time.Time, bool) (bool, error)
 	MarkDetailPending(context.Context, string) error
 	DeleteExpiredCandidates(context.Context) error
@@ -37,9 +39,14 @@ type CardBoards interface {
 }
 
 func (s *Service) CapturePage(ctx context.Context, target dto.SourceTarget, cards []dto.Job, config dto.SearchConfig) error {
-	cards, err := s.dropBoardCards(ctx, target, cards)
+	cards, boardCards, err := s.splitBoardCards(ctx, target, cards)
 	if err != nil {
 		return err
+	}
+	if len(boardCards) > 0 {
+		if err := s.targets.ApplyBoardCards(ctx, target.Source, boardCards); err != nil {
+			return fmt.Errorf("apply board card dates: %w", err)
+		}
 	}
 	candidates, err := s.targets.SaveCards(ctx, target, cards)
 	if err != nil {
@@ -48,9 +55,9 @@ func (s *Service) CapturePage(ctx context.Context, target dto.SourceTarget, card
 	return s.assess(ctx, candidates, config)
 }
 
-func (s *Service) dropBoardCards(ctx context.Context, target dto.SourceTarget, cards []dto.Job) ([]dto.Job, error) {
+func (s *Service) splitBoardCards(ctx context.Context, target dto.SourceTarget, cards []dto.Job) (kept, boardCards []dto.Job, err error) {
 	if target.Source != "linkedin" || len(cards) == 0 {
-		return cards, nil
+		return cards, nil, nil
 	}
 	slugs := make([]string, len(cards))
 	for i, card := range cards {
@@ -58,12 +65,17 @@ func (s *Service) dropBoardCards(ctx context.Context, target dto.SourceTarget, c
 	}
 	boards, err := s.boards.VerifiedBoardsBySlug(ctx, slugs)
 	if err != nil {
-		return nil, fmt.Errorf("look up verified boards: %w", err)
+		return nil, nil, fmt.Errorf("look up verified boards: %w", err)
 	}
 	s.harvestUntracked(ctx, boards)
-	return slices.DeleteFunc(slices.Clone(cards), func(card dto.Job) bool {
-		return slices.ContainsFunc(boards, func(b dto.CardBoard) bool { return b.CompanySlug == card.CompanySlug })
-	}), nil
+	for _, card := range cards {
+		if slices.ContainsFunc(boards, func(b dto.CardBoard) bool { return b.CompanySlug == card.CompanySlug && b.Polled }) {
+			boardCards = append(boardCards, card)
+		} else {
+			kept = append(kept, card)
+		}
+	}
+	return kept, boardCards, nil
 }
 
 func (s *Service) harvestUntracked(ctx context.Context, boards []dto.CardBoard) {
@@ -106,16 +118,25 @@ func (s *Service) DeleteExpired(ctx context.Context) error {
 }
 
 func (s *Service) assess(ctx context.Context, candidates []Candidate, config dto.SearchConfig) error {
+	ids := make([]string, len(candidates))
+	for i, candidate := range candidates {
+		ids[i] = candidate.ID
+	}
+	discoveries, err := s.targets.DiscoveryFilters(ctx, config.UserID, ids)
+	if err != nil {
+		return fmt.Errorf("list candidate discoveries: %w", err)
+	}
 	for _, candidate := range candidates {
 		_, rejected := filter.Reject(candidate.Card, config)
-		queueDetail, err := s.targets.Assess(ctx, candidate.ID, config.UserID, config.UpdatedAt, !rejected)
+		card, wanted := detailCard(candidate.Card, discoveries[candidate.ID])
+		queueDetail, err := s.targets.Assess(ctx, candidate.ID, config.UserID, config.UpdatedAt, !rejected && wanted)
 		if err != nil {
 			return fmt.Errorf("assess candidate %s: %w", candidate.ID, err)
 		}
 		if !queueDetail {
 			continue
 		}
-		if err := s.queue.EnqueueJobs(ctx, []dto.QueuedJob{{URL: candidate.URL, Card: candidate.Card}}); err != nil {
+		if err := s.queue.EnqueueJobs(ctx, []dto.QueuedJob{{URL: candidate.URL, Card: card}}); err != nil {
 			return fmt.Errorf("enqueue candidate %s: %w", candidate.ID, err)
 		}
 		if err := s.targets.MarkDetailPending(ctx, candidate.ID); err != nil {

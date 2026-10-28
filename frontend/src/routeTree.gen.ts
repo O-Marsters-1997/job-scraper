@@ -13,16 +13,20 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthTasksRouteImport } from './routes/_auth/tasks'
 import { Route as AuthSettingsRouteImport } from './routes/_auth/settings'
 import { Route as AuthOverviewRouteImport } from './routes/_auth/overview'
 import { Route as AuthJobsRouteImport } from './routes/_auth/jobs'
 import { Route as AuthInsightsRouteImport } from './routes/_auth/insights'
 import { Route as AuthExperienceRouteImport } from './routes/_auth/experience'
 import { Route as AuthCvTemplatesRouteImport } from './routes/_auth/cv-templates'
+import { Route as AuthCoverLettersRouteImport } from './routes/_auth/cover-letters'
 import { Route as AuthCompaniesRouteImport } from './routes/_auth/companies'
 import { Route as AuthApplicationsRouteImport } from './routes/_auth/applications'
+import { Route as AuthActivityRouteImport } from './routes/_auth/activity'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
 import { Route as AuthSettingsUsageRouteImport } from './routes/_auth/settings/usage'
+import { Route as AuthSettingsTaskTypesRouteImport } from './routes/_auth/settings/task-types'
 import { Route as AuthSettingsStatusesRouteImport } from './routes/_auth/settings/statuses'
 import { Route as AuthSettingsSearchesRouteImport } from './routes/_auth/settings/searches'
 import { Route as AuthSettingsScoringRouteImport } from './routes/_auth/settings/scoring'
@@ -32,10 +36,10 @@ import { Route as AuthSettingsAiRouteImport } from './routes/_auth/settings/ai'
 import { Route as AuthJobsIdRouteImport } from './routes/_auth/jobs_.$id'
 import { Route as AuthCompaniesNewRouteImport } from './routes/_auth/companies_.new'
 import { Route as AuthCompaniesIdRouteImport } from './routes/_auth/companies_.$id'
+import { Route as AuthApplicationsIdRouteImport } from './routes/_auth/applications_.$id'
 import { Route as AuthSettingsScoringIndexRouteImport } from './routes/_auth/settings/scoring/index'
 import { Route as AuthTailoringDraftsIdRouteImport } from './routes/_auth/tailoring.drafts.$id'
 import { Route as AuthSettingsScoringSectionRouteImport } from './routes/_auth/settings/scoring/$section'
-import { Route as AuthJobsIdTailorRouteImport } from './routes/_auth/jobs_.$id_.tailor'
 import { Route as AuthCvTemplatesDocIdTabIdRouteImport } from './routes/_auth/cv-templates_.$docId.$tabId'
 
 const SignupRoute = SignupRouteImport.update({
@@ -56,6 +60,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthTasksRoute = AuthTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => AuthRoute,
 } as any)
 const AuthSettingsRoute = AuthSettingsRouteImport.update({
   id: '/settings',
@@ -87,6 +96,11 @@ const AuthCvTemplatesRoute = AuthCvTemplatesRouteImport.update({
   path: '/cv-templates',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthCoverLettersRoute = AuthCoverLettersRouteImport.update({
+  id: '/cover-letters',
+  path: '/cover-letters',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthCompaniesRoute = AuthCompaniesRouteImport.update({
   id: '/companies',
   path: '/companies',
@@ -97,6 +111,11 @@ const AuthApplicationsRoute = AuthApplicationsRouteImport.update({
   path: '/applications',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthActivityRoute = AuthActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthSettingsIndexRoute = AuthSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -105,6 +124,11 @@ const AuthSettingsIndexRoute = AuthSettingsIndexRouteImport.update({
 const AuthSettingsUsageRoute = AuthSettingsUsageRouteImport.update({
   id: '/usage',
   path: '/usage',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
+const AuthSettingsTaskTypesRoute = AuthSettingsTaskTypesRouteImport.update({
+  id: '/task-types',
+  path: '/task-types',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
 const AuthSettingsStatusesRoute = AuthSettingsStatusesRouteImport.update({
@@ -153,6 +177,11 @@ const AuthCompaniesIdRoute = AuthCompaniesIdRouteImport.update({
   path: '/companies/$id',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthApplicationsIdRoute = AuthApplicationsIdRouteImport.update({
+  id: '/applications_/$id',
+  path: '/applications/$id',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthSettingsScoringIndexRoute =
   AuthSettingsScoringIndexRouteImport.update({
     id: '/',
@@ -170,11 +199,6 @@ const AuthSettingsScoringSectionRoute =
     path: '/$section',
     getParentRoute: () => AuthSettingsScoringRoute,
   } as any)
-const AuthJobsIdTailorRoute = AuthJobsIdTailorRouteImport.update({
-  id: '/jobs_/$id_/tailor',
-  path: '/jobs/$id/tailor',
-  getParentRoute: () => AuthRoute,
-} as any)
 const AuthCvTemplatesDocIdTabIdRoute =
   AuthCvTemplatesDocIdTabIdRouteImport.update({
     id: '/cv-templates_/$docId/$tabId',
@@ -186,14 +210,18 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/activity': typeof AuthActivityRoute
   '/applications': typeof AuthApplicationsRoute
   '/companies': typeof AuthCompaniesRoute
+  '/cover-letters': typeof AuthCoverLettersRoute
   '/cv-templates': typeof AuthCvTemplatesRoute
   '/experience': typeof AuthExperienceRoute
   '/insights': typeof AuthInsightsRoute
   '/jobs': typeof AuthJobsRoute
   '/overview': typeof AuthOverviewRoute
   '/settings': typeof AuthSettingsRouteWithChildren
+  '/tasks': typeof AuthTasksRoute
+  '/applications/$id': typeof AuthApplicationsIdRoute
   '/companies/$id': typeof AuthCompaniesIdRoute
   '/companies/new': typeof AuthCompaniesNewRoute
   '/jobs/$id': typeof AuthJobsIdRoute
@@ -203,10 +231,10 @@ export interface FileRoutesByFullPath {
   '/settings/scoring': typeof AuthSettingsScoringRouteWithChildren
   '/settings/searches': typeof AuthSettingsSearchesRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
+  '/settings/task-types': typeof AuthSettingsTaskTypesRoute
   '/settings/usage': typeof AuthSettingsUsageRoute
   '/settings/': typeof AuthSettingsIndexRoute
   '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
-  '/jobs/$id/tailor': typeof AuthJobsIdTailorRoute
   '/settings/scoring/$section': typeof AuthSettingsScoringSectionRoute
   '/tailoring/drafts/$id': typeof AuthTailoringDraftsIdRoute
   '/settings/scoring/': typeof AuthSettingsScoringIndexRoute
@@ -215,13 +243,17 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/activity': typeof AuthActivityRoute
   '/applications': typeof AuthApplicationsRoute
   '/companies': typeof AuthCompaniesRoute
+  '/cover-letters': typeof AuthCoverLettersRoute
   '/cv-templates': typeof AuthCvTemplatesRoute
   '/experience': typeof AuthExperienceRoute
   '/insights': typeof AuthInsightsRoute
   '/jobs': typeof AuthJobsRoute
   '/overview': typeof AuthOverviewRoute
+  '/tasks': typeof AuthTasksRoute
+  '/applications/$id': typeof AuthApplicationsIdRoute
   '/companies/$id': typeof AuthCompaniesIdRoute
   '/companies/new': typeof AuthCompaniesNewRoute
   '/jobs/$id': typeof AuthJobsIdRoute
@@ -230,10 +262,10 @@ export interface FileRoutesByTo {
   '/settings/profile': typeof AuthSettingsProfileRoute
   '/settings/searches': typeof AuthSettingsSearchesRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
+  '/settings/task-types': typeof AuthSettingsTaskTypesRoute
   '/settings/usage': typeof AuthSettingsUsageRoute
   '/settings': typeof AuthSettingsIndexRoute
   '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
-  '/jobs/$id/tailor': typeof AuthJobsIdTailorRoute
   '/settings/scoring/$section': typeof AuthSettingsScoringSectionRoute
   '/tailoring/drafts/$id': typeof AuthTailoringDraftsIdRoute
   '/settings/scoring': typeof AuthSettingsScoringIndexRoute
@@ -244,14 +276,18 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteWithChildren
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/_auth/activity': typeof AuthActivityRoute
   '/_auth/applications': typeof AuthApplicationsRoute
   '/_auth/companies': typeof AuthCompaniesRoute
+  '/_auth/cover-letters': typeof AuthCoverLettersRoute
   '/_auth/cv-templates': typeof AuthCvTemplatesRoute
   '/_auth/experience': typeof AuthExperienceRoute
   '/_auth/insights': typeof AuthInsightsRoute
   '/_auth/jobs': typeof AuthJobsRoute
   '/_auth/overview': typeof AuthOverviewRoute
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
+  '/_auth/tasks': typeof AuthTasksRoute
+  '/_auth/applications_/$id': typeof AuthApplicationsIdRoute
   '/_auth/companies_/$id': typeof AuthCompaniesIdRoute
   '/_auth/companies_/new': typeof AuthCompaniesNewRoute
   '/_auth/jobs_/$id': typeof AuthJobsIdRoute
@@ -261,10 +297,10 @@ export interface FileRoutesById {
   '/_auth/settings/scoring': typeof AuthSettingsScoringRouteWithChildren
   '/_auth/settings/searches': typeof AuthSettingsSearchesRoute
   '/_auth/settings/statuses': typeof AuthSettingsStatusesRoute
+  '/_auth/settings/task-types': typeof AuthSettingsTaskTypesRoute
   '/_auth/settings/usage': typeof AuthSettingsUsageRoute
   '/_auth/settings/': typeof AuthSettingsIndexRoute
   '/_auth/cv-templates_/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
-  '/_auth/jobs_/$id_/tailor': typeof AuthJobsIdTailorRoute
   '/_auth/settings/scoring/$section': typeof AuthSettingsScoringSectionRoute
   '/_auth/tailoring/drafts/$id': typeof AuthTailoringDraftsIdRoute
   '/_auth/settings/scoring/': typeof AuthSettingsScoringIndexRoute
@@ -275,14 +311,18 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/signup'
+    | '/activity'
     | '/applications'
     | '/companies'
+    | '/cover-letters'
     | '/cv-templates'
     | '/experience'
     | '/insights'
     | '/jobs'
     | '/overview'
     | '/settings'
+    | '/tasks'
+    | '/applications/$id'
     | '/companies/$id'
     | '/companies/new'
     | '/jobs/$id'
@@ -292,10 +332,10 @@ export interface FileRouteTypes {
     | '/settings/scoring'
     | '/settings/searches'
     | '/settings/statuses'
+    | '/settings/task-types'
     | '/settings/usage'
     | '/settings/'
     | '/cv-templates/$docId/$tabId'
-    | '/jobs/$id/tailor'
     | '/settings/scoring/$section'
     | '/tailoring/drafts/$id'
     | '/settings/scoring/'
@@ -304,13 +344,17 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/signup'
+    | '/activity'
     | '/applications'
     | '/companies'
+    | '/cover-letters'
     | '/cv-templates'
     | '/experience'
     | '/insights'
     | '/jobs'
     | '/overview'
+    | '/tasks'
+    | '/applications/$id'
     | '/companies/$id'
     | '/companies/new'
     | '/jobs/$id'
@@ -319,10 +363,10 @@ export interface FileRouteTypes {
     | '/settings/profile'
     | '/settings/searches'
     | '/settings/statuses'
+    | '/settings/task-types'
     | '/settings/usage'
     | '/settings'
     | '/cv-templates/$docId/$tabId'
-    | '/jobs/$id/tailor'
     | '/settings/scoring/$section'
     | '/tailoring/drafts/$id'
     | '/settings/scoring'
@@ -332,14 +376,18 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/login'
     | '/signup'
+    | '/_auth/activity'
     | '/_auth/applications'
     | '/_auth/companies'
+    | '/_auth/cover-letters'
     | '/_auth/cv-templates'
     | '/_auth/experience'
     | '/_auth/insights'
     | '/_auth/jobs'
     | '/_auth/overview'
     | '/_auth/settings'
+    | '/_auth/tasks'
+    | '/_auth/applications_/$id'
     | '/_auth/companies_/$id'
     | '/_auth/companies_/new'
     | '/_auth/jobs_/$id'
@@ -349,10 +397,10 @@ export interface FileRouteTypes {
     | '/_auth/settings/scoring'
     | '/_auth/settings/searches'
     | '/_auth/settings/statuses'
+    | '/_auth/settings/task-types'
     | '/_auth/settings/usage'
     | '/_auth/settings/'
     | '/_auth/cv-templates_/$docId/$tabId'
-    | '/_auth/jobs_/$id_/tailor'
     | '/_auth/settings/scoring/$section'
     | '/_auth/tailoring/drafts/$id'
     | '/_auth/settings/scoring/'
@@ -394,6 +442,13 @@ declare module '@tanstack/solid-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_auth/tasks': {
+      id: '/_auth/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof AuthTasksRouteImport
+      parentRoute: typeof AuthRoute
     }
     '/_auth/settings': {
       id: '/_auth/settings'
@@ -437,6 +492,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthCvTemplatesRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/cover-letters': {
+      id: '/_auth/cover-letters'
+      path: '/cover-letters'
+      fullPath: '/cover-letters'
+      preLoaderRoute: typeof AuthCoverLettersRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/companies': {
       id: '/_auth/companies'
       path: '/companies'
@@ -451,6 +513,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthApplicationsRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/activity': {
+      id: '/_auth/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof AuthActivityRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/settings/': {
       id: '/_auth/settings/'
       path: '/'
@@ -463,6 +532,13 @@ declare module '@tanstack/solid-router' {
       path: '/usage'
       fullPath: '/settings/usage'
       preLoaderRoute: typeof AuthSettingsUsageRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
+    '/_auth/settings/task-types': {
+      id: '/_auth/settings/task-types'
+      path: '/task-types'
+      fullPath: '/settings/task-types'
+      preLoaderRoute: typeof AuthSettingsTaskTypesRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
     '/_auth/settings/statuses': {
@@ -528,6 +604,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthCompaniesIdRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/applications_/$id': {
+      id: '/_auth/applications_/$id'
+      path: '/applications/$id'
+      fullPath: '/applications/$id'
+      preLoaderRoute: typeof AuthApplicationsIdRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/settings/scoring/': {
       id: '/_auth/settings/scoring/'
       path: '/'
@@ -548,13 +631,6 @@ declare module '@tanstack/solid-router' {
       fullPath: '/settings/scoring/$section'
       preLoaderRoute: typeof AuthSettingsScoringSectionRouteImport
       parentRoute: typeof AuthSettingsScoringRoute
-    }
-    '/_auth/jobs_/$id_/tailor': {
-      id: '/_auth/jobs_/$id_/tailor'
-      path: '/jobs/$id/tailor'
-      fullPath: '/jobs/$id/tailor'
-      preLoaderRoute: typeof AuthJobsIdTailorRouteImport
-      parentRoute: typeof AuthRoute
     }
     '/_auth/cv-templates_/$docId/$tabId': {
       id: '/_auth/cv-templates_/$docId/$tabId'
@@ -586,6 +662,7 @@ interface AuthSettingsRouteChildren {
   AuthSettingsScoringRoute: typeof AuthSettingsScoringRouteWithChildren
   AuthSettingsSearchesRoute: typeof AuthSettingsSearchesRoute
   AuthSettingsStatusesRoute: typeof AuthSettingsStatusesRoute
+  AuthSettingsTaskTypesRoute: typeof AuthSettingsTaskTypesRoute
   AuthSettingsUsageRoute: typeof AuthSettingsUsageRoute
   AuthSettingsIndexRoute: typeof AuthSettingsIndexRoute
 }
@@ -597,6 +674,7 @@ const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
   AuthSettingsScoringRoute: AuthSettingsScoringRouteWithChildren,
   AuthSettingsSearchesRoute: AuthSettingsSearchesRoute,
   AuthSettingsStatusesRoute: AuthSettingsStatusesRoute,
+  AuthSettingsTaskTypesRoute: AuthSettingsTaskTypesRoute,
   AuthSettingsUsageRoute: AuthSettingsUsageRoute,
   AuthSettingsIndexRoute: AuthSettingsIndexRoute,
 }
@@ -606,36 +684,42 @@ const AuthSettingsRouteWithChildren = AuthSettingsRoute._addFileChildren(
 )
 
 interface AuthRouteChildren {
+  AuthActivityRoute: typeof AuthActivityRoute
   AuthApplicationsRoute: typeof AuthApplicationsRoute
   AuthCompaniesRoute: typeof AuthCompaniesRoute
+  AuthCoverLettersRoute: typeof AuthCoverLettersRoute
   AuthCvTemplatesRoute: typeof AuthCvTemplatesRoute
   AuthExperienceRoute: typeof AuthExperienceRoute
   AuthInsightsRoute: typeof AuthInsightsRoute
   AuthJobsRoute: typeof AuthJobsRoute
   AuthOverviewRoute: typeof AuthOverviewRoute
   AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
+  AuthTasksRoute: typeof AuthTasksRoute
+  AuthApplicationsIdRoute: typeof AuthApplicationsIdRoute
   AuthCompaniesIdRoute: typeof AuthCompaniesIdRoute
   AuthCompaniesNewRoute: typeof AuthCompaniesNewRoute
   AuthJobsIdRoute: typeof AuthJobsIdRoute
   AuthCvTemplatesDocIdTabIdRoute: typeof AuthCvTemplatesDocIdTabIdRoute
-  AuthJobsIdTailorRoute: typeof AuthJobsIdTailorRoute
   AuthTailoringDraftsIdRoute: typeof AuthTailoringDraftsIdRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthActivityRoute: AuthActivityRoute,
   AuthApplicationsRoute: AuthApplicationsRoute,
   AuthCompaniesRoute: AuthCompaniesRoute,
+  AuthCoverLettersRoute: AuthCoverLettersRoute,
   AuthCvTemplatesRoute: AuthCvTemplatesRoute,
   AuthExperienceRoute: AuthExperienceRoute,
   AuthInsightsRoute: AuthInsightsRoute,
   AuthJobsRoute: AuthJobsRoute,
   AuthOverviewRoute: AuthOverviewRoute,
   AuthSettingsRoute: AuthSettingsRouteWithChildren,
+  AuthTasksRoute: AuthTasksRoute,
+  AuthApplicationsIdRoute: AuthApplicationsIdRoute,
   AuthCompaniesIdRoute: AuthCompaniesIdRoute,
   AuthCompaniesNewRoute: AuthCompaniesNewRoute,
   AuthJobsIdRoute: AuthJobsIdRoute,
   AuthCvTemplatesDocIdTabIdRoute: AuthCvTemplatesDocIdTabIdRoute,
-  AuthJobsIdTailorRoute: AuthJobsIdTailorRoute,
   AuthTailoringDraftsIdRoute: AuthTailoringDraftsIdRoute,
 }
 

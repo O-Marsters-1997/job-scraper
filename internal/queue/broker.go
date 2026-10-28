@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ const (
 	workExchange = "source.work"
 	deadExchange = "source.dead.exchange"
 	deadQueue    = "source.dead"
+	urgentQueue  = "urgent"
 	tracerName   = "internal/queue"
 )
 
@@ -115,8 +117,8 @@ func declareTopology(ch *amqp.Channel) error {
 	if err := ch.QueueBind(deadQueue, deadQueue, deadExchange, false, nil); err != nil {
 		return fmt.Errorf("bind dead queue: %w", err)
 	}
-	for _, src := range sourcespec.Sources() {
-		name := "source." + src.Name
+	for _, key := range consumerNames() {
+		name := queueName(key)
 		args := amqp.Table{
 			"x-queue-type":              "quorum",
 			"x-max-length":              int32(10000),
@@ -132,11 +134,29 @@ func declareTopology(ch *amqp.Channel) error {
 		if _, err := ch.QueueDeclare(name, true, false, false, false, args); err != nil {
 			return fmt.Errorf("declare %s: %w", name, err)
 		}
-		if err := ch.QueueBind(name, src.Name, workExchange, false, nil); err != nil {
+		if err := ch.QueueBind(name, key, workExchange, false, nil); err != nil {
 			return fmt.Errorf("bind %s: %w", name, err)
 		}
 	}
 	return nil
+}
+
+func consumerNames() []string {
+	names := []string{urgentQueue}
+	for _, src := range sourcespec.Sources() {
+		if src.Role == sourcespec.RoleLinkOnly {
+			continue
+		}
+		names = append(names, src.Name)
+	}
+	return names
+}
+
+func queueName(consumer string) string {
+	if consumer == urgentQueue {
+		return urgentQueue
+	}
+	return "source." + consumer
 }
 
 func (b *Broker) Publish(ctx context.Context, task Task) (err error) {
@@ -168,8 +188,12 @@ func (b *Broker) Publish(ctx context.Context, task Task) (err error) {
 	}()
 	headers := amqp.Table{}
 	otel.GetTextMapPropagator().Inject(ctx, headerCarrier(headers))
+	routingKey := task.Source
+	if task.Urgent {
+		routingKey = urgentQueue
+	}
 	msg := amqp.Publishing{ContentType: "application/json", DeliveryMode: amqp.Persistent, MessageId: task.ID, Priority: priority, Timestamp: time.Now(), Headers: headers, Body: body}
-	if err := b.pub.PublishWithContext(ctx, workExchange, task.Source, true, false, msg); err != nil {
+	if err := b.pub.PublishWithContext(ctx, workExchange, routingKey, true, false, msg); err != nil {
 		return fmt.Errorf("publish %s: %w", task.ID, err)
 	}
 	returned := false
@@ -218,12 +242,12 @@ func (e *DeferError) Unwrap() error { return e.Err }
 
 func (b *Broker) Consume(ctx context.Context, handler func(context.Context, Task) error, terminal func(context.Context, Task) error) error {
 	var wg sync.WaitGroup
-	for _, source := range sourcespec.Sources() {
+	for _, name := range consumerNames() {
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
 			b.consumeSource(ctx, name, handler, terminal)
-		}(source.Name)
+		}(name)
 	}
 	<-ctx.Done()
 	wg.Wait()
@@ -267,7 +291,7 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 		return err
 	}
 	const consumerTag = "worker"
-	deliveries, err := ch.Consume("source."+source, consumerTag, false, false, false, false, nil)
+	deliveries, err := ch.Consume(queueName(source), consumerTag, false, false, false, false, nil)
 	if err != nil {
 		return err
 	}
@@ -283,25 +307,30 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 			var task Task
 			err := json.Unmarshal(delivery.Body, &task)
 			task.Redelivered = delivery.Redelivered
+			task.Attempt = int(deliveryCount(delivery.Headers["x-delivery-count"])) + 1
 			if err == nil {
 				err = task.Validate()
 			}
-			if err == nil && task.Source != source {
+			taskSource := source
+			if source == urgentQueue {
+				taskSource = task.Source
+			}
+			if err == nil && task.Source != taskSource {
 				err = fmt.Errorf("task source %s delivered to %s", task.Source, source)
 			}
 			taskCtx := logger.With(ctx,
-				slog.String(logger.KeySource, source),
+				slog.String(logger.KeySource, taskSource),
 				slog.String(logger.KeyKind, string(task.Kind)),
 				slog.String(logger.KeyTaskID, task.ID),
 				slog.String(logger.KeyTargetID, task.TargetID),
 				slog.String(logger.KeyRunID, task.RunID),
 			)
 			taskCtx = otel.GetTextMapPropagator().Extract(taskCtx, headerCarrier(delivery.Headers))
-			taskCtx, span := otel.Tracer(tracerName).Start(taskCtx, "process "+source, trace.WithSpanKind(trace.SpanKindConsumer))
+			taskCtx, span := otel.Tracer(tracerName).Start(taskCtx, "process "+taskSource, trace.WithSpanKind(trace.SpanKindConsumer))
 			slog.DebugContext(taskCtx, "queue delivery received", slog.Bool("redelivered", task.Redelivered))
 			if err == nil {
 				handlerStart := time.Now()
-				err = handler(taskCtx, task)
+				err = safeHandle(taskCtx, handler, task)
 				logTaskDone(taskCtx, delivery.Timestamp, consumedAt, time.Since(handlerStart), err)
 			}
 			if err != nil {
@@ -332,12 +361,13 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 					slog.Any(logger.KeyErr, err),
 					slog.Int64(logger.KeyDeliveryCount, count),
 				)
-				if terminal != nil && count >= 5 {
+				panicked := errors.Is(err, errPanicked)
+				if terminal != nil && (count >= 5 || panicked) {
 					if terminalErr := terminal(taskCtx, task); terminalErr != nil {
 						return fmt.Errorf("record terminal task failure for %s: %w", task.ID, terminalErr)
 					}
 				}
-				if rejectErr := delivery.Reject(true); rejectErr != nil {
+				if rejectErr := delivery.Reject(!panicked); rejectErr != nil {
 					return rejectErr
 				}
 				continue
@@ -348,6 +378,21 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 			}
 		}
 	}
+}
+
+var errPanicked = errors.New("handler panicked")
+
+func safeHandle(ctx context.Context, handler func(context.Context, Task) error, task Task) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(ctx, "queue handler panicked",
+				slog.Any("panic", r),
+				slog.String(logger.KeyStack, string(debug.Stack())),
+			)
+			err = fmt.Errorf("%w: %v", errPanicked, r)
+		}
+	}()
+	return handler(ctx, task)
 }
 
 func logTaskDone(ctx context.Context, publishedAt, consumedAt time.Time, duration time.Duration, err error) {

@@ -4,11 +4,8 @@ package jobsearch
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"strconv"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -19,16 +16,10 @@ import (
 )
 
 const (
-	defaultPageLimit = 50
-	defaultSinceDays = 90
-	maxSinceDays     = 36500
-	maxSeenJobIDs    = 5000
+	defaultPageLimit  = 50
+	maxSeenJobIDs     = 5000
+	maxBulkCompanyIDs = 500
 )
-
-type jobCursor struct {
-	Time time.Time `json:"time"`
-	ID   string    `json:"id"`
-}
 
 type Service struct {
 	store   Store
@@ -38,65 +29,6 @@ type Service struct {
 
 func NewService(store Store, q QueuePublisher, configs sourcetargets.SearchConfigReader) *Service {
 	return &Service{store: store, queue: q, configs: configs}
-}
-
-func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto.JobPage, error) {
-	limit, err := parsePageLimit(q.Limit)
-	if err != nil {
-		return dto.JobPage{}, err
-	}
-	if q.Availability != "" && q.Availability != "open" && q.Availability != "closed" && q.Availability != "all" {
-		return dto.JobPage{}, apperr.Invalid("invalid availability")
-	}
-
-	sinceDays := int32(defaultSinceDays)
-	if q.SinceDays != "" {
-		d, err := strconv.ParseInt(q.SinceDays, 10, 32)
-		if err != nil || d < 0 || d > maxSinceDays {
-			return dto.JobPage{}, apperr.Invalid("since_days must be between 0 and 36500")
-		}
-		sinceDays = int32(d)
-	}
-
-	options := dto.JobPageOptions{Limit: int32(limit + 1), Availability: q.Availability, CompanyID: q.CompanyID, ScoredOnly: q.Scored == "1", SinceDays: sinceDays}
-	if q.Cursor != "" {
-		var decoded jobCursor
-		if err := decodeCursor(q.Cursor, &decoded); err != nil || decoded.Time.IsZero() || decoded.ID == "" {
-			return dto.JobPage{}, apperr.Invalid("invalid cursor")
-		}
-		options.CursorTime, options.CursorID = decoded.Time, decoded.ID
-	}
-
-	options.ExcludedCompanySlugs, err = s.excludedCompanySlugs(ctx, userID)
-	if err != nil {
-		return dto.JobPage{}, err
-	}
-
-	page, err := s.store.Page(ctx, userID, options)
-	if err != nil {
-		if errors.Is(err, store.ErrInvalidID) {
-			return dto.JobPage{}, apperr.Invalid("invalid company or cursor ID")
-		}
-		return dto.JobPage{}, err
-	}
-
-	if len(page.Items) > limit {
-		page.Items = page.Items[:limit]
-		last := page.Items[len(page.Items)-1]
-		page.NextCursor = encodeCursor(jobCursor{Time: last.ScrapedAt, ID: last.ID})
-	}
-	if page.Items == nil {
-		page.Items = []dto.Job{}
-	}
-	return page, nil
-}
-
-func (s *Service) ListScored(ctx context.Context, userID string) ([]dto.Job, error) {
-	excluded, err := s.excludedCompanySlugs(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	return s.store.ListJobs(ctx, userID, excluded)
 }
 
 func (s *Service) excludedCompanySlugs(ctx context.Context, userID string) ([]string, error) {
@@ -149,17 +81,4 @@ func parsePageLimit(raw string) (int, error) {
 		return 0, apperr.Invalid("limit must be between 1 and 100")
 	}
 	return limit, nil
-}
-
-func decodeCursor(raw string, into any) error {
-	data, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, into)
-}
-
-func encodeCursor(c any) string {
-	data, _ := json.Marshal(c)
-	return base64.RawURLEncoding.EncodeToString(data)
 }

@@ -1,6 +1,6 @@
 -- name: InsertDraft :one
-INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps)
-SELECT sqlc.arg(user_id)::uuid, j.id, sqlc.arg(base_doc_id)::text, sqlc.arg(base_tab_id)::text, sqlc.arg(achievement_ids)::uuid[], sqlc.arg(skill_swaps)::jsonb
+INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, mode)
+SELECT sqlc.arg(user_id)::uuid, j.id, sqlc.arg(base_doc_id)::text, sqlc.arg(base_tab_id)::text, sqlc.arg(achievement_ids)::uuid[], sqlc.arg(skill_swaps)::jsonb, sqlc.arg(mode)::text
 FROM jobs j WHERE j.id = sqlc.arg(job_id)::uuid
 RETURNING *;
 
@@ -20,7 +20,7 @@ UPDATE tailored_cvs t SET status = CASE WHEN t.status = 'keeping' THEN 'keeping'
 FROM next, jobs j
 LEFT JOIN companies c ON c.id = j.company_id
 WHERE t.id = next.id AND j.id = t.job_id
-RETURNING t.id, t.user_id, t.job_id, t.base_doc_id, t.base_tab_id, t.achievement_ids, t.skill_swaps, t.attempts,
+RETURNING t.id, t.user_id, t.job_id, t.base_doc_id, t.base_tab_id, t.achievement_ids, t.skill_swaps, t.mode, t.attempts,
     COALESCE(t.draft_doc_id, '')::text AS draft_doc_id,
     t.status = 'keeping' AS keeping,
     j.title AS job_title,
@@ -76,12 +76,48 @@ UPDATE tailored_cvs SET
 WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status = 'keeping';
 
 -- name: SetDraftEdits :execrows
-UPDATE tailored_cvs SET edit_set = sqlc.arg(edit_set)::jsonb, findings = sqlc.arg(findings)::jsonb
+UPDATE tailored_cvs SET edit_set = sqlc.arg(edit_set)::jsonb, findings = sqlc.arg(findings)::jsonb,
+    achievement_ids = sqlc.arg(achievement_ids)::uuid[]
 WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
 
 -- name: GetJobDescription :one
 SELECT description FROM jobs WHERE id = $1;
 
--- name: InsertBulletLabels :copyfrom
-INSERT INTO preference_labels (user_id, job_id, draft_id, kind, achievement_id, p_yes, p_no, p_not_stated, confidence, preselected, kept)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+-- name: SetDraftInsights :execrows
+UPDATE tailored_cvs SET insights = sqlc.arg(insights)::jsonb, insights_for = sqlc.arg(insights_for)::text
+WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
+
+-- name: GetJobNote :one
+SELECT body FROM job_notes WHERE user_id = $1 AND job_id = $2;
+
+-- name: ListJobCommentBodies :many
+SELECT body FROM job_comments WHERE user_id = $1 AND job_id = $2 ORDER BY created_at, id LIMIT 200;
+
+-- name: DeleteAchievementOutcomes :exec
+DELETE FROM achievement_outcomes WHERE draft_id = $1 AND user_id = $2;
+
+-- name: InsertAchievementOutcomes :copyfrom
+INSERT INTO achievement_outcomes (draft_id, achievement_id, user_id, job_id, p_yes, p_no, on_source_cv, in_final_cv, outscored_kept_but_left_out, reworded)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+
+-- name: AddProfileAttempt :execrows
+INSERT INTO profile_attempts (draft_id, text, steer, rejection, prompt_key, model, cost, created_at)
+SELECT d.id, @text::text, @steer::text, @rejection::text, @prompt_key::text, @model::text, @cost::float8, clock_timestamp()
+FROM tailored_cvs d
+WHERE d.id = @draft_id::uuid AND d.user_id = @user_id::uuid;
+
+-- name: ListProfileCaptureDrafts :many
+SELECT d.id, d.base_content, d.edit_set, j.title AS job_title,
+    COALESCE(c.name, j.company_slug)::text AS company, j.description AS job_description
+FROM tailored_cvs d
+JOIN jobs j ON j.id = d.job_id
+LEFT JOIN companies c ON c.id = j.company_id
+WHERE d.user_id = $1 AND d.outcome = 'kept'
+  AND EXISTS (SELECT 1 FROM profile_attempts a WHERE a.draft_id = d.id)
+ORDER BY d.created_at, d.id;
+
+-- name: ListProfileAttempts :many
+SELECT draft_id, text, steer, rejection, prompt_key, model, cost::float8 AS cost
+FROM profile_attempts
+WHERE draft_id = ANY($1::uuid[])
+ORDER BY draft_id, created_at, id;

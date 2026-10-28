@@ -1,4 +1,5 @@
 import { createQuery, queryOptions } from "@tanstack/solid-query";
+import { loadedData } from "@/lib/queryData";
 import { keys } from "../api/keys";
 import { fetchSources, resolveUrl } from "../api/sources";
 
@@ -10,6 +11,12 @@ const sourcesQueryOptions = queryOptions({
 
 export function useSources() {
 	return createQuery(() => sourcesQueryOptions);
+}
+
+export function useSourceOptions() {
+	const sources = useSources();
+	return () =>
+		(loadedData(sources) ?? []).map((s) => ({ value: s.name, label: s.label }));
 }
 
 export function useResolveUrl(

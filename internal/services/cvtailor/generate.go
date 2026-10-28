@@ -7,37 +7,40 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"slices"
 	"time"
-	"unicode/utf8"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/openrouter"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/letterwrite"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
-	"github.com/ollymarsters/job-scraper/internal/services/jev"
 )
 
 const (
 	statusReady    = "ready"
 	statusKeeping  = "keeping"
+	statusFailed   = "failed"
 	cleanupTimeout = 30 * time.Second
-
-	shortenBullets = 3
 )
 
-var errInvalidEdit = errors.New("model returned an invalid edit")
-
 type Editor interface {
-	Edit(ctx context.Context, apiKey string, in cvedit.Input) (cvedit.Result, error)
-	Suggest(ctx context.Context, apiKey string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error)
 	Explain(ctx context.Context, apiKey string, in cvedit.ExplainInput) (cvedit.ExplainResult, error)
+	Insights(ctx context.Context, apiKey string, in cvedit.InsightsInput) (cvedit.InsightsResult, error)
 }
+
+type Scaffolder interface {
+	Scaffold(ctx context.Context, apiKey string, in letterwrite.Input) (letterwrite.Result, error)
+}
+
+var _ Scaffolder = (*letterwrite.Client)(nil)
 
 // Credentials reads a user's stored provider API key.
 type Credentials interface {
@@ -47,6 +50,7 @@ type Credentials interface {
 // Drive is the Google write surface a Draft is built on.
 type Drive interface {
 	ListTabs(ctx context.Context, userID, docID string) ([]google.Tab, error)
+	AddTab(ctx context.Context, userID, docID, title string) (string, error)
 	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
 	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
 	DeleteFile(ctx context.Context, userID, fileID string) error
@@ -104,11 +108,13 @@ func (m *Module) keep(ctx context.Context, claim dto.DraftClaim) error {
 	if claim.Attempts > dto.MaxDraftAttempts {
 		return m.store.FailKeep(ctx, claim, dto.DraftFailure{Reason: "gave up after repeated crashes", Terminal: true})
 	}
-	name := claim.CompanyName + " \u2014 " + claim.JobTitle
+	name := claim.CompanyName + " — " + claim.JobTitle
 	cause := m.drive.RenameFile(ctx, claim.UserID, claim.DraftDocID, name)
 	if cause != nil {
 		cause = fmt.Errorf("rename kept doc: %w", cause)
-	} else if cause = m.store.CompleteKeep(ctx, claim); cause == nil {
+	} else if outcomes, err := m.svc.keepOutcomes(ctx, claim); err != nil {
+		cause = fmt.Errorf("compute outcomes: %w", err)
+	} else if cause = m.store.CompleteKeep(ctx, claim, outcomes); cause == nil {
 		return nil
 	} else if !errors.Is(cause, store.ErrKeptDraftExists) {
 		return cause
@@ -141,54 +147,38 @@ func (m *Module) fail(ctx context.Context, claim dto.DraftClaim, cause error, cl
 }
 
 func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dto.DraftResult, error) {
-	key, err := m.creds.Get(ctx, claim.UserID, jev.Provider)
-	if errors.Is(err, data.ErrNotFound) {
-		return "", dto.DraftResult{}, apperr.Unprocessable("connect an OpenRouter key in Settings, AI to tailor a CV")
-	}
-	if err != nil {
-		return "", dto.DraftResult{}, fmt.Errorf("load credential: %w", err)
-	}
-
+	stop := m.stepTimer(ctx, claim.ID, "plan")
 	pl, err := m.svc.plan(ctx, claim, claim.DocID)
+	stop()
 	if err != nil {
 		return "", dto.DraftResult{}, err
 	}
-	res, err := m.editClean(ctx, key, pl, pl.input(claim.JobDescription))
-	if err != nil {
-		return "", dto.DraftResult{}, err
+	edits := pl.keepAll()
+	var lean chan leanResult
+	if claim.Mode == dto.DraftModeGenerate {
+		lean = make(chan leanResult, 1)
+		go func() {
+			defer m.stepTimer(ctx, claim.ID, "replace_low_lean")()
+			e, err := m.svc.replaceLowLean(ctx, claim, pl)
+			lean <- leanResult{edits: e, err: err}
+		}()
 	}
-	cost := res.Cost
-
 	docID, err := m.copyTab(ctx, claim)
+	if lean != nil {
+		res := <-lean
+		edits = res.edits
+		err = errors.Join(err, res.err)
+	}
 	if err != nil {
 		return docID, dto.DraftResult{}, err
 	}
-	if err := m.svc.applyEdits(ctx, claim.UserID, docID, pl, res.Edits); err != nil {
-		return docID, dto.DraftResult{}, err
-	}
-
-	basePages, draftPages, draftPDF, err := m.svc.pageCounts(ctx, claim, docID)
+	stop = m.stepTimer(ctx, claim.ID, "apply_edits")
+	err = m.svc.applyEdits(ctx, claim.UserID, docID, pl, edits)
+	stop()
 	if err != nil {
 		return docID, dto.DraftResult{}, err
 	}
-	if draftPages > basePages {
-		slog.InfoContext(ctx, "draft runs over the base CV, shortening",
-			slog.Int("base_pages", basePages), slog.Int("draft_pages", draftPages))
-		short, err := m.shorten(ctx, claim, key, docID, pl, res)
-		if err != nil {
-			return docID, dto.DraftResult{}, err
-		}
-		res, cost = short, cost+short.Cost
-		if draftPDF, draftPages, err = m.svc.measure(ctx, claim.UserID, docID, claim.TabID); err != nil {
-			return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
-		}
-	}
-
-	res.Edits = pl.withSlotIDs(res.Edits)
-	finalDraft := pl.draft(res.Edits, basePages, draftPages)
-	finalDraft.Parse = parseInput(ctx, draftPDF, pl.structure.Headings)
-
-	editSet, err := json.Marshal(res.Edits)
+	editSet, err := json.Marshal(edits)
 	if err != nil {
 		return docID, dto.DraftResult{}, fmt.Errorf("marshal edit set: %w", err)
 	}
@@ -197,62 +187,48 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 		return docID, dto.DraftResult{}, fmt.Errorf("marshal base content: %w", err)
 	}
 	return docID, dto.DraftResult{
-		EditSet: editSet, BaseContent: baseContent, RawOutput: res.Raw, Model: cvedit.Model, PromptVersion: cvedit.PromptVersion,
-		JobFingerprint: claim.JobFingerprint, Cost: cost,
-		Findings: toDraftFindings(checks.Run(finalDraft)),
+		EditSet: editSet, BaseContent: baseContent, JobFingerprint: claim.JobFingerprint, Findings: []dto.DraftFinding{},
 	}, nil
 }
 
-func (m *Module) editClean(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, error) {
-	res, err := m.editValid(ctx, key, pl, in)
-	if err != nil {
-		return cvedit.Result{}, err
-	}
-	var reverted []string
-	res.Edits, reverted = pl.revertBlocked(res.Edits)
-	if res.Edits.Skills == nil {
-		res.Edits.Skills = pl.swappedSkills()
-	}
-	if len(reverted) > 0 {
-		slog.InfoContext(ctx, "reverted blocked draft slots", slog.Any("checks", reverted))
-	}
-	return res, nil
+type leanResult struct {
+	edits cvedit.EditSet
+	err   error
 }
 
-func (m *Module) shorten(ctx context.Context, claim dto.DraftClaim, key, docID string, pl plan, prior cvedit.Result) (cvedit.Result, error) {
-	in := pl.input(claim.JobDescription)
-	in.PriorEdits, in.ShortenBullets = &prior.Edits, longestBullets(prior.Edits, shortenBullets)
-	res, err := m.editClean(ctx, key, pl, in)
-	if err != nil {
-		return cvedit.Result{}, err
+func (m *Module) stepTimer(ctx context.Context, draftID, step string) func() {
+	start := time.Now()
+	return func() {
+		m.log.InfoContext(ctx, "draft step", slog.String("draft_id", draftID), slog.String("step", step), slog.Int64("duration_ms", time.Since(start).Milliseconds()))
 	}
-	copyPlan, err := m.svc.plan(ctx, withoutSwaps(claim), docID)
-	if err != nil {
-		return cvedit.Result{}, err
-	}
-	if err := m.svc.applyEdits(ctx, claim.UserID, docID, copyPlan, res.Edits); err != nil {
-		return cvedit.Result{}, err
-	}
-	return res, nil
 }
 
-func (m *Module) editValid(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, error) {
-	res, err := m.editor.Edit(ctx, key, in)
+func (s *Service) replaceLowLean(ctx context.Context, claim dto.DraftClaim, pl plan) (cvedit.EditSet, error) {
+	bank, err := s.store.ListPositions(ctx, claim.UserID)
 	if err != nil {
-		return res, fmt.Errorf("edit: %w", err)
+		return cvedit.EditSet{}, err
 	}
-	return res, pl.validate(res.Edits)
+	answers, err := s.asker.Ask(ctx, claim.UserID, claim.JobID, bankQuestions(bank))
+	if err != nil {
+		return cvedit.EditSet{}, err
+	}
+	lines, err := sourceLines(pl.raw, pl)
+	if err != nil {
+		return cvedit.EditSet{}, err
+	}
+	reps := leanRule{}.Replacements(RuleInput{Positions: bank, Content: pl.baseContent().content(), Answers: answers, Lines: lines})
+	return pl.withReplacements(bank, reps), nil
 }
 
-func longestBullets(edits cvedit.EditSet, n int) []string {
-	var texts []string
-	for _, pe := range edits.Positions {
-		for _, b := range pe.Bullets {
-			texts = append(texts, b.Text)
+func suggestError(err error) error {
+	var se *openrouter.StatusError
+	if errors.As(err, &se) {
+		switch se.Code {
+		case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden:
+			return apperr.Unprocessable("OpenRouter refused the request; check your key and credit in Settings, AI")
 		}
 	}
-	slices.SortStableFunc(texts, func(a, b string) int { return utf8.RuneCountInString(b) - utf8.RuneCountInString(a) })
-	return texts[:min(n, len(texts))]
+	return apperr.Upstream("the suggestion model failed")
 }
 
 func toDraftFindings(findings []checks.Finding) []dto.DraftFinding {
@@ -264,14 +240,18 @@ func toDraftFindings(findings []checks.Finding) []dto.DraftFinding {
 }
 
 func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, error) {
+	stop := m.stepTimer(ctx, claim.ID, "list_tabs")
 	tabs, err := m.drive.ListTabs(ctx, claim.UserID, claim.DocID)
+	stop()
 	if err != nil {
 		return "", fmt.Errorf("list tabs: %w", err)
 	}
 	if !slices.ContainsFunc(tabs, func(t google.Tab) bool { return t.ID == claim.TabID }) {
 		return "", apperr.Unprocessable("the base CV tab must be a top-level tab")
 	}
+	stop = m.stepTimer(ctx, claim.ID, "copy_file")
 	docID, err := m.drive.CopyFile(ctx, claim.UserID, claim.DocID, "CV draft "+claim.ID[:8])
+	stop()
 	if err != nil {
 		return "", fmt.Errorf("copy doc: %w", err)
 	}
@@ -291,7 +271,10 @@ func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, err
 		trim = append(trim, req)
 	}
 	if len(trim) > 0 {
-		if err := m.drive.BatchUpdate(ctx, claim.UserID, docID, trim); err != nil {
+		stop := m.stepTimer(ctx, claim.ID, "delete_tabs")
+		err := m.drive.BatchUpdate(ctx, claim.UserID, docID, trim)
+		stop()
+		if err != nil {
 			return docID, fmt.Errorf("remove other tabs: %w", err)
 		}
 	}
@@ -299,23 +282,28 @@ func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, err
 }
 
 func (s *Service) applyEdits(ctx context.Context, userID, docID string, pl plan, edits cvedit.EditSet) error {
-	requests, err := docedit.Requests(pl.structure, pl.slotIDs(), edits)
-	if err != nil {
-		return fmt.Errorf("build doc edits: %w", err)
-	}
-	if len(requests) == 0 {
-		return nil
-	}
-	raw := make([]json.RawMessage, len(requests))
-	for i, r := range requests {
-		b, err := json.Marshal(r)
-		if err != nil {
-			return fmt.Errorf("marshal doc edit: %w", err)
-		}
-		raw[i] = b
+	raw, err := s.editRequests(pl, edits)
+	if err != nil || len(raw) == 0 {
+		return err
 	}
 	if err := s.drive.BatchUpdate(ctx, userID, docID, raw); err != nil {
 		return fmt.Errorf("apply doc edits: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) editRequests(pl plan, edits cvedit.EditSet) ([]json.RawMessage, error) {
+	requests, err := docedit.Requests(pl.structure, pl.slotIDs(), edits)
+	if err != nil {
+		return nil, fmt.Errorf("build doc edits: %w", err)
+	}
+	raw := make([]json.RawMessage, len(requests))
+	for i, r := range requests {
+		b, err := json.Marshal(r)
+		if err != nil {
+			return nil, fmt.Errorf("marshal doc edit: %w", err)
+		}
+		raw[i] = b
+	}
+	return raw, nil
 }

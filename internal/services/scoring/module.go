@@ -23,6 +23,10 @@ type noopAlerter struct{}
 
 func (noopAlerter) NotifyNewJob(context.Context, dto.Job, string) error { return nil }
 
+type noopNotifications struct{}
+
+func (noopNotifications) NewJob(context.Context, string, dto.Job) error { return nil }
+
 type noopPusher struct{}
 
 func (noopPusher) Send(context.Context, dto.PushSubscriptionInput, dto.PushMessage) error {
@@ -38,16 +42,19 @@ type Module struct {
 // builds the real ones and calls Build. Tests call Build directly with
 // fakes (ADR 0012).
 type Deps struct {
-	Store       Store
-	Answerer    Answerer
-	Credentials Credentials
-	Alerter     Alerter
-	Pusher      PushSender
+	Store         Store
+	Answerer      Answerer
+	Credentials   Credentials
+	Alerter       Alerter
+	Notifications Notifications
+	Pusher        PushSender
 	// VAPIDPublicKey empty means Web Push is not configured.
 	VAPIDPublicKey string
 	Profiles       ProfileReader
 	Candidates     Reconsiderer
 	Extractor      Extractor
+	Classifier     RecruiterClassifier
+	CompanyKinds   CompanyKinds
 	TickInterval   time.Duration
 }
 
@@ -64,7 +71,7 @@ func (v VAPID) configured() bool { return v.PublicKey != "" && v.PrivateKey != "
 // New wires the scoring context: its own store, the answer-effect loop and
 // Search Config orchestration. notifyAPIKey empty disables new-job email
 // alerts (dev default).
-func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates Reconsiderer, notifyAPIKey, notifyFrom string, vapid VAPID) *Module {
+func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates Reconsiderer, companyKinds CompanyKinds, notifications Notifications, notifyAPIKey, notifyFrom string, vapid VAPID) *Module {
 	st := store.New(pool)
 
 	var alerter Alerter = noopAlerter{}
@@ -77,9 +84,11 @@ func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, ca
 		pusher = notify.NewWebPusher(vapid.PublicKey, vapid.PrivateKey, vapid.Subject)
 	}
 
+	jevClient := jev.NewClient()
 	return Build(Deps{
-		Store: st, Pusher: pusher, VAPIDPublicKey: vapid.PublicKey, Answerer: jev.NewClient(), Credentials: credentials,
-		Alerter: alerter, Profiles: profiles, Candidates: candidates, Extractor: extract.NewClient(),
+		Store: st, Pusher: pusher, VAPIDPublicKey: vapid.PublicKey, Answerer: jevClient, Credentials: credentials,
+		Alerter: alerter, Notifications: notifications, Profiles: profiles, Candidates: candidates, Extractor: extract.NewClient(),
+		Classifier: jevClient, CompanyKinds: companyKinds,
 	})
 }
 
@@ -191,7 +200,7 @@ func (m *Module) Replay(ctx context.Context, userID string) (string, error) {
 	return m.svc.Replay(ctx, userID)
 }
 
-// Fit calibrates userID's Bands and refits their weights from their labels,
+// Fit refits userID's weights from their labels and recomputes their scores,
 // returning a report of what changed.
 func (m *Module) Fit(ctx context.Context, userID string) (string, error) {
 	return m.svc.Fit(ctx, userID)

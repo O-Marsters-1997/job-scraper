@@ -33,14 +33,20 @@ export async function updateApplicationStatus(
 	name: string,
 	colour: string,
 	replyWindowDays: number | null,
+	countsAsReply: boolean,
 ): Promise<ApplicationStatus> {
 	return mocked(
-		(db) => db.updateStatus(id, name, colour, replyWindowDays),
+		(db) => db.updateStatus(id, name, colour, replyWindowDays, countsAsReply),
 		() =>
 			apiFetch(
 				`/application-statuses/${id}`,
 				applicationStatusSchema,
-				jsonInit("PATCH", { name, colour, replyWindowDays }),
+				jsonInit("PATCH", {
+					name,
+					colour,
+					replyWindowDays,
+					countsAsReply,
+				}),
 			),
 	);
 }

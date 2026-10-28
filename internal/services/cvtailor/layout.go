@@ -50,7 +50,10 @@ func (s *Service) DraftLayout(ctx context.Context, userID string, q dto.DraftQue
 		slog.ErrorContext(ctx, "parse draft doc failed", slog.String("draft_id", draft.ID), slog.Any(logger.KeyErr, err))
 		return dto.DraftLayout{}, apperr.Unprocessable("could not read the draft document")
 	}
-	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: draft.AchievementIDs}
+	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: draft.AchievementIDs, Roles: edits.Roles}
+	if claim, err = s.withinRoles(ctx, claim, edits.Roles); err != nil {
+		return dto.DraftLayout{}, err
+	}
 	pl, err := s.planOf(ctx, claim, ds)
 	if err != nil {
 		return dto.DraftLayout{}, err
@@ -78,14 +81,14 @@ func baseSlotsByStart(pl plan, edits cvedit.EditSet) map[int]string {
 	for _, slot := range pl.structure.Slots {
 		startOf[slot.ID] = slot.StartIndex
 	}
-	bulletsOf := make(map[string][]cvedit.Bullet, len(edits.Positions))
+	linesOf := make(map[string][]cvedit.Line, len(edits.Positions))
 	for _, pe := range edits.Positions {
-		bulletsOf[pe.PositionID] = pe.Bullets
+		linesOf[pe.PositionID] = pe.Lines()
 	}
 	for _, p := range pl.positions {
 		for i, docSlot := range p.slotIDs {
-			if bullets := bulletsOf[p.ID]; i < len(bullets) && bullets[i].SlotID != "" {
-				out[startOf[docSlot]] = bullets[i].SlotID
+			if lines := linesOf[p.ID]; i < len(lines) && lines[i].SlotID != "" {
+				out[startOf[docSlot]] = lines[i].SlotID
 			}
 		}
 	}

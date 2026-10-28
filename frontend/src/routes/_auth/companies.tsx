@@ -1,11 +1,15 @@
-import { createFileRoute, Link } from "@tanstack/solid-router";
-import { createEffect, createSignal, For, Show } from "solid-js";
-import type { CompanySort } from "@/api/companies";
+import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
+import { createEffect, createSignal, For, on, Show, untrack } from "solid-js";
+import type { CompanyPoster, CompanySort } from "@/api/companies";
+import { CompanyFiltersDialog } from "@/components/companies/CompanyFiltersDialog";
 import { FavouriteStar } from "@/components/FavouriteStar";
+import { Icon } from "@/components/Icon";
 import { PageHeading } from "@/components/PageHeading";
 import { Pager } from "@/components/Pager";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { TableShortcuts } from "@/components/TableShortcuts";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,45 +34,82 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { useTableKeyNav } from "@/hooks/useTableKeyNav";
+import {
+	activeCompanyFilterCount,
+	type CompanyListState,
+	companySearchPatch,
+	parseCompanySearch,
+} from "@/lib/companyFilters";
 import { formatDate } from "@/lib/datetime";
+import { pageCount } from "@/lib/serverTable";
 import {
 	COMPANY_PAGE_SIZE,
+	companyPageQuery,
+	useCompanyAtsCounts,
 	useCompanyPages,
 	useSetCompanyFavourite,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
 import { useDebouncedTerm } from "../../hooks/useDebouncedTerm";
+import { queryClient } from "../../lib/queryClient";
 import type { Company } from "../../types/company";
 
 export const Route = createFileRoute("/_auth/companies")({
+	validateSearch: (raw: Record<string, unknown>): Partial<CompanyListState> =>
+		parseCompanySearch(raw),
+	loader: ({ location }) =>
+		queryClient.prefetchQuery(
+			companyPageQuery(parseCompanySearch(location.search)),
+		),
 	component: CompaniesPage,
 });
+
+type PosterOption = { value: CompanyPoster | "all"; label: string };
+
+const POSTER_OPTIONS: PosterOption[] = [
+	{ value: "all", label: "All companies" },
+	{ value: "agency", label: "Agencies" },
+	{ value: "direct", label: "Direct employers" },
+];
 
 const SORT_OPTIONS: { value: CompanySort; label: string }[] = [
 	{ value: "relevance", label: "Relevance" },
 	{ value: "alphabetical", label: "Alphabetical" },
+	{ value: "open_jobs", label: "Open jobs" },
 ];
 
 function CompaniesPage() {
 	const [term, search] = useDebouncedTerm();
-	const [favouritesOnly, setFavouritesOnly] = createSignal(false);
-	const [noBoardOnly, setNoBoardOnly] = createSignal(false);
-	const [sort, setSort] = createSignal<CompanySort>("relevance");
-	const [page, setPage] = createSignal(1);
-	const query = useCompanyPages(() => ({
-		q: term(),
-		favourite: favouritesOnly(),
-		noBoard: noBoardOnly(),
-		sort: sort(),
-		offset: (page() - 1) * COMPANY_PAGE_SIZE,
-	}));
-
-	createEffect(() => {
-		const total = query.data?.total;
-		if (total === undefined || query.isPlaceholderData) return;
-		const lastPage = Math.max(1, Math.ceil(total / COMPANY_PAGE_SIZE));
-		if (page() > lastPage) setPage(lastPage);
+	const urlSearch = Route.useSearch();
+	const state = () => parseCompanySearch(urlSearch());
+	const navigate = useNavigate({ from: "/companies" });
+	const table = useCompanyPages(state, (patch) =>
+		navigate({
+			to: "/companies",
+			search: (prev) => ({ ...prev, ...companySearchPatch(patch) }),
+			replace: true,
+		}),
+	);
+	const query = table.query;
+	const nav = useTableKeyNav({
+		rowIds: () => table.items().map((c) => c.ID),
+		data: table.items,
+		page: table.page,
+		lastPage: () => pageCount(table.total(), COMPANY_PAGE_SIZE),
+		onPage: table.setPage,
+		rowUrl: (id) => `/companies/${encodeURIComponent(id)}`,
 	});
+
+	createEffect(
+		on(term, (q) => table.setFilters({ q }), {
+			defer: true,
+		}),
+	);
+
+	const [filtersOpen, setFiltersOpen] = createSignal(false);
+	const filterCount = () => activeCompanyFilterCount(state());
+	const atsCounts = useCompanyAtsCounts();
 
 	const trackMutation = useSetCompanyTracking();
 	const favouriteMutation = useSetCompanyFavourite();
@@ -94,20 +135,32 @@ function CompaniesPage() {
 						Search companies
 					</Label>
 					<Input
+						ref={nav.searchRef}
 						id="companies-search"
+						aria-keyshortcuts="/"
+						onKeyDown={nav.onSearchKeyDown}
 						placeholder="Search companies…"
-						onInput={(e) => {
-							search(e.currentTarget.value);
-							setPage(1);
-						}}
+						value={untrack(() => state().q)}
+						onInput={(e) => search(e.currentTarget.value)}
 					/>
 				</div>
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={() => setFiltersOpen(true)}
+					class="relative shrink-0"
+				>
+					<Icon name="filter" size={14} />
+					Filters
+					<Show when={filterCount() > 0}>
+						<Badge class="ml-0.5 h-4 min-w-4 justify-center px-1 py-0 text-2xs leading-none">
+							{filterCount()}
+						</Badge>
+					</Show>
+				</Button>
 				<Switch
-					checked={favouritesOnly()}
-					onChange={(checked) => {
-						setFavouritesOnly(checked);
-						setPage(1);
-					}}
+					checked={state().favourite}
+					onChange={(favourite) => table.setFilters({ favourite })}
 				>
 					<div class="flex items-center gap-2">
 						<SwitchControl>
@@ -117,11 +170,8 @@ function CompaniesPage() {
 					</div>
 				</Switch>
 				<Switch
-					checked={noBoardOnly()}
-					onChange={(checked) => {
-						setNoBoardOnly(checked);
-						setPage(1);
-					}}
+					checked={state().noBoard}
+					onChange={(noBoard) => table.setFilters({ noBoard })}
 				>
 					<div class="flex items-center gap-2">
 						<SwitchControl>
@@ -130,16 +180,41 @@ function CompaniesPage() {
 						<SwitchLabel>No Board discovered</SwitchLabel>
 					</div>
 				</Switch>
+				<Select
+					options={POSTER_OPTIONS}
+					optionValue="value"
+					optionTextValue="label"
+					value={
+						POSTER_OPTIONS.find((o) => o.value === (state().poster ?? "all")) ??
+						null
+					}
+					onChange={(opt) => {
+						if (!opt) return;
+						table.setFilters({
+							poster: opt.value === "all" ? undefined : opt.value,
+						});
+					}}
+					itemComponent={(itemProps) => (
+						<SelectItem item={itemProps.item}>
+							<SelectItemLabel>{itemProps.item.rawValue.label}</SelectItemLabel>
+						</SelectItem>
+					)}
+				>
+					<SelectTrigger aria-label="Filter companies by poster">
+						<Select.Value<PosterOption>>
+							{(state) => state.selectedOption()?.label ?? "All companies"}
+						</Select.Value>
+					</SelectTrigger>
+					<SelectContent />
+				</Select>
 				<div class="ml-auto">
 					<Select
 						options={SORT_OPTIONS}
 						optionValue="value"
 						optionTextValue="label"
-						value={SORT_OPTIONS.find((o) => o.value === sort()) ?? null}
+						value={SORT_OPTIONS.find((o) => o.value === state().sort) ?? null}
 						onChange={(opt) => {
-							if (!opt) return;
-							setSort(opt.value);
-							setPage(1);
+							if (opt) table.setFilters({ sort: opt.value });
 						}}
 						itemComponent={(itemProps) => (
 							<SelectItem item={itemProps.item}>
@@ -159,10 +234,22 @@ function CompaniesPage() {
 				</div>
 			</div>
 
+			<CompanyFiltersDialog
+				open={filtersOpen()}
+				onOpenChange={setFiltersOpen}
+				ats={state().ats}
+				atsCounts={atsCounts.data ?? []}
+				onChange={table.setFilters}
+			/>
+
 			<QueryBoundary query={query} fallbackRows={6}>
 				{(data) => (
 					<>
-						<Card class="overflow-hidden">
+						<p class="mb-2 text-xs text-muted">
+							{data().verifiedBoardCompanies} of {data().allCompanies} companies
+							have a verified board
+						</p>
+						<Card ref={nav.containerRef} class="overflow-hidden">
 							<Table>
 								<TableHeader>
 									<TableRow>
@@ -179,10 +266,14 @@ function CompaniesPage() {
 								<TableBody>
 									<For each={data().items}>
 										{(c) => (
-											<TableRow>
+											<TableRow
+												{...nav.rowProps(c.ID)}
+												class="data-[active]:bg-accent-subtle"
+											>
 												<TableCell>
 													<FavouriteStar
 														favourite={c.Favourite ?? false}
+														hourly={c.Tracked && c.CheckIntervalMinutes === 60}
 														companyName={c.Name}
 														disabled={favouriteMutation.isPending}
 														onToggle={() =>
@@ -241,12 +332,14 @@ function CompaniesPage() {
 							</Table>
 							<Pager
 								total={data().total}
-								page={page()}
+								page={table.page()}
 								pageSize={COMPANY_PAGE_SIZE}
 								noun="companies"
-								onPage={setPage}
+								keyHints
+								onPage={table.setPage}
 							/>
 						</Card>
+						<TableShortcuts noun="company" />
 					</>
 				)}
 			</QueryBoundary>

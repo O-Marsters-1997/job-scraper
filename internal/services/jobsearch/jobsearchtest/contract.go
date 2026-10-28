@@ -37,7 +37,26 @@ func NewDeps(st Store) jobsearch.Deps {
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string)) {
 	t.Helper()
 
+	t.Run("a board token differing only in case resolves to the same board", func(t *testing.T) {
+		t.Parallel()
+		st, _ := newStore(t)
+		ctx := t.Context()
+		company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		first, err := st.UpsertCandidateBoard(ctx, company.ID, "ashby", "Acme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := st.UpsertCandidateBoard(ctx, company.ID, "ashby", "acme")
+		if err != nil || second.ID != first.ID {
+			t.Fatalf("UpsertCandidateBoard(acme) = %+v, %v, want board %s", second, err, first.ID)
+		}
+	})
+
 	t.Run("fetch cache round trips a redirect and forgets by url", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		want := dto.CachedResponse{URL: "https://x.test/a", Status: 302, Header: http.Header{"Location": {"https://x.test/b"}}, Body: []byte("body")}
@@ -62,7 +81,80 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("a recorded discover miss is seen only since before it", func(t *testing.T) {
+		t.Parallel()
+		st, _ := newStore(t)
+		ctx := t.Context()
+		if err := st.RecordDiscoverMiss(ctx, "greenhouse", "acme"); err != nil {
+			t.Fatal(err)
+		}
+		for name, tc := range map[string]struct {
+			token string
+			since time.Time
+			want  bool
+		}{
+			"recent window": {"acme", time.Now().Add(-time.Hour), true},
+			"future window": {"acme", time.Now().Add(time.Hour), false},
+			"other board":   {"other", time.Now().Add(-time.Hour), false},
+		} {
+			got, err := st.DiscoverMissedSince(ctx, "greenhouse", tc.token, tc.since)
+			if err != nil || got != tc.want {
+				t.Errorf("%s: DiscoverMissedSince = %v, %v, want %v", name, got, err, tc.want)
+			}
+		}
+		if err := st.RecordDiscoverMiss(ctx, "greenhouse", "acme"); err != nil {
+			t.Errorf("RecordDiscoverMiss(repeat) = %v, want nil", err)
+		}
+	})
+
+	t.Run("harvest seen ids are kept per source until retired", func(t *testing.T) {
+		t.Parallel()
+		st, _ := newStore(t)
+		ctx := t.Context()
+		if err := st.RecordHarvestSeenIDs(ctx, "wttj", "backfill", []string{"a", "b", "c"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.RecordHarvestSeenIDs(ctx, "wttj", "exported", []string{"b"}); err != nil {
+			t.Fatalf("RecordHarvestSeenIDs(repeat) = %v, want nil", err)
+		}
+		if err := st.RecordHarvestSeenIDs(ctx, "other", "backfill", []string{"x"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.RetireHarvestSeenIDs(ctx, "wttj", []string{"a"}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := st.HarvestSeenIDs(ctx, "wttj")
+		if err != nil {
+			t.Fatal(err)
+		}
+		slices.Sort(got)
+		if diff := cmp.Diff([]string{"b", "c"}, got); diff != "" {
+			t.Errorf("HarvestSeenIDs (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("marking a board's UK jobs seen stamps it", func(t *testing.T) {
+		t.Parallel()
+		st, _ := newStore(t)
+		ctx := t.Context()
+		company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme"); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.MarkBoardUKJobsSeen(ctx, "greenhouse", "acme"); err != nil {
+			t.Fatal(err)
+		}
+		boards, err := st.ListCompanyBoards(ctx, company.ID)
+		if err != nil || len(boards) != 1 || boards[0].UKJobsSeenAt == nil {
+			t.Fatalf("ListCompanyBoards() = %+v, %v, want one stamped board", boards, err)
+		}
+	})
+
 	t.Run("get an unknown job returns not found", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		_, err := st.GetJob(t.Context(), missingID, missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -71,6 +163,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("save then get a canonical job round trips", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		saved, status, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/1"})
@@ -84,6 +177,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("marking seen is idempotent and unseen clears it", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		saved, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/seen"})
@@ -118,6 +212,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("resaving the same content is unchanged, changed content is changed", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		job := dto.Job{Title: "Engineer", URL: "https://example.com/jobs/2"}
@@ -138,7 +233,42 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("discovery provenance is set on creation only and its listing URL is aliased", func(t *testing.T) {
+		t.Parallel()
+		st, _ := newStore(t)
+		ctx := t.Context()
+		created, status, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/new", DiscoveredVia: "wttj", DiscoveryURL: "https://wttj.example/jobs/new"})
+		if err != nil || status != "new" {
+			t.Fatalf("SaveCanonical(discovered) = %+v, %q, %v, want new", created, status, err)
+		}
+		existing, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Designer", URL: "https://example.com/jobs/old"})
+		if err != nil {
+			t.Fatalf("SaveCanonical(existing) = %v", err)
+		}
+		again, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Designer", URL: "https://example.com/jobs/old", DiscoveredVia: "wellfound", DiscoveryURL: "https://wellfound.example/jobs/old"})
+		if err != nil || again.ID != existing.ID {
+			t.Fatalf("SaveCanonical(rediscovered) = %+v, %v, want job %s", again, err, existing.ID)
+		}
+		for _, tt := range []struct{ id, wantVia, wantAlias string }{
+			{created.ID, "wttj", "https://wttj.example/jobs/new"},
+			{existing.ID, "", "https://wellfound.example/jobs/old"},
+		} {
+			got, err := st.GetJob(ctx, tt.id, missingID)
+			if err != nil || got.DiscoveredVia != tt.wantVia {
+				t.Errorf("GetJob(%s) = %+v, %v, want DiscoveredVia %q", tt.id, got, err, tt.wantVia)
+				continue
+			}
+			listings, err := st.ListJobListings(ctx, tt.id)
+			if err != nil || !slices.ContainsFunc(listings, func(l dto.JobListing) bool { return l.URL == tt.wantAlias }) {
+				t.Errorf("ListJobListings(%s) = %+v, %v, want alias %s", tt.id, listings, err, tt.wantAlias)
+			}
+		}
+	})
+
+	runPostedContract(t, newStore)
+
 	t.Run("listings are every url of a job in first-seen order", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		posting := dto.Job{Title: "Engineer", BoardID: "33333333-3333-3333-3333-333333333333", ProviderPostingID: "p-1"}
@@ -174,6 +304,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("listings of an unknown job are empty", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		got, err := st.ListJobListings(t.Context(), missingID)
 		if err != nil || len(got) != 0 {
@@ -181,7 +312,51 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("FindJobByPosting finds a job by board posting or by url and reports a miss", func(t *testing.T) {
+		t.Parallel()
+		st, _ := newStore(t)
+		ctx := t.Context()
+		company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "find-co", Name: "Find Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		board, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "find-co")
+		if err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		byBoard, _, err := st.SaveCanonical(ctx, dto.Job{
+			Title: "Engineer", URL: "https://boards.greenhouse.io/find-co/jobs/42", Source: "greenhouse",
+			CompanySlug: "find-co", BoardID: board.ID, ProviderPostingID: "42",
+		})
+		if err != nil {
+			t.Fatalf("SaveCanonical(board) = %v", err)
+		}
+		byURL, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Designer", URL: "https://example.com/jobs/find-1", Source: "other", CompanySlug: "find-co"})
+		if err != nil {
+			t.Fatalf("SaveCanonical(url) = %v", err)
+		}
+
+		for _, tt := range []struct {
+			name                          string
+			url, source, token, postingID string
+			wantID                        string
+		}{
+			{"posting ID on the board", "https://elsewhere.test/x", "greenhouse", "find-co", "42", byBoard.ID},
+			{"url alone", "https://example.com/jobs/find-1?utm_source=x", "", "", "", byURL.ID},
+		} {
+			got, err := st.FindJobByPosting(ctx, tt.url, tt.source, tt.token, tt.postingID)
+			if err != nil || got.ID != tt.wantID {
+				t.Errorf("FindJobByPosting(%s) = %q, %v, want %q", tt.name, got.ID, err, tt.wantID)
+			}
+		}
+		_, err = st.FindJobByPosting(ctx, "https://example.com/jobs/none", "greenhouse", "find-co", "43")
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("FindJobByPosting(miss) err = %v, want %v", err, data.ErrNotFound)
+		}
+	})
+
 	t.Run("urls differing only by tracking parameters are one job", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		first, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/9?gh_jid=7&utm_source=x&team=a"})
@@ -198,6 +373,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("new urls filters out known ones", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		if _, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/3"}); err != nil {
@@ -210,6 +386,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("upsert company then get round trips", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
@@ -223,6 +400,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("get an unknown company returns not found", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		_, err := st.GetCompany(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -231,6 +409,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("get company for user carries that user's tracking", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "tracked-co", Name: "Tracked Co"})
@@ -247,6 +426,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("get an unknown company for user returns not found", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		_, err := st.GetCompanyForUser(t.Context(), userID, missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -255,6 +435,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("set company tracking then list for user shows it", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "tracked-co", Name: "Tracked Co"})
@@ -271,6 +452,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("paging companies by offset visits each once in name then id order and reports the total", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		for _, c := range []dto.CompanyUpsert{
@@ -308,7 +490,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
-	t.Run("relevance puts tracked companies first then their favourites, alphabetical ignores both", func(t *testing.T) {
+	t.Run("relevance puts favourites first, then tracked companies, alphabetical ignores both", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		ids := map[string]string{}
@@ -325,6 +508,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			}
 		}
 		for _, name := range []string{"Gamma", "Delta"} {
+			verifyBoard(t, st, ids[name], "greenhouse")
 			if err := st.SetCompanyFavourite(ctx, userID, ids[name], true); err != nil {
 				t.Fatalf("SetCompanyFavourite(%q) = %v", name, err)
 			}
@@ -340,8 +524,11 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			}
 			return out
 		}
-		if got, want := names(dto.CompanySortRelevance), []string{"Gamma", "Beta", "Alpha", "Delta"}; !slices.Equal(got, want) {
-			t.Errorf("relevance = %v, want %v (an untracked favourite gets no boost)", got, want)
+		if got, want := names(dto.CompanySortRelevance), []string{"Delta", "Gamma", "Beta", "Alpha"}; !slices.Equal(got, want) {
+			t.Errorf("relevance = %v, want %v (favourites lead tracked companies)", got, want)
+		}
+		if got, want := names(dto.CompanySortOpenJobs), []string{"Alpha", "Beta", "Delta", "Gamma"}; !slices.Equal(got, want) {
+			t.Errorf("open jobs = %v, want %v (no jobs, so ties fall back to name)", got, want)
 		}
 		if got, want := names(dto.CompanySortAlphabetical), []string{"Alpha", "Beta", "Delta", "Gamma"}; !slices.Equal(got, want) {
 			t.Errorf("alphabetical = %v, want %v", got, want)
@@ -349,6 +536,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("no-board filter keeps companies without any board and counts only them", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		withBoard, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "with-board", Name: "With Board"})
@@ -367,7 +555,111 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("ats filter and counts consider verified boards only and skip wttj", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		for _, b := range []struct{ slug, source string }{
+			{"gh-co", "greenhouse"}, {"gh-co", "lever"}, {"lever-co", "lever"}, {"wttj-co", "wttj"},
+		} {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: b.slug, Name: b.slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", b.slug, err)
+			}
+			if _, err := st.UpsertCandidateBoard(ctx, c.ID, b.source, b.slug); err != nil {
+				t.Fatalf("UpsertCandidateBoard(%q, %q) = %v", b.slug, b.source, err)
+			}
+			if _, err := st.VerifyCompanyBoard(ctx, c.ID, b.source, b.slug, "test", "test"); err != nil {
+				t.Fatalf("VerifyCompanyBoard(%q, %q) = %v", b.slug, b.source, err)
+			}
+		}
+		candidate, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "candidate-co", Name: "candidate-co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(candidate) = %v", err)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, candidate.ID, "greenhouse", "candidate-co"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(candidate) = %v", err)
+		}
+
+		counts, err := st.CountCompaniesByATS(ctx)
+		want := []dto.ATSCount{{Source: "greenhouse", Companies: 1}, {Source: "lever", Companies: 2}}
+		if err != nil || !slices.Equal(counts, want) {
+			t.Fatalf("CountCompaniesByATS() = %+v, %v, want %+v", counts, err, want)
+		}
+
+		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, ATSSources: []string{"greenhouse"}})
+		if err != nil || len(page.Items) != 1 || page.Items[0].Slug != "gh-co" || page.Total != 1 {
+			t.Fatalf("PageCompaniesForUser(ats greenhouse) = %+v, %v, want only gh-co", page, err)
+		}
+		page, err = st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, ATSSources: []string{"greenhouse", "lever"}})
+		if err != nil || page.Total != 2 {
+			t.Fatalf("PageCompaniesForUser(ats greenhouse+lever) = %+v, %v, want gh-co and lever-co once each", page, err)
+		}
+	})
+
+	t.Run("board coverage counts verified non-WTTJ companies regardless of filters", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		ids := map[string]string{}
+		for _, slug := range []string{"verified", "wttj-only", "candidate", "bare"} {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug, Name: slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", slug, err)
+			}
+			ids[slug] = c.ID
+		}
+		verifyBoard(t, st, ids["verified"], "greenhouse")
+		verifyBoard(t, st, ids["wttj-only"], "wttj")
+		if _, err := st.UpsertCandidateBoard(ctx, ids["candidate"], "greenhouse", "candidate"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, Search: "bare"})
+		if err != nil || page.Total != 1 || page.AllCompanies != 4 || page.VerifiedBoardCompanies != 1 {
+			t.Fatalf("PageCompaniesForUser(search bare) = %+v, %v, want total 1, 1 of 4 verified", page, err)
+		}
+	})
+
+	t.Run("poster filter splits agency and likely agency from everything else", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		kinds := map[string]dto.CompanyKind{
+			"agency-co": dto.KindAgency, "likely-agency-co": dto.KindLikelyAgency,
+			"direct-co": dto.KindDirect, "likely-direct-co": dto.KindLikelyDirect, "plain-co": dto.KindUnclassified,
+		}
+		for slug, kind := range kinds {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug, Name: slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", slug, err)
+			}
+			if kind == dto.KindUnclassified {
+				continue
+			}
+			if err := st.SetCompanyKind(ctx, c.ID, kind); err != nil {
+				t.Fatalf("SetCompanyKind(%q) = %v", slug, err)
+			}
+		}
+		for poster, want := range map[dto.Poster][]string{
+			dto.PosterAgency: {"agency-co", "likely-agency-co"},
+			dto.PosterDirect: {"direct-co", "likely-direct-co", "plain-co"},
+		} {
+			page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, Poster: poster})
+			if err != nil {
+				t.Fatalf("PageCompaniesForUser(%q) = %v", poster, err)
+			}
+			var got []string
+			for _, c := range page.Items {
+				got = append(got, c.Slug)
+			}
+			if diff := cmp.Diff(want, got); diff != "" || page.Total != len(want) {
+				t.Errorf("PageCompaniesForUser(%q) slugs (-want +got):\n%s\ntotal = %d", poster, diff, page.Total)
+			}
+		}
+	})
+
 	t.Run("companies search and tracked filters compose with the offset", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		var acme dto.Company
@@ -406,6 +698,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("list tracked companies returns only this user's, paused included, with boards", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		active, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "active-co", Name: "Active Co"})
@@ -449,6 +742,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("verifying a board records how it was discovered once", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "via-co", Name: "Via Co"})
@@ -472,6 +766,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("completing a board stores the reported and parsed counts", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "count-co", Name: "Count Co"})
@@ -490,7 +785,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 		job, _, err := st.SaveCanonical(ctx, dto.Job{
 			Title: "Engineer", URL: "https://boards.greenhouse.io/count-co/jobs/1", Source: "greenhouse", CompanySlug: "count-co",
-			CompanyID: c.ID, BoardID: board.ID, ProviderPostingID: "1", UpdatedAt: time.Now(),
+			CompanyID: c.ID, BoardID: board.ID, ProviderPostingID: "1",
 		})
 		if err != nil {
 			t.Fatalf("SaveCanonical(...) = %v", err)
@@ -499,7 +794,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if err != nil {
 			t.Fatalf("ClaimBoard(...) = %v", err)
 		}
-		if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: poll, Complete: true, Jobs: []dto.Job{job}, Reported: 5}); err != nil {
+		if _, err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: poll, Complete: true, Jobs: []dto.Job{job}, Reported: 5}); err != nil {
 			t.Fatalf("CompleteBoard(...) = %v", err)
 		}
 		boards, err := st.ListCompanyBoards(ctx, c.ID)
@@ -508,9 +803,87 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
-	t.Run("verified boards by slug skip candidates and flag enabled trackers", func(t *testing.T) {
+	t.Run("a retired board is no longer due", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "gone-co", Name: "Gone Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		board, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", "gone-co")
+		if err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, c.ID, true, 60); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+		if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", "gone-co", "test", ""); err != nil {
+			t.Fatalf("VerifyCompanyBoard(...) = %v", err)
+		}
+		if err := st.RetireBoard(ctx, board.ID); err != nil {
+			t.Fatalf("RetireBoard(...) = %v", err)
+		}
+		due, err := st.ListDueBoards(ctx)
+		if err != nil || len(due) != 0 {
+			t.Errorf("ListDueBoards() = %v, %v, want none", due, err)
+		}
+		boards, err := st.ListCompanyBoards(ctx, c.ID)
+		if err != nil || len(boards) != 1 || boards[0].Status != dto.BoardRetired {
+			t.Errorf("ListCompanyBoards() = %+v, %v, want one retired board", boards, err)
+		}
+	})
+
+	t.Run("a published board check holds the board back until released", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "held-co", Name: "Held Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		board, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", "held-co")
+		if err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, c.ID, true, 60); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+		if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", "held-co", "test", ""); err != nil {
+			t.Fatalf("VerifyCompanyBoard(...) = %v", err)
+		}
+		dueIDs := func() []string {
+			t.Helper()
+			due, err := st.ListDueBoards(ctx)
+			if err != nil {
+				t.Fatalf("ListDueBoards() = %v", err)
+			}
+			ids := make([]string, 0, len(due))
+			for _, b := range due {
+				ids = append(ids, b.ID)
+			}
+			return ids
+		}
+
+		if err := st.MarkBoardCheckPublished(ctx, board.ID); err != nil {
+			t.Fatalf("MarkBoardCheckPublished(...) = %v", err)
+		}
+		if got := dueIDs(); len(got) != 0 {
+			t.Errorf("ListDueBoards() after publish = %v, want none", got)
+		}
+		if err := st.ClearBoardCheckPublished(ctx, board.ID); err != nil {
+			t.Fatalf("ClearBoardCheckPublished(...) = %v", err)
+		}
+		if got := dueIDs(); !slices.Equal(got, []string{board.ID}) {
+			t.Errorf("ListDueBoards() after release = %v, want [%s]", got, board.ID)
+		}
+	})
+
+	t.Run("verified boards by slug skip candidates and flag enabled trackers and completed polls", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		boardIDs := map[string]string{}
 		for _, tc := range []struct {
 			slug     string
 			verified bool
@@ -520,9 +893,11 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			if err != nil {
 				t.Fatalf("UpsertCompany(%s) = %v", tc.slug, err)
 			}
-			if _, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", tc.slug); err != nil {
+			board, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", tc.slug)
+			if err != nil {
 				t.Fatalf("UpsertCandidateBoard(%s) = %v", tc.slug, err)
 			}
+			boardIDs[tc.slug] = board.ID
 			if tc.verified {
 				if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", tc.slug, "test", ""); err != nil {
 					t.Fatalf("VerifyCompanyBoard(%s) = %v", tc.slug, err)
@@ -532,10 +907,17 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 				t.Fatalf("SetCompanyTracking(%s) = %v", tc.slug, err)
 			}
 		}
+		poll, err := st.ClaimBoard(ctx, boardIDs["polled-co"], false)
+		if err != nil {
+			t.Fatalf("ClaimBoard(polled-co) = %v", err)
+		}
+		if _, err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: poll, Complete: true}); err != nil {
+			t.Fatalf("CompleteBoard(polled-co) = %v", err)
+		}
 		got, err := st.ListVerifiedBoardsBySlug(ctx, []string{"polled-co", "candidate-co", "paused-co", "unknown-co"})
 		want := []dto.CardBoard{
 			{CompanySlug: "paused-co", Source: "greenhouse", BoardToken: "paused-co"},
-			{CompanySlug: "polled-co", Source: "greenhouse", BoardToken: "polled-co", Tracked: true},
+			{CompanySlug: "polled-co", Source: "greenhouse", BoardToken: "polled-co", Tracked: true, Polled: true},
 		}
 		slices.SortFunc(got, func(a, b dto.CardBoard) int { return strings.Compare(a.CompanySlug, b.CompanySlug) })
 		if err != nil || !cmp.Equal(got, want) {
@@ -544,6 +926,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("verified company slugs need a verified board", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
 		for _, tc := range []struct {
@@ -570,6 +953,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("delete company tracking removes it and keeps the company", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "untrack-co", Name: "Untrack Co"})
@@ -595,6 +979,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("dismiss keeps the row disabled, undo re-enables it as new", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "review-co", Name: "Review Co"})
@@ -622,6 +1007,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("track discovered company inserts as new once and never overwrites", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "found-co", Name: "Found Co"})
@@ -643,13 +1029,15 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
-	t.Run("favouriting an untracked company stars it without tracking it", func(t *testing.T) {
+	t.Run("favouriting an untracked company stars and tracks it hourly, unfavouriting goes back to six hours", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "star-co", Name: "Star Co"})
 		if err != nil {
 			t.Fatalf("UpsertCompany(...) = %v", err)
 		}
+		verifyBoard(t, st, c.ID, "greenhouse")
 		job, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/star", CompanySlug: "star-co"})
 		if err != nil {
 			t.Fatalf("SaveCanonical(...) = %v", err)
@@ -660,8 +1048,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			}
 		}
 		got, err := st.GetCompanyForUser(ctx, userID, c.ID)
-		if err != nil || !got.Favourite || got.Tracked {
-			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want favourite and untracked", got, err)
+		if err != nil || !got.Favourite || !got.Tracked || got.CheckIntervalMinutes != 60 {
+			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want favourite, tracked, every 60 minutes", got, err)
 		}
 		gotJob, err := st.GetJob(ctx, job.ID, userID)
 		if err != nil || !gotJob.CompanyFavourite {
@@ -671,21 +1059,151 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if err != nil || len(page.Items) != 1 || page.Items[0].ID != c.ID {
 			t.Fatalf("PageCompaniesForUser(favourite only) = %+v, %v, want Star Co", page, err)
 		}
-		if tracked, err := st.ListTrackedCompaniesForUser(ctx, userID); err != nil || len(tracked) != 0 {
-			t.Fatalf("ListTrackedCompaniesForUser(...) = %+v, %v, want none", tracked, err)
-		}
 		for range 2 {
 			if err := st.SetCompanyFavourite(ctx, userID, c.ID, false); err != nil {
 				t.Fatalf("SetCompanyFavourite(false) = %v", err)
 			}
 		}
+		got, err = st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || got.Favourite || !got.Tracked || got.CheckIntervalMinutes != 360 {
+			t.Fatalf("GetCompanyForUser(...) after unstar = %+v, %v, want unfavourited, tracked, every 360 minutes", got, err)
+		}
 		page, err = st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, FavouriteOnly: true})
 		if err != nil || len(page.Items) != 0 {
 			t.Fatalf("PageCompaniesForUser(favourite only) after unstar = %+v, %v, want none", page, err)
 		}
+		if _, err := st.SetCompanyReviewState(ctx, userID, c.ID, "dismissed"); err != nil {
+			t.Fatalf("SetCompanyReviewState(dismissed) = %v", err)
+		}
+		if err := st.SetCompanyFavourite(ctx, userID, c.ID, true); err != nil {
+			t.Fatalf("SetCompanyFavourite(true) = %v", err)
+		}
+		got, err = st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || !got.Tracked || got.ReviewState != "kept" {
+			t.Fatalf("GetCompanyForUser(...) after favouriting a dismissed company = %+v, %v, want tracked and kept", got, err)
+		}
+	})
+
+	t.Run("favouriting a company without a verified ats board stars it and leaves tracking alone", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		for _, tc := range []struct{ slug, source, board string }{
+			{"no-board-co", "", ""},
+			{"candidate-co", "greenhouse", "candidate"},
+			{"discovery-co", "linkedin", "verified"},
+		} {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: tc.slug, Name: tc.slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", tc.slug, err)
+			}
+			switch tc.board {
+			case "candidate":
+				if _, err := st.UpsertCandidateBoard(ctx, c.ID, tc.source, tc.slug); err != nil {
+					t.Fatalf("UpsertCandidateBoard(%q) = %v", tc.slug, err)
+				}
+			case "verified":
+				verifyBoard(t, st, c.ID, tc.source)
+			}
+			if err := st.SetCompanyFavourite(ctx, userID, c.ID, true); err != nil {
+				t.Fatalf("SetCompanyFavourite(%q) = %v", tc.slug, err)
+			}
+			got, err := st.GetCompanyForUser(ctx, userID, c.ID)
+			if err != nil || !got.Favourite || got.Tracked {
+				t.Fatalf("GetCompanyForUser(%q) = %+v, %v, want favourite and untracked", tc.slug, got, err)
+			}
+		}
+	})
+
+	t.Run("an upsert kind overrides a likely kind, never agency, and an empty kind keeps it", func(t *testing.T) {
+		t.Parallel()
+		st, _ := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co", Kind: dto.KindDirect})
+		if err != nil || c.Kind != dto.KindDirect {
+			t.Fatalf("UpsertCompany(direct) = %+v, %v, want direct", c, err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindLikelyAgency); err != nil {
+			t.Fatalf("SetCompanyKind(likely_agency) = %v", err)
+		}
+		if c, err = st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co"}); err != nil || c.Kind != dto.KindLikelyAgency {
+			t.Fatalf("UpsertCompany(empty) = %+v, %v, want likely_agency kept", c, err)
+		}
+		if c, err = st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co", Kind: dto.KindDirect}); err != nil || c.Kind != dto.KindDirect {
+			t.Fatalf("UpsertCompany(direct) = %+v, %v, want direct", c, err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindAgency); err != nil {
+			t.Fatalf("SetCompanyKind(agency) = %v", err)
+		}
+		if c, err = st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co", Kind: dto.KindDirect}); err != nil || c.Kind != dto.KindAgency {
+			t.Fatalf("UpsertCompany(direct) = %+v, %v, want agency kept", c, err)
+		}
+	})
+
+	t.Run("a company starts unclassified and its kind shows on the company and its jobs", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "kind-co", Name: "Kind Co"})
+		if err != nil || c.Kind != dto.KindUnclassified {
+			t.Fatalf("UpsertCompany(...) = %+v, %v, want unclassified", c, err)
+		}
+		job, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/kind", CompanySlug: "kind-co"})
+		if err != nil {
+			t.Fatalf("SaveCanonical(...) = %v", err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindAgency); err != nil {
+			t.Fatalf("SetCompanyKind(agency) = %v", err)
+		}
+		got, err := st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || got.Kind != dto.KindAgency {
+			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want agency", got, err)
+		}
+		gotJob, err := st.GetJob(ctx, job.ID, userID)
+		if err != nil || gotJob.CompanyKind != dto.KindAgency {
+			t.Fatalf("GetJob(...).CompanyKind = %q, %v, want agency", gotJob.CompanyKind, err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindDirect); err != nil {
+			t.Fatalf("SetCompanyKind(direct) = %v", err)
+		}
+		page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10})
+		if err != nil || len(page.Items) != 1 || page.Items[0].CompanyKind != dto.KindDirect {
+			t.Fatalf("Page(...) = %+v, %v, want one direct job", page, err)
+		}
+		if err := st.SetCompanyKind(ctx, "00000000-0000-0000-0000-000000000000", dto.KindAgency); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("SetCompanyKind(unknown) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("suggesting a company kind writes only over unclassified", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "suggest-co", Name: "Suggest Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		wrote, err := st.SuggestCompanyKind(ctx, c.ID, dto.KindLikelyAgency)
+		if err != nil || !wrote {
+			t.Fatalf("SuggestCompanyKind(first) = %v, %v, want true", wrote, err)
+		}
+		wrote, err = st.SuggestCompanyKind(ctx, c.ID, dto.KindLikelyDirect)
+		if err != nil || wrote {
+			t.Fatalf("SuggestCompanyKind(second) = %v, %v, want false", wrote, err)
+		}
+		got, err := st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || got.Kind != dto.KindLikelyAgency {
+			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want likely_agency", got, err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindDirect); err != nil {
+			t.Fatalf("SetCompanyKind(direct) = %v", err)
+		}
+		if wrote, err = st.SuggestCompanyKind(ctx, c.ID, dto.KindLikelyAgency); err != nil || wrote {
+			t.Fatalf("SuggestCompanyKind(over direct) = %v, %v, want false", wrote, err)
+		}
 	})
 
 	t.Run("favouriting a new tracked company keeps it, and dismissing it removes the star", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "found-co", Name: "Found Co"})
@@ -695,6 +1213,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if _, err := st.TrackDiscoveredCompany(ctx, userID, c.ID); err != nil {
 			t.Fatalf("TrackDiscoveredCompany(...) = %v", err)
 		}
+		verifyBoard(t, st, c.ID, "greenhouse")
 		if err := st.SetCompanyFavourite(ctx, userID, c.ID, true); err != nil {
 			t.Fatalf("SetCompanyFavourite(true) = %v", err)
 		}
@@ -712,6 +1231,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("untracked discovered boards exclude tracked, dismissed, candidate and user-confirmed ones", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		cases := []struct {
@@ -743,13 +1263,14 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 				}
 			}
 		}
-		got, err := st.ListUntrackedDiscoveredBoards(ctx)
+		got, err := st.ListUntrackedDiscoveredBoards(ctx, false, time.Now().Add(-30*24*time.Hour))
 		if err != nil || len(got) != 1 || got[0].BoardToken != "untracked-co" {
 			t.Fatalf("ListUntrackedDiscoveredBoards() = %+v, %v, want only untracked-co", got, err)
 		}
 	})
 
 	t.Run("set company tracking without an interval keeps the existing one", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "keep-co", Name: "Keep Co"})
@@ -766,6 +1287,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("saving a profile twice keeps one, shown on the new company card", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "profiled", Name: "Profiled"})
@@ -778,8 +1300,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if _, err := st.SetCompanyReviewState(ctx, userID, c.ID, "new"); err != nil {
 			t.Fatalf("SetCompanyReviewState(...) = %v", err)
 		}
-		got, err := st.ListNewCompanies(ctx, userID)
-		if err != nil || len(got) != 1 || got[0].Profile != nil {
+		page, err := st.ListNewCompanies(ctx, userID, 25, 0)
+		if got := page.Items; err != nil || len(got) != 1 || got[0].Profile != nil {
 			t.Fatalf("ListNewCompanies(no profile) = %+v, %v, want nil profile", got, err)
 		}
 		for _, hq := range []string{"Paris", "London"} {
@@ -787,13 +1309,14 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 				t.Fatalf("SaveCompanyProfile(%s) = %v", hq, err)
 			}
 		}
-		got, err = st.ListNewCompanies(ctx, userID)
-		if err != nil || len(got) != 1 || got[0].Profile == nil || got[0].Profile.HQ != "London" {
+		page, err = st.ListNewCompanies(ctx, userID, 25, 0)
+		if got := page.Items; err != nil || len(got) != 1 || got[0].Profile == nil || got[0].Profile.HQ != "London" {
 			t.Fatalf("ListNewCompanies(profiled) = %+v, %v, want the London profile", got, err)
 		}
 	})
 
 	t.Run("new companies list only review state new, newest first, with their open jobs", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		var ids []string
@@ -819,30 +1342,40 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 		for i, id := range ids {
 			if _, _, err := st.SaveCanonical(ctx, dto.Job{
-				Title: "Go Engineer", URL: fmt.Sprintf("https://example.com/new-co/%d", i), CompanyID: id,
+				Title: "Go Engineer", URL: fmt.Sprintf("https://example.com/new-co/%d", i), CompanyID: id, CompanySlug: fmt.Sprintf("new-co-%d", i),
 			}); err != nil {
 				t.Fatalf("SaveCanonical(...) = %v", err)
 			}
 		}
 
-		got, err := st.ListNewCompanies(ctx, userID)
-		if err != nil || len(got) != 2 || got[0].ID != ids[1] || got[1].ID != ids[0] {
-			t.Fatalf("ListNewCompanies(...) = %+v, %v, want newer-co then older-co", got, err)
+		page, err := st.ListNewCompanies(ctx, userID, 25, 0)
+		got := page.Items
+		if err != nil || len(got) != 2 || page.Total != 2 || got[0].ID != ids[1] || got[1].ID != ids[0] {
+			t.Fatalf("ListNewCompanies(...) = %+v, %v, want newer-co then older-co", page, err)
 		}
 		if len(got[0].Boards) != 0 || len(got[1].Boards) != 1 {
 			t.Fatalf("ListNewCompanies(...) boards = %+v, want one on older-co only", got)
 		}
-		jobs, err := st.ListNewCompanyJobs(ctx, userID)
+		jobs, err := st.ListNewCompanyJobs(ctx, userID, ids)
 		if err != nil || len(jobs) != 2 {
 			t.Fatalf("ListNewCompanyJobs(...) = %+v, %v, want the two new companies' jobs", jobs, err)
 		}
-		other, err := st.ListNewCompanies(ctx, missingID)
-		if err != nil || len(other) != 0 {
+		onePage, err := st.ListNewCompanyJobs(ctx, userID, ids[:1])
+		if err != nil || len(onePage) != 1 {
+			t.Fatalf("ListNewCompanyJobs(one id) = %+v, %v, want only that company's job", onePage, err)
+		}
+		second, err := st.ListNewCompanies(ctx, userID, 1, 1)
+		if err != nil || len(second.Items) != 1 || second.Items[0].ID != ids[0] || second.Total != 2 || len(second.Items[0].Boards) != 1 {
+			t.Fatalf("ListNewCompanies(limit 1, offset 1) = %+v, %v, want older-co with its board and total 2", second, err)
+		}
+		other, err := st.ListNewCompanies(ctx, missingID, 25, 0)
+		if err != nil || len(other.Items) != 0 || other.Total != 0 {
 			t.Fatalf("ListNewCompanies(other user) = %+v, %v, want none", other, err)
 		}
 	})
 
 	t.Run("create then list source targets for a user", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "acme", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -856,6 +1389,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("create a duplicate source target returns already exists", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		if _, err := st.CreateSourceTarget(ctx, userID, "linkedin", "dup", true, map[string]string{}, dto.RunWindow{}, nil); err != nil {
@@ -867,6 +1401,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("restarting a failed run clears its error", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "retry", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -887,6 +1422,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("disabling a source records the reason until the target is re-enabled", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		running, err := st.CreateSourceTargetWithRun(ctx, userID, "indeed", "go", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -921,6 +1457,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("starting a run clears the disabled reason", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "indeed", "go", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -937,6 +1474,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("update then delete a source target", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "update-me", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -958,6 +1496,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("a new source target is manual on the default window", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		target, err := st.CreateSourceTarget(t.Context(), userID, "linkedin", "defaults", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
@@ -974,6 +1513,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("run window and next run round trip through create update and rerun", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		interval := 180
@@ -1021,6 +1561,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("get an unknown source target returns not found", func(t *testing.T) {
+		t.Parallel()
 		st, _ := newStore(t)
 		_, err := st.GetSourceTarget(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
@@ -1029,6 +1570,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("save cards then list for user round trips", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "candidate-search", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1046,6 +1588,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("new urls counts saved candidates as known under any host or tracking params", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "known-search", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1067,6 +1610,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	})
 
 	t.Run("list for user returns the full card only for complete sources", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		complete, err := st.CreateSourceTarget(ctx, userID, "remoteok", "complete-search", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1097,7 +1641,51 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("a card keeps its remote-check page and its discovering targets' filters", func(t *testing.T) {
+		t.Parallel()
+		st, userID := newStore(t)
+		ctx := t.Context()
+		remote := map[string]string{"arrangement": "2"}
+		first, err := st.CreateSourceTarget(ctx, userID, "linkedin", "remote-search", true, remote, dto.RunWindow{}, nil)
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(remote) = %v", err)
+		}
+		second, err := st.CreateSourceTarget(ctx, userID, "linkedin", "london-search", true, map[string]string{}, dto.RunWindow{}, nil)
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(london) = %v", err)
+		}
+		card := dto.Job{URL: "https://www.linkedin.com/jobs/view/777", Title: "Engineer", RemoteCheckURL: "https://uk.linkedin.com/jobs/view/engineer-777", WorkArrangement: "remote"}
+		var saved []sourcetargets.Candidate
+		for _, target := range []dto.SourceTarget{first, second} {
+			if saved, err = st.SaveCards(ctx, target, []dto.Job{card}); err != nil || len(saved) != 1 {
+				t.Fatalf("SaveCards(%s) = %+v, %v, want one candidate", target.Value, saved, err)
+			}
+		}
+
+		listed, err := st.ListForUser(ctx, userID, "", 10)
+		if err != nil || len(listed) != 1 {
+			t.Fatalf("ListForUser(...) = %+v, %v, want one candidate", listed, err)
+		}
+		if got := listed[0].Card; got.RemoteCheckURL != card.RemoteCheckURL || got.WorkArrangement != "remote" {
+			t.Errorf("listed card = {RemoteCheckURL: %q, WorkArrangement: %q}, want both kept", got.RemoteCheckURL, got.WorkArrangement)
+		}
+
+		got, err := st.DiscoveryFilters(ctx, userID, []string{saved[0].ID})
+		if err != nil {
+			t.Fatalf("DiscoveryFilters(...) = %v", err)
+		}
+		slices.SortFunc(got[saved[0].ID], func(a, b map[string]string) int { return len(b) - len(a) })
+		want := map[string][]map[string]string{saved[0].ID: {remote, {}}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("DiscoveryFilters(...) (-want +got):\n%s", diff)
+		}
+		if other, err := st.DiscoveryFilters(ctx, missingID, []string{saved[0].ID}); err != nil || len(other) != 0 {
+			t.Errorf("DiscoveryFilters(other user) = %v, %v, want none", other, err)
+		}
+	})
+
 	t.Run("assess a relevant candidate requests detail once", func(t *testing.T) {
+		t.Parallel()
 		st, userID := newStore(t)
 		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "assess-search", true, map[string]string{}, dto.RunWindow{}, nil)
@@ -1124,3 +1712,14 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 }
 
 const missingID = "00000000-0000-0000-0000-000000000000"
+
+func verifyBoard(t *testing.T, st Store, companyID, source string) {
+	t.Helper()
+	ctx := t.Context()
+	if _, err := st.UpsertCandidateBoard(ctx, companyID, source, companyID); err != nil {
+		t.Fatalf("UpsertCandidateBoard(%q) = %v", source, err)
+	}
+	if _, err := st.VerifyCompanyBoard(ctx, companyID, source, companyID, "discovered", ""); err != nil {
+		t.Fatalf("VerifyCompanyBoard(%q) = %v", source, err)
+	}
+}

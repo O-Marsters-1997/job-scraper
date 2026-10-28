@@ -4,12 +4,33 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/profiledraft"
 )
+
+type RecordingProfileWriter struct {
+	result profiledraft.Result
+	err    error
+	Inputs []profiledraft.Input
+}
+
+func Redrafting(res profiledraft.Result, err error) *RecordingProfileWriter {
+	return &RecordingProfileWriter{result: res, err: err}
+}
+
+func (w *RecordingProfileWriter) Redraft(_ context.Context, _ string, in profiledraft.Input) (profiledraft.Result, error) {
+	w.Inputs = append(w.Inputs, in)
+	return w.result, w.err
+}
+
+var _ cvtailor.ProfileWriter = (*RecordingProfileWriter)(nil)
 
 type Key string
 
@@ -24,21 +45,21 @@ var (
 	_ cvtailor.Credentials = NoKey{}
 )
 
-type Reply struct {
-	Result cvedit.Result
-	Err    error
-}
-
 type RecordingEditor struct {
-	replies []Reply
-	Inputs  []cvedit.Input
-
-	deltas        []string
-	suggestErr    error
-	SuggestInputs []cvedit.SuggestInput
-
 	explanation   string
 	ExplainInputs []cvedit.ExplainInput
+
+	insightLines  []cvedit.InsightLine
+	InsightInputs []cvedit.InsightsInput
+}
+
+func Insighting(lines ...cvedit.InsightLine) *RecordingEditor {
+	return &RecordingEditor{insightLines: lines}
+}
+
+func (e *RecordingEditor) Insights(_ context.Context, _ string, in cvedit.InsightsInput) (cvedit.InsightsResult, error) {
+	e.InsightInputs = append(e.InsightInputs, in)
+	return cvedit.InsightsResult{Lines: slices.Clone(e.insightLines), Cost: 0.01}, nil
 }
 
 // Explaining is an Editor whose explanations reply with text.
@@ -51,42 +72,37 @@ func (e *RecordingEditor) Explain(_ context.Context, _ string, in cvedit.Explain
 	return cvedit.ExplainResult{Text: e.explanation, Cost: 0.001}, nil
 }
 
-// Suggesting is an Editor whose suggestions stream the given deltas.
-func Suggesting(deltas ...string) *RecordingEditor {
-	return &RecordingEditor{deltas: deltas}
+type RecordingModel struct {
+	deltas  []string
+	err     error
+	pace    time.Duration
+	Prompts []lineedit.Prompt
+}
+
+func Suggesting(deltas ...string) *RecordingModel {
+	return &RecordingModel{deltas: deltas}
+}
+
+func SuggestingEvery(pace time.Duration, deltas ...string) *RecordingModel {
+	return &RecordingModel{deltas: deltas, pace: pace}
 }
 
 // SuggestFailing streams the deltas, then fails with err; with no deltas the
 // stream never opens.
-func SuggestFailing(err error, deltas ...string) *RecordingEditor {
-	return &RecordingEditor{deltas: deltas, suggestErr: err}
+func SuggestFailing(err error, deltas ...string) *RecordingModel {
+	return &RecordingModel{deltas: deltas, err: err}
 }
 
-func (e *RecordingEditor) Suggest(_ context.Context, _ string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error) {
-	e.SuggestInputs = append(e.SuggestInputs, in)
-	for _, d := range e.deltas {
+func (m *RecordingModel) Complete(_ context.Context, _ string, p lineedit.Prompt, onDelta func(string)) (lineedit.Completion, error) {
+	m.Prompts = append(m.Prompts, p)
+	for _, d := range m.deltas {
+		time.Sleep(m.pace)
 		onDelta(d)
 	}
-	return cvedit.SuggestResult{Text: strings.Join(e.deltas, ""), Cost: 0.001}, e.suggestErr
+	return lineedit.Completion{Text: strings.Join(m.deltas, ""), Cost: 0.001}, m.err
 }
 
-func ReplyingWith(replies ...Reply) *RecordingEditor {
-	return &RecordingEditor{replies: replies}
-}
-
-func Editing(results ...cvedit.Result) *RecordingEditor {
-	replies := make([]Reply, len(results))
-	for i, r := range results {
-		replies[i] = Reply{Result: r}
-	}
-	return ReplyingWith(replies...)
-}
-
-func (e *RecordingEditor) Edit(_ context.Context, _ string, in cvedit.Input) (cvedit.Result, error) {
-	e.Inputs = append(e.Inputs, in)
-	r := e.replies[min(len(e.Inputs), len(e.replies))-1]
-	return r.Result, r.Err
-}
+var _ lineedit.Model = (*RecordingModel)(nil)
 
 var _ cvtailor.Editor = (*RecordingEditor)(nil)
 
@@ -101,6 +117,24 @@ func (f failingBatchUpdate) BatchUpdate(context.Context, string, string, []json.
 
 func FailsBatchUpdate(d cvtailor.Drive, err error) cvtailor.Drive {
 	return failingBatchUpdate{Drive: d, err: err}
+}
+
+type failsFirstBatchUpdate struct {
+	cvtailor.Drive
+	err    error
+	failed bool
+}
+
+func (f *failsFirstBatchUpdate) BatchUpdate(ctx context.Context, userID, docID string, reqs []json.RawMessage) error {
+	if !f.failed {
+		f.failed = true
+		return f.err
+	}
+	return f.Drive.BatchUpdate(ctx, userID, docID, reqs)
+}
+
+func FailsFirstBatchUpdate(d cvtailor.Drive, err error) cvtailor.Drive {
+	return &failsFirstBatchUpdate{Drive: d, err: err}
 }
 
 type failingExport struct {

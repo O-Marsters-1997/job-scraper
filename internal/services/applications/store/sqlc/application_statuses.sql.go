@@ -29,9 +29,9 @@ func (q *Queries) CountApplicationsUsingStatus(ctx context.Context, arg CountApp
 }
 
 const createApplicationStatus = `-- name: CreateApplicationStatus :one
-INSERT INTO application_statuses (user_id, name, colour, reply_window_days)
-VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, name, colour, created_at, reply_window_days
+INSERT INTO application_statuses (user_id, name, colour, reply_window_days, counts_as_reply)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, user_id, name, colour, created_at, reply_window_days, counts_as_reply, system_key
 `
 
 type CreateApplicationStatusParams struct {
@@ -39,6 +39,7 @@ type CreateApplicationStatusParams struct {
 	Name            string
 	Colour          string
 	ReplyWindowDays pgtype.Int4
+	CountsAsReply   bool
 }
 
 func (q *Queries) CreateApplicationStatus(ctx context.Context, arg CreateApplicationStatusParams) (ApplicationStatus, error) {
@@ -47,6 +48,7 @@ func (q *Queries) CreateApplicationStatus(ctx context.Context, arg CreateApplica
 		arg.Name,
 		arg.Colour,
 		arg.ReplyWindowDays,
+		arg.CountsAsReply,
 	)
 	var i ApplicationStatus
 	err := row.Scan(
@@ -56,6 +58,8 @@ func (q *Queries) CreateApplicationStatus(ctx context.Context, arg CreateApplica
 		&i.Colour,
 		&i.CreatedAt,
 		&i.ReplyWindowDays,
+		&i.CountsAsReply,
+		&i.SystemKey,
 	)
 	return i, err
 }
@@ -76,7 +80,7 @@ func (q *Queries) DeleteApplicationStatus(ctx context.Context, arg DeleteApplica
 }
 
 const listApplicationStatusesByUser = `-- name: ListApplicationStatusesByUser :many
-SELECT id, user_id, name, colour, created_at, reply_window_days FROM application_statuses
+SELECT id, user_id, name, colour, created_at, reply_window_days, counts_as_reply, system_key FROM application_statuses
 WHERE user_id = $1
 ORDER BY created_at ASC
 `
@@ -97,6 +101,8 @@ func (q *Queries) ListApplicationStatusesByUser(ctx context.Context, userID pgty
 			&i.Colour,
 			&i.CreatedAt,
 			&i.ReplyWindowDays,
+			&i.CountsAsReply,
+			&i.SystemKey,
 		); err != nil {
 			return nil, err
 		}
@@ -109,13 +115,13 @@ func (q *Queries) ListApplicationStatusesByUser(ctx context.Context, userID pgty
 }
 
 const seedDefaultStatuses = `-- name: SeedDefaultStatuses :exec
-INSERT INTO application_statuses (user_id, name, colour)
+INSERT INTO application_statuses (user_id, name, colour, system_key, counts_as_reply)
 VALUES
-    ($1, 'Draft',        '#64748b'),
-    ($1, 'Applied',      '#6366f1'),
-    ($1, 'Interviewing', '#f59e0b'),
-    ($1, 'Rejected',     '#ef4444'),
-    ($1, 'Offer',        '#22c55e')
+    ($1, 'Draft',        '#64748b', 'draft',   FALSE),
+    ($1, 'Applied',      '#6366f1', 'applied', FALSE),
+    ($1, 'Interviewing', '#f59e0b', NULL, TRUE),
+    ($1, 'Rejected',     '#ef4444', NULL, FALSE),
+    ($1, 'Offer',        '#22c55e', NULL, TRUE)
 `
 
 func (q *Queries) SeedDefaultStatuses(ctx context.Context, userID pgtype.UUID) error {
@@ -125,9 +131,9 @@ func (q *Queries) SeedDefaultStatuses(ctx context.Context, userID pgtype.UUID) e
 
 const updateApplicationStatus = `-- name: UpdateApplicationStatus :one
 UPDATE application_statuses
-SET name = $3, colour = $4, reply_window_days = $5
+SET name = $3, colour = $4, reply_window_days = $5, counts_as_reply = $6
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, name, colour, created_at, reply_window_days
+RETURNING id, user_id, name, colour, created_at, reply_window_days, counts_as_reply, system_key
 `
 
 type UpdateApplicationStatusParams struct {
@@ -136,6 +142,7 @@ type UpdateApplicationStatusParams struct {
 	Name            string
 	Colour          string
 	ReplyWindowDays pgtype.Int4
+	CountsAsReply   bool
 }
 
 func (q *Queries) UpdateApplicationStatus(ctx context.Context, arg UpdateApplicationStatusParams) (ApplicationStatus, error) {
@@ -145,6 +152,7 @@ func (q *Queries) UpdateApplicationStatus(ctx context.Context, arg UpdateApplica
 		arg.Name,
 		arg.Colour,
 		arg.ReplyWindowDays,
+		arg.CountsAsReply,
 	)
 	var i ApplicationStatus
 	err := row.Scan(
@@ -154,6 +162,8 @@ func (q *Queries) UpdateApplicationStatus(ctx context.Context, arg UpdateApplica
 		&i.Colour,
 		&i.CreatedAt,
 		&i.ReplyWindowDays,
+		&i.CountsAsReply,
+		&i.SystemKey,
 	)
 	return i, err
 }

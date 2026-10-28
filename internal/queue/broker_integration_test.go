@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,22 +29,41 @@ const (
 	workExchange = "source.work"
 	deadExchange = "source.dead.exchange"
 	deadQueue    = "source.dead"
+
+	rabbitContainer = "job-scraper-rabbitmqtest-v1"
+	rabbitUser      = "jobs"
+	rabbitPass      = "testpass"
 )
+
+const rabbitEntrypoint = `
+(
+	idle=0
+	while sleep 10; do
+		n=$(cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | awk '$2 ~ /:1628$/ && $4 == "01"' | wc -l)
+		if [ "$n" -eq 0 ]; then idle=$((idle + 10)); else idle=0; fi
+		if [ "$idle" -ge 300 ]; then kill -TERM 1; fi
+	done
+) &
+exec docker-entrypoint.sh "$@"
+`
 
 func TestRabbitMQWorkQueue(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires Docker")
 	}
 	ctx := t.Context()
+	t.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true")
 	container, err := testcontainers.Run(ctx, "rabbitmq:4.3.6-management",
-		testcontainers.WithEnv(map[string]string{"RABBITMQ_DEFAULT_USER": "jobs", "RABBITMQ_DEFAULT_PASS": "testpass"}),
+		testcontainers.WithReuseByName(rabbitContainer),
+		testcontainers.WithEntrypoint("sh", "-c", rabbitEntrypoint, "rabbitmqtest"),
+		testcontainers.WithCmd("rabbitmq-server"),
+		testcontainers.WithEnv(map[string]string{"RABBITMQ_DEFAULT_USER": rabbitUser, "RABBITMQ_DEFAULT_PASS": rabbitPass}),
 		testcontainers.WithExposedPorts("5672/tcp", "15672/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForLog("Server startup complete")),
+		testcontainers.WithWaitStrategy(wait.ForHTTP("/api/overview").WithPort("15672/tcp").WithBasicAuth(rabbitUser, rabbitPass)),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = container.Terminate(context.WithoutCancel(ctx)) })
 	host, err := container.Host(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -51,12 +72,20 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	managementPort, err := container.MappedPort(ctx, "15672/tcp")
-	if err != nil {
-		t.Fatal(err)
+	managementURL := func() string {
+		t.Helper()
+		managementPort, err := container.MappedPort(context.WithoutCancel(ctx), "15672/tcp")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fmt.Sprintf("http://%s:%s", host, managementPort.Port())
 	}
-	t.Setenv("RABBITMQ_MANAGEMENT_URL", fmt.Sprintf("http://%s:%s", host, managementPort.Port()))
-	url := fmt.Sprintf("amqp://jobs:testpass@%s:%s/", host, port.Port())
+	t.Setenv("RABBITMQ_MANAGEMENT_URL", managementURL())
+	vhost := "test-" + uuid.NewString()
+	manage(t, http.MethodPut, managementURL()+"/api/vhosts/"+vhost, nil)
+	t.Cleanup(func() { manage(t, http.MethodDelete, managementURL()+"/api/vhosts/"+vhost, nil) })
+	manage(t, http.MethodPut, managementURL()+"/api/permissions/"+vhost+"/"+rabbitUser, map[string]string{"configure": ".*", "write": ".*", "read": ".*"})
+	url := fmt.Sprintf("amqp://%s:%s@%s:%s/%s", rabbitUser, rabbitPass, host, port.Port(), vhost)
 	broker, err := queue.NewBroker(url)
 	if err != nil {
 		t.Fatal(err)
@@ -99,6 +128,48 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		if err := broker.Publish(ctx, detail); err == nil {
 			t.Fatal("unroutable publish confirmed as success")
 		}
+	})
+
+	t.Run("urgent task is consumed while its source queue holds a backlog", func(t *testing.T) { //nolint:paralleltest // subtests share one broker and the restart subtest stops it
+		blocker := queuetest.DetailTask("indeed")
+		backlog := queuetest.DetailTask("indeed")
+		urgent := queuetest.DetailTask("indeed")
+		urgent.Urgent = true
+		for _, task := range []queue.Task{blocker, backlog, urgent} {
+			if err := broker.Publish(ctx, task); err != nil {
+				t.Fatal(err)
+			}
+		}
+		t.Cleanup(func() { _, _ = ch.QueuePurge("source.indeed", false) })
+		consumeCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		var sawBacklog atomic.Bool
+		gotUrgent := make(chan struct{})
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_ = broker.Consume(consumeCtx, func(ctx context.Context, task queue.Task) error {
+				switch task.ID {
+				case urgent.ID:
+					close(gotUrgent)
+				case backlog.ID:
+					sawBacklog.Store(true)
+				default:
+					<-ctx.Done()
+				}
+				return nil
+			}, nil)
+		}()
+		select {
+		case <-gotUrgent:
+		case <-time.After(5 * time.Second):
+			t.Fatal("urgent task not consumed while source queue was blocked")
+		}
+		if sawBacklog.Load() {
+			t.Fatal("backlog task consumed behind the blocked source delivery")
+		}
+		cancel()
+		<-done
 	})
 
 	t.Run("board discover yields to board check", func(t *testing.T) {
@@ -336,6 +407,34 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		<-done
 	})
 
+	t.Run("panicking handler dead-letters without requeue", func(t *testing.T) {
+		task := queuetest.DetailTask("wis")
+		if err := broker.Publish(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		consumeCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		var calls atomic.Int32
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_ = broker.Consume(consumeCtx, func(context.Context, queue.Task) error {
+				calls.Add(1)
+				panic("boom")
+			}, nil)
+		}()
+		waitForDeadLetterCount(t, broker, 1)
+		cancel()
+		<-done
+		if got := calls.Load(); got != 1 {
+			t.Errorf("handler calls = %d, want 1 (a panic is never requeued)", got)
+		}
+		dead, ok, err := ch.Get(deadQueue, true)
+		if err != nil || !ok || dead.MessageId != task.ID {
+			t.Errorf("dead queue Get() = %v, %v, %v, want task %s", dead.MessageId, ok, err, task.ID)
+		}
+	})
+
 	t.Run("deferred task waits out the pause and never dead-letters", func(t *testing.T) {
 		const deferrals = 6
 		task := queuetest.DetailTask("wis")
@@ -466,7 +565,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		restartedURL := fmt.Sprintf("amqp://jobs:testpass@%s:%s/", host, restartedPort.Port())
+		restartedURL := fmt.Sprintf("amqp://%s:%s@%s:%s/%s", rabbitUser, rabbitPass, host, restartedPort.Port(), vhost)
 		waitFor(t, 30*time.Second, func() error {
 			fresh, err := amqp.Dial(restartedURL)
 			if err != nil {
@@ -513,6 +612,28 @@ func waitFor(t *testing.T, timeout time.Duration, check func() error) {
 			t.Fatalf("timed out after %s: %v", timeout, err)
 		}
 		<-ticker.C
+	}
+}
+
+func manage(t *testing.T, method, endpoint string, body any) {
+	t.Helper()
+	payload, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(context.WithoutCancel(t.Context()), method, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SetBasicAuth(rabbitUser, rabbitPass)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= http.StatusMultipleChoices {
+		t.Fatalf("%s %s = %s", method, endpoint, resp.Status)
 	}
 }
 

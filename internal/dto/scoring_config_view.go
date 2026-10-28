@@ -13,4 +13,12 @@ type ScoringConfigView struct {
 	MaxJobAgeDays         int         `json:"maxJobAgeDays"`
 	UpdatedAt             time.Time   `json:"updatedAt"`
 	BackfillQueued        int64       `json:"backfillQueued"`
+	DroppedOptionIDs      []string    `json:"droppedOptionIds,omitempty"`
+	Bands                 BandCuts    `json:"bands"`
+}
+
+type BandCuts struct {
+	Great int `json:"great"`
+	Good  int `json:"good"`
+	Fair  int `json:"fair"`
 }

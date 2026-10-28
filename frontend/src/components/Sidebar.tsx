@@ -11,10 +11,12 @@ import { type Accessor, createEffect, createSignal, For, Show } from "solid-js";
 import { FastTrackMark } from "@/components/brand-mark";
 import { Icon, type IconName } from "@/components/Icon";
 import { queryClient } from "@/lib/queryClient";
+import { loadedData } from "@/lib/queryData";
 import { cn } from "@/lib/utils";
 import { logout } from "../api/auth";
 import { useApplications } from "../hooks/useApplications";
 import { useGoogleStatus } from "../hooks/useGoogle";
+import { useOpenTaskCount } from "../hooks/useTasks";
 import { useUsageWarning } from "../hooks/useUsageWarning";
 import { UsageDot } from "./UsageDot";
 
@@ -52,54 +54,108 @@ interface NavItem {
 	exact?: boolean;
 	includeSearch?: boolean;
 	search?: Record<string, unknown>;
-	badge?: boolean;
+	badge?: "applications" | "tasks";
 	desktopOnly?: boolean;
 	when?: (ctx: { googleConnected: boolean }) => boolean;
 }
 
-const NAV: NavItem[] = [
+interface NavGroup {
+	label: string;
+	items: NavItem[];
+}
+
+const googleConnectedOnly: NavItem["when"] = (ctx) => ctx.googleConnected;
+
+const NAV: NavGroup[] = [
 	{
-		to: "/overview",
-		label: "Overview",
-		icon: "dashboard",
-		exact: true,
-		desktopOnly: true,
-	},
-	{ to: "/jobs", label: "Jobs", icon: "suitcase", exact: true },
-	{
-		to: "/applications",
-		label: "Applications",
-		icon: "fileText",
-		exact: true,
-		includeSearch: false,
-		search: { status: undefined },
-		badge: true,
-	},
-	{ to: "/companies", label: "Companies", icon: "building", desktopOnly: true },
-	{
-		to: "/cv-templates",
-		label: "CVs",
-		icon: "fileLines",
-		exact: true,
-		when: (ctx) => ctx.googleConnected,
+		label: "Search",
+		items: [
+			{ to: "/jobs", label: "Jobs", icon: "suitcase", exact: true },
+			{
+				to: "/companies",
+				label: "Companies",
+				icon: "building",
+				desktopOnly: true,
+			},
+		],
 	},
 	{
-		to: "/experience",
-		label: "Experience",
-		icon: "briefcase",
-		desktopOnly: true,
+		label: "Pipeline",
+		items: [
+			{
+				to: "/applications",
+				label: "Applications",
+				icon: "fileText",
+				exact: true,
+				includeSearch: false,
+				search: { status: undefined },
+				badge: "applications",
+			},
+			{
+				to: "/tasks",
+				label: "Tasks",
+				icon: "checkSquare",
+				exact: true,
+				badge: "tasks",
+			},
+		],
 	},
 	{
-		to: "/insights",
-		label: "Insights",
-		icon: "barChart",
-		exact: true,
-		desktopOnly: true,
+		label: "Documents",
+		items: [
+			{
+				to: "/cv-templates",
+				label: "CVs",
+				icon: "fileLines",
+				exact: true,
+				when: googleConnectedOnly,
+			},
+			{
+				to: "/cover-letters",
+				label: "Cover letters",
+				icon: "pen",
+				exact: true,
+				when: googleConnectedOnly,
+			},
+			{
+				to: "/experience",
+				label: "Experience",
+				icon: "briefcase",
+				desktopOnly: true,
+			},
+		],
 	},
-	{ to: "/settings", label: "Settings", icon: "settings", desktopOnly: true },
+	{
+		label: "Data",
+		items: [
+			{
+				to: "/insights",
+				label: "Insights",
+				icon: "barChart",
+				exact: true,
+				desktopOnly: true,
+			},
+			{
+				to: "/activity",
+				label: "Activity",
+				icon: "history",
+				desktopOnly: true,
+			},
+		],
+	},
 ];
 
-const MOBILE_NAV = NAV.filter((item) => !item.desktopOnly);
+const MOBILE_NAV = NAV.map((group) => ({
+	...group,
+	items: group.items.filter((item) => !item.desktopOnly),
+})).filter((group) => group.items.length > 0);
+
+const SETTINGS: NavItem = {
+	to: "/settings",
+	label: "Settings",
+	icon: "settings",
+	desktopOnly: true,
+};
 
 interface SidebarProps {
 	mobileOpen?: boolean;
@@ -113,6 +169,7 @@ export default function Sidebar(props: SidebarProps) {
 	const navigate = useNavigate();
 
 	const appsQuery = useApplications();
+	const taskCount = useOpenTaskCount();
 	const googleStatus = useGoogleStatus();
 
 	const handleLogout = async () => {
@@ -129,7 +186,7 @@ export default function Sidebar(props: SidebarProps) {
 		props.onMobileClose?.();
 	});
 
-	const links = { appsQuery, googleStatus, handleLogout };
+	const links = { appsQuery, taskCount, googleStatus, handleLogout };
 
 	return (
 		<>
@@ -175,15 +232,78 @@ interface SidebarBodyProps {
 	expanded?: Accessor<boolean>;
 	onCollapseToggle?: () => void;
 	appsQuery: ReturnType<typeof useApplications>;
+	taskCount: ReturnType<typeof useOpenTaskCount>;
 	googleStatus: ReturnType<typeof useGoogleStatus>;
 	handleLogout: () => void;
 }
 
 function SidebarBody(props: SidebarBodyProps) {
 	const usageWarning = useUsageWarning();
+	const badgeCount = (badge: NavItem["badge"]) => {
+		switch (badge) {
+			case "applications":
+				return props.appsQuery.data?.length ?? 0;
+			case "tasks":
+				return props.taskCount.data ?? 0;
+			default:
+				return 0;
+		}
+	};
+	const renderItem = (item: NavItem) => (
+		<Show
+			when={
+				!item.when ||
+				item.when({
+					googleConnected: loadedData(props.googleStatus)?.connected ?? false,
+				})
+			}
+		>
+			<Link
+				to={item.to}
+				search={item.search as never}
+				activeOptions={{
+					exact: item.exact ?? false,
+					...(item.includeSearch === false && {
+						includeSearch: false,
+					}),
+				}}
+				title={item.label}
+			>
+				{({ isActive }) => (
+					<span class={navLinkVariants({ active: isActive })}>
+						<span class="relative flex shrink-0">
+							<Icon name={item.icon} class="shrink-0" />
+							<Show when={item.to === "/settings" && !props.showLabels()}>
+								<UsageDot
+									level={usageWarning.overall()}
+									class="absolute -right-1 -top-1"
+								/>
+							</Show>
+						</span>
+						<Show when={props.showLabels()}>
+							<span class="whitespace-nowrap">{item.label}</span>
+							<Show when={item.to === "/settings"}>
+								<UsageDot level={usageWarning.overall()} />
+							</Show>
+							<Show when={badgeCount(item.badge) > 0}>
+								<span class={sidebarBadgeVariants({ active: isActive })}>
+									{badgeCount(item.badge)}
+								</span>
+							</Show>
+						</Show>
+					</span>
+				)}
+			</Link>
+		</Show>
+	);
 	return (
 		<>
-			<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
+			<Link
+				to="/overview"
+				title="Overview"
+				aria-label={props.showLabels() ? undefined : "Overview"}
+				class="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4"
+			>
 				<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sidebar-active text-sidebar-active-foreground">
 					<FastTrackMark size={15} />
 				</div>
@@ -192,75 +312,32 @@ function SidebarBody(props: SidebarBodyProps) {
 						FastTrack
 					</span>
 				</Show>
-			</div>
+			</Link>
 
 			<nav class="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
-				<Show when={props.showLabels()}>
-					<span class="px-2.5 pb-1 pt-2.5 text-2xs font-semibold uppercase tracking-wider text-sidebar-foreground">
-						Main
-					</span>
-				</Show>
-
 				<For each={props.mobile ? MOBILE_NAV : NAV}>
-					{(item) => (
-						<Show
-							when={
-								!item.when ||
-								item.when({
-									googleConnected: props.googleStatus.data?.connected ?? false,
-								})
-							}
-						>
-							<Link
-								to={item.to}
-								search={item.search as never}
-								activeOptions={{
-									exact: item.exact ?? false,
-									...(item.includeSearch === false && {
-										includeSearch: false,
-									}),
-								}}
-								title={item.label}
+					{(group, i) => (
+						<>
+							<Show
+								when={props.showLabels()}
+								fallback={
+									<Show when={i() > 0}>
+										<hr class="my-2 border-sidebar-border" />
+									</Show>
+								}
 							>
-								{({ isActive }) => (
-									<span class={navLinkVariants({ active: isActive })}>
-										<span class="relative flex shrink-0">
-											<Icon name={item.icon} class="shrink-0" />
-											<Show
-												when={item.to === "/settings" && !props.showLabels()}
-											>
-												<UsageDot
-													level={usageWarning.overall()}
-													class="absolute -right-1 -top-1"
-												/>
-											</Show>
-										</span>
-										<Show when={props.showLabels()}>
-											<span class="whitespace-nowrap">{item.label}</span>
-											<Show when={item.to === "/settings"}>
-												<UsageDot level={usageWarning.overall()} />
-											</Show>
-											<Show
-												when={
-													item.badge && (props.appsQuery.data?.length ?? 0) > 0
-												}
-											>
-												<span
-													class={sidebarBadgeVariants({ active: isActive })}
-												>
-													{props.appsQuery.data?.length}
-												</span>
-											</Show>
-										</Show>
-									</span>
-								)}
-							</Link>
-						</Show>
+								<span class="px-2.5 pb-1 pt-2.5 text-2xs font-semibold uppercase tracking-wider text-sidebar-foreground">
+									{group.label}
+								</span>
+							</Show>
+							<For each={group.items}>{renderItem}</For>
+						</>
 					)}
 				</For>
 			</nav>
 
 			<div class="flex shrink-0 flex-col gap-0.5 border-t border-sidebar-border px-2 py-2">
+				<Show when={!props.mobile}>{renderItem(SETTINGS)}</Show>
 				<button
 					type="button"
 					onClick={() => props.handleLogout()}

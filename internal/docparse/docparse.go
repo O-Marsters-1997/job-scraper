@@ -105,7 +105,10 @@ type element struct {
 type paragraph struct {
 	Elements []struct {
 		TextRun *struct {
-			Content string `json:"content"`
+			Content   string `json:"content"`
+			TextStyle struct {
+				Bold bool `json:"bold"`
+			} `json:"textStyle"`
 		} `json:"textRun"`
 	} `json:"elements"`
 	ParagraphStyle struct {
@@ -116,6 +119,7 @@ type paragraph struct {
 
 type para struct {
 	text       string
+	bold       string
 	lead       int
 	level      int
 	list       bool
@@ -134,6 +138,22 @@ func Parse(tabJSON []byte) (DocStructure, error) {
 	ds := build(paras)
 	ds.Contact = Contact{InBody: hasContact(paras), InHeaderFooter: hasContact(segmentParas(t))}
 	return ds, nil
+}
+
+func Text(tabJSON []byte) (string, error) {
+	var t tab
+	if err := json.Unmarshal(tabJSON, &t); err != nil {
+		return "", fmt.Errorf("docparse.Text: %w", err)
+	}
+	var paras []para
+	flatten(t.DocumentTab.Body.Content, &paras)
+	lines := make([]string, 0, len(paras))
+	for _, p := range paras {
+		if p.text != "" {
+			lines = append(lines, p.text)
+		}
+	}
+	return strings.Join(lines, "\n"), nil
 }
 
 func segmentParas(t tab) []para {
@@ -166,15 +186,20 @@ func flatten(content []element, out *[]para) {
 	for _, el := range content {
 		switch {
 		case el.Paragraph != nil:
-			var sb strings.Builder
+			var sb, boldLead strings.Builder
+			leading := true
 			for _, pe := range el.Paragraph.Elements {
 				if pe.TextRun != nil {
 					sb.WriteString(pe.TextRun.Content)
+					if leading = leading && pe.TextRun.TextStyle.Bold; leading {
+						boldLead.WriteString(pe.TextRun.Content)
+					}
 				}
 			}
 			raw := sb.String()
 			*out = append(*out, para{
 				text:  strings.TrimSpace(raw),
+				bold:  strings.TrimSpace(boldLead.String()),
 				lead:  utf16Len(raw[:len(raw)-len(strings.TrimLeftFunc(raw, unicode.IsSpace))]),
 				level: headingLevel(el.Paragraph.ParagraphStyle.NamedStyleType),
 				list:  el.Paragraph.Bullet != nil,
@@ -288,7 +313,7 @@ func buildSkills(paras []para) *SkillsSlot {
 }
 
 func isPlainListItem(p para) bool {
-	_, _, labelled := splitLabel(p.text)
+	_, _, labelled := splitLabel(p)
 	return p.list && !labelled
 }
 
@@ -301,7 +326,7 @@ func listLine(run []para) SkillLine {
 }
 
 func proseLine(p para) SkillLine {
-	label, body, labelled := splitLabel(p.text)
+	label, body, labelled := splitLabel(p)
 	l := SkillLine{Label: label, Separator: detectSeparator(body), ItemsStart: p.start + p.lead, End: p.end - 1}
 	if labelled {
 		l.ItemsStart += utf16Len(p.text[:len(p.text)-len(body)])
@@ -314,8 +339,15 @@ func proseLine(p para) SkillLine {
 	return l
 }
 
-func splitLabel(text string) (label, body string, labelled bool) {
+func splitLabel(p para) (label, body string, labelled bool) {
+	text := p.text
 	before, after, found := strings.Cut(text, ":")
+	if !found && p.bold != "" && p.bold != text {
+		rest := strings.TrimLeftFunc(text[len(p.bold):], unicode.IsSpace)
+		if loc := skillSplit.FindStringIndex(rest); loc == nil || loc[0] != 0 {
+			return p.bold, rest, true
+		}
+	}
 	label = strings.TrimSpace(before)
 	if !found || label == "" || skillSplit.MatchString(label) || strings.ContainsAny(label, "()") {
 		return "", text, false

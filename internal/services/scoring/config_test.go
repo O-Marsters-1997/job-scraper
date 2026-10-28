@@ -43,6 +43,7 @@ func TestGet(t *testing.T) {
 		RequiredLocations:     []string{},
 		RequiredTitleKeywords: []string{},
 		MaxJobAgeDays:         7,
+		Bands:                 dto.BandCuts{Great: 80, Good: 65, Fair: 45},
 	}
 	saved := empty
 	saved.NotifyThreshold = 5
@@ -149,6 +150,37 @@ func TestUpdateConfig(t *testing.T) {
 	}
 	if got.BackfillQueued != 4 {
 		t.Errorf("BackfillQueued = %d, want 4", got.BackfillQueued)
+	}
+}
+
+func TestUpdateConfigDropsStoredStalePicks(t *testing.T) {
+	st := newFakeStore()
+	st.SeedSearchConfig(dto.SearchConfig{UserID: "user-1", Preferences: dto.Preferences{Picks: []dto.Pick{
+		{OptionID: "tech:vercel", Stance: "nice", Source: "manual"},
+		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+	}}})
+	svc := newService(t, st)
+
+	got, err := svc.UpdateConfig(t.Context(), "user-1", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{
+		{OptionID: "tech:vercel", Stance: "nice"},
+		{OptionID: "tech:go", Stance: "nice"},
+	}}})
+	if err != nil {
+		t.Fatalf("UpdateConfig() err = %v", err)
+	}
+	wantPicks := []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}}
+	if diff := cmp.Diff(wantPicks, got.Preferences.Picks); diff != "" {
+		t.Errorf("picks (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"tech:vercel"}, got.DroppedOptionIDs); diff != "" {
+		t.Errorf("dropped option IDs (-want +got):\n%s", diff)
+	}
+
+	_, err = svc.UpdateConfig(t.Context(), "user-1", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{
+		{OptionID: "tech:cobol", Stance: "nice"},
+	}}})
+	if !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Errorf("new unknown pick err = %v, want an invalid apperr", err)
 	}
 }
 

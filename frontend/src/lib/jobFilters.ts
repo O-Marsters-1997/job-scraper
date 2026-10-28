@@ -1,11 +1,19 @@
-import type { Job } from "@/types/job";
-import { type JobSort, SORT_OPTIONS } from "./jobSort";
+import { POSTER_OPTIONS, type PosterFilter } from "@/types/company";
+
+export const SORT_OPTIONS = ["relevant", "newest", "best"] as const;
+export type JobSort = (typeof SORT_OPTIONS)[number];
+
+export const SORT_LABELS: Record<JobSort, string> = {
+	relevant: "Relevant",
+	newest: "Newest",
+	best: "Best match",
+};
 
 export const GRADED_OPTIONS = ["all", "ungraded", "graded"] as const;
-export type GradedFilter = (typeof GRADED_OPTIONS)[number];
+type GradedFilter = (typeof GRADED_OPTIONS)[number];
 
 export const SEEN_OPTIONS = ["all", "unseen", "seen"] as const;
-export type SeenFilter = (typeof SEEN_OPTIONS)[number];
+type SeenFilter = (typeof SEEN_OPTIONS)[number];
 
 export interface JobFilters {
 	q: string;
@@ -20,6 +28,7 @@ export interface JobFilters {
 	graded: GradedFilter;
 	seen: SeenFilter;
 	fav: boolean;
+	poster: PosterFilter;
 	sort: JobSort;
 	page?: number | undefined;
 }
@@ -37,6 +46,7 @@ export const DEFAULT_FILTERS: JobFilters = {
 	graded: "all",
 	seen: "all",
 	fav: false,
+	poster: "direct",
 	sort: "relevant",
 	page: undefined,
 };
@@ -74,75 +84,13 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		graded: GRADED_OPTIONS.find((o) => o === raw.graded) ?? "all",
 		seen: SEEN_OPTIONS.find((o) => o === raw.seen) ?? "all",
 		fav: raw.fav === true || raw.fav === "1" || raw.fav === 1,
+		poster: POSTER_OPTIONS.find((o) => o === raw.poster) ?? "direct",
 		sort: SORT_OPTIONS.find((o) => o === raw.sort) ?? "relevant",
 		page:
 			typeof page === "number" && Number.isInteger(page) && page > 1
 				? page
 				: undefined,
 	};
-}
-
-/** Parse free-text salary strings like "£80,000 to £95,000", "£80k-£95k", "Up to £90k". */
-export function parseSalary(
-	raw: string | undefined | null,
-): { min: number; max: number } | null {
-	if (!raw) return null;
-	const normalised = raw
-		.replace(/[£$€,]/g, "")
-		.replace(/\b(\d+(?:\.\d+)?)k\b/gi, (_, n) => String(Number(n) * 1000));
-	const nums = [...normalised.matchAll(/\d+(?:\.\d+)?/g)].map((m) =>
-		Number(m[0]),
-	);
-	const [min, second] = nums;
-	if (min === undefined) return null;
-	const max = second ?? min;
-	return { min, max };
-}
-
-type Arrangement = "remote" | "hybrid" | "onsite" | "unknown";
-
-/** Derive a canonical work arrangement from the job, covering both live and demo data. */
-export function normalizeArrangement(job: Job): Arrangement {
-	const wa = job.WorkArrangement?.toLowerCase().trim();
-	if (wa === "remote") return "remote";
-	if (wa === "hybrid") return "hybrid";
-	if (wa === "onsite") return "onsite";
-	const d = job.DaysInOffice;
-	if (d === 0) return "remote";
-	if (typeof d === "number" && d >= 5) return "onsite";
-	if (typeof d === "number" && d >= 1) return "hybrid";
-	return "unknown";
-}
-
-export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
-	const q = f.q.toLowerCase();
-	return jobs.filter((j) => {
-		if (q) {
-			const hay =
-				`${j.Title} ${j.CompanySlug} ${j.Location} ${j.Source}`.toLowerCase();
-			if (!hay.includes(q)) return false;
-		}
-		if (f.company && j.CompanyID !== f.company) return false;
-		if (f.scored && j.SuitabilityScore == null) return false;
-		if (f.suit !== undefined && (j.SuitabilityScore ?? -Infinity) < f.suit)
-			return false;
-		if (f.graded === "ungraded" && j.Grade) return false;
-		if (f.graded === "graded" && !j.Grade) return false;
-		if (f.seen === "unseen" && j.Seen) return false;
-		if (f.seen === "seen" && !j.Seen) return false;
-		if (f.fav && !j.CompanyFavourite) return false;
-		if (f.src.length > 0 && !f.src.includes(j.Source)) return false;
-		if (f.work.length > 0 && !f.work.includes(normalizeArrangement(j)))
-			return false;
-		if (f.sal) {
-			const parsed = parseSalary(j.SalaryRaw ?? j.SalaryRange);
-			if (!parsed) return false;
-			const reqMin = f.salMin ?? -Infinity;
-			const reqMax = f.salMax ?? Infinity;
-			if (parsed.max < reqMin || parsed.min > reqMax) return false;
-		}
-		return true;
-	});
 }
 
 /** Number of active filters (excluding search, which lives outside the panel). */
@@ -156,20 +104,4 @@ export function activeFilterCount(f: JobFilters): number {
 	if (f.seen !== "all") n++;
 	if (f.fav) n++;
 	return n;
-}
-
-/** Unique Source values present in the dataset, sorted. */
-export function sourceOptions(jobs: Job[]): string[] {
-	return [...new Set(jobs.map((j) => j.Source))].sort();
-}
-
-export function filterCompanyJobs(
-	jobs: Job[],
-	company: { ID: string; Slug: string },
-): Job[] {
-	return jobs.filter((job) =>
-		job.CompanyID
-			? job.CompanyID === company.ID
-			: job.CompanySlug === company.Slug,
-	);
 }

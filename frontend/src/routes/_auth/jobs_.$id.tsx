@@ -4,35 +4,55 @@ import { recordEvent } from "@/api/events";
 import { Icon } from "@/components/Icon";
 import { CvSheet } from "@/components/jobs/CvSheet";
 import { JobActionBar } from "@/components/jobs/JobActionBar";
-import JobDescription from "@/components/jobs/JobDescription";
 import { SuitabilityPanel } from "@/components/jobs/SuitabilityPanel";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { QueryBoundary } from "@/components/QueryBoundary";
-import { JobDrafts } from "@/components/tailoring/JobDrafts";
+import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { isAgencyKind } from "@/lib/agencyRollup";
 import type { Job } from "@/types/job";
+import { applicationStatusesQueryOptions } from "../../hooks/useApplicationStatuses";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
 import { DismissToast, useDismissJob } from "../../hooks/useDismissJob";
+import { gradeQueryOptions } from "../../hooks/useGrades";
+import { jobCommentsQueryOptions } from "../../hooks/useJobComments";
+import { jobNoteQueryOptions } from "../../hooks/useJobNotes";
 import { jobQueryOptions, useJob, useMarkJobsSeen } from "../../hooks/useJobs";
+import { experienceMatchQueryOptions } from "../../hooks/useTailoring";
+import { jobOpenTasksQueryOptions } from "../../hooks/useTasks";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 import { ApplicationCard } from "./-jobs-detail/ApplicationCard";
+import { CommentableDescription } from "./-jobs-detail/CommentableDescription";
 import { JobFactsCard } from "./-jobs-detail/JobFactsCard";
 import { JobHeader } from "./-jobs-detail/JobHeader";
+import { JobNotesCard } from "./-jobs-detail/JobNotesCard";
+import { JobTasksCard } from "./-jobs-detail/JobTasksCard";
+import { RecruiterContactsCard } from "./-jobs-detail/RecruiterContactsCard";
 
 export const Route = createFileRoute("/_auth/jobs_/$id")({
-	loader: ({ params }) =>
-		Promise.all([
+	loader: ({ params }) => {
+		void queryClient.prefetchQuery(jobNoteQueryOptions(params.id));
+		void queryClient.prefetchQuery(jobCommentsQueryOptions(params.id));
+		void queryClient.prefetchQuery(jobOpenTasksQueryOptions(params.id));
+		void queryClient.prefetchQuery(gradeQueryOptions(params.id));
+		void queryClient.prefetchQuery(experienceMatchQueryOptions(params.id));
+		void queryClient.prefetchQuery(applicationStatusesQueryOptions);
+		return Promise.all([
 			queryClient.prefetchQuery(jobQueryOptions(params.id)),
 			queryClient.prefetchQuery(applicationsQueryOptions()),
-		]),
+		]);
+	},
 	component: JobDetailPage,
 });
 
 function JobDetailPage() {
 	const params = Route.useParams();
 	const [cvOpen, setCvOpen] = createSignal(false);
+	const [taskOpen, setTaskOpen] = createSignal(false);
+	const [tab, setTab] = createSignal("description");
 	const jobsQuery = useJob(() => params().id);
 	const navigate = useNavigate();
 	const { dismiss } = useDismissJob();
@@ -91,86 +111,116 @@ function JobDetailPage() {
 						app={app()}
 						appSummary={track.appsForJobs()[params().id]}
 						onTrack={() => track.openTrack(params().id)}
+						onAddTask={() => setTaskOpen(true)}
 					/>
 
-					<div class="grid grid-cols-1 items-start lg:grid-cols-[1fr_284px] gap-4">
-						<Card class="max-md:order-2">
-							<CardHeader>
-								<CardTitle>Description</CardTitle>
-							</CardHeader>
-							<CardContent class="gap-0">
-								<Show
-									when={j().Description}
-									fallback={
-										<p class="text-sm text-faint">
-											No description captured.{" "}
-											<a
-												href={j().URL}
-												target="_blank"
-												rel="noopener noreferrer"
-												class="text-primary transition-colors hover:underline"
-											>
-												View the original listing ↗
-											</a>
-										</p>
-									}
-								>
-									{(desc) => <JobDescription html={desc()} />}
-								</Show>
-							</CardContent>
-						</Card>
-
-						<div class="sticky top-0 flex flex-col gap-3 max-md:contents">
-							<div class="max-md:order-3">
-								<JobFactsCard job={j()} />
-							</div>
-
-							<Show when={(j().Skills?.length ?? 0) > 0}>
-								<Card class="max-md:order-3">
-									<CardHeader class="pb-2">
-										<CardTitle>Skills & technologies</CardTitle>
+					<Tabs value={tab()} onChange={setTab}>
+						<TabsList variant="line" class="mb-3">
+							<TabsTrigger value="description">Description</TabsTrigger>
+							<TabsTrigger value="notes">Notes</TabsTrigger>
+						</TabsList>
+						<TabsContent value="description">
+							<div class="grid grid-cols-1 items-start lg:grid-cols-[1fr_284px] gap-4">
+								<Card class="max-md:order-2">
+									<CardHeader>
+										<CardTitle>Description</CardTitle>
 									</CardHeader>
-									<CardContent>
-										<div class="flex flex-wrap gap-1.5">
-											<For each={j().Skills}>
-												{(skill) => (
-													<span class="rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs text-muted">
-														{skill}
-													</span>
-												)}
-											</For>
-										</div>
+									<CardContent class="gap-0">
+										<Show
+											when={j().Description}
+											fallback={
+												<p class="text-sm text-faint">
+													No description captured.{" "}
+													<a
+														href={j().URL}
+														target="_blank"
+														rel="noopener noreferrer"
+														class="text-primary transition-colors hover:underline"
+													>
+														View the original listing ↗
+													</a>
+												</p>
+											}
+										>
+											{(desc) => (
+												<CommentableDescription
+													html={desc()}
+													jobId={params().id}
+												/>
+											)}
+										</Show>
 									</CardContent>
 								</Card>
-							</Show>
 
-							<div class="max-md:order-1">
-								<SuitabilityPanel job={j()} />
-							</div>
+								<div class="sticky top-0 flex flex-col gap-3 max-md:contents">
+									<div class="max-md:order-3">
+										<JobFactsCard job={j()} />
+									</div>
 
-							<div id="job-drafts" class="max-md:order-4">
-								<JobDrafts jobId={params().id} />
-							</div>
+									<Show when={(j().Skills?.length ?? 0) > 0}>
+										<Card class="max-md:order-3">
+											<CardHeader class="pb-2">
+												<CardTitle>Skills & technologies</CardTitle>
+											</CardHeader>
+											<CardContent>
+												<div class="flex flex-wrap gap-1.5">
+													<For each={j().Skills}>
+														{(skill) => (
+															<span class="rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs text-muted">
+																{skill}
+															</span>
+														)}
+													</For>
+												</div>
+											</CardContent>
+										</Card>
+									</Show>
 
-							<div class="max-md:order-4">
-								<ApplicationCard
-									app={app()}
-									onTrack={() => track.openTrack(params().id)}
-								/>
+									<div class="max-md:order-1">
+										<SuitabilityPanel job={j()} />
+									</div>
+
+									<div class="max-md:order-4">
+										<ApplicationCard
+											app={app()}
+											onTrack={() => track.openTrack(params().id)}
+										/>
+									</div>
+
+									<div class="max-md:order-4">
+										<JobTasksCard
+											jobId={params().id}
+											onAdd={() => setTaskOpen(true)}
+										/>
+									</div>
+
+									<Show when={isAgencyKind(j().CompanyKind)}>
+										<div class="max-md:order-4">
+											<RecruiterContactsCard jobId={params().id} />
+										</div>
+									</Show>
+								</div>
 							</div>
-						</div>
-					</div>
+						</TabsContent>
+						<TabsContent value="notes">
+							<JobNotesCard jobId={params().id} />
+						</TabsContent>
+					</Tabs>
 
 					<CvSheet job={j()} open={cvOpen()} onOpenChange={setCvOpen} />
 					<JobActionBar
 						job={j()}
 						app={app()}
 						onCv={() => setCvOpen(true)}
-						onTrack={() => track.openTrack(params().id)}
 						onDismiss={() => void dismissAndLeave(j())}
 					/>
 					<DismissToast />
 
+					<CreateTaskDialog
+						open={taskOpen()}
+						onOpenChange={setTaskOpen}
+						job={j()}
+					/>
 					<TrackApplicationDialog
 						open={track.modalOpen()}
 						onOpenChange={track.setModalOpen}

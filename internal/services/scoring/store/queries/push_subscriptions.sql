@@ -1,8 +1,9 @@
--- name: UpsertPushSubscription :exec
+-- name: UpsertPushSubscription :execrows
 INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
 VALUES (sqlc.arg(user_id)::uuid, sqlc.arg(endpoint)::text, sqlc.arg(p256dh)::text, sqlc.arg(auth)::text)
 ON CONFLICT (endpoint) DO UPDATE
-SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth;
+SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth
+WHERE push_subscriptions.user_id = EXCLUDED.user_id;
 
 -- name: ListPushSubscriptions :many
 SELECT endpoint, p256dh, auth FROM push_subscriptions

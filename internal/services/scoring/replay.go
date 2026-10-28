@@ -281,6 +281,5 @@ func writeReplayParams(sb *strings.Builder, p *dto.ScoringParams) {
 		}
 		fmt.Fprintf(sb, "- Weights: fitted: %s\n", strings.Join(parts, ", "))
 	}
-	b := bandsFor(p)
-	fmt.Fprintf(sb, "- Bands: Great from %d, Good from %d, Fair from %d\n\n", b.Great, b.Good, b.Fair)
+	sb.WriteString("\n")
 }

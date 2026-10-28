@@ -7,6 +7,7 @@ import {
 } from "@/hooks/useApplications";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { dayKey } from "@/lib/datetime";
+import { loadedData } from "@/lib/queryData";
 import type { ApplicationWithDetails } from "@/types/application";
 import type { Job } from "@/types/job";
 
@@ -14,7 +15,6 @@ interface JobActionBarProps {
 	job: Pick<Job, "ID" | "URL">;
 	app: ApplicationWithDetails | undefined;
 	onCv: () => void;
-	onTrack: () => void;
 	onDismiss: () => void;
 }
 
@@ -24,13 +24,8 @@ export function JobActionBar(props: JobActionBarProps) {
 	const update = useUpdateApplication();
 
 	const applied = useFormSubmit(async () => {
-		const status = statuses.data?.find(
-			(s) => s.Name.trim().toLowerCase() === "applied",
-		);
-		if (!status) {
-			props.onTrack();
-			return;
-		}
+		const status = loadedData(statuses)?.find((s) => s.SystemKey === "applied");
+		if (!status) return;
 		const applied_at = dayKey(new Date());
 		const app = props.app;
 		if (!app) {
@@ -46,7 +41,6 @@ export function JobActionBar(props: JobActionBarProps) {
 			data: {
 				status_id: status.ID,
 				applied_at,
-				notes: app.Notes,
 				salary_info: app.SalaryInfo,
 			},
 		});
@@ -77,7 +71,7 @@ export function JobActionBar(props: JobActionBarProps) {
 					Open listing
 				</Button>
 				<Button
-					disabled={!statuses.data || applied.pending()}
+					disabled={!statuses.isSuccess || applied.pending()}
 					onClick={applied.submit}
 				>
 					I applied

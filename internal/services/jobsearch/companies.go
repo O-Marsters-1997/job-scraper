@@ -32,6 +32,7 @@ func (s *Service) CreateCompany(ctx context.Context, userID string, in dto.Creat
 	company, err := s.store.UpsertCompany(ctx, dto.CompanyUpsert{
 		Slug: token,
 		Name: slug.Humanize(token),
+		Kind: dto.KindDirect,
 	})
 	if err != nil {
 		return dto.Company{}, err
@@ -61,6 +62,10 @@ func (s *Service) ListCompanies(ctx context.Context, userID string, q dto.Compan
 	if err != nil {
 		return dto.CompanyPage{}, err
 	}
+	poster, err := parseCompanyPoster(q.Poster)
+	if err != nil {
+		return dto.CompanyPage{}, err
+	}
 	options := dto.CompanyPageOptions{
 		Limit:         int32(limit),
 		Offset:        int32(offset),
@@ -69,6 +74,8 @@ func (s *Service) ListCompanies(ctx context.Context, userID string, q dto.Compan
 		FavouriteOnly: q.Favourite == "1",
 		NoBoardOnly:   q.NoBoard == "1",
 		Sort:          sort,
+		Poster:        poster,
+		ATSSources:    splitCSV(q.ATS),
 	}
 
 	page, err := s.store.PageCompaniesForUser(ctx, userID, options)
@@ -84,6 +91,20 @@ func (s *Service) ListCompanies(ctx context.Context, userID string, q dto.Compan
 	return page, nil
 }
 
+func (s *Service) CompanyATSCounts(ctx context.Context, _ string) ([]dto.ATSCount, error) {
+	return s.store.CountCompaniesByATS(ctx)
+}
+
+func splitCSV(raw string) []string {
+	var out []string
+	for part := range strings.SplitSeq(raw, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
 func parsePageOffset(raw string) (int, error) {
 	if raw == "" {
 		return 0, nil
@@ -95,14 +116,23 @@ func parsePageOffset(raw string) (int, error) {
 	return offset, nil
 }
 
+func parseCompanyPoster(raw string) (dto.Poster, error) {
+	switch poster := dto.Poster(raw); poster {
+	case "", dto.PosterAgency, dto.PosterDirect:
+		return poster, nil
+	default:
+		return "", apperr.Invalid("poster must be agency or direct")
+	}
+}
+
 func parseCompanySort(raw string) (dto.CompanySort, error) {
 	switch sort := dto.CompanySort(raw); sort {
 	case "":
 		return dto.CompanySortRelevance, nil
-	case dto.CompanySortRelevance, dto.CompanySortAlphabetical:
+	case dto.CompanySortRelevance, dto.CompanySortAlphabetical, dto.CompanySortOpenJobs:
 		return sort, nil
 	default:
-		return "", apperr.Invalid("sort must be relevance or alphabetical")
+		return "", apperr.Invalid("sort must be relevance, alphabetical or open_jobs")
 	}
 }
 
@@ -134,6 +164,57 @@ func (s *Service) setCompanyFavourite(ctx context.Context, userID, companyID str
 		return dto.Company{}, err
 	}
 	return s.GetCompany(ctx, userID, companyID)
+}
+
+func (s *Service) SetCompanyKind(ctx context.Context, userID string, in dto.SetCompanyKindInput) (dto.Company, error) {
+	if in.Kind != dto.KindAgency && in.Kind != dto.KindDirect {
+		return dto.Company{}, apperr.Invalid("kind must be agency or direct")
+	}
+	return s.applyCompanyKind(ctx, userID, in.CompanyID, in.Kind)
+}
+
+func (s *Service) UndoCompanyKind(ctx context.Context, userID string, in dto.UndoCompanyKindInput) (dto.Company, error) {
+	switch in.Kind {
+	case dto.KindUnclassified, dto.KindLikelyAgency, dto.KindLikelyDirect, dto.KindAgency, dto.KindDirect:
+	default:
+		return dto.Company{}, apperr.Invalid("unknown company kind")
+	}
+	return s.applyCompanyKind(ctx, userID, in.CompanyID, in.Kind)
+}
+
+func (s *Service) applyCompanyKind(ctx context.Context, userID, companyID string, kind dto.CompanyKind) (dto.Company, error) {
+	err := s.store.SetCompanyKind(ctx, companyID, kind)
+	switch {
+	case errors.Is(err, data.ErrNotFound):
+		return dto.Company{}, apperr.NotFound("company not found")
+	case errors.Is(err, store.ErrInvalidID):
+		return dto.Company{}, apperr.Invalid("invalid company ID")
+	case err != nil:
+		return dto.Company{}, err
+	}
+	return s.GetCompany(ctx, userID, companyID)
+}
+
+func (s *Service) SetCompaniesKind(ctx context.Context, _ string, in dto.SetCompaniesKindInput) (dto.CompaniesKindResult, error) {
+	if in.Kind != dto.KindAgency && in.Kind != dto.KindDirect {
+		return dto.CompaniesKindResult{}, apperr.Invalid("kind must be agency or direct")
+	}
+	ids, err := distinctCompanyIDs(in.CompanyIDs)
+	if err != nil {
+		return dto.CompaniesKindResult{}, err
+	}
+	for _, id := range ids {
+		err := s.store.SetCompanyKind(ctx, id, in.Kind)
+		switch {
+		case errors.Is(err, data.ErrNotFound):
+			return dto.CompaniesKindResult{}, apperr.NotFound("company not found")
+		case errors.Is(err, store.ErrInvalidID):
+			return dto.CompaniesKindResult{}, apperr.Invalid("invalid company ID")
+		case err != nil:
+			return dto.CompaniesKindResult{}, err
+		}
+	}
+	return dto.CompaniesKindResult{Updated: len(ids)}, nil
 }
 
 func (s *Service) SetCompanyTracking(ctx context.Context, userID string, in dto.SetCompanyTrackingInput) (dto.CompanyTracking, error) {

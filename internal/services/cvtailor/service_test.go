@@ -1,7 +1,6 @@
 package cvtailor_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -66,6 +65,24 @@ func TestBankSkillRejectsBlankName(t *testing.T) {
 	}
 }
 
+func TestBulkBankSkillsRejectEmptyOrRepeatedIDs(t *testing.T) {
+	t.Parallel()
+	svc, _ := newService(t, nil, nil)
+	for name, ids := range map[string][]string{"empty": nil, "repeated": {"a", "a"}} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, err := svc.SetBankSkillsCategory(t.Context(), userID, dto.BankSkillsBulkInput{IDs: ids})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Fatalf("SetBankSkillsCategory() err = %v, want an invalid error", err)
+			}
+			_, err = svc.DeleteBankSkills(t.Context(), userID, dto.BankSkillsBulkInput{IDs: ids})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Fatalf("DeleteBankSkills() err = %v, want an invalid error", err)
+			}
+		})
+	}
+}
+
 func TestReorderRejectsRepeatedIDs(t *testing.T) {
 	svc, _ := newService(t, nil, nil)
 	_, err := svc.ReorderPositions(t.Context(), userID, dto.ReorderInput{IDs: []string{"a", "a"}})
@@ -107,6 +124,10 @@ func newDraftEnv(t *testing.T) draftEnv {
 		}
 		pos.Achievements = append(pos.Achievements, a)
 	}
+	if err := store.SetAchievementContexts(ctx, userID, []string{pos.Achievements[0].ID}, []string{"Legacy ORM constrained the fix"}); err != nil {
+		t.Fatal(err)
+	}
+	pos.Achievements[0].Context = "Legacy ORM constrained the fix"
 	if err := store.SaveHeadingMappings(ctx, userID, docID, tabID, []dto.HeadingMapping{{HeadingText: heading, PositionID: &pos.ID}}); err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +140,7 @@ func newDraftEnv(t *testing.T) draftEnv {
 		svc:   cvtailor.NewService(store, cvtailortest.Docs{TabJSON: baseTab(t)}, asker, drive),
 		asker: asker,
 		pos:   pos,
-		input: dto.DraftInput{JobID: jobID, DocID: docID, TabID: tabID, AchievementIDs: []string{pos.Achievements[0].ID}},
+		input: dto.DraftInput{JobID: jobID, DocID: docID, TabID: tabID},
 	}
 }
 
@@ -132,136 +153,50 @@ func (e draftEnv) bankSkill(t *testing.T, name string) dto.BankSkill {
 	return sk
 }
 
-func TestCreateDraftSkillSwaps(t *testing.T) {
-	e := newDraftEnv(t)
-	e.svc = cvtailor.NewService(e.store, cvtailortest.Docs{TabJSON: baseTab(t, head("Skills"), prose("Languages: Go, SQL"))}, e.asker, e.drive)
-	rust := e.bankSkill(t, "Rust")
-	foreign, err := e.store.CreateBankSkill(t.Context(), otherUserID, dto.BankSkillInput{Name: "Zig"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cases := []struct {
-		name string
-		swap dto.SkillSwap
-	}{
-		{"another user's Bank Skill is invalid", dto.SkillSwap{BankSkillID: foreign.ID, Line: 0, Replaces: "SQL"}},
-		{"unknown line is invalid", dto.SkillSwap{BankSkillID: rust.ID, Line: 3, Replaces: "SQL"}},
-		{"item not in the line is invalid", dto.SkillSwap{BankSkillID: rust.ID, Line: 0, Replaces: "Perl"}},
-		{"Bank Skill already in the CV is invalid", dto.SkillSwap{BankSkillID: e.bankSkill(t, "go").ID, Line: 0, Replaces: "SQL"}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			in := e.input
-			in.SkillSwaps = []dto.SkillSwap{tc.swap}
-
-			_, err := e.svc.CreateDraft(t.Context(), userID, in)
-
-			if !apperr.IsKind(err, apperr.KindInvalid) {
-				t.Errorf("CreateDraft(%+v) error = %v, want an invalid error", tc.swap, err)
-			}
-		})
-	}
-
-	t.Run("a valid swap is queued", func(t *testing.T) {
-		in := e.input
-		in.SkillSwaps = []dto.SkillSwap{{BankSkillID: rust.ID, Line: 0, Replaces: "sql"}}
-
-		if _, err := e.svc.CreateDraft(t.Context(), userID, in); err != nil {
-			t.Fatalf("CreateDraft() error = %v", err)
-		}
-	})
-}
-
 func TestCreateDraft(t *testing.T) {
-	t.Run("queues a pending Draft for confirmed achievements", func(t *testing.T) {
+	t.Run("queues a pending Draft", func(t *testing.T) {
+		t.Parallel()
 		e := newDraftEnv(t)
 
 		id := e.queue(t)
 
-		want := dto.Draft{ID: id, JobID: jobID, Status: "pending", Findings: []dto.DraftFinding{}}
+		want := dto.Draft{ID: id, JobID: jobID, Mode: dto.DraftModeGenerate, Status: "pending", Findings: []dto.DraftFinding{}}
 		if diff := cmp.Diff(want, e.draft(t, id), cmpopts.IgnoreFields(dto.Draft{}, "CreatedAt", "BaseDocID", "BaseTabID", "AchievementIDs")); diff != "" {
 			t.Errorf("GetDraft(%s) mismatch (-want +got):\n%s", id, diff)
 		}
 	})
 
-	t.Run("records a label for every offered achievement", func(t *testing.T) {
+	t.Run("an unknown mode is invalid and as_is is kept", func(t *testing.T) {
+		t.Parallel()
 		e := newDraftEnv(t)
-		pos := e.pos
-		extra := addAchievements(t, pos.ID, e.store, "Third", "Hand", "Unseen")
-		e.asker.answers = map[string]dto.Answer{
-			questionPrefix + pos.Achievements[0].Text: {PYes: 0.7, PNo: 0.1, PNotStated: 0.2, Confidence: 0.6},
-			questionPrefix + pos.Achievements[1].Text: {PYes: 0.3, PNo: 0.1, PNotStated: 0.6, Confidence: 0.2},
-			questionPrefix + "Third":                  {PYes: 0.2, PNo: 0.1, PNotStated: 0.7, Confidence: 0.1},
-			questionPrefix + "Hand":                   {PYes: 0, PNo: 0.6, PNotStated: 0.4, Confidence: 0.5},
-		}
-		in := e.input
-		in.AchievementIDs = []string{pos.Achievements[0].ID, extra[1].ID}
 
-		if _, err := e.svc.CreateDraft(t.Context(), userID, in); err != nil {
-			t.Fatalf("CreateDraft() error = %v", err)
+		e.input.Mode = "rewrite"
+		if _, err := e.svc.CreateDraft(t.Context(), userID, e.input); !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("CreateDraft(rewrite) err = %v, want an invalid error", err)
 		}
+		e.input.Mode = dto.DraftModeGenerate
+		if got := e.draft(t, e.queueOnOtherJob(t)).Mode; got != dto.DraftModeGenerate {
+			t.Errorf("generate Draft without achievements Mode = %q, want generate", got)
+		}
+		e.input.Mode = dto.DraftModeAsIs
+		id := e.queue(t)
 
-		answer := func(text string) *dto.Answer { a := e.asker.answers[questionPrefix+text]; return &a }
-		want := []dto.BulletLabel{
-			{AchievementID: pos.Achievements[0].ID, Answer: answer(pos.Achievements[0].Text), Preselected: true, Kept: true},
-			{AchievementID: pos.Achievements[1].ID, Answer: answer(pos.Achievements[1].Text), Preselected: true},
-			{AchievementID: extra[0].ID, Answer: answer("Third"), Preselected: true},
-			{AchievementID: extra[2].ID},
-			{AchievementID: extra[1].ID, Answer: answer("Hand"), Kept: true},
-		}
-		if diff := cmp.Diff(want, e.store.BulletLabels()); diff != "" {
-			t.Errorf("recorded labels mismatch (-want +got):\n%s", diff)
+		if got := e.draft(t, id).Mode; got != dto.DraftModeAsIs {
+			t.Errorf("GetDraft(%s).Mode = %q, want as_is", id, got)
 		}
 	})
 
-	t.Run("still queues the Draft when Jev cannot answer", func(t *testing.T) {
+	t.Run("missing tab is invalid", func(t *testing.T) {
+		t.Parallel()
 		e := newDraftEnv(t)
-		e.asker.err = errors.New("jev down")
+		e.input.TabID = ""
 
-		if _, err := e.svc.CreateDraft(t.Context(), userID, e.input); err != nil {
-			t.Fatalf("CreateDraft() error = %v", err)
-		}
+		_, err := e.svc.CreateDraft(t.Context(), userID, e.input)
 
-		for _, l := range e.store.BulletLabels() {
-			if l.Answer != nil {
-				t.Errorf("label %+v has an answer, want none", l)
-			}
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("CreateDraft(%+v) error = %v, want an invalid error", e.input, err)
 		}
 	})
-
-	e := newDraftEnv(t)
-	other, err := e.store.CreatePosition(t.Context(), userID, dto.PositionInput{Employer: "Unmapped", Title: "Dev"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	unmapped, err := e.store.CreateAchievement(t.Context(), userID, dto.AchievementInput{PositionID: other.ID, Text: "Shipped"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cases := []struct {
-		name   string
-		user   string
-		mutate func(*dto.DraftInput)
-	}{
-		{"no achievements is invalid", userID, func(in *dto.DraftInput) { in.AchievementIDs = nil }},
-		{"repeated achievement is invalid", userID, func(in *dto.DraftInput) { in.AchievementIDs = []string{in.AchievementIDs[0], in.AchievementIDs[0]} }},
-		{"another user's achievement is invalid", otherUserID, func(*dto.DraftInput) {}},
-		{"achievement of an unmapped position is invalid", userID, func(in *dto.DraftInput) { in.AchievementIDs = []string{unmapped.ID} }},
-		{"missing tab is invalid", userID, func(in *dto.DraftInput) { in.TabID = "" }},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			in := e.input
-			in.AchievementIDs = append([]string(nil), in.AchievementIDs...)
-			tc.mutate(&in)
-
-			_, err := e.svc.CreateDraft(t.Context(), tc.user, in)
-
-			if !apperr.IsKind(err, apperr.KindInvalid) {
-				t.Errorf("CreateDraft(%+v) error = %v, want an invalid error", in, err)
-			}
-		})
-	}
 }
 
 func TestGetDraft(t *testing.T) {

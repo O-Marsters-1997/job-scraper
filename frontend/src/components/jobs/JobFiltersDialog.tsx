@@ -30,7 +30,7 @@ interface JobFiltersDialogProps {
 	onOpenChange: (open: boolean) => void;
 	filters: JobFilters;
 	onChange: (patch: Partial<JobFilters>) => void;
-	sourceOptions: string[];
+	sourceOptions: { value: string; label: string }[];
 }
 
 const WORK_OPTIONS = [
@@ -161,11 +161,11 @@ export function JobFiltersDialog(props: JobFiltersDialogProps) {
 										<For each={props.sourceOptions}>
 											{(src) => (
 												<FilterChip
-													label={src}
-													active={props.filters.src.includes(src)}
+													label={src.label}
+													active={props.filters.src.includes(src.value)}
 													onClick={() =>
 														props.onChange({
-															src: toggle(props.filters.src, src),
+															src: toggle(props.filters.src, src.value),
 														})
 													}
 												/>

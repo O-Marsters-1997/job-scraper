@@ -14,19 +14,36 @@ type Job struct {
 	ProviderPostingID  string
 	ContentFingerprint string
 	Source             string
-	UpdatedAt          time.Time
+	PostedAt           *time.Time
+	PostedAfter        *time.Time
+	RepostedAt         *time.Time
 	ScrapedAt          time.Time
 	FirstDiscoveredAt  time.Time
 	Description        string
 	SalaryRaw          string
 	WorkArrangement    string
+	RemoteCheckURL     string
 	SuitabilityScore   *int
 	Band               string
 	Grade              string
 	Seen               bool
 	CompanyFavourite   bool
+	CompanyKind        CompanyKind
+	DiscoveredVia      string
+	DiscoveryURL       string
 	Breakdown          []ScoreRow
 	Listings           []JobListing
+}
+
+func (j Job) EffectiveAge() time.Time {
+	switch {
+	case j.PostedAt != nil:
+		return *j.PostedAt
+	case j.PostedAfter != nil:
+		return *j.PostedAfter
+	default:
+		return j.FirstDiscoveredAt
+	}
 }
 
 type JobListing struct {

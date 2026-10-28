@@ -1,4 +1,4 @@
-export const TOLERANCE_FLOOR = 0.5;
+const TOLERANCE_FLOOR = 0.5;
 
 export type LadderTier = { level: number; weight: number };
 

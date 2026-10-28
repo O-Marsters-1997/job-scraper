@@ -18,14 +18,29 @@ type Store interface {
 	SetChase(ctx context.Context, userID, id string, chaseBy time.Time) (dto.Application, error)
 	ClearChase(ctx context.Context, userID, id string) error
 	DeleteApplication(ctx context.Context, userID, id string) error
+	DeleteApplications(ctx context.Context, userID string, ids []string) error
 	GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error)
+	ListDue(ctx context.Context, userID string) (dto.DueList, error)
 
-	CreateApplicationStatus(ctx context.Context, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error)
-	UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error)
+	CreateApplicationStatus(ctx context.Context, userID, name, colour string, replyWindowDays *int, countsAsReply bool) (dto.ApplicationStatus, error)
+	UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string, replyWindowDays *int, countsAsReply bool) (dto.ApplicationStatus, error)
 	DeleteApplicationStatus(ctx context.Context, id, userID string) error
 	CountApplicationsUsingStatus(ctx context.Context, statusID, userID string) (int64, error)
 	ListApplicationStatusesByUser(ctx context.Context, userID string) ([]dto.ApplicationStatus, error)
 	SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID string) error
+	MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error
+
+	CreateRecruiterContact(ctx context.Context, userID string, in dto.LogRecruiterContactInput) (dto.RecruiterContact, error)
+	ListRecruiterContacts(ctx context.Context, userID, jobID string) ([]dto.RecruiterContact, error)
+	GetRecruiterContactSummaries(ctx context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error)
+
+	GetJobNote(ctx context.Context, userID, jobID string) (dto.JobNote, error)
+	PutJobNote(ctx context.Context, userID string, in dto.PutJobNoteInput) (dto.JobNote, error)
+
+	CreateJobComment(ctx context.Context, userID string, in dto.CreateJobCommentInput) (dto.JobComment, error)
+	ListJobComments(ctx context.Context, userID, jobID string) ([]dto.JobComment, error)
+	UpdateJobComment(ctx context.Context, userID string, in dto.UpdateJobCommentInput) (dto.JobComment, error)
+	DeleteJobComment(ctx context.Context, userID, id string) error
 }
 
 type Service struct {
@@ -55,6 +70,13 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateApplic
 
 func (s *Service) List(ctx context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error) {
 	return s.store.ListApplications(ctx, userID, q)
+}
+
+func (s *Service) DeleteApplications(ctx context.Context, userID string, in dto.DeleteApplicationsInput) (struct{}, error) {
+	if len(in.IDs) == 0 {
+		return struct{}{}, apperr.Invalid("ids are required")
+	}
+	return struct{}{}, s.store.DeleteApplications(ctx, userID, in.IDs)
 }
 
 func (s *Service) SetChase(ctx context.Context, userID string, in dto.ChaseInput) (dto.Application, error) {

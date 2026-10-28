@@ -576,6 +576,104 @@ html[data-size="lg"] {
 	}
 }
 
+.spinner-hair,
+.spinner-outline,
+.spinner-line {
+	fill: none;
+	stroke: currentColor;
+	stroke-linejoin: round;
+}
+.spinner-hair {
+	stroke-width: 0.6;
+}
+.spinner-outline {
+	stroke-width: 1.4;
+}
+.spinner-line {
+	stroke-width: 2.3;
+	stroke-linecap: round;
+}
+.spinner-comet-base {
+	opacity: 0.18;
+}
+.spinner-comet {
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-dasharray: 1.5 4 3 4 16 71.5;
+	animation: spinnerLap 1.4s linear infinite;
+}
+.spinner-frame-base {
+	opacity: 0.1;
+}
+.spinner-frame-run {
+	opacity: 0.5;
+	stroke-width: 0.9;
+	stroke-linecap: round;
+	stroke-dasharray: 1 3 2 3 12 79;
+	animation: spinnerLap 1.4s linear infinite;
+}
+.spinner-flick-1,
+.spinner-flick-2 {
+	opacity: 0.22;
+	animation: 1.4s linear infinite;
+}
+.spinner-flick-1 {
+	animation-name: spinnerFlick1;
+}
+.spinner-flick-2 {
+	animation-name: spinnerFlick2;
+}
+@keyframes spinnerLap {
+	to {
+		stroke-dashoffset: -100;
+	}
+}
+@keyframes spinnerFlick1 {
+	0%,
+	63% {
+		opacity: 0.22;
+	}
+	68% {
+		opacity: 1;
+	}
+	87%,
+	100% {
+		opacity: 0.22;
+	}
+}
+@keyframes spinnerFlick2 {
+	0%,
+	54% {
+		opacity: 0.22;
+	}
+	59% {
+		opacity: 1;
+	}
+	78%,
+	100% {
+		opacity: 0.22;
+	}
+}
+@keyframes spinnerCalm {
+	50% {
+		opacity: 0.45;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.spinner-comet,
+	.spinner-frame-run {
+		display: none;
+	}
+	.spinner-comet-base,
+	.spinner-frame-base {
+		opacity: 1;
+	}
+	.spinner-flick-1,
+	.spinner-flick-2 {
+		animation: spinnerCalm 1.6s ease-in-out infinite;
+	}
+}
+
 /* ============================================================
    Reusable brand-aurora — faint violet glow for app shell
    chrome, empty states, and dashboard headers (never behind
@@ -613,6 +711,22 @@ html[data-size="lg"] {
 	);
 }
 
+::highlight(job-comment) {
+	background-color: color-mix(in oklch, var(--color-primary), transparent 92%);
+	text-decoration: underline;
+	text-decoration-color: color-mix(
+		in oklch,
+		var(--color-primary),
+		transparent 50%
+	);
+}
+
+::highlight(job-comment-active) {
+	background-color: color-mix(in oklch, var(--color-primary), transparent 75%);
+	text-decoration: underline;
+	text-decoration-color: var(--color-primary);
+}
+
 /* Empty-state / section glow: centred ambient wash */
 .brand-ribbon-center {
 	width: 60%;
@@ -624,4 +738,37 @@ html[data-size="lg"] {
 		color-mix(in oklch, var(--color-primary), transparent 94%),
 		transparent 65%
 	);
+}
+
+@layer components {
+	.z-tabs {
+		@apply gap-2;
+	}
+	.z-tabs-list {
+		@apply rounded-full p-1 group-data-[orientation=horizontal]/tabs:h-9 group-data-[orientation=vertical]/tabs:rounded-2xl data-[variant=line]:rounded-none;
+	}
+	.z-tabs-trigger {
+		@apply gap-2 rounded-full border border-transparent! px-3 py-1 text-sm font-medium group-data-[orientation=vertical]/tabs:px-3 group-data-[orientation=vertical]/tabs:py-1.5 group-data-[orientation=vertical]/tabs:rounded-2xl [&_svg:not([class*='size-'])]:size-4 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2;
+	}
+	.z-tabs-content {
+		@apply text-sm;
+	}
+}
+
+@layer components {
+	.z-accordion {
+		@apply overflow-hidden rounded-2xl border;
+	}
+	.z-accordion-item {
+		@apply data-expanded:bg-surface-muted not-last:border-b;
+	}
+	.z-accordion-trigger {
+		@apply [&_[data-slot=accordion-trigger-icon]]:text-faint gap-6 p-4 text-left text-sm font-medium hover:underline [&_[data-slot=accordion-trigger-icon]]:ml-auto [&_[data-slot=accordion-trigger-icon]]:size-4;
+	}
+	.z-accordion-content {
+		@apply data-expanded:animate-accordion-down data-closed:animate-accordion-up px-4 text-sm;
+	}
+	.z-accordion-content-inner {
+		@apply pt-0 pb-4;
+	}
 }

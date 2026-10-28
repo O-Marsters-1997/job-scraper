@@ -11,6 +11,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const findActiveBoardByToken = `-- name: FindActiveBoardByToken :one
+SELECT id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, uk_jobs_seen_at, created_at FROM company_boards
+WHERE source = $1 AND lower(board_token) = lower($2) AND status <> 'retired'
+`
+
+type FindActiveBoardByTokenParams struct {
+	Source string
+	Lower  string
+}
+
+func (q *Queries) FindActiveBoardByToken(ctx context.Context, arg FindActiveBoardByTokenParams) (CompanyBoard, error) {
+	row := q.db.QueryRow(ctx, findActiveBoardByToken, arg.Source, arg.Lower)
+	var i CompanyBoard
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.Source,
+		&i.BoardToken,
+		&i.Status,
+		&i.VerificationMethod,
+		&i.VerifiedAt,
+		&i.LastLinkedAt,
+		&i.RetiredAt,
+		&i.SupersededAt,
+		&i.DiscoveredVia,
+		&i.UkJobsSeenAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getBoardCompanyID = `-- name: GetBoardCompanyID :one
 SELECT company_id FROM company_boards WHERE source = $1 AND board_token = $2
 `
@@ -25,6 +56,22 @@ func (q *Queries) GetBoardCompanyID(ctx context.Context, arg GetBoardCompanyIDPa
 	var company_id pgtype.UUID
 	err := row.Scan(&company_id)
 	return company_id, err
+}
+
+const getBoardIdentity = `-- name: GetBoardIdentity :one
+SELECT source, board_token FROM company_boards WHERE id = $1
+`
+
+type GetBoardIdentityRow struct {
+	Source     string
+	BoardToken string
+}
+
+func (q *Queries) GetBoardIdentity(ctx context.Context, id pgtype.UUID) (GetBoardIdentityRow, error) {
+	row := q.db.QueryRow(ctx, getBoardIdentity, id)
+	var i GetBoardIdentityRow
+	err := row.Scan(&i.Source, &i.BoardToken)
+	return i, err
 }
 
 const getVerifiedBoardID = `-- name: GetVerifiedBoardID :one
@@ -81,8 +128,49 @@ func (q *Queries) ListBoardChecks(ctx context.Context, companyID pgtype.UUID) ([
 	return items, nil
 }
 
+const listBoardsForCompanies = `-- name: ListBoardsForCompanies :many
+SELECT id, company_id, source, board_token, status
+FROM company_boards
+WHERE company_id = ANY($1::uuid[])
+ORDER BY created_at, id
+`
+
+type ListBoardsForCompaniesRow struct {
+	ID         pgtype.UUID
+	CompanyID  pgtype.UUID
+	Source     string
+	BoardToken string
+	Status     string
+}
+
+func (q *Queries) ListBoardsForCompanies(ctx context.Context, dollar_1 []pgtype.UUID) ([]ListBoardsForCompaniesRow, error) {
+	rows, err := q.db.Query(ctx, listBoardsForCompanies, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBoardsForCompaniesRow
+	for rows.Next() {
+		var i ListBoardsForCompaniesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CompanyID,
+			&i.Source,
+			&i.BoardToken,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCompanyBoards = `-- name: ListCompanyBoards :many
-SELECT id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, created_at FROM company_boards WHERE company_id = $1 ORDER BY created_at, id
+SELECT id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, uk_jobs_seen_at, created_at FROM company_boards WHERE company_id = $1 ORDER BY created_at, id
 `
 
 func (q *Queries) ListCompanyBoards(ctx context.Context, companyID pgtype.UUID) ([]CompanyBoard, error) {
@@ -106,6 +194,7 @@ func (q *Queries) ListCompanyBoards(ctx context.Context, companyID pgtype.UUID) 
 			&i.RetiredAt,
 			&i.SupersededAt,
 			&i.DiscoveredVia,
+			&i.UkJobsSeenAt,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -161,14 +250,20 @@ func (q *Queries) ListTrackedCompanyBoards(ctx context.Context, userID pgtype.UU
 }
 
 const listUntrackedDiscoveredBoards = `-- name: ListUntrackedDiscoveredBoards :many
-SELECT cb.id, cb.company_id, cb.source, cb.board_token, cb.status, cb.verification_method, cb.verified_at, cb.last_linked_at, cb.retired_at, cb.superseded_at, cb.discovered_via, cb.created_at FROM company_boards cb
+SELECT cb.id, cb.company_id, cb.source, cb.board_token, cb.status, cb.verification_method, cb.verified_at, cb.last_linked_at, cb.retired_at, cb.superseded_at, cb.discovered_via, cb.uk_jobs_seen_at, cb.created_at FROM company_boards cb
 WHERE cb.status = 'verified' AND cb.verification_method = 'discovered'
   AND NOT EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = cb.company_id)
+  AND (COALESCE(cb.uk_jobs_seen_at >= $1::timestamptz, FALSE) = $2::boolean)
 ORDER BY cb.created_at, cb.id
 `
 
-func (q *Queries) ListUntrackedDiscoveredBoards(ctx context.Context) ([]CompanyBoard, error) {
-	rows, err := q.db.Query(ctx, listUntrackedDiscoveredBoards)
+type ListUntrackedDiscoveredBoardsParams struct {
+	UkSince pgtype.Timestamptz
+	Uk      bool
+}
+
+func (q *Queries) ListUntrackedDiscoveredBoards(ctx context.Context, arg ListUntrackedDiscoveredBoardsParams) ([]CompanyBoard, error) {
+	rows, err := q.db.Query(ctx, listUntrackedDiscoveredBoards, arg.UkSince, arg.Uk)
 	if err != nil {
 		return nil, err
 	}
@@ -188,6 +283,7 @@ func (q *Queries) ListUntrackedDiscoveredBoards(ctx context.Context) ([]CompanyB
 			&i.RetiredAt,
 			&i.SupersededAt,
 			&i.DiscoveredVia,
+			&i.UkJobsSeenAt,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -202,7 +298,8 @@ func (q *Queries) ListUntrackedDiscoveredBoards(ctx context.Context) ([]CompanyB
 
 const listVerifiedBoardsBySlug = `-- name: ListVerifiedBoardsBySlug :many
 SELECT c.slug, cb.source, cb.board_token,
-  EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = c.id AND tc.enabled) AS tracked
+  EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = c.id AND tc.enabled) AS tracked,
+  EXISTS (SELECT 1 FROM board_poll_state ps WHERE ps.board_id = cb.id AND ps.last_completed_at IS NOT NULL) AS polled
 FROM companies c
 JOIN company_boards cb ON cb.company_id = c.id AND cb.status = 'verified'
 WHERE c.slug = ANY($1::text[])
@@ -214,6 +311,7 @@ type ListVerifiedBoardsBySlugRow struct {
 	Source     string
 	BoardToken string
 	Tracked    bool
+	Polled     bool
 }
 
 func (q *Queries) ListVerifiedBoardsBySlug(ctx context.Context, dollar_1 []string) ([]ListVerifiedBoardsBySlugRow, error) {
@@ -230,6 +328,7 @@ func (q *Queries) ListVerifiedBoardsBySlug(ctx context.Context, dollar_1 []strin
 			&i.Source,
 			&i.BoardToken,
 			&i.Tracked,
+			&i.Polled,
 		); err != nil {
 			return nil, err
 		}
@@ -268,12 +367,35 @@ func (q *Queries) ListVerifiedCompanySlugs(ctx context.Context, dollar_1 []strin
 	return items, nil
 }
 
+const markBoardUKJobsSeen = `-- name: MarkBoardUKJobsSeen :exec
+UPDATE company_boards SET uk_jobs_seen_at = NOW() WHERE source = $1 AND board_token = $2
+`
+
+type MarkBoardUKJobsSeenParams struct {
+	Source     string
+	BoardToken string
+}
+
+func (q *Queries) MarkBoardUKJobsSeen(ctx context.Context, arg MarkBoardUKJobsSeenParams) error {
+	_, err := q.db.Exec(ctx, markBoardUKJobsSeen, arg.Source, arg.BoardToken)
+	return err
+}
+
+const retireDuplicateBoard = `-- name: RetireDuplicateBoard :exec
+UPDATE company_boards SET status = 'retired', retired_at = NOW() WHERE id = $1 AND status <> 'retired'
+`
+
+func (q *Queries) RetireDuplicateBoard(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, retireDuplicateBoard, id)
+	return err
+}
+
 const upsertCandidateBoard = `-- name: UpsertCandidateBoard :one
 INSERT INTO company_boards (company_id, source, board_token)
 VALUES ($1, $2, $3)
 ON CONFLICT (source, board_token) DO UPDATE SET source = EXCLUDED.source
 WHERE company_boards.company_id = EXCLUDED.company_id
-RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, created_at
+RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, uk_jobs_seen_at, created_at
 `
 
 type UpsertCandidateBoardParams struct {
@@ -297,6 +419,7 @@ func (q *Queries) UpsertCandidateBoard(ctx context.Context, arg UpsertCandidateB
 		&i.RetiredAt,
 		&i.SupersededAt,
 		&i.DiscoveredVia,
+		&i.UkJobsSeenAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -306,7 +429,7 @@ const verifyCompanyBoard = `-- name: VerifyCompanyBoard :one
 UPDATE company_boards
 SET status = 'verified', verification_method = $4, verified_at = NOW(), discovered_via = NULLIF($5::text, '')
 WHERE company_id = $1 AND source = $2 AND board_token = $3 AND status = 'candidate'
-RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, created_at
+RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, uk_jobs_seen_at, created_at
 `
 
 type VerifyCompanyBoardParams struct {
@@ -338,6 +461,7 @@ func (q *Queries) VerifyCompanyBoard(ctx context.Context, arg VerifyCompanyBoard
 		&i.RetiredAt,
 		&i.SupersededAt,
 		&i.DiscoveredVia,
+		&i.UkJobsSeenAt,
 		&i.CreatedAt,
 	)
 	return i, err

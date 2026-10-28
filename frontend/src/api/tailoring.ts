@@ -2,21 +2,25 @@ import { z } from "zod";
 import { createSseParser } from "../lib/sse";
 import { KeptDraftExistsError } from "../lib/tailoring";
 import {
-	type CVHeading,
-	cvHeadingSchema,
+	type BulletLean,
+	bulletLeanSchema,
 	type Draft,
 	type DraftInput,
+	type DraftInsights,
 	type DraftLayout,
+	type DraftPositionEdit,
 	type DraftRef,
+	type DraftRoles,
+	draftInsightsSchema,
 	draftLayoutSchema,
 	draftRefSchema,
+	draftRolesSchema,
 	draftSchema,
 	type ExperienceMatch,
-	type Explanation,
 	experienceMatchSchema,
-	explanationSchema,
 	type HeadingMapping,
 	headingMappingSchema,
+	type ProfileRedraftInput,
 	type SkillGroup,
 	type SkillSuggestions,
 	type SlotEdit,
@@ -47,16 +51,6 @@ export class LayoutUnsupportedError extends Error {}
 
 const cvPath = (docId: string, tabId: string) =>
 	`/tailoring/cvs/${encodeURIComponent(docId)}/${encodeURIComponent(tabId)}/headings`;
-
-export async function fetchHeadings(
-	docId: string,
-	tabId: string,
-): Promise<CVHeading[]> {
-	return mocked(
-		(db) => db.getHeadings(docId, tabId),
-		() => apiFetch(cvPath(docId, tabId), cvHeadingSchema.array()),
-	);
-}
 
 export async function saveHeadings(
 	docId: string,
@@ -117,21 +111,6 @@ export async function fetchExperienceMatch(
 	);
 }
 
-export async function explainAchievement(
-	jobId: string,
-	achievementId: string,
-): Promise<Explanation> {
-	return mocked(
-		(db) => db.explainAchievement(achievementId),
-		() =>
-			apiFetch(
-				`/tailoring/jobs/${jobId}/achievements/${encodeURIComponent(achievementId)}/explain`,
-				explanationSchema,
-				jsonInit("POST", {}),
-			).catch(rethrowStatus({ 422: () => new MissingAiKeyError() })),
-	);
-}
-
 export async function createDraft(input: DraftInput): Promise<DraftRef> {
 	return mocked(
 		(db) => db.createDraft(input),
@@ -185,15 +164,35 @@ export async function saveDraftSlots(
 	id: string,
 	slots: SlotEdit[],
 	skills?: SkillGroup[],
+	positions?: DraftPositionEdit[],
+	roles?: string[],
 ): Promise<Draft> {
 	return mocked(
-		(db) => db.saveDraftSlots(id, slots, skills),
+		(db) => db.saveDraftSlots(id, slots, skills, positions, roles),
 		() =>
 			apiFetch(
 				`/tailoring/drafts/${id}/slots`,
 				draftSchema,
-				jsonInit("PUT", { slots, skills }),
+				jsonInit("PUT", { positions, slots, skills, roles }),
 			),
+	);
+}
+
+export async function redraftProfile(
+	id: string,
+	input: ProfileRedraftInput,
+): Promise<Draft> {
+	return mocked(
+		(db) => db.redraftProfile(id, input),
+		() =>
+			apiFetch(
+				`/tailoring/drafts/${id}/profile/redraft`,
+				draftSchema,
+				jsonInit("POST", input),
+			).catch((err) => {
+				const message = err instanceof ApiError && bodyError(err);
+				throw message ? new Error(message) : err;
+			}),
 	);
 }
 
@@ -206,6 +205,39 @@ export async function fetchDraftLayout(id: string): Promise<DraftLayout> {
 					422: (err) =>
 						new LayoutUnsupportedError(bodyError(err) ?? "unsupported layout"),
 				}),
+			),
+	);
+}
+
+export async function fetchDraftLean(id: string): Promise<BulletLean[]> {
+	return mocked(
+		(db) => db.getDraftLean(),
+		() => apiFetch(`/tailoring/drafts/${id}/lean`, z.array(bulletLeanSchema)),
+	);
+}
+
+export async function fetchDraftRoles(id: string): Promise<DraftRoles> {
+	return mocked(
+		(db) => db.getDraftRoles(),
+		() => apiFetch(`/tailoring/drafts/${id}/roles`, draftRolesSchema),
+	);
+}
+
+export async function fetchDraftInsights(id: string): Promise<DraftInsights> {
+	return mocked(
+		(db) => db.getDraftInsights(),
+		() => apiFetch(`/tailoring/drafts/${id}/insights`, draftInsightsSchema),
+	);
+}
+
+export async function explainDraft(id: string): Promise<DraftInsights> {
+	return mocked(
+		(db) => db.getDraftInsights(),
+		() =>
+			apiFetch(
+				`/tailoring/drafts/${id}/insights`,
+				draftInsightsSchema,
+				jsonInit("POST", {}),
 			),
 	);
 }

@@ -1,7 +1,10 @@
 import { createSignal, For, onCleanup, Show } from "solid-js";
+import { Icon } from "@/components/Icon";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
 	useAddCompanyBoard,
 	useCompanyBoards,
@@ -54,9 +57,9 @@ export function CompanyBoardsCard(props: { companyId: string }) {
 	const [boardMessage, setBoardMessage] = createSignal("");
 	let checkTimeout: ReturnType<typeof setTimeout> | undefined;
 	onCleanup(() => clearTimeout(checkTimeout));
+	const boards = () => (boardsQuery.isPending ? [] : (boardsQuery.data ?? []));
 	const checkedBoardVerified = () =>
-		boardsQuery.data?.find((b) => b.ID === checkingBoardID())?.Status ===
-		"verified";
+		boards().find((b) => b.ID === checkingBoardID())?.Status === "verified";
 	const boardStatusMessage = () =>
 		checkedBoardVerified() ? "Board verified." : boardMessage();
 	const saveBoard = async (url: string) => {
@@ -96,39 +99,71 @@ export function CompanyBoardsCard(props: { companyId: string }) {
 				<CardTitle>Boards</CardTitle>
 			</CardHeader>
 			<CardContent class="gap-3">
-				<Show when={boardsQuery.isError}>
-					<p class="text-sm text-destructive-strong">Could not load boards.</p>
-				</Show>
-				<Show when={boardsQuery.isPending}>
-					<p class="text-sm text-muted">Loading boards…</p>
-				</Show>
-				<Show when={!boardsQuery.isPending && !boardsQuery.isError}>
-					<Show
-						when={(boardsQuery.data ?? []).length > 0}
-						fallback={<p class="text-sm text-faint">No boards linked yet.</p>}
-					>
-						<For each={boardsQuery.data ?? []}>
-							{(board) => (
-								<div class="flex items-start justify-between gap-2 border-b border-border pb-2 text-xs">
-									<div class="min-w-0">
-										<p class="font-medium text-foreground">{board.Source}</p>
-										<p class="break-all font-mono text-faint">
-											{board.BoardToken}
-										</p>
-										<Show when={board.LastCompletedAt}>
-											{(checked) => (
-												<p class="text-faint">
-													Last checked {new Date(checked()).toLocaleString()}
-												</p>
-											)}
-										</Show>
+				<QueryBoundary query={boardsQuery} fallbackRows={2}>
+					{() => (
+						<Show
+							when={boards().length > 0}
+							fallback={<p class="text-sm text-faint">No boards linked yet.</p>}
+						>
+							<For each={boards()}>
+								{(board) => (
+									<div
+										class={cn(
+											"flex items-start justify-between gap-2 border-b border-border pb-2 text-xs",
+											board.Status === "verified" &&
+												"border-l-2 border-l-primary pl-2",
+										)}
+									>
+										<div class="min-w-0">
+											<p class="font-medium text-foreground">
+												{board.Source === "wttj"
+													? "Welcome to the Jungle · aggregator"
+													: board.Source}
+											</p>
+											<p class="break-all font-mono text-faint">
+												{board.BoardToken}
+											</p>
+											<Show when={board.LastCompletedAt}>
+												{(checked) => (
+													<p class="text-faint">
+														Last checked {new Date(checked()).toLocaleString()}
+													</p>
+												)}
+											</Show>
+										</div>
+										<div class="flex items-center gap-1.5">
+											<Show
+												when={board.Status === "verified" && boardURLFor(board)}
+											>
+												{(url) => (
+													<a
+														href={url()}
+														target="_blank"
+														rel="noopener noreferrer"
+														aria-label={`Open ${board.Source} board`}
+														class="text-primary"
+													>
+														<Icon name="externalLink" size={14} />
+													</a>
+												)}
+											</Show>
+											<span
+												class={cn(
+													"capitalize",
+													board.Status === "verified"
+														? "font-medium text-primary"
+														: "text-muted",
+												)}
+											>
+												{board.Status}
+											</span>
+										</div>
 									</div>
-									<span class="capitalize text-muted">{board.Status}</span>
-								</div>
-							)}
-						</For>
-					</Show>
-				</Show>
+								)}
+							</For>
+						</Show>
+					)}
+				</QueryBoundary>
 				<form
 					onSubmit={(event) => {
 						event.preventDefault();
@@ -157,11 +192,7 @@ export function CompanyBoardsCard(props: { companyId: string }) {
 						<output class="text-xs text-muted">{boardStatusMessage()}</output>
 					</Show>
 				</form>
-				<For
-					each={(boardsQuery.data ?? []).filter(
-						(board) => board.Status === "candidate",
-					)}
-				>
+				<For each={boards().filter((board) => board.Status === "candidate")}>
 					{(board) => (
 						<Button
 							type="button"

@@ -4,14 +4,29 @@ SELECT $1, unnest($2::text[]), unnest($3::text[])
 ON CONFLICT (tracked_doc_id, tab_id) DO UPDATE SET title = EXCLUDED.title;
 
 -- name: ListTabs :many
-SELECT id, tracked_doc_id, tab_id, title, visible, created_at
+SELECT id, tracked_doc_id, tab_id, title, visible, is_default, created_at
 FROM tracked_doc_tabs
 WHERE tracked_doc_id = $1
 ORDER BY created_at;
 
 -- name: SetTabVisible :execrows
 UPDATE tracked_doc_tabs t
-SET visible = $4
+SET visible = $4, is_default = t.is_default AND $4
 FROM tracked_docs d
 WHERE t.tracked_doc_id = d.id
   AND d.user_id = $1 AND d.doc_id = $2 AND t.tab_id = $3;
+
+-- name: SetTabDefault :execrows
+WITH target AS (
+    SELECT t.id
+    FROM tracked_doc_tabs t
+    JOIN tracked_docs d ON t.tracked_doc_id = d.id
+    WHERE d.user_id = $1 AND d.doc_id = $2 AND t.tab_id = $3 AND t.visible
+)
+UPDATE tracked_doc_tabs t
+SET is_default = t.id IN (SELECT id FROM target)
+FROM tracked_docs d
+WHERE t.tracked_doc_id = d.id
+  AND d.user_id = $1
+  AND EXISTS (SELECT 1 FROM target)
+  AND (t.is_default OR t.id IN (SELECT id FROM target));

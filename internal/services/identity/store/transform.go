@@ -24,7 +24,7 @@ func toSessionDTO(s sqlc.Session) dto.Session {
 	}
 }
 
-func toSessionRowDTO(r sqlc.GetSessionRow) dto.Session {
+func toSessionRowDTO(r sqlc.GetSessionByTokenHashRow) dto.Session {
 	return dto.Session{
 		ID:        r.ID.String(),
 		UserID:    r.UserID.String(),

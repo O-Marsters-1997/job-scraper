@@ -44,8 +44,8 @@ function ProfileForm(props: { data: Accessor<Profile> }) {
 	return (
 		<>
 			<SettingsActions>
-				<Button size="sm" onClick={handleSave} disabled={mutation.isPending}>
-					{mutation.isPending ? "Saving…" : "Save"}
+				<Button size="sm" onClick={handleSave} loading={mutation.isPending}>
+					Save
 				</Button>
 			</SettingsActions>
 			<FormFeedback success={saved()} error={saveError()} />

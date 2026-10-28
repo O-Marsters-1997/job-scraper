@@ -1,15 +1,12 @@
 package wttj_test
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"flag"
-	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -19,44 +16,52 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
 )
 
-var update = flag.Bool("update", false, "rewrite golden files from parser output")
+var now = time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC)
 
-var now = time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-
-type site struct {
-	mu       sync.Mutex
-	company  string
-	jobPages map[string]string
-	status   int
-	requests []string
+type api struct {
+	mu         sync.Mutex
+	company    string
+	jobs       string
+	status     int
+	retryAfter string
+	queries    []string
 }
 
-func (s *site) RoundTrip(req *http.Request) (*http.Response, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.requests = append(s.requests, req.URL.Path)
-	respond := func(status int, body string) (*http.Response, error) {
-		return &http.Response{StatusCode: status, Status: http.StatusText(status), Body: io.NopCloser(strings.NewReader(body))}, nil
+func (a *api) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var body struct {
+		Query string `json:"query"`
 	}
-	if s.status != 0 {
-		return respond(s.status, "")
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
-	if strings.HasPrefix(req.URL.Path, "/companies/") {
-		return respond(http.StatusOK, s.company)
+	a.queries = append(a.queries, body.Query)
+	if a.status != 0 {
+		if a.retryAfter != "" {
+			w.Header().Set("Retry-After", a.retryAfter)
+		}
+		w.WriteHeader(a.status)
+		return
 	}
-	if page, ok := s.jobPages[strings.TrimPrefix(req.URL.Path, "/jobs/")]; ok {
-		return respond(http.StatusOK, page)
+	if strings.Contains(body.Query, "company(") {
+		_, _ = w.Write([]byte(a.company))
+		return
 	}
-	return respond(http.StatusNotFound, "")
+	_, _ = w.Write([]byte(a.jobs))
 }
 
-func (s *site) jobRequests() int {
+func (a *api) jobQueries() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	n := 0
-	for _, p := range s.requests {
-		if strings.HasPrefix(p, "/jobs/") {
+	for _, q := range a.queries {
+		if strings.Contains(q, "publicJob") {
 			n++
 		}
 	}
@@ -72,130 +77,165 @@ func fixture(t *testing.T, name string) string {
 	return string(body)
 }
 
-func newSite(t *testing.T, company string) *site {
-	t.Helper()
-	return &site{
-		company: fixture(t, company),
-		jobPages: map[string]string{
-			"rj-ZQt7d": fixture(t, "job_ashby.html"),
-			"a-1anGDH": fixture(t, "job_greenhouse.html"),
-			"8-Y5adJl": fixture(t, "job_workday.html"),
-		},
-	}
+func (a *api) RoundTrip(r *http.Request) (*http.Response, error) {
+	rec := httptest.NewRecorder()
+	a.ServeHTTP(rec, r)
+	return rec.Result(), nil
 }
 
-func poll(t *testing.T, token string, s *site) ([]dto.Job, error) {
+func newAPI(t *testing.T, company string) (*api, *wttj.Client) {
 	t.Helper()
-	wttj.ResetLimiter()
-	src := wttj.New(token, func() time.Time { return now })
-	src.Client().Transport = s
-	jobs, _, err := src.FetchPage(t.Context(), "")
-	return jobs, err
+	a := &api{company: fixture(t, company), jobs: fixture(t, "jobs_faculty.json")}
+	client := wttj.NewClient(0)
+	client.Client().Transport = a
+	return a, client
 }
 
-func assertGolden(t *testing.T, name string, got []dto.Job) {
-	t.Helper()
-	path := filepath.Join("snapshots", name)
-	if *update {
-		out, err := json.MarshalIndent(got, "", "  ")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, append(out, '\n'), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read golden: %v (run `go test -update`)", err)
-	}
-	var want []dto.Job
-	if err := json.Unmarshal(raw, &want); err != nil {
-		t.Fatal(err)
-	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("FetchPage mismatch (-want +got):\n%s", diff)
-	}
+func source(client *wttj.Client) *wttj.Source {
+	return wttj.New("Faculty", func() time.Time { return now }, client)
 }
 
 func TestFetchPage(t *testing.T) {
-	t.Run("UK company returns jobs posted within 90 days with datePosted as UpdatedAt", func(t *testing.T) {
-		jobs, err := poll(t, "faculty-golden", newSite(t, "company_faculty.html"))
+	t.Parallel()
+	t.Run("UK company returns its UK engineering jobs posted within 90 days", func(t *testing.T) {
+		t.Parallel()
+		_, client := newAPI(t, "company_faculty.json")
+		jobs, _, err := source(client).FetchPage(t.Context(), "")
 		if err != nil {
 			t.Fatal(err)
 		}
-		assertGolden(t, "company_faculty.golden.json", jobs)
+		sourcetest.MatchGolden(t, "company_faculty.json", jobs)
 	})
 
-	t.Run("US-only company fetches no job pages", func(t *testing.T) {
-		s := newSite(t, "company_us_only.html")
-		jobs, err := poll(t, "us-only", s)
-		if err != nil {
+	t.Run("only backend, frontend and full-stack jobs under 6 years are looked up", func(t *testing.T) {
+		t.Parallel()
+		a, client := newAPI(t, "company_faculty.json")
+		a.company = `{"data": {"company": {"jobLocations": ["LONDON"], "liveJobs": [
+			{"externalId": "keep1", "locationPreferences": [{"location": "LONDON"}], "subFunction": {"value": "Backend Engineer"}, "minYearsExperienceRequired": 3},
+			{"externalId": "keep2", "locationPreferences": [{"location": "LONDON"}], "subFunction": {"value": "Frontend Engineer"}, "minYearsExperienceRequired": null},
+			{"externalId": "hw", "locationPreferences": [{"location": "LONDON"}], "subFunction": {"value": "Embedded Engineer"}},
+			{"externalId": "senior", "locationPreferences": [{"location": "LONDON"}], "subFunction": {"value": "Backend Engineer"}, "minYearsExperienceRequired": 6}
+		]}}}`
+		if _, _, err := source(client).FetchPage(t.Context(), ""); err != nil {
 			t.Fatal(err)
 		}
-		if len(jobs) != 0 || s.jobRequests() != 0 {
-			t.Errorf("FetchPage = %d jobs, %d job pages, want none", len(jobs), s.jobRequests())
-		}
-	})
-
-	t.Run("company with no live jobs returns none", func(t *testing.T) {
-		jobs, err := poll(t, "no-jobs", newSite(t, "company_no_jobs.html"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(jobs) != 0 {
-			t.Errorf("FetchPage = %d jobs, want 0", len(jobs))
-		}
-	})
-
-	t.Run("second poll fetches no job page already read", func(t *testing.T) {
-		s := newSite(t, "company_faculty.html")
-		first, err := poll(t, "faculty-repeat", s)
-		if err != nil {
-			t.Fatal(err)
-		}
-		fetched := s.jobRequests()
-		second, err := poll(t, "faculty-repeat", s)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := s.jobRequests(); got != fetched {
-			t.Errorf("job pages fetched on second poll = %d, want 0", got-fetched)
-		}
-		if diff := cmp.Diff(first, second); diff != "" {
-			t.Errorf("second poll jobs differ (-first +second):\n%s", diff)
-		}
-	})
-
-	t.Run("403 and 429 fail the poll without retrying", func(t *testing.T) {
-		for _, status := range []int{http.StatusForbidden, http.StatusTooManyRequests} {
-			s := newSite(t, "company_faculty.html")
-			s.status = status
-			if _, err := poll(t, "blocked", s); err == nil {
-				t.Errorf("FetchPage with status %d error = %v, want error", status, err)
+		q := a.queries[len(a.queries)-1]
+		for id, want := range map[string]bool{"keep1": true, "keep2": true, "hw": false, "senior": false} {
+			if got := strings.Contains(q, `"`+id+`"`); got != want {
+				t.Errorf("job query mentions %s = %v, want %v", id, got, want)
 			}
-			if len(s.requests) != 1 {
-				t.Errorf("status %d: %d requests, want 1", status, len(s.requests))
+		}
+	})
+
+	t.Run("US-only company looks up no jobs", func(t *testing.T) {
+		t.Parallel()
+		a, client := newAPI(t, "company_us_only.json")
+		jobs, _, err := source(client).FetchPage(t.Context(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(jobs) != 0 || a.jobQueries() != 0 {
+			t.Errorf("FetchPage = %d jobs, %d job queries, want none", len(jobs), a.jobQueries())
+		}
+	})
+
+	t.Run("company with no live jobs looks up none", func(t *testing.T) {
+		t.Parallel()
+		a, client := newAPI(t, "company_no_jobs.json")
+		jobs, _, err := source(client).FetchPage(t.Context(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(jobs) != 0 || a.jobQueries() != 0 {
+			t.Errorf("FetchPage = %d jobs, %d job queries, want none", len(jobs), a.jobQueries())
+		}
+	})
+
+	t.Run("a company WTTJ no longer has is gone", func(t *testing.T) {
+		t.Parallel()
+		_, client := newAPI(t, "company_missing.json")
+		if _, _, err := source(client).FetchPage(t.Context(), ""); !errors.Is(err, sources.ErrGone) {
+			t.Errorf("FetchPage error = %v, want ErrGone", err)
+		}
+	})
+
+	t.Run("a response with no data is unparseable", func(t *testing.T) {
+		t.Parallel()
+		a, client := newAPI(t, "company_faculty.json")
+		a.company = `{"errors": [{"message": "boom"}]}`
+		if _, _, err := source(client).FetchPage(t.Context(), ""); !errors.Is(err, sources.ErrUnparseable) {
+			t.Errorf("FetchPage error = %v, want ErrUnparseable", err)
+		}
+	})
+
+	t.Run("403 and 429 block the poll without retrying", func(t *testing.T) {
+		t.Parallel()
+		for _, status := range []int{http.StatusForbidden, http.StatusTooManyRequests} {
+			a, client := newAPI(t, "company_faculty.json")
+			a.status = status
+			_, _, err := source(client).FetchPage(t.Context(), "")
+			if _, blocked := sources.BlockedUntil(err, time.Now()); !blocked {
+				t.Errorf("FetchPage with status %d error = %v, want a block", status, err)
+			}
+			if len(a.queries) != 1 {
+				t.Errorf("status %d: %d requests, want 1", status, len(a.queries))
+			}
+		}
+	})
+
+	t.Run("a block lasts for Retry-After, or five minutes without one", func(t *testing.T) {
+		t.Parallel()
+		for retryAfter, want := range map[string]time.Duration{"120": 2 * time.Minute, "": 5 * time.Minute} {
+			a, client := newAPI(t, "company_faculty.json")
+			a.status, a.retryAfter = http.StatusTooManyRequests, retryAfter
+			start := time.Now()
+			_, _, err := source(client).FetchPage(t.Context(), "")
+			until, blocked := sources.BlockedUntil(err, start)
+			if got := until.Sub(start); !blocked || got < want-5*time.Second || got > want+5*time.Second {
+				t.Errorf("Retry-After %q: blocked for %v (blocked %v), want about %v", retryAfter, got, blocked, want)
 			}
 		}
 	})
 }
 
-func pollBoard(t *testing.T, token string, s *site) (sources.BoardResult, error) {
-	t.Helper()
-	wttj.ResetLimiter()
-	src := wttj.New(token, func() time.Time { return now })
-	src.Client().Transport = s
-	return src.PollBoard(t.Context())
+func TestListing_Eligible(t *testing.T) {
+	t.Parallel()
+	six, five := 6, 5
+	tests := []struct {
+		name string
+		l    wttj.Listing
+		want bool
+	}{
+		{"backend in London", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Backend Engineer"}, true},
+		{"frontend remote", wttj.Listing{Locations: []string{"REMOTE"}, SubFunction: "Frontend Engineer"}, true},
+		{"full-stack", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Full-stack Engineer"}, true},
+		{"other sub-function", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Security Engineer"}, false},
+		{"no sub-function", wttj.Listing{Locations: []string{"LONDON"}}, false},
+		{"non-UK location", wttj.Listing{Locations: []string{"PARIS_FR"}, SubFunction: "Backend Engineer"}, false},
+		{"unknown experience", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Backend Engineer", MinYears: nil}, true},
+		{"5 years", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Backend Engineer", MinYears: &five}, true},
+		{"6 years", wttj.Listing{Locations: []string{"LONDON"}, SubFunction: "Backend Engineer", MinYears: &six}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.l.Eligible(); got != tt.want {
+				t.Errorf("Eligible() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
 
 func TestPollBoard(t *testing.T) {
-	t.Run("a UK company is next due in 7 days and a non-UK one in 90", func(t *testing.T) {
+	t.Parallel()
+	t.Run("a UK company gets no poll hint and a non-UK one is next due in 90 days", func(t *testing.T) {
+		t.Parallel()
 		for company, want := range map[string]time.Duration{
-			"company_faculty.html": 7 * 24 * time.Hour,
-			"company_us_only.html": 90 * 24 * time.Hour,
+			"company_faculty.json": 0,
+			"company_us_only.json": 90 * 24 * time.Hour,
 		} {
-			res, err := pollBoard(t, "cadence", newSite(t, company))
+			_, client := newAPI(t, company)
+			res, err := source(client).PollBoard(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -205,8 +245,10 @@ func TestPollBoard(t *testing.T) {
 		}
 	})
 
-	t.Run("the company state becomes a profile", func(t *testing.T) {
-		res, err := pollBoard(t, "faculty-profile", newSite(t, "company_faculty.html"))
+	t.Run("the company becomes a profile", func(t *testing.T) {
+		t.Parallel()
+		_, client := newAPI(t, "company_faculty.json")
+		res, err := source(client).PollBoard(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -214,7 +256,7 @@ func TestPollBoard(t *testing.T) {
 			Sectors:       []string{"B2B", "Artificial Intelligence", "Big data", "Machine Learning"},
 			Size:          "201-500",
 			Growth:        "+19%",
-			FundingTotal:  "$56.0M",
+			FundingTotal:  "$56.1M",
 			FundingRounds: 4,
 			HQ:            "Old Street, London, UK",
 			UKVisa:        "yes",
@@ -226,85 +268,43 @@ func TestPollBoard(t *testing.T) {
 		}
 	})
 
-	t.Run("an unparseable profile leaves no profile and still returns jobs", func(t *testing.T) {
-		s := newSite(t, "company_faculty.html")
-		s.company = breakProfile(t, s.company)
-		res, err := pollBoard(t, "faculty-broken", s)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if res.Profile != nil || len(res.Jobs) == 0 {
-			t.Errorf("PollBoard = profile %v, %d jobs, want no profile and some jobs", res.Profile, len(res.Jobs))
-		}
-	})
-
-	t.Run("a 429 defers every later wttj request until the next day", func(t *testing.T) {
-		s := newSite(t, "company_faculty.html")
-		s.status = http.StatusTooManyRequests
-		if _, err := pollBoard(t, "limited", s); err == nil {
+	t.Run("a 429 defers every later wttj request on the same client", func(t *testing.T) {
+		t.Parallel()
+		a, client := newAPI(t, "company_faculty.json")
+		a.status = http.StatusTooManyRequests
+		if _, err := source(client).PollBoard(t.Context()); err == nil {
 			t.Fatal("PollBoard on 429 = nil error, want error")
 		}
-		other := newSite(t, "company_faculty.html")
-		src := wttj.New("other", func() time.Time { return now })
-		src.Client().Transport = other
-		if _, err := src.PollBoard(t.Context()); !errors.Is(err, sources.ErrDeferred) || len(other.requests) != 0 {
-			t.Errorf("PollBoard after 429 = %v with %d requests, want ErrDeferred and none", err, len(other.requests))
+		other := wttj.New("Other", func() time.Time { return now }, client)
+		if _, err := other.PollBoard(t.Context()); !errors.Is(err, sources.ErrDeferred) || len(a.queries) != 1 {
+			t.Errorf("PollBoard after 429 = %v with %d requests, want ErrDeferred and 1", err, len(a.queries))
 		}
 	})
 }
 
 func TestDiscover(t *testing.T) {
-	discover := func(t *testing.T, s *site) (wttj.Discovery, error) {
-		t.Helper()
-		wttj.ResetLimiter()
-		src := wttj.New("discover", func() time.Time { return now })
-		src.Client().Transport = s
-		return src.Discover(t.Context())
-	}
-
-	t.Run("a UK company returns its page name, its jobs and UK", func(t *testing.T) {
-		got, err := discover(t, newSite(t, "company_faculty.html"))
+	t.Parallel()
+	t.Run("a UK company returns its name, its jobs and UK", func(t *testing.T) {
+		t.Parallel()
+		_, client := newAPI(t, "company_faculty.json")
+		got, err := source(client).Discover(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.Name != "Faculty" || !got.UK || len(got.Jobs) == 0 {
-			t.Errorf("Discover() = name %q, UK %v, %d jobs, want Faculty, UK and jobs", got.Name, got.UK, len(got.Jobs))
+		if got.Name != "Faculty" || !got.UK || len(got.Jobs) == 0 || got.Profile == nil {
+			t.Errorf("Discover() = name %q, UK %v, %d jobs, profile %v, want Faculty, UK, jobs and a profile", got.Name, got.UK, len(got.Jobs), got.Profile)
 		}
 	})
 
 	t.Run("a non-UK company sends one request and is not UK", func(t *testing.T) {
-		s := newSite(t, "company_us_only.html")
-		got, err := discover(t, s)
+		t.Parallel()
+		a, client := newAPI(t, "company_us_only.json")
+		got, err := source(client).Discover(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.UK || len(got.Jobs) != 0 || len(s.requests) != 1 {
-			t.Errorf("Discover() = UK %v, %d jobs, %d requests, want not UK, none, 1", got.UK, len(got.Jobs), len(s.requests))
+		if got.UK || len(got.Jobs) != 0 || len(a.queries) != 1 {
+			t.Errorf("Discover() = UK %v, %d jobs, %d requests, want not UK, none, 1", got.UK, len(got.Jobs), len(a.queries))
 		}
 	})
-}
-
-var apolloStateRe = regexp.MustCompile(`__APOLLO_STATE__=__b64dec\("([^"]+)"\)`)
-
-func breakProfile(t *testing.T, page string) string {
-	t.Helper()
-	m := apolloStateRe.FindStringSubmatch(page)
-	raw, err := base64.StdEncoding.DecodeString(m[1])
-	if err != nil {
-		t.Fatal(err)
-	}
-	var state map[string]map[string]any
-	if err := json.Unmarshal(raw, &state); err != nil {
-		t.Fatal(err)
-	}
-	for _, e := range state {
-		if e["__typename"] == "Company" {
-			e["mission"] = 42
-		}
-	}
-	out, err := json.Marshal(state)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return strings.Replace(page, m[1], base64.StdEncoding.EncodeToString(out), 1)
 }

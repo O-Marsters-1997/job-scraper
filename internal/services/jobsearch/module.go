@@ -3,6 +3,7 @@ package jobsearch
 import (
 	"cmp"
 	"context"
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -52,18 +53,21 @@ type QueuePublisher interface {
 }
 
 type Store interface {
+	JobStats(ctx context.Context, userID string, options dto.JobStatsOptions) (dto.JobStats, error)
+	JobInsightGroups(ctx context.Context, userID string, options dto.JobInsightsOptions) ([]dto.JobInsightGroup, error)
 	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
 	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
 	ListJobListings(ctx context.Context, jobID string) ([]dto.JobListing, error)
-	ListJobs(ctx context.Context, userID string, excludedCompanySlugs []string) ([]dto.Job, error)
+	FindJobByPosting(ctx context.Context, url, source, token, postingID string) (dto.Job, error)
 	MarkJobsSeen(ctx context.Context, userID string, jobIDs []string, seen bool) error
 	NewURLs(ctx context.Context, urls []string) ([]string, error)
 	SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error)
 	PageCompaniesForUser(ctx context.Context, userID string, options dto.CompanyPageOptions) (dto.CompanyPage, error)
+	CountCompaniesByATS(ctx context.Context) ([]dto.ATSCount, error)
 	GetCompanyForUser(ctx context.Context, userID, id string) (dto.Company, error)
 	ListTrackedCompaniesForUser(ctx context.Context, userID string) ([]dto.TrackedCompany, error)
-	ListNewCompanies(ctx context.Context, userID string) ([]dto.NewCompany, error)
-	ListNewCompanyJobs(ctx context.Context, userID string) ([]dto.Job, error)
+	ListNewCompanies(ctx context.Context, userID string, limit, offset int32) (dto.NewCompanyPage, error)
+	ListNewCompanyJobs(ctx context.Context, userID string, companyIDs []string) ([]dto.Job, error)
 	SaveCompanyProfile(ctx context.Context, companyID, source string, profile dto.CompanyProfile) error
 	DeleteCompanyTracking(ctx context.Context, userID, companyID string) error
 	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
@@ -73,17 +77,22 @@ type Store interface {
 	SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, checkIntervalMinutes int) (dto.CompanyTracking, error)
 	TrackDiscoveredCompany(ctx context.Context, userID, companyID string) (bool, error)
 	SetCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) error
+	SetCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) error
+	SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error)
 	SetCompanyReviewState(ctx context.Context, userID, companyID, state string) (dto.CompanyTracking, error)
 	VerifyCompanyBoard(ctx context.Context, companyID, source, token, method, via string) (dto.CompanyBoard, error)
 	ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error)
 	TouchCompanyCrawled(ctx context.Context, id string) error
 	RenameCompany(ctx context.Context, id, name string) error
 	ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error)
+	MarkBoardCheckPublished(ctx context.Context, id string) error
+	ClearBoardCheckPublished(ctx context.Context, id string) error
+	RetireBoard(ctx context.Context, id string) error
 	ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error)
 	ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error)
-	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error
+	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) ([]dto.JobChange, error)
 	FailBoard(ctx context.Context, poll dto.BoardPoll) error
-	ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.CompanyBoard, error)
+	ListUntrackedDiscoveredBoards(ctx context.Context, uk bool, ukSince time.Time) ([]dto.CompanyBoard, error)
 	ListVerifiedBoardsBySlug(ctx context.Context, slugs []string) ([]dto.CardBoard, error)
 	ListVerifiedCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
 	GetBoardCompanyID(ctx context.Context, source, token string) (string, error)
@@ -94,6 +103,24 @@ type Store interface {
 	PutFetch(ctx context.Context, resp dto.CachedResponse) error
 	ForgetFetches(ctx context.Context, urls []string) error
 	DeleteExpiredFetches(ctx context.Context) error
+	ScrapeRunPageDone(ctx context.Context, runID string) error
+	ScrapeRunDeferred(ctx context.Context, runID string) error
+	ScrapeRunAttemptFailed(ctx context.Context, runID string, page, attempt int, message string) error
+	FinishScrapeRun(ctx context.Context, runID string, stop dto.StopReason) error
+	BoardRunAttemptFailed(ctx context.Context, run dto.BoardRunStart, attempt int, message string) error
+	FinishBoardRun(ctx context.Context, run dto.BoardRunStart, stop dto.StopReason, tally dto.BoardTally) error
+	DeleteExpiredScrapeRuns(ctx context.Context) error
+	ListScrapeRuns(ctx context.Context, userID string, opts dto.ScrapeRunListOptions) ([]dto.ScrapeRun, error)
+	ListScrapeRunJobSnapshots(ctx context.Context, userID, runID string) ([]dto.ScrapeRunJobSnapshot, error)
+	ListSourceHealth(ctx context.Context, userID string) ([]dto.SourceHealth, error)
+	ListRecentNewJobs(ctx context.Context, userID string, since time.Time) ([]dto.SourceNewJob, error)
+	ScrapeRunSummary(ctx context.Context, userID string, opts dto.ScrapeRunSummaryOptions) (dto.ScrapeRunSummary, error)
+	MarkBoardUKJobsSeen(ctx context.Context, source, token string) error
+	RecordDiscoverMiss(ctx context.Context, source, token string) error
+	DiscoverMissedSince(ctx context.Context, source, token string, since time.Time) (bool, error)
+	HarvestSeenIDs(ctx context.Context, source string) ([]string, error)
+	RecordHarvestSeenIDs(ctx context.Context, source, outcome string, ids []string) error
+	RetireHarvestSeenIDs(ctx context.Context, source string, ids []string) error
 }
 
 type Deps struct {
@@ -125,8 +152,8 @@ func Build(deps Deps) *Module {
 	}
 }
 
-func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort, proxyQuota QuotaFetcher, maxAutomaticTargets int) *Module {
-	st := store.New(pool, scoring)
+func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort, proxyQuota QuotaFetcher, maxAutomaticTargets int, log *slog.Logger) *Module {
+	st := store.New(pool, scoring, store.WithLogger(log))
 	return Build(Deps{
 		Store:         st,
 		SourceTargets: st,
@@ -151,6 +178,10 @@ func (m *Module) PublishBoardChecks(ctx context.Context, manual bool) error {
 // whether it did; an existing row of any review state is left untouched.
 func (m *Module) TrackDiscoveredCompany(ctx context.Context, userID, companyID string) (bool, error) {
 	return m.store.TrackDiscoveredCompany(ctx, userID, companyID)
+}
+
+func (m *Module) SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error) {
+	return m.store.SuggestCompanyKind(ctx, companyID, kind)
 }
 
 // SaveCompanyProfile upserts the profile source reports for companyID.

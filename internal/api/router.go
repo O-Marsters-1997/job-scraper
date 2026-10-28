@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 
@@ -24,13 +25,19 @@ type Module interface {
 // NewRouter takes idm and js separately from modules so js's PublicRoutes
 // (ingest) can get its own ServiceTokenMiddleware group here, since
 // depguard bars internal/api from internal/services/** (ADR 0011).
-func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) http.Handler {
+func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) (http.Handler, error) {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
 	}
 
+	cop := http.NewCrossOriginProtection()
+	if err := cop.AddTrustedOrigin(allowedOrigin); err != nil {
+		return nil, fmt.Errorf("add trusted origin %q: %w", allowedOrigin, err)
+	}
+
 	r := chi.NewRouter()
+	r.Use(recoverer)
 	r.Use(otelhttp.NewMiddleware("api"))
 	r.Use(chimw.RequestID)
 	r.Use(logger.Middleware)
@@ -41,13 +48,17 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) ht
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
 	}))
+	r.Use(requireJSON)
 
 	allModules := append([]Module{idm}, modules...)
-	for _, m := range allModules {
-		if pm, ok := m.(interface{ PublicRoutes(chi.Router) }); ok {
-			pm.PublicRoutes(r)
+	r.Group(func(r chi.Router) {
+		r.Use(limitBody(maxBodyBytes))
+		for _, m := range allModules {
+			if pm, ok := m.(interface{ PublicRoutes(chi.Router) }); ok {
+				pm.PublicRoutes(r)
+			}
 		}
-	}
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.ServiceTokenMiddleware)
@@ -55,6 +66,7 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) ht
 	})
 
 	r.Group(func(r chi.Router) {
+		r.Use(limitBody(maxBodyBytes))
 		r.Use(idm.Middleware())
 
 		js.Routes(r)
@@ -63,5 +75,5 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) ht
 		}
 	})
 
-	return r
+	return cop.Handler(r), nil
 }

@@ -7,53 +7,43 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/eval"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/profiledraft"
 )
 
 func main() {
 	runs := flag.Int("runs", 1, "runs per fixture")
 	only := flag.String("fixture", "", "run only fixtures whose name contains this")
-	suggest := flag.Bool("suggest", false, "evaluate inline suggestions instead of generation")
+	suite := flag.String("suite", "suggest", "suggest or profile")
+	local := flag.String("local", "internal/services/cvtailor/eval/local/profile", "directory of local profile fixtures")
 	flag.Parse()
 
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
 		fail("OPENROUTER_API_KEY is not set")
 	}
-	client := cvedit.NewClient()
-	if *suggest {
-		runSuggest(client, apiKey, *runs, *only)
-		return
+	model := lineedit.NewOpenRouter()
+	var report string
+	var err error
+	switch *suite {
+	case "suggest":
+		report, err = runSuggest(apiKey, lineedit.New(model), *only, *runs)
+	case "profile":
+		report, err = runProfile(apiKey, profiledraft.New(model), *local, *only, *runs)
+	default:
+		fail("unknown suite " + *suite)
 	}
-	fixtures, err := eval.Fixtures()
 	if err != nil {
 		fail(err.Error())
 	}
-
-	var outcomes []eval.Outcome
-	for _, f := range fixtures {
-		if !strings.Contains(f.Name, *only) {
-			continue
-		}
-		for range *runs {
-			o, err := eval.Run(context.Background(), client, apiKey, f)
-			if err != nil {
-				fail(err.Error())
-			}
-			outcomes = append(outcomes, o)
-		}
-	}
-	if len(outcomes) == 0 {
-		fail("no fixture matched")
-	}
-	fmt.Print(eval.Report(cvedit.PromptVersion, cvedit.Model, outcomes))
+	fmt.Print(report)
 }
 
-func runSuggest(client *cvedit.Client, apiKey string, runs int, only string) {
+func runSuggest(apiKey string, editor *lineedit.Editor, only string, runs int) (string, error) {
 	fixtures, err := eval.SuggestFixtures()
 	if err != nil {
-		fail(err.Error())
+		return "", err
 	}
 	var outcomes []eval.SuggestOutcome
 	for _, f := range fixtures {
@@ -61,17 +51,41 @@ func runSuggest(client *cvedit.Client, apiKey string, runs int, only string) {
 			continue
 		}
 		for range runs {
-			o, err := eval.RunSuggest(context.Background(), client, apiKey, f)
+			o, err := eval.RunSuggest(context.Background(), editor, apiKey, f)
 			if err != nil {
-				fail(err.Error())
+				return "", err
 			}
 			outcomes = append(outcomes, o)
 		}
 	}
 	if len(outcomes) == 0 {
-		fail("no fixture matched")
+		return "", fmt.Errorf("no fixture matched")
 	}
-	fmt.Print(eval.SuggestReport(cvedit.SuggestPromptVersion, cvedit.SuggestModel, outcomes))
+	return eval.SuggestReport(outcomes), nil
+}
+
+func runProfile(apiKey string, w *profiledraft.Writer, local, only string, runs int) (string, error) {
+	fixtures, err := eval.ProfileFixtures(local)
+	if err != nil {
+		return "", err
+	}
+	var outcomes []eval.ProfileOutcome
+	for _, f := range fixtures {
+		if !strings.Contains(f.Name, only) {
+			continue
+		}
+		for range runs {
+			o, err := eval.RunProfile(context.Background(), w, apiKey, f)
+			if err != nil {
+				return "", err
+			}
+			outcomes = append(outcomes, o)
+		}
+	}
+	if len(outcomes) == 0 {
+		return "", fmt.Errorf("no fixture matched")
+	}
+	return eval.ProfileReport(outcomes), nil
 }
 
 func fail(msg string) {

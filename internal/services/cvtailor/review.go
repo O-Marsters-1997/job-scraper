@@ -27,6 +27,9 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 	if draft.Status != statusReady || len(draft.EditSet) == 0 {
 		return draft, nil
 	}
+	if draft, err = s.withInsightsSummary(ctx, userID, draft); err != nil {
+		return dto.Draft{}, err
+	}
 	positions, err := s.store.ListPositions(ctx, userID)
 	if err != nil {
 		return dto.Draft{}, err
@@ -48,6 +51,11 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 	}
 	base := stored.content()
 	draft.Base = &base
+	for _, p := range stored.Positions {
+		if p.PositionID == "" {
+			content.Positions = append(content.Positions, p)
+		}
+	}
 	if content.Profile == nil {
 		content.Profile = draft.Base.Profile
 	}
@@ -65,7 +73,9 @@ func (s *Service) ListJobDrafts(ctx context.Context, userID string, q dto.DraftJ
 		return nil, err
 	}
 	for i := range drafts {
-		drafts[i] = withDocURL(drafts[i])
+		if drafts[i], err = s.withInsightsSummary(ctx, userID, withDocURL(drafts[i])); err != nil {
+			return nil, err
+		}
 	}
 	return drafts, nil
 }
@@ -113,8 +123,8 @@ func (s *Service) DiscardDraft(ctx context.Context, userID string, q dto.DraftQu
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	if draft.Status != statusReady {
-		return dto.Draft{}, apperr.Conflict("only a ready draft can be discarded")
+	if draft.Status != statusReady && draft.Status != statusFailed {
+		return dto.Draft{}, apperr.Conflict("only a ready or failed draft can be discarded")
 	}
 	if outcome(draft) == dto.OutcomeDiscarded {
 		return draft, nil
@@ -130,6 +140,7 @@ func (s *Service) DiscardDraft(ctx context.Context, userID string, q dto.DraftQu
 
 // DraftPDF streams Google's PDF export of the Draft's Doc. The caller must
 // close the body.
+// By Tab: Google's whole-Doc export drops heading styles, https://github.com/O-Marsters-1997/job-scraper/pull/1434
 func (s *Service) DraftPDF(ctx context.Context, userID string, q dto.DraftQuery) (io.ReadCloser, error) {
 	draft, err := s.store.GetDraft(ctx, userID, q.ID)
 	if err != nil {
@@ -138,7 +149,7 @@ func (s *Service) DraftPDF(ctx context.Context, userID string, q dto.DraftQuery)
 	if (draft.Status != statusReady && draft.Status != statusKeeping) || draft.DraftDocID == "" {
 		return nil, apperr.NotFound("draft has no document")
 	}
-	body, err := s.drive.ExportPDF(ctx, userID, draft.DraftDocID, "")
+	body, err := s.drive.ExportPDF(ctx, userID, draft.DraftDocID, draft.BaseTabID)
 	if err != nil {
 		slog.ErrorContext(ctx, "export draft pdf failed", slog.String("draft_id", draft.ID), slog.Any(logger.KeyErr, err))
 		return nil, apperr.Upstream("failed to export PDF")
@@ -181,13 +192,13 @@ func editedContent(edits cvedit.EditSet) dto.DraftContent {
 	c := dto.DraftContent{Profile: edits.Profile, Positions: []dto.DraftPosition{}}
 	c.Skills, c.SkillGroups = skillContent(edits.Skills)
 	for _, pe := range edits.Positions {
-		dp := dto.DraftPosition{PositionID: pe.PositionID, Bullets: []dto.DraftBullet{}}
-		for _, b := range pe.Bullets {
-			ids := b.AchievementIDs
+		dp := dto.DraftPosition{PositionID: pe.PositionID, Linked: true, Bullets: []dto.DraftBullet{}}
+		for _, l := range pe.Lines() {
+			ids := l.AchievementIDs
 			if ids == nil {
 				ids = []string{}
 			}
-			dp.Bullets = append(dp.Bullets, dto.DraftBullet{Text: b.Text, AchievementIDs: ids})
+			dp.Bullets = append(dp.Bullets, dto.DraftBullet{Text: l.Text, AchievementIDs: ids})
 		}
 		c.Positions = append(c.Positions, dp)
 	}
@@ -210,14 +221,14 @@ func provenance(edits cvedit.EditSet, bank []dto.Position) *dto.DraftProvenance 
 	for _, pe := range edits.Positions {
 		p := positionByID[pe.PositionID]
 		pp := dto.ProvenancePosition{PositionID: pe.PositionID, Employer: p.Employer, Title: p.Title, Bullets: []dto.ProvenanceBullet{}}
-		for _, b := range pe.Bullets {
+		for _, l := range pe.Lines() {
 			cited := []dto.Achievement{}
-			for _, id := range b.AchievementIDs {
+			for _, id := range l.AchievementIDs {
 				if a, ok := achievementByID[id]; ok {
 					cited = append(cited, a)
 				}
 			}
-			pp.Bullets = append(pp.Bullets, dto.ProvenanceBullet{SlotID: b.SlotID, Achievements: cited})
+			pp.Bullets = append(pp.Bullets, dto.ProvenanceBullet{SlotID: l.SlotID, Achievements: cited})
 		}
 		out.Positions = append(out.Positions, pp)
 	}

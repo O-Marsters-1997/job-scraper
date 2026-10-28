@@ -5,34 +5,27 @@ import (
 	"time"
 )
 
-// DraftInput asks for a Tailored CV Draft of one Job from one base CV Tab,
-// citing the Achievements the User confirmed.
+type DraftMode string
+
+const (
+	DraftModeAsIs     DraftMode = "as_is"
+	DraftModeGenerate DraftMode = "generate"
+)
+
 type DraftInput struct {
-	JobID          string      `json:"jobId"`
-	DocID          string      `json:"docId"`
-	TabID          string      `json:"tabId"`
-	AchievementIDs []string    `json:"achievementIds"`
-	SkillSwaps     []SkillSwap `json:"skillSwaps"`
+	JobID string    `json:"jobId"`
+	DocID string    `json:"docId"`
+	TabID string    `json:"tabId"`
+	Mode  DraftMode `json:"mode"`
 }
 
-// SkillSwap puts a Bank Skill into the Skill Line at index Line (0-based, in
-// base CV order), in place of the base item Replaces.
-type SkillSwap struct {
-	BankSkillID string `json:"bankSkillId"`
-	Line        int    `json:"line"`
-	Replaces    string `json:"replaces"`
-	// Name is set from the Bank Skill when a Draft is created, so later plans
-	// need no lookup. A request value is ignored.
-	Name string `json:"name"`
-}
-
-// BulletLabel is what one offered Achievement looked like when a Draft was
-// created; Answer is nil when Jev had no cached answer for it.
-type BulletLabel struct {
-	AchievementID string
-	Answer        *Answer
-	Preselected   bool
-	Kept          bool
+type AchievementOutcome struct {
+	AchievementID           string
+	PYes, PNo               *float64
+	OnSourceCV              bool
+	InFinalCV               bool
+	OutscoredKeptButLeftOut bool
+	Reworded                bool
 }
 
 // MaxDraftAttempts is how many times a Draft is claimed before it fails for
@@ -58,28 +51,31 @@ type DraftFinding struct {
 // is nil until the User keeps or discards a ready Draft. Provenance is set
 // by GetDraft only.
 type Draft struct {
-	ID          string           `json:"id"`
-	JobID       string           `json:"jobId"`
-	Status      string           `json:"status"`
-	Outcome     *string          `json:"outcome"`
-	KeptAs      string           `json:"keptAs"`
-	DraftDocURL *string          `json:"draftDocUrl"`
-	LastError   string           `json:"lastError"`
-	CreatedAt   time.Time        `json:"createdAt"`
-	Findings    []DraftFinding   `json:"findings"`
-	Provenance  *DraftProvenance `json:"provenance"`
-	DraftDocID  string           `json:"-"`
-	EditSet     json.RawMessage  `json:"-"`
-	Content     *DraftContent    `json:"content"`
-	Base        *DraftContent    `json:"base"`
-	BaseContent json.RawMessage  `json:"-"`
+	ID           string           `json:"id"`
+	JobID        string           `json:"jobId"`
+	Mode         DraftMode        `json:"mode"`
+	Status       string           `json:"status"`
+	Outcome      *string          `json:"outcome"`
+	KeptAs       string           `json:"keptAs"`
+	DraftDocURL  *string          `json:"draftDocUrl"`
+	LastError    string           `json:"lastError"`
+	CreatedAt    time.Time        `json:"createdAt"`
+	Findings     []DraftFinding   `json:"findings"`
+	Provenance   *DraftProvenance `json:"provenance"`
+	DraftDocID   string           `json:"-"`
+	EditSet      json.RawMessage  `json:"-"`
+	Content      *DraftContent    `json:"content"`
+	Base         *DraftContent    `json:"base"`
+	BaseContent  json.RawMessage  `json:"-"`
+	InsightLines json.RawMessage  `json:"-"`
+	InsightsFor  string           `json:"-"`
+	Insights     *InsightsSummary `json:"insights"`
 	// SkillsEditable is false for a Draft made before Skill Lines.
 	SkillsEditable bool `json:"skillsEditable"`
 
-	BaseDocID      string      `json:"baseDocId"`
-	BaseTabID      string      `json:"baseTabId"`
-	AchievementIDs []string    `json:"-"`
-	SkillSwaps     []SkillSwap `json:"-"`
+	BaseDocID      string   `json:"baseDocId"`
+	BaseTabID      string   `json:"baseTabId"`
+	AchievementIDs []string `json:"-"`
 }
 
 // DraftContent is the editable part of a Draft: the Profile, Skills (flat,
@@ -100,8 +96,10 @@ type SkillGroup struct {
 }
 
 type DraftPosition struct {
-	PositionID string        `json:"positionId"`
-	Bullets    []DraftBullet `json:"bullets"`
+	PositionID  string        `json:"positionId"`
+	HeadingText string        `json:"headingText"`
+	Linked      bool          `json:"linked"`
+	Bullets     []DraftBullet `json:"bullets"`
 }
 
 type DraftBullet struct {
@@ -146,7 +144,8 @@ type DraftClaim struct {
 	DocID          string
 	TabID          string
 	AchievementIDs []string
-	SkillSwaps     []SkillSwap
+	Roles          []string
+	Mode           DraftMode
 	Attempts       int
 	DraftDocID     string
 	JobDescription string
@@ -191,14 +190,44 @@ type DraftJobQuery struct {
 type SlotEdit struct {
 	SlotID string `json:"slotId"`
 	Text   string `json:"text"`
+	After  string `json:"after,omitempty"`
+	Remove bool   `json:"remove,omitempty"`
 }
 
-// DraftSlotsInput carries the bullets and, when Skills is set, the full
-// grouped Skills the User changed on a Draft.
+// DraftSlotsInput carries a Draft's changed bullets. Each Positions entry replaces that role's
+// whole bullet list and applies before Slots; Skills, when set, is the full grouped Skills.
 type DraftSlotsInput struct {
-	ID     string       `json:"-" path:"id"`
-	Slots  []SlotEdit   `json:"slots"`
-	Skills []SkillGroup `json:"skills"`
+	ID        string          `json:"-" path:"id"`
+	Positions []DraftPosition `json:"positions"`
+	Slots     []SlotEdit      `json:"slots"`
+	Skills    []SkillGroup    `json:"skills"`
+	Roles     []string        `json:"roles"`
+}
+
+type ProfileAttempt struct {
+	Text      string
+	Steer     string
+	Rejection string
+	PromptKey string
+	Model     string
+	Cost      float64
+}
+
+type ProfileCapture struct {
+	DraftID        string
+	JobTitle       string
+	Company        string
+	JobDescription string
+	BaseProfile    string
+	FinalProfile   string
+	BankSkills     []string
+	Bank           []string
+	Attempts       []ProfileAttempt
+}
+
+type ProfileRedraftInput struct {
+	ID    string `json:"-" path:"id"`
+	Steer string `json:"steer"`
 }
 
 // DraftLayout is a Draft Doc's single-column page geometry and styled
@@ -268,6 +297,11 @@ type LayoutRun struct {
 	Link      string  `json:"link"`
 }
 
+const (
+	SuggestActionTailor   = "tailor"
+	TailorMaxChangedShare = 1.0 / 3
+)
+
 // SuggestInput asks for one inline edit of a slot. Text is the client's
 // current, possibly unsaved, text; MaxChars applies to the fit action.
 type SuggestInput struct {
@@ -275,8 +309,82 @@ type SuggestInput struct {
 	SlotID   string `json:"-" path:"slotId"`
 	Action   string `json:"action"`
 	Prompt   string `json:"prompt"`
+	Quote    string `json:"quote"`
 	Text     string `json:"text"`
 	MaxChars int    `json:"maxChars"`
+}
+
+type CloserMatch struct {
+	AchievementID string  `json:"achievementId"`
+	Text          string  `json:"text"`
+	Lean          float64 `json:"lean"`
+}
+
+type BulletLean struct {
+	SlotID        string          `json:"slotId"`
+	AchievementID *string         `json:"achievementId"`
+	Lean          *float64        `json:"lean"`
+	State         SuggestionState `json:"state"`
+	ReplacedFrom  *string         `json:"replacedFrom"`
+	ReplacedLean  *float64        `json:"replacedLean"`
+	CloserMatch   *CloserMatch    `json:"closerMatch"`
+}
+
+func (b BulletLean) MarshalJSON() ([]byte, error) {
+	var state *SuggestionState
+	if b.State != "" {
+		state = &b.State
+	}
+	return json.Marshal(struct {
+		SlotID        string           `json:"slotId"`
+		AchievementID *string          `json:"achievementId"`
+		Lean          *float64         `json:"lean"`
+		State         *SuggestionState `json:"state"`
+		ReplacedFrom  *string          `json:"replacedFrom"`
+		ReplacedLean  *float64         `json:"replacedLean"`
+		CloserMatch   *CloserMatch     `json:"closerMatch"`
+	}{b.SlotID, b.AchievementID, b.Lean, state, b.ReplacedFrom, b.ReplacedLean, b.CloserMatch})
+}
+
+type DraftLeanQuery struct {
+	ID string `json:"-" path:"id"`
+}
+
+type InsightSource string
+
+const (
+	InsightSourceJD      InsightSource = "jd"
+	InsightSourceNote    InsightSource = "note"
+	InsightSourceComment InsightSource = "comment"
+)
+
+type InsightLine struct {
+	SlotID   string        `json:"slotId"`
+	Lean     *float64      `json:"lean"`
+	Source   InsightSource `json:"source"`
+	Quote    string        `json:"quote"`
+	Why      string        `json:"why"`
+	Anchored bool          `json:"anchored"`
+}
+
+type DraftInsights struct {
+	Lines []InsightLine `json:"lines"`
+	Stale bool          `json:"stale"`
+}
+
+type InsightsSummary struct {
+	Anchored int  `json:"anchored"`
+	Total    int  `json:"total"`
+	Stale    bool `json:"stale"`
+}
+
+type ExplainDraftInput struct {
+	ID string `json:"-" path:"id"`
+}
+
+type JobAnnotations struct {
+	Note     string
+	Comments []string
 }
 
 // SuggestDone is the final event of a suggestion stream.

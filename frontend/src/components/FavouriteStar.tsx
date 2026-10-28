@@ -4,8 +4,10 @@ import { cn } from "@/lib/utils";
 interface FavouriteStarProps {
 	favourite: boolean;
 	companyName: string;
+	label?: string;
 	onToggle: () => void;
 	disabled?: boolean;
+	hourly?: boolean;
 }
 
 export function FavouriteStar(props: FavouriteStarProps) {
@@ -13,7 +15,12 @@ export function FavouriteStar(props: FavouriteStarProps) {
 		<button
 			type="button"
 			aria-pressed={props.favourite}
-			aria-label={`Favourite ${props.companyName}`}
+			aria-label={props.label ?? `Favourite ${props.companyName}`}
+			title={
+				props.favourite && props.hourly
+					? "Checked for new jobs hourly"
+					: undefined
+			}
 			disabled={props.disabled}
 			onClick={() => props.onToggle()}
 			class={cn(
