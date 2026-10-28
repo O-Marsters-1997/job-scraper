@@ -47,6 +47,11 @@ export type PageMetrics = {
 	fits: Record<string, LineFit>;
 };
 
+export type PageDiff = {
+	added: ReadonlySet<string>;
+	removedAfter: Readonly<Record<string, string[]>>;
+};
+
 export type PageEditor = {
 	editable: boolean;
 	showCounts: boolean;
@@ -393,12 +398,20 @@ function LineCount(props: {
 	);
 }
 
+const removedBlock = (anchor: LayoutBlock, text: string): LayoutBlock => ({
+	...anchor,
+	slotId: "",
+	runs: anchor.runs.slice(0, 1).map((r) => ({ ...r, text })),
+});
+
 function Block(props: {
 	block: LayoutBlock;
 	draw: BorderDraw;
 	page: DraftLayout["page"];
 	editor: PageEditor | undefined;
 	fit: LineFit | undefined;
+	added?: boolean | undefined;
+	removed?: boolean;
 	register: (slotId: string, el: HTMLElement) => void;
 }) {
 	const spacer = () => isSpacer(props.block);
@@ -414,11 +427,14 @@ function Block(props: {
 	return (
 		<div
 			data-slot-id={props.block.slotId || undefined}
+			data-diff-removed={props.removed || undefined}
 			data-section={props.block.section || undefined}
 			data-skill-line={props.block.skillLine ?? undefined}
 			class={cn(
 				"relative whitespace-pre-wrap [font-kerning:normal] [font-variant-ligatures:none] [tab-size:36pt]",
 				editor()?.editable && "cursor-text",
+				props.added && "bg-accent-subtle",
+				props.removed && "text-destructive-strong line-through",
 			)}
 			on:mouseenter={() => {
 				const ed = editor();
@@ -464,6 +480,9 @@ function Block(props: {
 					</>
 				)}
 			</Show>
+			<Show when={props.added || props.removed}>
+				<span class="sr-only">{props.added ? "Added: " : "Removed: "}</span>
+			</Show>
 			<Show when={props.block.bullet}>
 				{(bullet) => (
 					<span
@@ -505,6 +524,7 @@ function Block(props: {
 export function DocPage(props: {
 	layout: DraftLayout;
 	editor?: PageEditor;
+	diff?: PageDiff | undefined;
 	onMetrics?: (metrics: PageMetrics) => void;
 	onMeasurer?: (lines: (slotId: string, text: string) => number) => void;
 	class?: string;
@@ -526,8 +546,12 @@ export function DocPage(props: {
 			bodyLinePx ||= Number.parseFloat(getComputedStyle(el).lineHeight);
 		}
 		setFits(reconcile(next));
+		const ghosts = content.querySelectorAll<HTMLElement>("[data-diff-removed]");
+		for (const g of ghosts) g.style.display = "none";
+		const contentPx = content.offsetHeight;
+		for (const g of ghosts) g.style.display = "";
 		const metrics: PageMetrics = {
-			contentPt: content.offsetHeight / PX_PER_PT,
+			contentPt: contentPx / PX_PER_PT,
 			availablePt: page().height - page().marginTop - page().marginBottom,
 			bodyLinePt: bodyLinePx ? bodyLinePx / PX_PER_PT : DEFAULT_BODY_LINE_PT,
 			fits: next,
@@ -569,6 +593,7 @@ export function DocPage(props: {
 	createEffect(() => {
 		for (const b of props.layout.blocks)
 			if (b.slotId) props.editor?.text(b.slotId);
+		void props.diff;
 		remeasure();
 	});
 
@@ -589,17 +614,33 @@ export function DocPage(props: {
 			<div ref={content} class="flow-root">
 				<For each={props.layout.blocks}>
 					{(block, i) => (
-						<Block
-							block={block}
-							page={page()}
-							editor={props.editor}
-							fit={fits[block.slotId]}
-							draw={draws()[i()] ?? { top: true, bottom: true }}
-							register={(id, el) => {
-								lines.set(id, el);
-								remeasure();
-							}}
-						/>
+						<>
+							<Block
+								block={block}
+								page={page()}
+								editor={props.editor}
+								fit={fits[block.slotId]}
+								added={props.diff?.added.has(block.slotId)}
+								draw={draws()[i()] ?? { top: true, bottom: true }}
+								register={(id, el) => {
+									lines.set(id, el);
+									remeasure();
+								}}
+							/>
+							<For each={props.diff?.removedAfter[block.slotId]}>
+								{(text) => (
+									<Block
+										removed
+										block={removedBlock(block, text)}
+										page={page()}
+										editor={undefined}
+										fit={undefined}
+										draw={{ top: false, bottom: false }}
+										register={() => {}}
+									/>
+								)}
+							</For>
+						</>
 					)}
 				</For>
 			</div>

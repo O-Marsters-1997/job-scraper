@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { bulletDiff } from "./bulletDiff";
+import { bulletDiff, inlineMarks } from "./bulletDiff";
 
 const kinds = (base: string[], current: string[]) =>
 	bulletDiff(base, current)
@@ -41,4 +41,9 @@ assert.equal(
 	kinds(["built public apis"], ["negotiated vendor contracts"]),
 	"added:negotiated vendor contracts|removed:built public apis",
 	"an unrelated bullet is an add plus a remove, not a rewrite",
+);
+assert.deepEqual(
+	inlineMarks(["ran on call", "wrote docs"], ["wrote docs", "led migration"]),
+	{ added: [false, true], removed: ["ran on call"] },
+	"only new and dropped bullets are marked",
 );
