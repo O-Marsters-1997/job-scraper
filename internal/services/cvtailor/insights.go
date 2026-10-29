@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 )
@@ -101,6 +103,7 @@ func (m *Module) ExplainDraft(ctx context.Context, userID string, in dto.Explain
 
 	res, err := m.editor.Insights(ctx, key, input)
 	if err != nil {
+		m.log.ErrorContext(ctx, "explain draft failed", slog.String("draft_id", in.ID), slog.Any(logger.KeyErr, err))
 		return dto.DraftInsights{}, suggestError(err)
 	}
 
