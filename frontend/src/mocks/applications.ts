@@ -1,8 +1,10 @@
 import { faker } from "@faker-js/faker";
 import type {
 	Application,
+	ApplicationMove,
 	ApplicationWithDetails,
 	CreateApplicationPayload,
+	MoveApplicationPayload,
 	UpdateApplicationPayload,
 } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
@@ -117,6 +119,37 @@ export function updateApplication(
 		...applications.slice(idx + 1),
 	];
 	return updated;
+}
+
+export function moveApplication(
+	id: string,
+	data: MoveApplicationPayload,
+): ApplicationMove {
+	failIfRequested("moveApplication");
+	const prev = applications.find((a) => a.ID === id);
+	const status = statuses.find((s) => s.ID === data.status_id);
+	if (!prev || !status) throw new Error("Application not found");
+	if (prev.StatusID === status.ID) {
+		return { Application: prev, FilledAppliedAt: false };
+	}
+	let appliedAt = prev.AppliedAt;
+	if (data.clear_applied_at) appliedAt = null;
+	else if (appliedAt === null && status.SystemKey === "applied") {
+		appliedAt = new Date().toISOString();
+	}
+	const updated: Application = {
+		...prev,
+		StatusID: status.ID,
+		AppliedAt: appliedAt,
+		ChaseBy: chaseFor(status.ID),
+		UpdatedAt: new Date().toISOString(),
+	};
+	if (status.SystemKey === "applied") completeOpenApplyTasks(updated.JobID);
+	applications = applications.map((a) => (a.ID === id ? updated : a));
+	return {
+		Application: updated,
+		FilledAppliedAt: prev.AppliedAt === null && appliedAt !== null,
+	};
 }
 
 export function setChase(id: string, chaseBy: string): Application {

@@ -8,12 +8,16 @@ import {
 	createApplication,
 	deleteApplications,
 	fetchApplications,
+	moveApplication,
 	setChase,
 	updateApplication,
 } from "../api/applications";
 import { keys } from "../api/keys";
 import { cvStage, isCvStageBusy } from "../lib/cvStage";
-import type { UpdateApplicationPayload } from "../types/application";
+import type {
+	MoveApplicationPayload,
+	UpdateApplicationPayload,
+} from "../types/application";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const applicationsQueryOptions = (statusId?: string, chase = false) =>
@@ -54,6 +58,14 @@ export function useUpdateApplication() {
 	return useInvalidatingMutation(
 		({ id, data }: { id: string; data: UpdateApplicationPayload }) =>
 			updateApplication(id, data),
+		[keys.applications.all, keys.jobs.all, keys.tasks.all],
+	);
+}
+
+export function useMoveApplication() {
+	return useInvalidatingMutation(
+		({ id, data }: { id: string; data: MoveApplicationPayload }) =>
+			moveApplication(id, data),
 		[keys.applications.all, keys.jobs.all, keys.tasks.all],
 	);
 }
