@@ -1,3 +1,4 @@
+import { DEFAULT_CV_FILENAME_PATTERN } from "../lib/cvFilename";
 import type { AiPrefs } from "../types/aiPrefs";
 import type { GoogleStatus } from "../types/google";
 import type { Profile } from "../types/profile";
@@ -41,7 +42,7 @@ export function disconnectGoogle(): void {
 let profile: Profile = {
 	username: "demo",
 	email: "demo@example.com",
-	cvFilenamePattern: "cv-{company}",
+	cvFilenamePattern: DEFAULT_CV_FILENAME_PATTERN,
 };
 
 export function getProfile(): Profile {
@@ -53,7 +54,10 @@ export function updateProfile(payload: { email: string }): void {
 }
 
 export function updateCvFilenamePattern(pattern: string): void {
-	profile = { ...profile, cvFilenamePattern: pattern.trim() || "cv-{company}" };
+	profile = {
+		...profile,
+		cvFilenamePattern: pattern.trim() || DEFAULT_CV_FILENAME_PATTERN,
+	};
 }
 
 export function getAiUsage(): Quota {

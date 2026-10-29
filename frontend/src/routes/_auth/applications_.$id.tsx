@@ -403,8 +403,8 @@ function CvRowBody(props: {
 							{draft().outcome === "kept" ? "Complete" : "Draft"}
 						</Badge>
 					</Link>
-					<Show when={draft().status === "ready"}>
-						<div class="flex flex-wrap items-center gap-2">
+					<Show when={draft().status === "ready" || draft().outcome === "kept"}>
+						<div>
 							<DownloadPdfButton
 								draftId={draft().id}
 								jobId={props.jobId}

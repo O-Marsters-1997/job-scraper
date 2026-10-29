@@ -7,7 +7,7 @@ import { QueryBoundary } from "@/components/QueryBoundary";
 import { SettingsActions } from "@/components/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cvFilename } from "@/lib/cvFilename";
+import { cvFilename, DEFAULT_CV_FILENAME_PATTERN } from "@/lib/cvFilename";
 import {
 	chooseDownloadFolder,
 	clearDownloadFolder,
@@ -121,6 +121,7 @@ function PatternForm(props: { data: Accessor<Profile> }) {
 		setSaveError(null);
 		try {
 			await mutation.mutateAsync(pattern());
+			setPattern(pattern().trim() || DEFAULT_CV_FILENAME_PATTERN);
 			setSaved(true);
 			setTimeout(() => setSaved(false), 3000);
 		} catch {
