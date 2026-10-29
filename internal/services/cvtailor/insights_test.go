@@ -1,6 +1,11 @@
 package cvtailor_test
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -12,8 +17,30 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 )
 
+type failingInsights struct{ cvtailor.Editor }
+
+func (failingInsights) Insights(context.Context, string, cvedit.InsightsInput) (cvedit.InsightsResult, error) {
+	return cvedit.InsightsResult{}, errors.New("openrouter said no")
+}
+
 func TestModule_ExplainDraft(t *testing.T) {
 	t.Parallel()
+
+	t.Run("a model failure is logged with its cause and surfaces as upstream", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		var buf bytes.Buffer
+		log := slog.New(slog.NewTextHandler(&buf, nil))
+		m := cvtailor.Build(cvtailor.Deps{Store: e.store, Asker: e.asker, Editor: failingInsights{}, Creds: cvtailortest.Key(apiKey), Log: log})
+
+		_, err := m.ExplainDraft(t.Context(), userID, dto.ExplainDraftInput{ID: id})
+
+		if !apperr.IsKind(err, apperr.KindUpstream) || !strings.Contains(buf.String(), "openrouter said no") {
+			t.Errorf("ExplainDraft() = %v, log %q, want upstream error with the cause logged", err, buf.String())
+		}
+	})
+
 	setup := func(t *testing.T) (draftEnv, string, string) {
 		t.Helper()
 		e := newDraftEnv(t)
