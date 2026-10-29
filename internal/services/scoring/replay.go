@@ -19,7 +19,21 @@ const (
 	replayLowScoredPct  = 50
 	replaySourceGrade   = "grade"
 	replayGradeNegative = "no"
+	replayBandGreat     = "great"
+
+	replayHoldoutDays = 28
+	replayPrecisionN  = 20
+	replayTopWindow   = 100
 )
+
+type replayMetrics struct {
+	PrecisionAt20   *float64 // nil when the Holdout window has fewer than replayPrecisionN labels
+	HoldoutLabels   int
+	DistinctTop100  int
+	DismissedTop100 int
+	GreatBand       int
+	Concordance     *float64 // nil below replayMinNegatives negatives
+}
 
 type replayRow struct {
 	JobID    string
@@ -31,6 +45,8 @@ type replayRow struct {
 	Band     string
 	Rank     int
 	Reasons  []string
+
+	LabelledAt time.Time
 }
 
 func (r replayRow) rankPct(total int) float64 { return 100 * float64(r.Rank) / float64(total) }
@@ -38,9 +54,11 @@ func (r replayRow) rankPct(total int) float64 { return 100 * float64(r.Rank) / f
 type replayReport struct {
 	Total    int
 	Scores   []int
+	Bands    []string
 	Labelled []replayRow
 	Unscored int
 	Params   *dto.ScoringParams
+	Metrics  replayMetrics
 }
 
 // Replay re-runs compute over userID's cached answers for every scored job
@@ -93,16 +111,17 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 	}
 	cfg, labels := pool.cfg, pool.labels
 
-	report := replayReport{Total: len(pool.inputs), Scores: make([]int, len(pool.inputs)), Params: cfg.Preferences.Scoring}
+	report := replayReport{Total: len(pool.inputs), Scores: make([]int, len(pool.inputs)), Bands: make([]string, len(pool.inputs)), Params: cfg.Preferences.Scoring}
 	var labelled []replayRow
 	for i, in := range pool.inputs {
 		scored := scoreJob(userID, cfg, in.Job, pool.bank.byID, in.Answers, in.Corrections, in.Favourite)
 		score := scored.Score
 		report.Scores[i] = score
+		report.Bands[i] = scored.Band
 		if l, ok := labels[in.Job.ID]; ok {
 			labelled = append(labelled, replayRow{
 				JobID: in.Job.ID, Title: in.Job.Title, Company: in.Job.CompanySlug,
-				Positive: l.positive, Source: l.source, Score: score, Band: scored.Band, Reasons: l.reasons,
+				Positive: l.positive, Source: l.source, Score: score, Band: scored.Band, Reasons: l.reasons, LabelledAt: l.at,
 			})
 		}
 	}
@@ -114,6 +133,7 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 	})
 	report.Labelled = labelled
 	report.Unscored = len(labels) - len(labelled)
+	report.Metrics = computeReplayMetrics(report, time.Now())
 	return report, nil
 }
 
@@ -121,16 +141,17 @@ type replayLabelInfo struct {
 	positive bool
 	source   string
 	reasons  []string
+	at       time.Time
 }
 
 func replayLabels(grades []dto.Grade, implied []dto.ImpliedLabel) map[string]replayLabelInfo {
 	labels := make(map[string]replayLabelInfo, len(grades)+len(implied))
 	for _, g := range grades {
-		labels[g.JobID] = replayLabelInfo{positive: g.Grade != replayGradeNegative, source: replaySourceGrade, reasons: g.Reasons}
+		labels[g.JobID] = replayLabelInfo{positive: g.Grade != replayGradeNegative, source: replaySourceGrade, reasons: g.Reasons, at: g.UpdatedAt}
 	}
 	for _, l := range implied {
 		if _, ok := labels[l.JobID]; !ok {
-			labels[l.JobID] = replayLabelInfo{positive: true, source: l.Source}
+			labels[l.JobID] = replayLabelInfo{positive: true, source: l.Source, at: l.At}
 		}
 	}
 	return labels
@@ -151,6 +172,7 @@ func renderReplay(r replayReport) string {
 	sb.WriteString("# Replay\n\n")
 	writeReplayParams(&sb, r.Params)
 	writeReplaySummary(&sb, r)
+	writeShipMetrics(&sb, r.Metrics)
 	if len(r.Labelled) == 0 {
 		return sb.String()
 	}
@@ -230,14 +252,60 @@ func writeReplaySummary(sb *strings.Builder, r replayReport) {
 	} else {
 		fmt.Fprintf(sb, "- Low-scored positives: %d in the bottom half: %s\n", len(low), strings.Join(low, "; "))
 	}
+}
 
-	if len(negatives) >= replayMinNegatives {
-		fmt.Fprintf(sb, "- Concordance: %.0f%% of positive/negative pairs score the positive higher\n", 100*concordance(positives, negatives))
+func computeReplayMetrics(r replayReport, now time.Time) replayMetrics {
+	var m replayMetrics
+	var positives, negatives, holdout []replayRow
+	cutoff := now.AddDate(0, 0, -replayHoldoutDays)
+	for _, row := range r.Labelled {
+		if row.Positive {
+			positives = append(positives, row)
+		} else {
+			negatives = append(negatives, row)
+			if row.Rank <= replayTopWindow {
+				m.DismissedTop100++
+			}
+		}
+		if !row.LabelledAt.Before(cutoff) {
+			holdout = append(holdout, row)
+		}
 	}
+	m.HoldoutLabels = len(holdout)
+	if len(holdout) >= replayPrecisionN {
+		slices.SortFunc(holdout, func(a, b replayRow) int {
+			return cmp.Or(cmp.Compare(b.Score, a.Score), cmp.Compare(a.JobID, b.JobID))
+		})
+		p := float64(countWhere(holdout[:replayPrecisionN], func(row replayRow) bool { return row.Positive })) / replayPrecisionN
+		m.PrecisionAt20 = &p
+	}
+	if len(positives) > 0 && len(negatives) >= replayMinNegatives {
+		c := concordance(positives, negatives)
+		m.Concordance = &c
+	}
+	top := slices.Clone(r.Scores)
+	slices.SortFunc(top, func(a, b int) int { return cmp.Compare(b, a) })
+	top = top[:min(len(top), replayTopWindow)]
+	m.DistinctTop100 = len(slices.Compact(top))
+	m.GreatBand = countWhere(r.Bands, func(b string) bool { return b == replayBandGreat })
+	return m
+}
 
-	top := slices.Max(r.Scores)
-	distinct := len(slices.Compact(slices.Sorted(slices.Values(r.Scores))))
-	fmt.Fprintf(sb, "- Distinct scores: %d, with %d jobs tied at the top score of %d\n", distinct, countWhere(r.Scores, func(s int) bool { return s == top }), top)
+func writeShipMetrics(sb *strings.Builder, m replayMetrics) {
+	sb.WriteString("\n## Ship metrics\n\n")
+	if m.PrecisionAt20 == nil {
+		fmt.Fprintf(sb, "- Precision@%d: not enough labels (%d in the last %d days, need %d)\n", replayPrecisionN, m.HoldoutLabels, replayHoldoutDays, replayPrecisionN)
+	} else {
+		fmt.Fprintf(sb, "- Precision@%d: %.0f%% of the top %d labels from the last %d days are positive\n", replayPrecisionN, 100**m.PrecisionAt20, replayPrecisionN, replayHoldoutDays)
+	}
+	fmt.Fprintf(sb, "- Distinct scores in the top %d: %d\n", replayTopWindow, m.DistinctTop100)
+	fmt.Fprintf(sb, "- Dismissed jobs in the top %d: %d\n", replayTopWindow, m.DismissedTop100)
+	fmt.Fprintf(sb, "- Great band size: %d\n", m.GreatBand)
+	if m.Concordance == nil {
+		fmt.Fprintf(sb, "- Concordance: not enough negatives (need %d)\n", replayMinNegatives)
+	} else {
+		fmt.Fprintf(sb, "- Concordance: %.0f%% of positive/negative pairs score the positive higher\n", 100**m.Concordance)
+	}
 }
 
 func median(xs []float64) float64 {

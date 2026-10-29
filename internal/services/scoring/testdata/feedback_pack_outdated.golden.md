@@ -9,7 +9,7 @@ An answer resolves to yes, no or unknown for the checklist rows: the top of P(ye
 
 Score = round(100 * (sum(weight * (evidence * credit + 0.5 * missing)) + 0.5 * prior) / (sum(weight * (evidence + missing)) + avoid cost + prior)), with missing = alpha * (1 - evidence), alpha = 1 and prior = 1.
 
-- Per dimension with nice or ok Picks, credit = min(1, sum of strength * P(yes) over its Picks / saturation), with strength 1 for nice and 0.5 for ok, and evidence = the largest P(yes) + P(no) over its Picks. Dimension weights and saturation:
+- Per dimension with nice or ok Picks, credit = 1 - exp(-ln(10) * sum of strength * P(yes) over its Picks / saturation), with strength 1 for nice and 0.5 for ok, and evidence = the largest P(yes) + P(no) over its Picks. Dimension weights and saturation:
   - tech: weight 2, saturation 3
   - role: weight 3, saturation 1
   - domain: weight 2, saturation 1

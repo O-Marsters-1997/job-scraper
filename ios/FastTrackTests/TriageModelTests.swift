@@ -40,6 +40,24 @@ struct TriageModelTests {
         return model
     }
 
+    @Test func shownCardsAreSentOnceAsOneBatchWithTheirQueuePosition() async {
+        var client = APIClient.mock(jobs: [Job.sample.with(id: "a"), Job.sample.with(id: "b")])
+        let calls = calls
+        client.recordImpressions = { batch in
+            calls.log.append(batch.items.map { "\($0.jobID)@\($0.position)" }.joined(separator: ","))
+        }
+        let model = TriageModel(client: client)
+        await model.load()
+
+        model.cardShown()
+        model.cardShown()
+        await model.decide(.skip).value
+        model.cardShown()
+        await model.flushImpressions().value
+
+        #expect(calls.log == ["a@1,b@2"])
+    }
+
     @Test func excludeDropsTheCompanysJobsAndUndoRestoresThem() async {
         let model = await model()
 

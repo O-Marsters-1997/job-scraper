@@ -4,6 +4,7 @@ import SwiftUI
 @Observable
 final class TriageModel {
     static let cacheSize = 50
+    static let impressionBatchSize = 5
 
     var stack: TriageStack = .direct
     private(set) var queues: [TriageStack: [Job]] = [:]
@@ -23,6 +24,9 @@ final class TriageModel {
     private let client: APIClient
     private let store: OfflineStore
     private var receipts: [UUID: UndoReceipt] = [:]
+    private var positions: [String: Int] = [:]
+    private var impressed: Set<String> = []
+    private var pendingImpressions: [ImpressionBatchInput.Item] = []
 
     init(client: APIClient, store: OfflineStore = .memory()) {
         self.client = client
@@ -48,6 +52,7 @@ final class TriageModel {
                 let cards = (try? store.loadCards(stack)) ?? []
                 queues[stack] = cards
                 unseen[stack] = cards.count
+                rank(cards)
             }
             loadState = .loaded(())
         } catch {
@@ -111,6 +116,20 @@ final class TriageModel {
                 fail(error)
             }
         }
+    }
+
+    func cardShown() {
+        guard let job = current, impressed.insert(job.id).inserted else { return }
+        pendingImpressions.append(.init(jobID: job.id, position: positions[job.id] ?? 1))
+        if pendingImpressions.count >= Self.impressionBatchSize { flushImpressions() }
+    }
+
+    @discardableResult
+    func flushImpressions() -> Task<Void, Never> {
+        guard !pendingImpressions.isEmpty, !isOffline else { return Task {} }
+        let batch = ImpressionBatchInput(surface: "triage", sort: "relevant", items: pendingImpressions)
+        pendingImpressions = []
+        return Task { try? await client.recordImpressions(batch) }
     }
 
     func currentNote() async throws -> String {
@@ -201,10 +220,15 @@ final class TriageModel {
         for (stack, page) in pages {
             let items = page.items.filter { !decided.contains($0.id) }
             queues[stack] = items
+            rank(page.items)
             let dropped = page.items.count - items.count
             unseen[stack] = max((page.total ?? page.items.count) - dropped, items.count)
         }
         persistCards()
+    }
+
+    private func rank(_ jobs: [Job]) {
+        for (index, job) in jobs.enumerated() { positions[job.id] = index + 1 }
     }
 
     private func apply(_ action: TriageAction, to job: Job) {

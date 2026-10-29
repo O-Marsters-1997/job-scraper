@@ -40,7 +40,7 @@ export function TechNeeded(props: {
 						)}
 					</For>
 				</div>
-				<span>of the techs you like for full tech credit.</span>
+				<span>techs earn about 90% of tech credit; more still helps.</span>
 			</div>
 			<p class="text-xs text-faint">
 				A tech you rate 5 counts as one, a 4 counts as half.

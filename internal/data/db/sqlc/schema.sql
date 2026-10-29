@@ -660,7 +660,8 @@ CREATE TYPE event_type AS ENUM (
     'job_dismissed',
     'application_created',
     'application_status_changed',
-    'alert_opened'
+    'alert_opened',
+    'job_impression'
 );
 
 CREATE TABLE events (

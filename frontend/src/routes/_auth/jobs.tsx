@@ -12,6 +12,7 @@ import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { useCompany } from "../../hooks/useCompanies";
 import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
+import { useJobImpressions } from "../../hooks/useJobImpressions";
 import { useJobPages } from "../../hooks/useJobs";
 import { SeenToast } from "../../hooks/useSeenToast";
 import { useSourceOptions } from "../../hooks/useSources";
@@ -43,6 +44,12 @@ function JobsPage() {
 	const company = useCompany(() => filters().company ?? "");
 	const companyName = () => company.data?.Name ?? "Selected company";
 	const sourceOptions = useSourceOptions();
+
+	useJobImpressions(
+		table.items,
+		() => (table.page() - 1) * table.pageSize + 1,
+		() => filters().sort,
+	);
 
 	const track = useTrackJobs(
 		table.items,

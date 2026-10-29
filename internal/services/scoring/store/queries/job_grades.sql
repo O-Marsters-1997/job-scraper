@@ -16,7 +16,7 @@ DELETE FROM job_grades WHERE user_id = $1 AND job_id = $2;
 SELECT * FROM job_grades WHERE user_id = $1 ORDER BY updated_at DESC, job_id;
 
 -- name: ListImpliedPositives :many
-SELECT job_id, 'application'::text AS source FROM applications WHERE applications.user_id = $1
+SELECT job_id, 'application'::text AS source, created_at AS at FROM applications WHERE applications.user_id = $1
 UNION ALL
-SELECT job_id, 'kept_cv'::text AS source FROM tailored_cvs WHERE tailored_cvs.user_id = $1 AND outcome = 'kept'
+SELECT job_id, 'kept_cv'::text AS source, created_at AS at FROM tailored_cvs WHERE tailored_cvs.user_id = $1 AND outcome = 'kept'
 ORDER BY source, job_id;

@@ -16,8 +16,9 @@ func TestRoutes(t *testing.T) {
 	r := chi.NewRouter()
 	events.Build(events.Deps{Store: st, Snapshots: eventstest.Unscored()}).Routes(r)
 
-	handlerstest.RequiresAuth(t, r, "POST /events")
-	handlerstest.RejectsMalformedBody(t, r, "POST /events")
+	handlerstest.RequiresAuth(t, r, "POST /events", "POST /events/impressions")
+	handlerstest.RejectsMalformedBody(t, r, "POST /events", "POST /events/impressions")
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /events/impressions", `{"surface":"list","sort":"newest","items":[{"job_id":"00000000-0000-0000-0000-000000000001","position":1}]}`)
 
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /events", `{"type":"job_opened","subject_id":"00000000-0000-0000-0000-000000000001"}`)
 
