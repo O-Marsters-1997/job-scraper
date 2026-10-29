@@ -11,7 +11,10 @@ struct Application: Decodable {
 }
 
 struct EventInput: Encodable {
-    enum Kind: String, Encodable { case jobDismissed = "job_dismissed" }
+    enum Kind: String, Encodable {
+        case jobDismissed = "job_dismissed"
+        case jobOpened = "job_opened"
+    }
 
     let type: Kind
     let subjectID: String
@@ -22,6 +25,22 @@ struct EventInput: Encodable {
         case type, reason, undone
         case subjectID = "subject_id"
     }
+}
+
+struct ImpressionBatchInput: Encodable {
+    struct Item: Encodable {
+        let jobID: String
+        let position: Int
+
+        enum CodingKeys: String, CodingKey {
+            case position
+            case jobID = "job_id"
+        }
+    }
+
+    let surface: String
+    let sort: String
+    let items: [Item]
 }
 
 struct CreateApplicationInput: Encodable {
