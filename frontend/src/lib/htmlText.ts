@@ -3,6 +3,9 @@ import type { QuoteSpan } from "./quoteMarks";
 export type TextPart = { kind: "p" | "h" | "li"; text: string };
 
 const LOOKS_HTML = /<[a-z][\s\S]*?>/i;
+const CRITERIA =
+	/\s+(?=(?:Seniority level|Employment type|Job function|Industries):)/;
+const BOLD_TAGS = new Set(["STRONG", "B"]);
 const BULLET = /^\s*[-*•]\s+/;
 const BLOCK_TAGS = new Set([
 	"P",
@@ -48,14 +51,23 @@ function htmlParts(root: Node): TextPart[] {
 	const parts: TextPart[] = [];
 	let kind: TextPart["kind"] = "p";
 	let buf = "";
+	let plain = false;
 	const flush = () => {
 		const text = buf.replace(/\s+/g, " ").trim();
-		if (text) parts.push({ kind, text });
+		if (text) {
+			const heading = kind === "p" && !plain;
+			parts.push({ kind: heading ? "h" : kind, text });
+		}
 		buf = "";
+		plain = false;
 	};
-	const visit = (n: Node) => {
+	const addText = (t: string | null, bold: boolean) => {
+		buf += t ?? "";
+		plain ||= !bold && /\S/.test(t ?? "");
+	};
+	const visit = (n: Node, bold: boolean) => {
 		if (n.nodeType === Node.TEXT_NODE) {
-			buf += n.textContent ?? "";
+			addText(n.textContent, bold);
 			return;
 		}
 		if (n.nodeType !== Node.ELEMENT_NODE) return;
@@ -69,13 +81,19 @@ function htmlParts(root: Node): TextPart[] {
 		if (block) flush();
 		const prev = kind;
 		if (next) kind = next;
-		for (const child of n.childNodes) visit(child);
+		const inBold = bold || BOLD_TAGS.has(tag);
+		for (const child of n.childNodes) visit(child, inBold);
 		if (block) flush();
 		kind = prev;
 	};
-	visit(root);
+	visit(root, false);
 	flush();
-	return parts;
+	return parts.flatMap(splitCriteria);
+}
+
+function splitCriteria(p: TextPart): TextPart[] {
+	if (p.kind !== "p") return [p];
+	return p.text.split(CRITERIA).map((text) => ({ kind: p.kind, text }));
 }
 
 export function htmlToParts(html: string): TextPart[] {
