@@ -224,117 +224,128 @@ function ScoringForm(props: {
 				</Button>
 			</SettingsActions>
 			<FormFeedback success={notice() ?? false} error={error()} />
-			<Show when={previewOpen()}>
-				<ScorePreview query={preview} />
-			</Show>
-			<Show when={RATED_SECTIONS.includes(params().section ?? "")}>
-				<RatingKey />
-			</Show>
-			<Switch>
-				<Match when={params().section === "role"}>
-					{section("Role", rows("role"))}
-					<SeniorityLadder
-						tiers={optionsFor("seniority")}
-						weightOf={(id) => weights[id] ?? 0}
-						setWeight={(id, weight) => setWeights(id, weight)}
-					/>
-					{section(
-						"Pay and contract",
-						<>
-							<Field
-								label="Minimum salary"
-								for="salary-floor"
-								hint="Jobs that don't state a salary, or state one in another currency, aren't affected. A stated salary below this caps the score."
-							>
-								<div class="relative w-44">
-									<span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-faint">
-										£
-									</span>
-									<Input
-										id="salary-floor"
-										type="number"
-										step="5000"
-										min="0"
-										value={salaryFloor()}
-										onInput={(e) => setSalaryFloor(e.currentTarget.value)}
-										placeholder="No minimum"
-										class="pl-7 font-mono tabular-nums"
-									/>
-								</div>
-							</Field>
-							{rows("employment")}
-						</>,
-					)}
-				</Match>
-				<Match when={params().section === "stack"}>
-					{section(
-						"Tech stack",
-						<>
-							<TechNeeded value={techNeeded()} onChange={setTechNeeded} />
-							{rows("tech")}
-						</>,
-					)}
-					{section("Industries", rows("domain"))}
-				</Match>
-				<Match when={params().section === "work"}>
-					{section(
-						"Working arrangement",
-						<>
-							<p class="text-xs text-faint">
-								To prefer some office days over others, rate the day counts
-								instead of Hybrid.
-							</p>
-							{rows("work")}
-						</>,
-					)}
-					{section("Company size", rows("size"))}
-					{section("Company stage", rows("stage"))}
-				</Match>
-				<Match when={params().section === "custom"}>
-					<CustomOptions
-						options={props.options()}
-						stanceOf={(id) => stances[id]}
-						onRate={(id, s) => setStances(id, s)}
-					/>
-				</Match>
-				<Match when={params().section === "filters"}>
-					<FiltersSection filters={filters} />
-				</Match>
-				<Match when={params().section === "other"}>
-					<Field
-						label="Anything else worth mentioning?"
-						for="preference-text"
-						hint="Whatever matches an option elsewhere becomes a pick. Your own picks always win."
-					>
-						<Textarea
-							id="preference-text"
-							value={preferenceText()}
-							onInput={(e) => setPreferenceText(e.currentTarget.value)}
-							placeholder="e.g. I'd like to work with people more senior than me, and avoid on-call rotations."
-							class="min-h-32"
-						/>
-					</Field>
-					<Show when={textPicks().length > 0}>
-						<div class="flex flex-wrap gap-1.5">
-							<For each={textPicks()}>
-								{(p) => (
-									<span
-										class={cn(
-											"inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-medium",
-											p.overridden
-												? "border-border text-faint line-through"
-												: STANCE_TONE[p.stance],
-										)}
-									>
-										{labelFor(p.optionId)}
-										{p.overridden && " (overridden)"}
-									</span>
-								)}
-							</For>
-						</div>
+			<div
+				class={cn(
+					"flex flex-col gap-6",
+					previewOpen() && "xl:grid xl:grid-cols-[3fr_2fr] xl:items-start",
+				)}
+			>
+				<Show when={previewOpen()}>
+					<div class="xl:sticky xl:top-20 xl:col-start-2 xl:row-start-1 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto">
+						<ScorePreview query={preview} />
+					</div>
+				</Show>
+				<div class="flex min-w-0 flex-col gap-6 xl:col-start-1 xl:row-start-1">
+					<Show when={RATED_SECTIONS.includes(params().section ?? "")}>
+						<RatingKey />
 					</Show>
-				</Match>
-			</Switch>
+					<Switch>
+						<Match when={params().section === "role"}>
+							{section("Role", rows("role"))}
+							<SeniorityLadder
+								tiers={optionsFor("seniority")}
+								weightOf={(id) => weights[id] ?? 0}
+								setWeight={(id, weight) => setWeights(id, weight)}
+							/>
+							{section(
+								"Pay and contract",
+								<>
+									<Field
+										label="Minimum salary"
+										for="salary-floor"
+										hint="Jobs that don't state a salary, or state one in another currency, aren't affected. A stated salary below this caps the score."
+									>
+										<div class="relative w-44">
+											<span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-faint">
+												£
+											</span>
+											<Input
+												id="salary-floor"
+												type="number"
+												step="5000"
+												min="0"
+												value={salaryFloor()}
+												onInput={(e) => setSalaryFloor(e.currentTarget.value)}
+												placeholder="No minimum"
+												class="pl-7 font-mono tabular-nums"
+											/>
+										</div>
+									</Field>
+									{rows("employment")}
+								</>,
+							)}
+						</Match>
+						<Match when={params().section === "stack"}>
+							{section(
+								"Tech stack",
+								<>
+									<TechNeeded value={techNeeded()} onChange={setTechNeeded} />
+									{rows("tech")}
+								</>,
+							)}
+							{section("Industries", rows("domain"))}
+						</Match>
+						<Match when={params().section === "work"}>
+							{section(
+								"Working arrangement",
+								<>
+									<p class="text-xs text-faint">
+										To prefer some office days over others, rate the day counts
+										instead of Hybrid.
+									</p>
+									{rows("work")}
+								</>,
+							)}
+							{section("Company size", rows("size"))}
+							{section("Company stage", rows("stage"))}
+						</Match>
+						<Match when={params().section === "custom"}>
+							<CustomOptions
+								options={props.options()}
+								stanceOf={(id) => stances[id]}
+								onRate={(id, s) => setStances(id, s)}
+							/>
+						</Match>
+						<Match when={params().section === "filters"}>
+							<FiltersSection filters={filters} />
+						</Match>
+						<Match when={params().section === "other"}>
+							<Field
+								label="Anything else worth mentioning?"
+								for="preference-text"
+								hint="Whatever matches an option elsewhere becomes a pick. Your own picks always win."
+							>
+								<Textarea
+									id="preference-text"
+									value={preferenceText()}
+									onInput={(e) => setPreferenceText(e.currentTarget.value)}
+									placeholder="e.g. I'd like to work with people more senior than me, and avoid on-call rotations."
+									class="min-h-32"
+								/>
+							</Field>
+							<Show when={textPicks().length > 0}>
+								<div class="flex flex-wrap gap-1.5">
+									<For each={textPicks()}>
+										{(p) => (
+											<span
+												class={cn(
+													"inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-medium",
+													p.overridden
+														? "border-border text-faint line-through"
+														: STANCE_TONE[p.stance],
+												)}
+											>
+												{labelFor(p.optionId)}
+												{p.overridden && " (overridden)"}
+											</span>
+										)}
+									</For>
+								</div>
+							</Show>
+						</Match>
+					</Switch>
+				</div>
+			</div>
 		</>
 	);
 }
