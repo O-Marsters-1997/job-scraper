@@ -73,6 +73,7 @@ export type PageEditor = {
 	onEditSkills?: (() => void) | undefined;
 	roleFor?: ((block: LayoutBlock) => string | undefined) | undefined;
 	onEditRole?: ((positionId: string) => void) | undefined;
+	isPlaceholder?: ((slotId: string) => boolean) | undefined;
 };
 
 const ALIGN: Record<string, JSX.CSSProperties["text-align"]> = {
@@ -562,12 +563,19 @@ function Block(props: {
 					}
 				>
 					{(ed) => (
-						<EditableLine
-							slotId={props.block.slotId}
-							editor={ed()}
-							style={leadStyle()}
-							ref={(el) => props.register(props.block.slotId, el)}
-						/>
+						<Show
+							when={!ed().isPlaceholder?.(props.block.slotId)}
+							fallback={
+								<span class="italic text-faint">Nothing selected yet</span>
+							}
+						>
+							<EditableLine
+								slotId={props.block.slotId}
+								editor={ed()}
+								style={leadStyle()}
+								ref={(el) => props.register(props.block.slotId, el)}
+							/>
+						</Show>
 					)}
 				</Show>
 			</Show>

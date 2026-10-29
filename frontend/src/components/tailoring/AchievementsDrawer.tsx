@@ -1,4 +1,5 @@
 import { Show } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SkeletonList } from "@/components/ui/skeleton";
@@ -20,8 +21,10 @@ export function AchievementsDrawer(
 		usedLines: number;
 		budgetLines: number;
 		roleBudget: RoleBudgetValue | undefined;
+		carried: { id: string; text: string }[];
+		onEmpty: () => void;
+		onReset: () => void;
 		onBackToRoles?: (() => void) | undefined;
-		onClear: () => void;
 		onClose: () => void;
 	},
 ) {
@@ -52,12 +55,29 @@ export function AchievementsDrawer(
 						{(b) => <RoleBudget budget={b()} />}
 					</Show>
 				</div>
-				<Button variant="ghost" size="sm" onClick={() => props.onClear()}>
-					Clear and re-pick
-				</Button>
+				<div class="flex items-center gap-1">
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						aria-label="Reset to generated"
+						title="Reset to generated"
+						onClick={() => props.onReset()}
+					>
+						<Icon name="rotateCcw" size={14} />
+					</Button>
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						aria-label="Empty this role"
+						title="Empty this role"
+						onClick={() => props.onEmpty()}
+					>
+						<Icon name="trash" size={14} />
+					</Button>
+				</div>
 			</div>
 			<Show
-				when={props.bank.length > 0}
+				when={props.bank.length > 0 || props.carried.length > 0}
 				fallback={
 					<Show
 						when={props.loading}
@@ -73,20 +93,27 @@ export function AchievementsDrawer(
 			>
 				<PickList
 					label="Achievements"
-					items={props.bank.map((s) => ({
-						id: s.achievementId,
-						meta: fitPercent(s.score),
-						body: (
-							<>
-								{s.text}
-								<Show when={s.state !== "fit"}>
-									<Badge variant="outline" class="ml-1.5 align-middle">
-										{s.state === "low" ? "Low fit" : "Unclear"}
-									</Badge>
-								</Show>
-							</>
-						),
-					}))}
+					items={[
+						...props.carried.map((c) => ({
+							id: c.id,
+							meta: "Kept",
+							body: c.text,
+						})),
+						...props.bank.map((s) => ({
+							id: s.achievementId,
+							meta: fitPercent(s.score),
+							body: (
+								<>
+									{s.text}
+									<Show when={s.state !== "fit"}>
+										<Badge variant="outline" class="ml-1.5 align-middle">
+											{s.state === "low" ? "Low fit" : "Unclear"}
+										</Badge>
+									</Show>
+								</>
+							),
+						})),
+					]}
 					picked={props.picked}
 					selected={props.selected}
 					onSelect={props.onSelect}

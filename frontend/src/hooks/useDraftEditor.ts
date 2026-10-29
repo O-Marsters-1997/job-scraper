@@ -179,6 +179,8 @@ export function createDraftEditor(
 				const body = text(slot).trim();
 				return body ? [{ slot, body, ids: edit.ids[i] ?? [] }] : [];
 			});
+			if (kept.length === 0 && edit.ids.length === 0)
+				return [{ positionId, slots: [], texts: [], bullets: [] }];
 			return kept.length
 				? [
 						{
@@ -210,6 +212,10 @@ export function createDraftEditor(
 			),
 		);
 		rekey(result, sent);
+		for (const { positionId } of sent.filter((s) => s.bullets.length === 0)) {
+			const [placeholder] = edits[positionId]?.slots ?? [];
+			if (placeholder) setSaved(placeholder, "");
+		}
 		setGoogleSaved(true);
 		queryClient.setQueryData(keys.tailoring.draft(id), result);
 		void queryClient.invalidateQueries({
@@ -350,12 +356,13 @@ export function createDraftEditor(
 		const list = blocks();
 		const lastAt = list.findIndex((b) => b.slotId === slots.at(-1));
 		const template = list.find((b) => b.slotId === slots[0]);
-		if (!template || lastAt < 0 || bullets.length === 0) return;
-		const dropped = new Set(slots.slice(bullets.length));
+		if (!template || lastAt < 0) return;
+		const keep = Math.max(bullets.length, 1);
+		const dropped = new Set(slots.slice(keep));
 		const fresh = bullets
 			.slice(slots.length)
 			.map(() => `${ADDED_PREFIX}${crypto.randomUUID()}`);
-		const final = [...slots.slice(0, bullets.length), ...fresh];
+		const final = [...slots.slice(0, keep), ...fresh];
 		const lead = template.runs[0];
 		setBlocks([
 			...list.slice(0, lastAt + 1).filter((b) => !dropped.has(b.slotId)),
