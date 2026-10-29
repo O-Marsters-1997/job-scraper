@@ -10,7 +10,7 @@ import { fitPercent } from "./Lean";
 import { PickList, type PickListProps } from "./PickList";
 
 const HINT =
-	"Click a row to add it, or its circle to remove it. Press 1–9 to move the selected row to that place. ↑ ↓ to move, Esc to deselect.";
+	"Click a row to add it, or its circle to remove it. Press 1–9 to move the selected row to that place. ↑ ↓ to change the selected row, Esc to deselect.";
 
 function ClosestLine(props: { quote: string | undefined }) {
 	const [open, setOpen] = createSignal(false);

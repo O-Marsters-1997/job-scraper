@@ -274,17 +274,23 @@ export function DraftEditor(props: {
 		if (key !== active()) setAskSlot(undefined);
 		setActive(key);
 	};
-	const focusLine = (slotId: string, atEnd = false) => {
+	const focusLine = (slotId: string, at: boolean | number = false) => {
 		const root = stage();
 		queueMicrotask(() => {
 			const line = root?.querySelector<HTMLElement>(
 				`[data-slot-id="${slotId}"] [role="textbox"]`,
 			);
 			line?.focus({ preventScroll: true });
-			if (line && atEnd) {
+			if (line && at !== false) {
 				const caret = document.createRange();
-				caret.selectNodeContents(line);
-				caret.collapse(false);
+				const node = line.firstChild;
+				if (typeof at === "number" && node) {
+					caret.setStart(node, Math.min(at, node.textContent?.length ?? 0));
+					caret.collapse(true);
+				} else {
+					caret.selectNodeContents(line);
+					caret.collapse(false);
+				}
 				const sel = window.getSelection();
 				sel?.removeAllRanges();
 				sel?.addRange(caret);
@@ -408,6 +414,10 @@ export function DraftEditor(props: {
 		onEnter: (slotId) => {
 			const added = ed.addBullet(slotId);
 			if (added) focusLine(added);
+		},
+		onMove: (slotId, delta, caret) => {
+			const moved = rolePicks.shift(slotId, delta);
+			if (moved) focusLine(moved, caret);
 		},
 		onBackspaceEmpty: (slotId) => {
 			const previous = ed.removeBullet(slotId);
