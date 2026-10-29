@@ -4,6 +4,6 @@ import WidgetKit
 @main
 struct FastTrackWidgetBundle: WidgetBundle {
 	var body: some Widget {
-		PlaceholderWidget()
+		NextUpWidget()
 	}
 }

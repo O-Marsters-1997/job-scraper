@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 struct MainTabs: View {
     private enum Tab { case triage, due, notifications }
@@ -19,8 +20,13 @@ struct MainTabs: View {
         _path = path
         _openedNotification = openedNotification
         _dueFocus = dueFocus
-        _due = State(initialValue: DueModel(client: client))
+        _due = State(initialValue: DueModel(client: client, saveSnapshot: Self.saveSnapshot))
         _notifications = State(initialValue: NotificationsModel(client: client))
+    }
+
+    private static func saveSnapshot(_ snapshot: NextUpSnapshot) {
+        guard let url = NextUpSnapshot.sharedFileURL, (try? snapshot.write(to: url)) != nil else { return }
+        WidgetCenter.shared.reloadTimelines(ofKind: NextUpSnapshot.widgetKind)
     }
 
     var body: some View {
@@ -48,6 +54,7 @@ struct MainTabs: View {
                 .tag(Tab.notifications)
         }
         .onChange(of: dueFocus, initial: true) { if dueFocus != nil { tab = .due } }
+        .onOpenURL { if $0 == DueFocus.dueTabURL { tab = .due } }
         .onChange(of: path) { if !path.isEmpty { tab = .triage } }
         .task { await due.load() }
         .task { await notifications.load() }
