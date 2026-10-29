@@ -71,6 +71,6 @@ struct NextUpWidget: Widget {
         }
         .configurationDisplayName("Next up")
         .description("The one thing to do now.")
-        .supportedFamilies([.systemSmall])
+        .supportedFamilies([.systemSmall, .accessoryRectangular])
     }
 }
