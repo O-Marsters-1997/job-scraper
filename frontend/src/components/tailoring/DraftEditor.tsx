@@ -391,6 +391,12 @@ export function DraftEditor(props: {
 		text: ed.text,
 		label: ed.label,
 		lean: (slotId) => leanBySlot().get(slotId),
+		insightFor: (slotId) =>
+			loadedData(insightsQuery)?.lines.find((l) => l.slotId === slotId),
+		get explaining() {
+			return explain.isPending;
+		},
+		onExplain: () => explain.mutate(),
 		diffFor: (slotId) => {
 			const sug = suggestions.get(slotId);
 			if (!sug || sug.error !== undefined) return null;
