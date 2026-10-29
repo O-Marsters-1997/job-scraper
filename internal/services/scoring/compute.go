@@ -76,6 +76,10 @@ type gateDimension struct {
 	unpickedYes     bool
 }
 
+func curveCredit(sum float64, saturation int) float64 {
+	return 1 - math.Exp(-math.Ln10/float64(saturation)*sum)
+}
+
 func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money, favourite bool, params *dto.ScoringParams) (int, string, []dto.ScoreRow) {
 	if floor != nil {
 		picks = append(picks, salaryPick(*floor, salaryRaw))
@@ -188,7 +192,7 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 
 	coverage := make(map[dto.Dimension]dimensionCoverage, len(nice)+len(ladders))
 	for dim, d := range nice {
-		coverage[dim] = dimensionCoverage{credit: min(1, d.sumYes/float64(dimensionSpecs[dim].Saturation)), evidence: d.evidence}
+		coverage[dim] = dimensionCoverage{credit: curveCredit(d.sumYes, dimensionSpecs[dim].Saturation), evidence: d.evidence}
 	}
 	for dim, tiers := range ladders {
 		l, ok := scoreLadder(dim, tiers)

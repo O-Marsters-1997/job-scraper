@@ -55,8 +55,7 @@ func TestComputeOkStance(t *testing.T) {
 	}{
 		{"two ok matches credit like one nice", techPicks("ok", 2), techPicks("nice", 1)},
 		{"four ok matches credit like two nice", techPicks("ok", 4), techPicks("nice", 2)},
-		{"six ok matches saturate like three nice", techPicks("ok", 6), techPicks("nice", 3)},
-		{"eight ok matches cap at saturation", techPicks("ok", 8), techPicks("nice", 3)},
+		{"six ok matches credit like three nice", techPicks("ok", 6), techPicks("nice", 3)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			okScore, _, _ := compute(tt.ok, nil, "", nil, false, nil)
@@ -92,6 +91,35 @@ func TestComputeOkStance(t *testing.T) {
 			t.Errorf("row effect = %q, want gated", rows[0].Effect)
 		}
 	})
+}
+
+func TestCurveCredit(t *testing.T) {
+	t.Parallel()
+	if got := curveCredit(0, 3); got != 0 {
+		t.Errorf("curveCredit(0, 3) = %v, want 0", got)
+	}
+	for _, sat := range []int{1, 3, 5} {
+		if got := curveCredit(float64(sat), sat); math.Abs(got-0.9) > 1e-9 {
+			t.Errorf("curveCredit(%d, %d) = %v, want 0.9", sat, sat, got)
+		}
+		prev := 0.0
+		for sum := 0.5; sum <= 10; sum += 0.5 {
+			got := curveCredit(sum, sat)
+			if got <= prev || got >= 1 {
+				t.Errorf("curveCredit(%v, %d) = %v, want in (%v, 1)", sum, sat, got, prev)
+			}
+			prev = got
+		}
+	}
+}
+
+func TestComputeKeepsRisingPastSaturation(t *testing.T) {
+	t.Parallel()
+	three, _, _ := compute(techPicks("nice", 3), nil, "", nil, false, nil)
+	four, _, _ := compute(techPicks("nice", 4), nil, "", nil, false, nil)
+	if four <= three {
+		t.Errorf("four matches = %d, want above three matches = %d", four, three)
+	}
 }
 
 func TestComputeRowImpact(t *testing.T) {
@@ -137,9 +165,9 @@ func TestComputeMissingEvidence(t *testing.T) {
 		unpicked []evaluatedPick
 		want     int
 	}{
-		{"sparse ad pulls toward 50", slices.Concat(matched, silent), nil, 83},
-		{"full evidence scores as before", matched, nil, 95},
-		{"unpicked dimensions never count", slices.Concat(matched, silent), unpicked, 83},
+		{"sparse ad pulls toward 50", slices.Concat(matched, silent), nil, 79},
+		{"full evidence scores as before", matched, nil, 89},
+		{"unpicked dimensions never count", slices.Concat(matched, silent), unpicked, 79},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got, _, _ := compute(tt.picks, tt.unpicked, "", nil, false, nil); got != tt.want {

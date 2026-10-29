@@ -214,7 +214,7 @@ func TestCorrectionRoutes(t *testing.T) {
 	}
 
 	reverted := handlerstest.Do[dto.JobScore](t, r, http.StatusOK, "DELETE /jobs/job-1/corrections/tech:go", "")
-	if reverted.Score != 37 || reverted.Rows[0].Corrected {
-		t.Errorf("DELETE correction = %+v, want the uncorrected score 37", reverted)
+	if reverted.Score != 50 || reverted.Rows[0].Corrected {
+		t.Errorf("DELETE correction = %+v, want the uncorrected score 50", reverted)
 	}
 }
