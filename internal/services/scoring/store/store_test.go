@@ -1261,6 +1261,18 @@ func TestPushSubscriptions(t *testing.T) {
 	}
 }
 
+func TestScoreFeedback_JobEntryMayHaveBlankReason(t *testing.T) {
+	t.Parallel()
+	st, pool := newStore(t)
+	userID := pgtest.InsertUser(t, pool)
+
+	for _, direction := range []string{"accurate", "higher", "lower"} {
+		if _, err := st.InsertScoreFeedback(t.Context(), userID, dto.ScoreFeedback{Kind: "job", Direction: &direction, Picks: []dto.Pick{}, Model: "m"}); err != nil {
+			t.Errorf("InsertScoreFeedback(job, %s, blank reason) err = %v", direction, err)
+		}
+	}
+}
+
 func TestScoreFeedback_BlankReasonIsRejectedAndWritesNothing(t *testing.T) {
 	t.Parallel()
 	st, pool := newStore(t)

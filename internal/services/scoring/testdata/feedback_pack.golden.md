@@ -1,6 +1,6 @@
 # Feedback Pack
 
-2 overall · 1 Job entries · 1 Collection entries · 0 outdated omitted (--include-outdated)
+2 overall · 2 Job entries · 1 Collection entries · 0 outdated omitted (--include-outdated)
 
 ## How Suitability is computed
 
@@ -54,6 +54,32 @@ Current Picks:
 No positives yet: grade a job great or ok, apply, or keep a tailored CV.
 
 ## Job entries
+
+### Backend Engineer, acme: score 72, looks right
+
+- Model: typesafe/jev-1.13
+- Score model: jev-old
+- Score fingerprint: score-fp
+- Content fingerprint: fp-1
+
+| Option | Stance | Resolved | P(yes) | P(no) | P(not stated) | Confidence |
+|---|---|---|---|---|---|---|
+| Go | nice | yes | 0.90 | 0.05 | 0.05 | 0.00 |
+| COBOL | nice | retired | no cached answer | | | |
+| Kubernetes | nice | unknown | no cached answer | | | |
+
+Job state sent to Jev:
+
+```json
+{
+  "title": "Backend Engineer",
+  "company": "acme",
+  "location": "",
+  "work_arrangement": "",
+  "salary_raw": "",
+  "description": "Build Go services."
+}
+```
 
 ### Backend Engineer, acme: score 72, should be lower
 

@@ -191,7 +191,7 @@ func TestJobFeedbackRoute(t *testing.T) {
 	}{
 		"unknown job":   {`{"jobId":"nope","direction":"higher","reason":"r"}`, http.StatusNotFound},
 		"bad direction": {`{"jobId":"job-1","direction":"up","reason":"r"}`, http.StatusBadRequest},
-		"blank reason":  {`{"jobId":"job-1","direction":"higher","reason":" "}`, http.StatusBadRequest},
+		"looks right":   {`{"jobId":"job-1","direction":"accurate","reason":""}`, http.StatusCreated},
 	} {
 		if rec := handlerstest.Serve(t, r, "POST /scoring-feedback/job", tc.body); rec.Code != tc.want {
 			t.Errorf("POST /scoring-feedback/job %s status = %d, want %d", name, rec.Code, tc.want)

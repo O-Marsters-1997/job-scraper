@@ -1409,6 +1409,21 @@ func TestAppendJobFeedback(t *testing.T) {
 		}
 	})
 
+	for _, direction := range []string{"accurate", "higher", "lower"} {
+		t.Run(direction+" saves with a blank reason", func(t *testing.T) {
+			st := newFakeStore()
+			seedScoredJob(st, userID, "tech:go")
+
+			got, err := svc(st).AppendJobFeedback(t.Context(), userID, dto.JobFeedbackInput{JobID: testJob.ID, Direction: direction, Reason: " "})
+			if err != nil {
+				t.Fatalf("AppendJobFeedback() err = %v", err)
+			}
+			if got.Reason != "" || got.Direction == nil || *got.Direction != direction {
+				t.Errorf("AppendJobFeedback() = %+v, want direction %s and an empty reason", got, direction)
+			}
+		})
+	}
+
 	tests := []struct {
 		name string
 		in   dto.JobFeedbackInput
@@ -1421,7 +1436,6 @@ func TestAppendJobFeedback(t *testing.T) {
 			seed: func(st *scoringtest.FakeStore) { st.SeedJob(dto.Job{ID: "job-2"}, nil) }, kind: apperr.KindUnprocessable,
 		},
 		{name: "bad direction is invalid", in: dto.JobFeedbackInput{JobID: testJob.ID, Direction: "sideways", Reason: "r"}, kind: apperr.KindInvalid},
-		{name: "blank reason is invalid", in: dto.JobFeedbackInput{JobID: testJob.ID, Direction: "higher", Reason: " "}, kind: apperr.KindInvalid},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name+" and writes nothing", func(t *testing.T) {

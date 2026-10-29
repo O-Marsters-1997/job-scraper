@@ -54,6 +54,7 @@ type Composing =
 const DIRECTIONS: { value: FeedbackDirection; label: string }[] = [
 	{ value: "higher", label: "Should be higher" },
 	{ value: "lower", label: "Should be lower" },
+	{ value: "accurate", label: "Looks right" },
 ];
 
 function targetAt(event: Event): HTMLElement | null {
@@ -189,8 +190,9 @@ export default function ScoreFeedbackPanel() {
 
 	const canSubmit = () =>
 		!form.pending() &&
-		reason().trim() !== "" &&
-		(composing()?.kind !== "job" || direction() != null);
+		(composing()?.kind === "job"
+			? direction() != null
+			: reason().trim() !== "");
 
 	return (
 		<>
@@ -282,7 +284,7 @@ export default function ScoreFeedbackPanel() {
 										class="min-h-24 text-sm text-foreground"
 										value={reason()}
 										onInput={(e) => setReason(e.currentTarget.value)}
-										required
+										required={current().kind !== "job"}
 									/>
 								</div>
 								<div class="flex gap-2">
@@ -425,9 +427,11 @@ function FeedbackEntry(props: { entry: ScoreFeedback }): JSX.Element {
 						.join(" · ")}
 				</span>
 			</Show>
-			<p class="text-sm whitespace-pre-wrap text-foreground">
-				{props.entry.reason}
-			</p>
+			<Show when={props.entry.reason}>
+				<p class="text-sm whitespace-pre-wrap text-foreground">
+					{props.entry.reason}
+				</p>
+			</Show>
 			<Show when={props.entry.snapshot?.options?.length}>
 				<details class="text-xs text-muted">
 					<summary class="cursor-pointer">
