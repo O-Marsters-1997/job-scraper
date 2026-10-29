@@ -157,6 +157,8 @@ export function createRolePicks(opts: {
 		);
 	};
 
+	const positionOf = (slotId: string) =>
+		[...headings().values()].find((id) => roleSlots(id).includes(slotId));
 	const picksFor = (positionId: string) =>
 		resolve(positionId, picks()[positionId] ?? []);
 	const order = () => onPage().map((r) => r.id);
@@ -238,17 +240,13 @@ export function createRolePicks(opts: {
 			setPicksFor(positionId, rest);
 		},
 		achievementOf(slotId: string) {
-			const positionId = [...headings().values()].find((id) =>
-				roleSlots(id).includes(slotId),
-			);
+			const positionId = positionOf(slotId);
 			if (!positionId) return undefined;
 			const id = picksFor(positionId)[roleSlots(positionId).indexOf(slotId)];
 			return id?.startsWith(CARRIED) ? undefined : id;
 		},
 		shift(slotId: string, delta: -1 | 1) {
-			const positionId = [...headings().values()].find((id) =>
-				roleSlots(id).includes(slotId),
-			);
+			const positionId = positionOf(slotId);
 			if (!positionId) return undefined;
 			const ids = picksFor(positionId);
 			const slots = roleSlots(positionId);
