@@ -1395,8 +1395,13 @@ func TestListImpliedPositives(t *testing.T) {
 		t.Fatalf("ListImpliedPositives() err = %v", err)
 	}
 	want := []dto.ImpliedLabel{{JobID: applied, Source: "application"}, {JobID: kept, Source: "kept_cv"}}
-	if diff := cmp.Diff(want, got); diff != "" {
+	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.ImpliedLabel{}, "At")); diff != "" {
 		t.Errorf("ListImpliedPositives() mismatch (-want +got):\n%s", diff)
+	}
+	for _, l := range got {
+		if time.Since(l.At) > time.Minute || l.At.After(time.Now()) {
+			t.Errorf("ListImpliedPositives() %s At = %v, want its creation time just now", l.JobID, l.At)
+		}
 	}
 }
 

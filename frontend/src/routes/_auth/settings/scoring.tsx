@@ -226,7 +226,7 @@ function ScoringForm(props: {
 					<Field
 						label="Minimum salary"
 						for="salary-floor"
-						hint="Jobs that don't state a salary are never penalised."
+						hint="Jobs that don't state a salary, or state one in another currency, aren't affected. A stated salary below this caps the score."
 					>
 						<div class="relative w-44">
 							<span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-faint">

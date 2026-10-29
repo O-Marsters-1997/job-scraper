@@ -87,15 +87,16 @@ func (q *Queries) ListGrades(ctx context.Context, userID pgtype.UUID) ([]JobGrad
 }
 
 const listImpliedPositives = `-- name: ListImpliedPositives :many
-SELECT job_id, 'application'::text AS source FROM applications WHERE applications.user_id = $1
+SELECT job_id, 'application'::text AS source, created_at AS at FROM applications WHERE applications.user_id = $1
 UNION ALL
-SELECT job_id, 'kept_cv'::text AS source FROM tailored_cvs WHERE tailored_cvs.user_id = $1 AND outcome = 'kept'
+SELECT job_id, 'kept_cv'::text AS source, created_at AS at FROM tailored_cvs WHERE tailored_cvs.user_id = $1 AND outcome = 'kept'
 ORDER BY source, job_id
 `
 
 type ListImpliedPositivesRow struct {
 	JobID  pgtype.UUID
 	Source string
+	At     pgtype.Timestamptz
 }
 
 func (q *Queries) ListImpliedPositives(ctx context.Context, userID pgtype.UUID) ([]ListImpliedPositivesRow, error) {
@@ -107,7 +108,7 @@ func (q *Queries) ListImpliedPositives(ctx context.Context, userID pgtype.UUID) 
 	var items []ListImpliedPositivesRow
 	for rows.Next() {
 		var i ListImpliedPositivesRow
-		if err := rows.Scan(&i.JobID, &i.Source); err != nil {
+		if err := rows.Scan(&i.JobID, &i.Source, &i.At); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

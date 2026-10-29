@@ -6,7 +6,14 @@ Scoring: default weights and Bands
 
 - Positive rank: median rank percentile 88 (lower is better), 2 of 2 in the top 20
 - Low-scored positives: 2 in the bottom half: Go Developer (acme, score 37); COBOL | Maintainer (acme, score 20)
-- Distinct scores: 4, with 1 jobs tied at the top score of 56
+
+## Ship metrics
+
+- Precision@20: not enough labels (0 in the last 28 days, need 20)
+- Distinct scores in the top 100: 4
+- Dismissed jobs in the top 100: 0
+- Great band size: 0
+- Concordance: not enough negatives (need 5)
 
 ## Labelled jobs
 

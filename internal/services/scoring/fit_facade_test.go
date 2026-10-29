@@ -3,7 +3,6 @@ package scoring_test
 import (
 	"fmt"
 	"math/rand/v2"
-	"slices"
 	"strings"
 	"testing"
 
@@ -61,55 +60,24 @@ func alternating(i int) string {
 }
 
 func TestFit(t *testing.T) {
-	t.Run("too few labels leaves the default weights", func(t *testing.T) {
+	t.Run("is disabled and changes nothing", func(t *testing.T) {
 		t.Parallel()
-		st := fitFixture(t, 40, nil)
+		params := &dto.ScoringParams{Weights: map[dto.Dimension]float64{dto.DimensionTech: 5}, GradeCount: 30}
+		st := fitFixture(t, 60, params)
 		svc := newService(t, st)
-		gradeJobs(t, svc, 0, 29, alternating)
+		gradeJobs(t, svc, 0, 60, alternating)
 
 		report, err := svc.Fit(t.Context(), fitUser)
-		if err != nil {
-			t.Fatalf("Fit() err = %v", err)
-		}
 
+		if err == nil || !strings.Contains(err.Error(), "disabled") {
+			t.Fatalf("Fit() = %q, %v, want the disabled error", report, err)
+		}
 		cfg, _ := st.GetSearchConfig(t.Context(), fitUser)
-		if cfg.Preferences.Scoring == nil || cfg.Preferences.Scoring.Weights != nil {
-			t.Errorf("Scoring = %+v, want no fitted weights", cfg.Preferences.Scoring)
+		if cfg.Preferences.Scoring == nil || cfg.Preferences.Scoring.GradeCount != 30 {
+			t.Errorf("Scoring = %+v, want it untouched", cfg.Preferences.Scoring)
 		}
-		if !strings.Contains(report, "Weights unchanged") {
-			t.Errorf("Fit() = %q, want it to say the weights are unchanged", report)
-		}
-	})
-
-	t.Run("a challenger that loses cross-validation is rejected and weights stay", func(t *testing.T) {
-		champion := map[dto.Dimension]float64{dto.DimensionRole: 0.2, dto.DimensionTech: 1, dto.DimensionDomain: 6}
-		st := fitFixture(t, 80, &dto.ScoringParams{Weights: champion})
-		svc := newService(t, st)
-		scores := championScores(t, st)
-		for i := range scores {
-			grade := "no"
-			if (scores[i] >= medianScore(scores)) != (i%7 == 0) {
-				grade = "great"
-			}
-			if _, err := st.UpsertGrade(t.Context(), fitUser, dto.Grade{JobID: fmt.Sprintf("job-%d", i), Grade: grade}); err != nil {
-				t.Fatalf("UpsertGrade err = %v", err)
-			}
-		}
-
-		report, err := svc.Fit(t.Context(), fitUser)
-		if err != nil {
-			t.Fatalf("Fit() err = %v", err)
-		}
-
-		cfg, _ := st.GetSearchConfig(t.Context(), fitUser)
-		got := cfg.Preferences.Scoring
-		if !strings.Contains(report, "Weights rejected") {
-			t.Fatalf("Fit() = %q, want the challenger rejected", report)
-		}
-		for dim, want := range champion {
-			if got.Weights[dim] != want {
-				t.Errorf("stored weight %s = %v, want %v unchanged", dim, got.Weights[dim], want)
-			}
+		if got := len(st.Recomputed()); got != 0 {
+			t.Errorf("Recomputed() = %d scores, want none", got)
 		}
 	})
 
@@ -138,26 +106,6 @@ func TestFit(t *testing.T) {
 			t.Errorf("Replay() = %q, want the fitted tech weight", got)
 		}
 	})
-}
-
-func championScores(t *testing.T, st *scoringtest.FakeStore) []int {
-	t.Helper()
-	if _, err := newService(t, st).Recompute(t.Context(), fitUser); err != nil {
-		t.Fatalf("Recompute() err = %v", err)
-	}
-	byJob := make(map[string]int)
-	for _, sc := range st.Recomputed() {
-		byJob[sc.JobID] = sc.Score
-	}
-	scores := make([]int, len(byJob))
-	for i := range scores {
-		scores[i] = byJob[fmt.Sprintf("job-%d", i)]
-	}
-	return scores
-}
-
-func medianScore(scores []int) int {
-	return slices.Sorted(slices.Values(scores))[len(scores)/2]
 }
 
 func TestUpdateConfigKeepsFittedParams(t *testing.T) {
