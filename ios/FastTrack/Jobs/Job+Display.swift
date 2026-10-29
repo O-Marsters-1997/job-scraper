@@ -7,7 +7,10 @@ extension Job {
 
     var topRows: [ScoreRow] {
         let shown = breakdown.filter { !Self.hiddenEffects.contains($0.effect) }
-        return Array((shown.filter { $0.effect.isGate } + shown.filter { !$0.effect.isGate }).prefix(3))
+        let rest = shown.filter { !$0.effect.isGate }
+        let favourites = rest.filter { $0.effect == .favourite }
+        let ranked = rest.filter { $0.effect != .favourite }.sorted { abs($0.impact ?? 0) > abs($1.impact ?? 0) }
+        return Array((shown.filter { $0.effect.isGate } + favourites + ranked).prefix(3))
     }
 
     func bandReason(_ scoring: ScoringBands?) -> String? {

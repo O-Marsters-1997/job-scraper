@@ -1190,7 +1190,7 @@ func TestRecompute(t *testing.T) {
 					t.Errorf("band = %q, want %q", saved[0].Band, tc.wantBand)
 				}
 				if tc.wantRows != nil {
-					ignore := cmpopts.IgnoreFields(dto.ScoreRow{}, "Key", "Label", "Stance", "Overridden")
+					ignore := cmpopts.IgnoreFields(dto.ScoreRow{}, "Key", "Label", "Stance", "Overridden", "Impact")
 					if diff := cmp.Diff(tc.wantRows, saved[0].Rows, ignore); diff != "" {
 						t.Errorf("rows (-want +got):\n%s", diff)
 					}

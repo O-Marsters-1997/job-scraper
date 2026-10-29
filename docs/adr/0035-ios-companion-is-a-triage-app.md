@@ -18,7 +18,7 @@ phone.
     Relevant order. Once grading accuracy is trusted it
     narrows to `suit=<notify_threshold>`.
   - **Card:** title, company, location and work arrangement, salary, age, Band and score, and the three
-    breakdown rows that moved the score most (gates included).
+    breakdown rows that moved the score most: gates, then the favourite row, then the rest by `ScoreRow.impact`.
   - **Right swipe = Shortlist:** creates the Application (Draft status, which also creates the `apply`
     Task). An optional "Draft CV" toggle starts a draft from the default CV (`POST /tailoring/drafts`).
   - **Left swipe = Dismiss:** Grade `no`, no reason asked.

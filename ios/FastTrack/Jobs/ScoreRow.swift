@@ -2,6 +2,7 @@ struct ScoreRow: Codable, Hashable {
     let key: String
     let label: String
     let effect: ScoreEffect
+    var impact: Double? = nil
 
     private static let levels = ["Junior", "Mid", "Senior", "Lead / Staff", "Principal / Head"]
 
