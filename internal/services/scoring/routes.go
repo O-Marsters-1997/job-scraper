@@ -11,6 +11,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Put("/scoring-config", handlers.Update(m.svc.UpdateConfig))
 	r.Post("/scoring-preview", handlers.Update(m.svc.Preview))
 	r.Get("/scoring-options", handlers.GetAll(m.svc.Options))
+	r.Post("/custom-options/draft", handlers.Create(m.svc.DraftCustomOption))
 	r.Post("/scoring-options/custom", handlers.Create(m.svc.CreateCustomOption))
 	r.Put("/scoring-options/custom/{id}", handlers.Update(m.svc.UpdateCustomOption))
 	r.Delete("/scoring-options/custom/{id}", handlers.Delete(m.svc.DeleteCustomOption))

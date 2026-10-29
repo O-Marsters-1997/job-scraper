@@ -39,6 +39,7 @@ type Store interface {
 	ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error)
 	FailAnswerEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error
 	GetJobForScoring(ctx context.Context, jobID string) (dto.Job, error)
+	ListRecentScoredJobs(ctx context.Context, userID string, limit int) ([]dto.Job, error)
 	GetCompanyProfile(ctx context.Context, companyID string) (dto.CompanyProfile, error)
 	ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error)
 	ListScoringOptions(ctx context.Context, userID string) ([]dto.ScoringOption, error)
@@ -101,6 +102,7 @@ type Service struct {
 	profiles      ProfileReader
 	candidates    Reconsiderer
 	extractor     Extractor
+	drafter       Drafter
 	classifier    RecruiterClassifier
 	companyKinds  CompanyKinds
 	tickInterval  time.Duration
@@ -122,7 +124,7 @@ func NewService(deps Deps) *Service {
 	return &Service{
 		store: deps.Store, answerer: deps.Answerer, credentials: deps.Credentials, alerter: deps.Alerter, notifications: notifications,
 		pusher: pusher, vapidKey: deps.VAPIDPublicKey,
-		profiles: deps.Profiles, candidates: deps.Candidates, extractor: deps.Extractor, tickInterval: tickInterval,
+		profiles: deps.Profiles, candidates: deps.Candidates, extractor: deps.Extractor, drafter: deps.Drafter, tickInterval: tickInterval,
 		classifier: deps.Classifier, companyKinds: deps.CompanyKinds,
 	}
 }

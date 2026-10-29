@@ -496,6 +496,40 @@ func TestSaveScores(t *testing.T) {
 	}
 }
 
+func TestStore_ListRecentScoredJobs(t *testing.T) {
+	t.Parallel()
+	st, pool := newStore(t)
+	userID := pgtest.InsertUser(t, pool)
+	otherID := pgtest.InsertUser(t, pool)
+	older := pgtest.InsertJob(t, pool, "Older", "fp-older")
+	newer := pgtest.InsertJob(t, pool, "Newer", "fp-newer")
+	closed := pgtest.InsertJob(t, pool, "Closed", "fp-closed")
+	unscored := pgtest.InsertJob(t, pool, "Other user's", "fp-other")
+	insertScore(t, pool, older, userID)
+	insertScore(t, pool, newer, userID)
+	insertScore(t, pool, closed, userID)
+	insertScore(t, pool, unscored, otherID)
+	exec(t, pool, `UPDATE job_scores SET updated_at = now() - interval '1 hour' WHERE job_id = $1`, older)
+	exec(t, pool, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closed)
+
+	got, err := st.ListRecentScoredJobs(t.Context(), userID, 5)
+	if err != nil {
+		t.Fatalf("ListRecentScoredJobs() err = %v", err)
+	}
+	var titles []string
+	for _, j := range got {
+		titles = append(titles, j.Title)
+	}
+	if diff := cmp.Diff([]string{"Newer", "Older"}, titles); diff != "" {
+		t.Errorf("titles (-want +got):\n%s", diff)
+	}
+
+	limited, err := st.ListRecentScoredJobs(t.Context(), userID, 1)
+	if err != nil || len(limited) != 1 {
+		t.Errorf("ListRecentScoredJobs(limit 1) = %d jobs, err %v, want 1", len(limited), err)
+	}
+}
+
 func insertTrackedCompany(t *testing.T, pool *pgxpool.Pool, slug string) (companyID, userID string) {
 	t.Helper()
 	if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, slug).Scan(&companyID); err != nil {

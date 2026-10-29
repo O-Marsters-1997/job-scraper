@@ -84,11 +84,14 @@ func runTick(t *testing.T, st scoring.Store, opts ...depsOpt) {
 }
 
 type fakeAnswerer struct {
+	mu    sync.Mutex
 	calls [][]string
 }
 
 func (f *fakeAnswerer) Answer(_ context.Context, _ string, _ dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
+	f.mu.Lock()
 	f.calls = append(f.calls, questions)
+	f.mu.Unlock()
 	out := make(map[string]dto.Answer, len(questions))
 	for _, q := range questions {
 		out[q] = dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}
