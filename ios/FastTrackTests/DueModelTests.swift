@@ -14,6 +14,7 @@ struct DueModelTests {
     private final class Calls {
         var log: [String] = []
         var failClear = false
+        var saved: [NextUpSnapshot] = []
     }
 
     private let calls = Calls()
@@ -47,9 +48,36 @@ struct DueModelTests {
             calls.log.append("createDraft \(id) \(cv.title)")
             return DraftRef(id: "new")
         }
-        let model = DueModel(client: client, now: { [today] in today.addingTimeInterval(3_600) })
+        let model = DueModel(client: client, now: { [today] in today.addingTimeInterval(3_600) }, saveSnapshot: { calls.saved.append($0) })
         await model.load()
         return model
+    }
+
+    @Test func savesSnapshotAfterLoadAndEveryLocalChange() async {
+        let model = await model([job("a", chase: -2), job("b", chase: 3), job("c", chase: nil, draft: .ready, applyTaskID: "t1")])
+        #expect(calls.saved.count == 1)
+        #expect(calls.saved[0].items.map(\.jobID) == ["a", "b", "c"])
+
+        await model.completeChase(model.jobs[0]).value
+        #expect(calls.saved.count == 2)
+        #expect(calls.saved[1].items.map(\.jobID) == ["b", "c"])
+
+        await model.snooze(model.jobs[1], days: 2).value
+        #expect(calls.saved.count == 3)
+
+        await model.markApplied(model.jobs[2]).value
+        #expect(calls.saved.count == 4)
+
+        await model.undo().value
+        #expect(calls.saved.count == 5)
+    }
+
+    @Test func savesNothingWhenLoadFails() async {
+        let calls = calls
+        let model = DueModel(client: .mock(due: [job("a", chase: 0)], failure: .status(500)), saveSnapshot: { calls.saved.append($0) })
+        await model.load()
+
+        #expect(calls.saved.isEmpty)
     }
 
     @Test func badgeCountsDueChasesAndReadyDraftsNotTasks() async {

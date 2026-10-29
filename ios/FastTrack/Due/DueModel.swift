@@ -21,10 +21,12 @@ final class DueModel {
 
     private let client: APIClient
     private let now: () -> Date
+    private let saveSnapshot: (NextUpSnapshot) -> Void
 
-    init(client: APIClient, now: @escaping () -> Date = { .now }) {
+    init(client: APIClient, now: @escaping () -> Date = { .now }, saveSnapshot: @escaping (NextUpSnapshot) -> Void = { _ in }) {
         self.client = client
         self.now = now
+        self.saveSnapshot = saveSnapshot
     }
 
     var dueJobs: [DueJob] { jobs.filter { hasChaseDue($0) || !$0.tasks.isEmpty || $0.draft != nil || $0.isReadyToApply } }
@@ -41,9 +43,7 @@ final class DueModel {
 
     func hasChaseDue(_ job: DueJob) -> Bool {
         guard let chaseBy = job.chaseBy else { return false }
-        let calendar = Calendar.current
-        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now())) else { return false }
-        return chaseBy < tomorrow
+        return NextUp.isChaseDue(chaseBy, at: now(), calendar: .current)
     }
 
     func overdueDays(_ job: DueJob) -> Int {
@@ -58,6 +58,7 @@ final class DueModel {
         do {
             jobs = try await client.due()
             loadState = .loaded(())
+            persistSnapshot()
         } catch is CancellationError {
             return
         } catch {
@@ -215,6 +216,11 @@ final class DueModel {
     private func replace(_ job: DueJob) {
         guard let index = jobs.firstIndex(where: { $0.id == job.id }) else { return }
         jobs[index] = job
+        persistSnapshot()
+    }
+
+    private func persistSnapshot() {
+        saveSnapshot(NextUpSnapshot(jobs: jobs, at: now()))
     }
 
     private func fail(_ error: any Error) {
