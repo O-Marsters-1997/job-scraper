@@ -44,6 +44,12 @@ export const SETTINGS_SECTIONS: SettingsGroup[] = [
 				description: "OpenRouter API key",
 				icon: "bot",
 			},
+			{
+				to: "/settings/downloads",
+				label: "CV downloads",
+				description: "Folder and filename for CV PDFs",
+				icon: "file",
+			},
 		],
 	},
 	{

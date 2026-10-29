@@ -12,6 +12,7 @@ import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CoverLetterCard } from "@/components/tailoring/CoverLetterCard";
+import { DownloadPdfButton } from "@/components/tailoring/DownloadPdfButton";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import {
 	Accordion,
@@ -402,6 +403,15 @@ function CvRowBody(props: {
 							{draft().outcome === "kept" ? "Complete" : "Draft"}
 						</Badge>
 					</Link>
+					<Show when={draft().status === "ready" || draft().outcome === "kept"}>
+						<div>
+							<DownloadPdfButton
+								draftId={draft().id}
+								jobId={props.jobId}
+								variant="outline"
+							/>
+						</div>
+					</Show>
 					<Show when={draft().outcome !== "kept"}>
 						<FormFeedback error={openAsIs.error()} />
 						<div class="flex flex-wrap items-center gap-2">

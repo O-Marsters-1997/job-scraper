@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
@@ -61,4 +63,17 @@ func (s *Service) GetAIPrefs(ctx context.Context, userID string) (dto.AIPrefsVie
 func (s *Service) UpdateProfile(ctx context.Context, userID string, in dto.UpdateProfileInput) (struct{}, error) {
 	_, err := s.store.UpdateEmail(ctx, userID, in.Email)
 	return struct{}{}, err
+}
+
+const maxCVFilenamePatternLen = 120
+
+func (s *Service) UpdateCVFilenamePattern(ctx context.Context, userID string, in dto.UpdateCVFilenamePatternInput) (struct{}, error) {
+	pattern := strings.TrimSpace(in.Pattern)
+	if pattern == "" {
+		pattern = dto.DefaultCVFilenamePattern
+	}
+	if utf8.RuneCountInString(pattern) > maxCVFilenamePatternLen {
+		return struct{}{}, apperr.Invalid("filename pattern is too long")
+	}
+	return struct{}{}, s.store.SetCVFilenamePattern(ctx, userID, pattern)
 }

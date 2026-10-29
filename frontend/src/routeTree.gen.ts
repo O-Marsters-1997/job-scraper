@@ -32,6 +32,7 @@ import { Route as AuthSettingsSearchesRouteImport } from './routes/_auth/setting
 import { Route as AuthSettingsScoringRouteImport } from './routes/_auth/settings/scoring'
 import { Route as AuthSettingsProfileRouteImport } from './routes/_auth/settings/profile'
 import { Route as AuthSettingsIntegrationsRouteImport } from './routes/_auth/settings/integrations'
+import { Route as AuthSettingsDownloadsRouteImport } from './routes/_auth/settings/downloads'
 import { Route as AuthSettingsAiRouteImport } from './routes/_auth/settings/ai'
 import { Route as AuthJobsIdRouteImport } from './routes/_auth/jobs_.$id'
 import { Route as AuthCompaniesNewRouteImport } from './routes/_auth/companies_.new'
@@ -157,6 +158,11 @@ const AuthSettingsIntegrationsRoute =
     path: '/integrations',
     getParentRoute: () => AuthSettingsRoute,
   } as any)
+const AuthSettingsDownloadsRoute = AuthSettingsDownloadsRouteImport.update({
+  id: '/downloads',
+  path: '/downloads',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
 const AuthSettingsAiRoute = AuthSettingsAiRouteImport.update({
   id: '/ai',
   path: '/ai',
@@ -226,6 +232,7 @@ export interface FileRoutesByFullPath {
   '/companies/new': typeof AuthCompaniesNewRoute
   '/jobs/$id': typeof AuthJobsIdRoute
   '/settings/ai': typeof AuthSettingsAiRoute
+  '/settings/downloads': typeof AuthSettingsDownloadsRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/settings/profile': typeof AuthSettingsProfileRoute
   '/settings/scoring': typeof AuthSettingsScoringRouteWithChildren
@@ -258,6 +265,7 @@ export interface FileRoutesByTo {
   '/companies/new': typeof AuthCompaniesNewRoute
   '/jobs/$id': typeof AuthJobsIdRoute
   '/settings/ai': typeof AuthSettingsAiRoute
+  '/settings/downloads': typeof AuthSettingsDownloadsRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/settings/profile': typeof AuthSettingsProfileRoute
   '/settings/searches': typeof AuthSettingsSearchesRoute
@@ -292,6 +300,7 @@ export interface FileRoutesById {
   '/_auth/companies_/new': typeof AuthCompaniesNewRoute
   '/_auth/jobs_/$id': typeof AuthJobsIdRoute
   '/_auth/settings/ai': typeof AuthSettingsAiRoute
+  '/_auth/settings/downloads': typeof AuthSettingsDownloadsRoute
   '/_auth/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/_auth/settings/profile': typeof AuthSettingsProfileRoute
   '/_auth/settings/scoring': typeof AuthSettingsScoringRouteWithChildren
@@ -327,6 +336,7 @@ export interface FileRouteTypes {
     | '/companies/new'
     | '/jobs/$id'
     | '/settings/ai'
+    | '/settings/downloads'
     | '/settings/integrations'
     | '/settings/profile'
     | '/settings/scoring'
@@ -359,6 +369,7 @@ export interface FileRouteTypes {
     | '/companies/new'
     | '/jobs/$id'
     | '/settings/ai'
+    | '/settings/downloads'
     | '/settings/integrations'
     | '/settings/profile'
     | '/settings/searches'
@@ -392,6 +403,7 @@ export interface FileRouteTypes {
     | '/_auth/companies_/new'
     | '/_auth/jobs_/$id'
     | '/_auth/settings/ai'
+    | '/_auth/settings/downloads'
     | '/_auth/settings/integrations'
     | '/_auth/settings/profile'
     | '/_auth/settings/scoring'
@@ -576,6 +588,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthSettingsIntegrationsRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
+    '/_auth/settings/downloads': {
+      id: '/_auth/settings/downloads'
+      path: '/downloads'
+      fullPath: '/settings/downloads'
+      preLoaderRoute: typeof AuthSettingsDownloadsRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
     '/_auth/settings/ai': {
       id: '/_auth/settings/ai'
       path: '/ai'
@@ -657,6 +676,7 @@ const AuthSettingsScoringRouteWithChildren =
 
 interface AuthSettingsRouteChildren {
   AuthSettingsAiRoute: typeof AuthSettingsAiRoute
+  AuthSettingsDownloadsRoute: typeof AuthSettingsDownloadsRoute
   AuthSettingsIntegrationsRoute: typeof AuthSettingsIntegrationsRoute
   AuthSettingsProfileRoute: typeof AuthSettingsProfileRoute
   AuthSettingsScoringRoute: typeof AuthSettingsScoringRouteWithChildren
@@ -669,6 +689,7 @@ interface AuthSettingsRouteChildren {
 
 const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
   AuthSettingsAiRoute: AuthSettingsAiRoute,
+  AuthSettingsDownloadsRoute: AuthSettingsDownloadsRoute,
   AuthSettingsIntegrationsRoute: AuthSettingsIntegrationsRoute,
   AuthSettingsProfileRoute: AuthSettingsProfileRoute,
   AuthSettingsScoringRoute: AuthSettingsScoringRouteWithChildren,
