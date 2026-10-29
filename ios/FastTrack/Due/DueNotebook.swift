@@ -7,9 +7,21 @@ struct DueNotebook: View {
     let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
     let openApplication: (DueJob) -> Void
+    let highlighted: String?
     @State private var opened: Set<String>?
 
     var body: some View {
+        ScrollViewReader { proxy in
+            list
+                .onChange(of: highlighted, initial: true) {
+                    guard let id = highlighted, jobs.contains(where: { $0.id == id }) else { return }
+                    opened = (opened ?? []).union([id])
+                    withAnimation { proxy.scrollTo(id, anchor: .top) }
+                }
+        }
+    }
+
+    private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
@@ -19,6 +31,13 @@ struct DueNotebook: View {
                         DueJobCard(job: job, model: model, isOpen: opened?.contains(job.id) ?? false,
                                    toggle: { toggle(job) }, logContact: logContact, openJob: openJob,
                                    openApplication: openApplication)
+                            .overlay {
+                                if job.id == highlighted {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .strokeBorder(Color.accentColor, lineWidth: 2)
+                                }
+                            }
+                            .id(job.id)
                             .transition(.opacity)
                     }
                 }
