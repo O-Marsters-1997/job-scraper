@@ -93,6 +93,8 @@ func TestUpdateConfigRejects(t *testing.T) {
 		{"a ladder weight above 100", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "seniority:senior", Stance: "nice", Weight: 101}}}}},
 		{"a ladder pick with an ok stance", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "seniority:senior", Stance: "ok", Weight: 50}}}}},
 		{"a weight on a non-ladder pick", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Weight: 50}}}}},
+		{"a tech needed above 4", dto.ScoringConfigView{Preferences: dto.Preferences{TechNeeded: 5}}},
+		{"a negative tech needed", dto.ScoringConfigView{Preferences: dto.Preferences{TechNeeded: -1}}},
 		{"a notify threshold below 0", dto.ScoringConfigView{NotifyThreshold: -1}},
 		{"a notify threshold above 100", dto.ScoringConfigView{NotifyThreshold: 101}},
 		{"a negative max job age", dto.ScoringConfigView{MaxJobAgeDays: -1}},

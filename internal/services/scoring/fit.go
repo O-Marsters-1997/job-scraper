@@ -120,7 +120,7 @@ func (p preparedJob) features() []float64 {
 	}
 	for i, spec := range Dimensions {
 		if d, ok := nice[spec.Key]; ok {
-			x[i] = d.evidence * min(1, d.sumYes/float64(spec.Saturation))
+			x[i] = d.evidence * min(1, d.sumYes/saturationFor(spec.Key, p.techNeeded))
 		}
 	}
 	return x

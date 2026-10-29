@@ -42,6 +42,7 @@ import { ScorePreview } from "./-scoring/ScorePreview";
 import { SeniorityLadder } from "./-scoring/SeniorityLadder";
 import { StanceRow } from "./-scoring/StanceRow";
 import { STANCE_TONE } from "./-scoring/stance";
+import { TechNeeded } from "./-scoring/TechNeeded";
 import { useExclusionFilters } from "./-scoring/useExclusionFilters";
 
 export const Route = createFileRoute("/_auth/settings/scoring")({
@@ -129,6 +130,9 @@ function ScoringForm(props: {
 	const [salaryFloor, setSalaryFloor] = createSignal(
 		initialConfig.preferences.salaryFloor?.amount.toString() ?? "",
 	);
+	const [techNeeded, setTechNeeded] = createSignal(
+		initialConfig.preferences.techNeeded,
+	);
 	const filters = useExclusionFilters(initialConfig);
 
 	const params = useParams({ strict: false });
@@ -165,6 +169,7 @@ function ScoringForm(props: {
 			? { amount: Number(salaryFloor()), currency: "GBP" }
 			: null,
 		preferenceText: preferenceText(),
+		techNeeded: techNeeded(),
 	});
 
 	const [previewOpen, setPreviewOpen] = createSignal(false);
@@ -262,7 +267,13 @@ function ScoringForm(props: {
 					)}
 				</Match>
 				<Match when={params().section === "stack"}>
-					{section("Tech stack", rows("tech"))}
+					{section(
+						"Tech stack",
+						<>
+							<TechNeeded value={techNeeded()} onChange={setTechNeeded} />
+							{rows("tech")}
+						</>,
+					)}
 					{section("Industries", rows("domain"))}
 				</Match>
 				<Match when={params().section === "work"}>

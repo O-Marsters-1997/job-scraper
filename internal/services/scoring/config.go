@@ -17,6 +17,7 @@ import (
 const (
 	defaultMaxJobAgeDays = 7
 	maxJobAgeDaysLimit   = 365
+	maxTechNeeded        = 4
 )
 
 func notFound(err error) bool {
@@ -38,6 +39,9 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 	}
 	if in.MaxJobAgeDays < 0 || in.MaxJobAgeDays > maxJobAgeDaysLimit {
 		return dto.ScoringConfigView{}, apperr.Invalid(fmt.Sprintf("max job age must be between 0 and %d days", maxJobAgeDaysLimit))
+	}
+	if in.Preferences.TechNeeded < 0 || in.Preferences.TechNeeded > maxTechNeeded {
+		return dto.ScoringConfigView{}, apperr.Invalid(fmt.Sprintf("tech needed must be unset or between 1 and %d", maxTechNeeded))
 	}
 	b, err := s.loadBank(ctx, userID)
 	if err != nil {
@@ -77,6 +81,7 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 			SalaryFloor:        floor,
 			PreferenceText:     text,
 			PreferenceTextHash: hash,
+			TechNeeded:         in.Preferences.TechNeeded,
 			Scoring:            existing.Preferences.Scoring,
 		},
 	}
@@ -218,6 +223,7 @@ func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 			Picks:          picksView(cfg.Preferences.Picks),
 			SalaryFloor:    cfg.Preferences.SalaryFloor,
 			PreferenceText: cfg.Preferences.PreferenceText,
+			TechNeeded:     cfg.Preferences.TechNeeded,
 		},
 		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
 		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),

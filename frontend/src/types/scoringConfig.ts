@@ -21,6 +21,7 @@ const preferencesSchema = z.object({
 	picks: z.array(pickSchema),
 	salaryFloor: moneySchema.nullable(),
 	preferenceText: z.string(),
+	techNeeded: z.number().int().min(1).max(4).optional(),
 });
 
 export type Preferences = z.infer<typeof preferencesSchema>;

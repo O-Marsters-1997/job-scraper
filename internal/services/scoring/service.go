@@ -582,21 +582,23 @@ type preparedJob struct {
 	salaryRaw       string
 	floor           *dto.Money
 	favourite       bool
+	techNeeded      int
 }
 
 func prepareJob(cfg dto.SearchConfig, job dto.Job, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string, favourite bool) preparedJob {
 	picks := dedupeBySource(cfg.Preferences.Picks)
 	return preparedJob{
-		picks:     evaluatedPicksFor(picks, byID, answers, corrections),
-		unpicked:  unpickedLadderOptions(picks, byID, answers, corrections),
-		salaryRaw: job.SalaryRaw,
-		floor:     cfg.Preferences.SalaryFloor,
-		favourite: favourite,
+		picks:      evaluatedPicksFor(picks, byID, answers, corrections),
+		unpicked:   unpickedLadderOptions(picks, byID, answers, corrections),
+		salaryRaw:  job.SalaryRaw,
+		floor:      cfg.Preferences.SalaryFloor,
+		favourite:  favourite,
+		techNeeded: cfg.Preferences.TechNeeded,
 	}
 }
 
 func (p preparedJob) compute(params *dto.ScoringParams) (int, string, []dto.ScoreRow) {
-	return compute(p.picks, p.unpicked, p.salaryRaw, p.floor, p.favourite, params)
+	return compute(p.picks, p.unpicked, p.salaryRaw, p.floor, p.favourite, params, p.techNeeded)
 }
 
 func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) []evaluatedPick {
