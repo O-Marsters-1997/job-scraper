@@ -18,6 +18,17 @@ type UpdateApplicationInput struct {
 	AppliedAt  *string `json:"applied_at"`
 }
 
+type MoveApplicationInput struct {
+	ID             string `json:"-" path:"id"`
+	StatusID       string `json:"status_id"`
+	ClearAppliedAt bool   `json:"clear_applied_at"`
+}
+
+type ApplicationMove struct {
+	Application     Application
+	FilledAppliedAt bool
+}
+
 type DeleteApplicationsInput struct {
 	IDs []string `json:"ids"`
 }

@@ -33,7 +33,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PATCH /applications/{id}",
 		"DELETE /applications/{id}",
 		"POST /applications/delete",
-		"PUT /applications/{id}/chase",
+		"PUT /applications/{id}/status", "PUT /applications/{id}/chase",
 		"DELETE /applications/{id}/chase",
 		"GET /applications/for-jobs",
 		"GET /recruiter-contacts/summaries",
@@ -45,7 +45,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	)
 	handlerstest.RejectsMalformedBody(t, r,
 		"POST /application-statuses/", "PATCH /application-statuses/{id}",
-		"POST /applications/", "PATCH /applications/{id}", "POST /applications/delete", "PUT /applications/{id}/chase",
+		"POST /applications/", "PATCH /applications/{id}", "POST /applications/delete", "PUT /applications/{id}/chase", "PUT /applications/{id}/status",
 		"POST /jobs/{id}/recruiter-contacts", "PUT /jobs/{id}/note",
 		"POST /jobs/{id}/comments", "PATCH /comments/{id}",
 	)
@@ -85,6 +85,13 @@ func TestRoutesHappyPaths(t *testing.T) {
 	if updated.SalaryInfo != "60k" {
 		t.Fatalf("updated salary = %q, want 60k", updated.SalaryInfo)
 	}
+
+	moved := handlerstest.Do[dto.ApplicationMove](t, r, http.StatusOK,
+		"PUT /applications/"+app.ID+"/status", `{"status_id":"`+status.ID+`"}`)
+	if moved.Application.StatusID != status.ID || moved.Application.SalaryInfo != "60k" {
+		t.Fatalf("moved = %+v, want status %q and salary 60k", moved.Application, status.ID)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusBadRequest, "PUT /applications/"+app.ID+"/status", `{}`)
 
 	chased := handlerstest.Do[dto.Application](t, r, http.StatusOK,
 		"PUT /applications/"+app.ID+"/chase", `{"chase_by":"2026-10-20"}`)

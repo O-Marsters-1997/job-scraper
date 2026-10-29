@@ -174,6 +174,30 @@ func (f *FakeStore) UpdateApplication(_ context.Context, userID, id string, in d
 	return app, nil
 }
 
+func (f *FakeStore) MoveApplication(_ context.Context, userID string, in dto.MoveApplicationInput) (dto.ApplicationMove, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	app, ok := f.apps[in.ID]
+	status, owned := f.statuses[in.StatusID]
+	if !ok || app.UserID != userID || !owned || status.UserID != userID {
+		return dto.ApplicationMove{}, data.ErrNotFound
+	}
+	if app.StatusID == in.StatusID {
+		return dto.ApplicationMove{Application: app}, nil
+	}
+	filled := false
+	switch {
+	case in.ClearAppliedAt:
+		app.AppliedAt = nil
+	case app.AppliedAt == nil && status.SystemKey == "applied":
+		now := time.Now().UTC().Truncate(24 * time.Hour)
+		app.AppliedAt, filled = &now, true
+	}
+	app.StatusID, app.ChaseBy = in.StatusID, f.chaseFor(in.StatusID, time.Now())
+	f.apps[in.ID] = app
+	return dto.ApplicationMove{Application: app, FilledAppliedAt: filled}, nil
+}
+
 func (f *FakeStore) MarkApplied(_ context.Context, _ pgx.Tx, userID, jobID string, now time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

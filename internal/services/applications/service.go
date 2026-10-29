@@ -15,6 +15,7 @@ type Store interface {
 	CreateApplication(ctx context.Context, userID string, in dto.CreateApplicationInput) (dto.Application, error)
 	ListApplications(ctx context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error)
 	UpdateApplication(ctx context.Context, userID, id string, in dto.UpdateApplicationInput) (dto.Application, error)
+	MoveApplication(ctx context.Context, userID string, in dto.MoveApplicationInput) (dto.ApplicationMove, error)
 	SetChase(ctx context.Context, userID, id string, chaseBy time.Time) (dto.Application, error)
 	ClearChase(ctx context.Context, userID, id string) error
 	DeleteApplication(ctx context.Context, userID, id string) error
@@ -66,6 +67,13 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateApplic
 		return dto.Application{}, apperr.Invalid("invalid applied_at date")
 	}
 	return s.store.UpdateApplication(ctx, userID, in.ID, in)
+}
+
+func (s *Service) Move(ctx context.Context, userID string, in dto.MoveApplicationInput) (dto.ApplicationMove, error) {
+	if in.StatusID == "" {
+		return dto.ApplicationMove{}, apperr.Invalid("status_id is required")
+	}
+	return s.store.MoveApplication(ctx, userID, in)
 }
 
 func (s *Service) List(ctx context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error) {

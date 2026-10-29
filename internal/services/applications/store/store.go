@@ -224,6 +224,50 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 	return out, nil
 }
 
+func (s *Store) MoveApplication(ctx context.Context, userID string, in dto.MoveApplicationInput) (dto.ApplicationMove, error) {
+	aid, err := data.UUID(in.ID)
+	if err != nil {
+		return dto.ApplicationMove{}, err
+	}
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.ApplicationMove{}, err
+	}
+	sid, err := data.UUID(in.StatusID)
+	if err != nil {
+		return dto.ApplicationMove{}, err
+	}
+	before, err := s.queries.GetApplication(ctx, sqlc.GetApplicationParams{ID: aid, UserID: uid})
+	if err != nil {
+		return dto.ApplicationMove{}, data.QueryErr("MoveApplication", err)
+	}
+	if before.StatusID == sid {
+		return dto.ApplicationMove{Application: toApplicationDTO(before)}, nil
+	}
+	snap := s.events.Snapshot(ctx, userID, before.JobID.String())
+	var out dto.Application
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		a, err := s.queries.WithTx(tx).MoveApplication(ctx, sqlc.MoveApplicationParams{
+			ID:             aid,
+			UserID:         uid,
+			StatusID:       sid,
+			ClearAppliedAt: in.ClearAppliedAt,
+		})
+		if err != nil {
+			return err
+		}
+		out = toApplicationDTO(a)
+		if err := s.events.RecordApplicationStatusChanged(ctx, tx, userID, out.ID, out.JobID, before.StatusID.String(), out.StatusID, snap); err != nil {
+			return err
+		}
+		return s.syncTasks(ctx, tx, userID, out, false)
+	})
+	if err != nil {
+		return dto.ApplicationMove{}, data.QueryErr("MoveApplication", err)
+	}
+	return dto.ApplicationMove{Application: out, FilledAppliedAt: !before.AppliedAt.Valid && out.AppliedAt != nil}, nil
+}
+
 func (s *Store) SetChase(ctx context.Context, userID, id string, chaseBy time.Time) (dto.Application, error) {
 	aid, err := data.UUID(id)
 	if err != nil {
