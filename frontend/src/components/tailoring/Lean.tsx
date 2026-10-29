@@ -22,21 +22,25 @@ export function Tone(props: {
 }
 
 export function Lean(props: { lean: BulletLean }) {
-	const label = () =>
+	const percent = () =>
 		props.lean.state && props.lean.lean !== null
-			? `${props.lean.state} ${fitPercent(props.lean.lean)}`
+			? fitPercent(props.lean.lean)
 			: null;
 	return (
 		<span
 			data-testid="lean"
 			role="img"
-			aria-label={label() ? `Lean: ${label()}` : "Not in your Experience Bank"}
+			aria-label={
+				percent()
+					? `Lean: ${props.lean.state} ${percent()}`
+					: "Not in your Experience Bank"
+			}
 			class={cn(
-				"pointer-events-none absolute top-0 left-[calc(100%+6pt)] font-mono text-2xs",
+				"pointer-events-none absolute top-0 left-[calc(100%+6pt)] whitespace-nowrap font-mono text-2xs",
 				props.lean.state ? TONE[props.lean.state] : "text-faint",
 			)}
 		>
-			{label() ?? "—"}
+			{percent() ?? "—"}
 		</span>
 	);
 }
