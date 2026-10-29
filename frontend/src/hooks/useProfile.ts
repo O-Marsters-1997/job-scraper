@@ -1,6 +1,10 @@
 import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
-import { fetchProfile, updateProfile } from "../api/profile";
+import {
+	fetchProfile,
+	updateCvFilenamePattern,
+	updateProfile,
+} from "../api/profile";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 const profileQueryOptions = queryOptions({
@@ -10,6 +14,10 @@ const profileQueryOptions = queryOptions({
 
 export function useProfile() {
 	return createQuery(() => profileQueryOptions);
+}
+
+export function useUpdateCvFilenamePattern() {
+	return useInvalidatingMutation(updateCvFilenamePattern, [keys.profile]);
 }
 
 export function useUpdateProfile() {

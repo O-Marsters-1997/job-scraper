@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT        NOT NULL,
     email         TEXT        UNIQUE,
     role          user_role   NOT NULL DEFAULT 'user',
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    cv_filename_pattern TEXT  NOT NULL DEFAULT 'cv-{company}'
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

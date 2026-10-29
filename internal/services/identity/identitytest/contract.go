@@ -237,6 +237,40 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 		}
 	})
 
+	t.Run("cv filename pattern defaults then updates", func(t *testing.T) {
+		t.Parallel()
+		st := newStore(t)
+		ctx := t.Context()
+		user, err := st.CreateUser(ctx, "kim", "hash", "kim@example.com")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := st.GetProfile(ctx, user.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.CVFilenamePattern != dto.DefaultCVFilenamePattern {
+			t.Errorf("default pattern = %q, want %q", got.CVFilenamePattern, dto.DefaultCVFilenamePattern)
+		}
+		if err := st.SetCVFilenamePattern(ctx, user.ID, "{name}-{role}"); err != nil {
+			t.Fatal(err)
+		}
+		if got, err = st.GetProfile(ctx, user.ID); err != nil {
+			t.Fatal(err)
+		}
+		if got.CVFilenamePattern != "{name}-{role}" {
+			t.Errorf("pattern = %q, want {name}-{role}", got.CVFilenamePattern)
+		}
+	})
+
+	t.Run("set cv filename pattern returns not found when missing", func(t *testing.T) {
+		t.Parallel()
+		st := newStore(t)
+		if err := st.SetCVFilenamePattern(t.Context(), missingID, "x"); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("err = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("update email returns not found when missing", func(t *testing.T) {
 		t.Parallel()
 		st := newStore(t)

@@ -38,7 +38,11 @@ export function disconnectGoogle(): void {
 	googleStatus = disconnectedGoogle;
 }
 
-let profile: Profile = { username: "demo", email: "demo@example.com" };
+let profile: Profile = {
+	username: "demo",
+	email: "demo@example.com",
+	cvFilenamePattern: "cv-{company}",
+};
 
 export function getProfile(): Profile {
 	return structuredClone(profile);
@@ -46,6 +50,10 @@ export function getProfile(): Profile {
 
 export function updateProfile(payload: { email: string }): void {
 	profile = { ...profile, email: payload.email };
+}
+
+export function updateCvFilenamePattern(pattern: string): void {
+	profile = { ...profile, cvFilenamePattern: pattern.trim() || "cv-{company}" };
 }
 
 export function getAiUsage(): Quota {

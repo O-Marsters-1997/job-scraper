@@ -120,7 +120,22 @@ func (s *Store) GetProfile(ctx context.Context, userID string) (dto.Profile, err
 	if err != nil {
 		return dto.Profile{}, data.QueryErr("GetProfile", err)
 	}
-	return toProfileDTO(row.Username, row.Email), nil
+	return toProfileDTO(row.Username, row.Email, row.CvFilenamePattern), nil
+}
+
+func (s *Store) SetCVFilenamePattern(ctx context.Context, userID, pattern string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.SetUserCVFilenamePattern(ctx, sqlc.SetUserCVFilenamePatternParams{ID: uid, CvFilenamePattern: pattern})
+	if err != nil {
+		return fmt.Errorf("store.SetCVFilenamePattern: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error) {
@@ -135,7 +150,7 @@ func (s *Store) UpdateEmail(ctx context.Context, userID, email string) (dto.Prof
 	if err != nil {
 		return dto.Profile{}, data.QueryErr("UpdateEmail", err)
 	}
-	return toProfileDTO(row.Username, row.Email), nil
+	return toProfileDTO(row.Username, row.Email, row.CvFilenamePattern), nil
 }
 
 func (s *Store) UpsertUserAICredential(ctx context.Context, userID string, provider dto.Provider, encKey string) error {
