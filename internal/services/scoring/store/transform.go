@@ -3,19 +3,25 @@ package store
 import (
 	"encoding/json"
 
+	"github.com/google/uuid"
+
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store/sqlc"
 )
 
 func toScoringOptionDTO(row sqlc.ScoringOption) dto.ScoringOption {
-	return dto.ScoringOption{
+	opt := dto.ScoringOption{
 		ID:        row.ID,
 		Dimension: dto.Dimension(row.Dimension),
 		Label:     row.Label,
 		Question:  row.Question,
 		RetiredAt: data.TimePtr(row.RetiredAt),
 	}
+	if row.OwnerUserID.Valid {
+		opt.OwnerID = uuid.UUID(row.OwnerUserID.Bytes).String()
+	}
+	return opt
 }
 
 func toSearchConfigDTO(row sqlc.SearchConfig) (dto.SearchConfig, error) {

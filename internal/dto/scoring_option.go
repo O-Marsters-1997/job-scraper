@@ -9,4 +9,5 @@ type ScoringOption struct {
 	Level     int        `json:"level,omitempty"`
 	Question  string     `json:"-"`
 	RetiredAt *time.Time `json:"-"`
+	OwnerID   string     `json:"-"`
 }

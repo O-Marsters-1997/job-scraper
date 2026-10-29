@@ -75,7 +75,7 @@ func (s *Service) AppendJobFeedback(ctx context.Context, userID string, in dto.J
 	if err != nil {
 		return dto.ScoreFeedback{}, err
 	}
-	b, err := s.loadBank(ctx)
+	b, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return dto.ScoreFeedback{}, err
 	}
@@ -180,7 +180,7 @@ func (s *Service) ExportFeedback(ctx context.Context, userID string, includeOutd
 	if err != nil {
 		return "", err
 	}
-	b, err := s.loadBank(ctx)
+	b, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return "", err
 	}
