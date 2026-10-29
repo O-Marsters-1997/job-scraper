@@ -142,23 +142,28 @@ _Avoid_: Agenda, today, inbox — Tasks have no due date, only chases do
 **Option**:
 One thing a User can pick a stance on — a technology, role, industry, level, work arrangement or
 company stage — carrying the single atomic yes/no question Jev is asked about a Job once some
-interested User has picked it. The full set (~160) is the bank, stored in `scoring_options` and
-shared by every User.
+interested User has picked it. The shared set (~160) is the bank, shared by every User.
 _Avoid_: Criterion, question — the bank replaces hand-written per-user criteria
 
+**Custom Option**:
+An Option one User wrote for themselves, drafted from their phrase into a yes/no question, previewed
+on their recent Jobs and confirmed. It sits in an existing Dimension, is seen only by its owner, and
+is capped at 10 live per User. Editing its wording retires it and creates a new one.
+_Avoid_: Custom dimension, private question
+
 **Dimension**:
-One of six fixed groups an Option belongs to (`tech`, `role`, `domain`, `seniority`, `work`,
-`stage`), fixed in Go code as `pair` (nice/avoid) or `multi` (nice only), deciding which stances a
-Pick on that Option may take.
+One of the fixed groups an Option belongs to (`tech`, `role`, `domain`, `seniority`, `work`,
+`stage`, `size`, `employment`), with a weight and a saturation that every Option in it, shared or
+custom, shares.
 _Avoid_: Category, section
 
 **Pick**:
-A User's stance (nice, avoid, or block for `domain`) on one Option. Nice Picks in the same
-Dimension are alternatives — a Job matching any one earns that Dimension's boost once; avoid Picks
-cost a Job only when the Job has them; a block Pick that resolves yes zeroes Suitability and drops
-the Job from the User's list — unlike a Hard filter, it runs after Jev answers, since domain needs
-Jev to decide. On the seniority Ladder a Pick is instead a 1–100 weight on one tier.
-_Avoid_: Preference (too broad), rule
+A User's Stance on one Option. The UI shows it as 1–5: 1 never (a yes Gates the Job), 2 avoid (costs
+a Job that has it), 3 no Pick (no effect, the same as unrated), 4 ok (half credit), 5 nice (full
+credit). Nice and ok Picks in the same Dimension are alternatives, summed up to its saturation; for
+`tech` the User sets the saturation ("a Job needs N"). On the seniority Ladder a Pick is instead a
+1–100 weight on one tier.
+_Avoid_: Preference (too broad), rule, rating (a Grade is the User's verdict on a Job), block
 
 **Ladder**:
 The seniority Dimension's ordered tiers (Junior 1 to Principal/Head 5). The User's tier weights give
@@ -199,9 +204,8 @@ are the other sort options.
 _Avoid_: Relevance, match score, hot rank
 
 **Gate**:
-A rule that caps Suitability at the top of Poor (44) without hiding the Job. A Gate dimension
-(work, employment) fires when every option the User picked in it resolves no and an option they did
-not pick resolves yes; the seniority Ladder fires when the Job sits more than twice the tolerance
+A rule that caps Suitability at the top of Poor (44) without hiding the Job. A never Pick fires one
+when its Option resolves yes; the seniority Ladder fires when the Job sits more than twice the tolerance
 from the User's point; a salary below the floor also fires one. The triggering row shows as `gated`.
 _Avoid_: Block (a block Pick forces 0 and hides the Job), filter
 
