@@ -29,8 +29,9 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"GET /scoring-options",
 		"GET /scores/status",
 		"POST /scores/recompute",
+		"POST /scoring-preview",
 	)
-	handlerstest.RejectsMalformedBody(t, r, "PUT /scoring-config")
+	handlerstest.RejectsMalformedBody(t, r, "PUT /scoring-config", "POST /scoring-preview")
 }
 
 func TestRoutesHappyPath(t *testing.T) {
@@ -58,6 +59,11 @@ func TestRoutesHappyPath(t *testing.T) {
 	}
 	if diff := cmp.Diff(wantPicks, saved.Preferences.Picks); diff != "" {
 		t.Errorf("GET /scoring-config picks (-want +got):\n%s", diff)
+	}
+
+	preview := handlerstest.Do[dto.ScoringPreview](t, r, http.StatusOK, "POST /scoring-preview", `{"preferences":{"picks":[{"optionId":"tech:go","stance":"nice"}]}}`)
+	if len(preview.Jobs) != 0 {
+		t.Errorf("POST /scoring-preview jobs = %+v, want none for a user with no scored jobs", preview.Jobs)
 	}
 
 	status := handlerstest.Do[dto.ScoringStatus](t, r, http.StatusOK, "GET /scores/status", "")
