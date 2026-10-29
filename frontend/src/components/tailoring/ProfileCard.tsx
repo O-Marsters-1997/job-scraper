@@ -11,6 +11,8 @@ export function ProfileCard(props: {
 	text: string;
 	top: number;
 	pending: boolean;
+	steerOpen: boolean;
+	onSteerClose: () => void;
 	error?: string;
 	onRedraft: (steer?: string) => void;
 	onRevert: () => void;
@@ -21,6 +23,9 @@ export function ProfileCard(props: {
 	const undoable = () => {
 		const a = attempt();
 		return a?.to !== undefined && a.to !== a.from && props.text === a.to;
+	};
+	const closeIfIdle = () => {
+		if (!steer().trim() && !props.pending) props.onSteerClose();
 	};
 	const redraft = () => {
 		setAttempt({ from: props.text });
@@ -43,17 +48,32 @@ export function ProfileCard(props: {
 			<Show when={differs()}>
 				<EditDiff from={props.base} to={props.text} title="Against your base" />
 			</Show>
-			<Input
-				aria-label="Steer the redraft"
-				placeholder="Steer it, e.g. lead with platform work"
-				maxLength={MAX_STEER}
-				value={steer()}
-				disabled={props.pending}
-				onInput={(e) => setSteer(e.currentTarget.value)}
-				onKeyDown={(e) => {
-					if (e.key === "Enter" && !props.pending) redraft();
-				}}
-			/>
+			<Show when={props.steerOpen}>
+				<div
+					class="flex flex-col gap-3"
+					onFocusOut={(e) => {
+						if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+							closeIfIdle();
+					}}
+				>
+					<Input
+						aria-label="Steer the redraft"
+						placeholder="Steer it, e.g. lead with platform work"
+						maxLength={MAX_STEER}
+						value={steer()}
+						disabled={props.pending}
+						onInput={(e) => setSteer(e.currentTarget.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" && !props.pending) redraft();
+							if (e.key === "Escape") closeIfIdle();
+						}}
+					/>
+					<Button size="sm" loading={props.pending} onClick={redraft}>
+						<Icon name="wand" size={14} />
+						Redraft
+					</Button>
+				</div>
+			</Show>
 			<Show when={props.error}>
 				{(message) => (
 					<p role="alert" class="text-xs text-destructive">
@@ -62,10 +82,6 @@ export function ProfileCard(props: {
 				)}
 			</Show>
 			<div class="flex items-center gap-2">
-				<Button size="sm" loading={props.pending} onClick={redraft}>
-					<Icon name="wand" size={14} />
-					Redraft
-				</Button>
 				<Show when={undoable() || differs()}>
 					<Button
 						variant="ghost"

@@ -24,6 +24,24 @@ func TestRedraftProfileRoute(t *testing.T) {
 		return profiledraft.Attempt{Text: text, PromptKey: "k", Model: "m", Rejection: "uses a banned word"}
 	}
 
+	t.Run("a Draft whose CV has a Skills section still redrafts", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		docs := cvtailortest.Docs{TabJSON: tabJSON(t, head("Profile"), prose(base), head(heading), bullet("Built and maintained the public APIs for the platform"), head("Skills"), prose("Go, SQL"))}
+		edits := e.citedEdit("Cut p99 latency by moving queries to Postgres")
+		profile := base
+		edits.Profile = &profile
+		id := e.readyWith(t, tick{docs: docs}, edits)
+		w := cvtailortest.Redrafting(profiledraft.Result{Text: accepted.Text, Attempts: []profiledraft.Attempt{accepted}}, nil)
+		r := newRouter(cvtailor.Deps{Store: e.store, Docs: docs, Drive: e.drive, Profile: w, Creds: apiKey})
+
+		got := handlerstest.Do[dto.Draft](t, r, http.StatusOK, "POST /tailoring/drafts/"+id+"/profile/redraft", `{}`)
+
+		if got.Content == nil || got.Content.Profile == nil || *got.Content.Profile != accepted.Text {
+			t.Errorf("redraft content.profile = %+v, want %q", got.Content, accepted.Text)
+		}
+	})
+
 	type env struct {
 		e      draftEnv
 		id     string

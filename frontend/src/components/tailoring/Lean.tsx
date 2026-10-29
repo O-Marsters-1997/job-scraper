@@ -31,9 +31,9 @@ export function Lean(props: {
 	explaining: boolean;
 	onExplain: () => void;
 }) {
-	const label = () =>
+	const percent = () =>
 		props.lean.state && props.lean.lean !== null
-			? `${props.lean.state} ${fitPercent(props.lean.lean)}`
+			? fitPercent(props.lean.lean)
 			: null;
 	return (
 		<Popover placement="right-start">
@@ -41,14 +41,16 @@ export function Lean(props: {
 				type="button"
 				data-testid="lean"
 				aria-label={
-					label() ? `Lean: ${label()}` : "Not in your Experience Bank"
+					percent()
+						? `Lean: ${props.lean.state} ${percent()}`
+						: "Not in your Experience Bank"
 				}
 				class={cn(
-					"absolute top-0 left-[calc(100%+6pt)] cursor-pointer font-mono text-2xs hover:underline focus-visible:outline-2 focus-visible:outline-primary",
+					"absolute top-0 left-[calc(100%+6pt)] cursor-pointer whitespace-nowrap font-mono text-2xs hover:underline focus-visible:outline-2 focus-visible:outline-primary",
 					props.lean.state ? TONE[props.lean.state] : "text-faint",
 				)}
 			>
-				{label() ?? "—"}
+				{percent() ?? "—"}
 			</Popover.Trigger>
 			<Popover.Portal>
 				<Popover.Content
