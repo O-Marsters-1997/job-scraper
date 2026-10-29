@@ -24,14 +24,21 @@ import {
 	useUpdateScoringConfig,
 } from "../../../hooks/useScoringConfig";
 import { useScoringOptions } from "../../../hooks/useScoringOptions";
-import type { ScoringConfig, Stance } from "../../../types/scoringConfig";
+import { useScoringPreview } from "../../../hooks/useScoringPreview";
+import type {
+	Preferences,
+	ScoringConfig,
+	Stance,
+} from "../../../types/scoringConfig";
 import type {
 	ScoringOption,
 	ScoringOptionsView,
 } from "../../../types/scoringOptions";
+import { CustomOptions } from "./-scoring/CustomOptions";
 import { FiltersSection } from "./-scoring/FiltersSection";
 import { RatingKey } from "./-scoring/RatingKey";
 import { RecomputeControls } from "./-scoring/RecomputeControls";
+import { ScorePreview } from "./-scoring/ScorePreview";
 import { SeniorityLadder } from "./-scoring/SeniorityLadder";
 import { StanceRow } from "./-scoring/StanceRow";
 import { STANCE_TONE } from "./-scoring/stance";
@@ -44,7 +51,7 @@ export const Route = createFileRoute("/_auth/settings/scoring")({
 
 type StanceMap = Record<string, Stance | undefined>;
 
-const RATED_SECTIONS = ["role", "stack", "work"];
+const RATED_SECTIONS = ["role", "stack", "work", "custom"];
 type Dim = ScoringOption["dimension"];
 
 function ScoringPage() {
@@ -138,6 +145,36 @@ function ScoringForm(props: {
 		setTimeout(() => setNotice(null), 3000);
 	};
 
+	const preferences = (): Preferences => ({
+		picks: [
+			...Object.entries(stances)
+				.filter((entry): entry is [string, Stance] => Boolean(entry[1]))
+				.map(([optionId, stance]) => ({
+					optionId,
+					stance,
+					source: "manual",
+					overridden: false,
+				})),
+			...Object.entries(weights)
+				.filter(([, weight]) => weight > 0)
+				.map(([optionId, weight]) => ({
+					optionId,
+					stance: "nice" as const,
+					weight,
+					source: "manual",
+					overridden: false,
+				})),
+		],
+		salaryFloor: salaryFloor()
+			? { amount: Number(salaryFloor()), currency: "GBP" }
+			: null,
+		preferenceText: preferenceText(),
+		techNeeded: techNeeded(),
+	});
+
+	const [previewOpen, setPreviewOpen] = createSignal(false);
+	const preview = useScoringPreview(preferences, previewOpen);
+
 	const handleSave = async () => {
 		setNotice(null);
 		setError(null);
@@ -150,32 +187,7 @@ function ScoringForm(props: {
 				excludedLocations: uniqueCapitalised(filters.locations()),
 				requiredLocations: uniqueCapitalised(filters.requiredLocations()),
 				requiredTitleKeywords: filters.requiredTitleKeywords(),
-				preferences: {
-					picks: [
-						...Object.entries(stances)
-							.filter((entry): entry is [string, Stance] => Boolean(entry[1]))
-							.map(([optionId, stance]) => ({
-								optionId,
-								stance,
-								source: "manual",
-								overridden: false,
-							})),
-						...Object.entries(weights)
-							.filter(([, weight]) => weight > 0)
-							.map(([optionId, weight]) => ({
-								optionId,
-								stance: "nice" as const,
-								weight,
-								source: "manual",
-								overridden: false,
-							})),
-					],
-					salaryFloor: salaryFloor()
-						? { amount: Number(salaryFloor()), currency: "GBP" }
-						: null,
-					preferenceText: preferenceText(),
-					techNeeded: techNeeded(),
-				},
+				preferences: preferences(),
 				updatedAt: props.config().updatedAt,
 			});
 			flash(
@@ -199,11 +211,22 @@ function ScoringForm(props: {
 					onDone={flash}
 					onError={setError}
 				/>
+				<Button
+					size="sm"
+					variant="outline"
+					aria-expanded={previewOpen()}
+					onClick={() => setPreviewOpen((open) => !open)}
+				>
+					Preview
+				</Button>
 				<Button size="sm" loading={mutation.isPending} onClick={handleSave}>
 					Save
 				</Button>
 			</SettingsActions>
 			<FormFeedback success={notice() ?? false} error={error()} />
+			<Show when={previewOpen()}>
+				<ScorePreview query={preview} />
+			</Show>
 			<Show when={RATED_SECTIONS.includes(params().section ?? "")}>
 				<RatingKey />
 			</Show>
@@ -266,6 +289,13 @@ function ScoringForm(props: {
 					)}
 					{section("Company size", rows("size"))}
 					{section("Company stage", rows("stage"))}
+				</Match>
+				<Match when={params().section === "custom"}>
+					<CustomOptions
+						options={props.options()}
+						stanceOf={(id) => stances[id]}
+						onRate={(id, s) => setStances(id, s)}
+					/>
 				</Match>
 				<Match when={params().section === "filters"}>
 					<FiltersSection filters={filters} />

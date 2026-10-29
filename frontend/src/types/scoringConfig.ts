@@ -24,6 +24,8 @@ const preferencesSchema = z.object({
 	techNeeded: z.number().int().min(1).max(4).optional(),
 });
 
+export type Preferences = z.infer<typeof preferencesSchema>;
+
 export const scoringConfigSchema = z.object({
 	preferences: preferencesSchema,
 	excludedTitleKeywords: z.array(z.string()),
