@@ -237,6 +237,23 @@ export function createRolePicks(opts: {
 			rest.splice(Math.min(place - 1, rest.length), 0, id);
 			setPicksFor(positionId, rest);
 		},
+		shift(slotId: string, delta: -1 | 1) {
+			const positionId = [...headings().values()].find((id) =>
+				roleSlots(id).includes(slotId),
+			);
+			if (!positionId) return undefined;
+			const ids = picksFor(positionId);
+			const slots = roleSlots(positionId);
+			const from = slots.indexOf(slotId);
+			const to = from + delta;
+			const id = ids[from];
+			if (slots.length !== ids.length || id === undefined) return undefined;
+			if (to < 0 || to >= ids.length) return undefined;
+			const next = ids.filter((x) => x !== id);
+			next.splice(to, 0, id);
+			setPicksFor(positionId, next);
+			return slots[to];
+		},
 		order,
 		toggleRole(positionId: string) {
 			const ids = order();
