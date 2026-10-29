@@ -90,8 +90,8 @@ function ApplicationsPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate();
 	const query = useApplications(
-		() => search().status,
-		() => search().chase === true,
+		() => (search().view === "board" ? undefined : search().status),
+		() => search().view !== "board" && search().chase === true,
 	);
 	const clearChase = useClearChase();
 	const statusesQuery = useApplicationStatuses();
@@ -115,7 +115,7 @@ function ApplicationsPage() {
 	const visible = (apps: ApplicationWithDetails[]) =>
 		apps.filter((a) => matchesApplication(a, q()));
 	const isBoard = () => search().view === "board";
-	const showView = (view: ApplicationsView) => {
+	const showView = (view: ApplicationsView, replace = false) => {
 		rememberView(view);
 		void navigate({
 			to: "/applications",
@@ -124,10 +124,13 @@ function ApplicationsPage() {
 				chase: undefined,
 				...(view === "board" && { view }),
 			},
+			replace,
 		});
 	};
 	onMount(() => {
-		if (!isBoard() && storedView() === "board") showView("board");
+		const filtered = search().status || search().chase;
+		if (!isBoard() && !filtered && storedView() === "board")
+			showView("board", true);
 	});
 	const [selection, setSelection] = createSignal<Selection>({});
 	const [createOpen, setCreateOpen] = createSignal(false);

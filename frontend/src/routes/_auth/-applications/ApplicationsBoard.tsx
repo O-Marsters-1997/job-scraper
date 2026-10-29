@@ -85,7 +85,12 @@ export function ApplicationsBoard(props: {
 			e.preventDefault();
 			setOver(statusID);
 		},
-		onDragLeave: () => setOver(undefined),
+		onDragLeave: (e: DragEvent) => {
+			if (
+				!(e.currentTarget as Element).contains(e.relatedTarget as Node | null)
+			)
+				setOver(undefined);
+		},
 		onDrop: (e: DragEvent) => {
 			e.preventDefault();
 			const id = dragging();
