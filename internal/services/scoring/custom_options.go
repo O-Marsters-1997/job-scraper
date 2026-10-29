@@ -53,7 +53,7 @@ func (s *Service) UpdateCustomOption(ctx context.Context, userID string, in dto.
 	}
 	for _, p := range cfg.Preferences.Picks {
 		if p.OptionID == in.ID && !stanceAllowed(dimensionSpecs[opt.Dimension], p.Stance) {
-			return dto.CustomOption{}, apperr.Invalid("stance not allowed for dimension " + string(opt.Dimension) + ": " + p.Stance)
+			return dto.CustomOption{}, apperr.Invalid("stance not allowed for dimension " + string(opt.Dimension) + ": " + string(p.Stance))
 		}
 	}
 	err = s.store.ReplaceCustomOption(ctx, userID, in.ID, opt)
