@@ -88,6 +88,7 @@ func TestDraftLayout(t *testing.T) {
 	})
 
 	t.Run("tags every linked role's bullets in an as-is draft, even a role with no chosen achievements", func(t *testing.T) {
+		t.Parallel()
 		e := newDraftEnv(t)
 		e.input.Mode = dto.DraftModeAsIs
 		second, err := e.store.CreatePosition(t.Context(), userID, dto.PositionInput{Employer: "Beta", Title: "Dev"})
