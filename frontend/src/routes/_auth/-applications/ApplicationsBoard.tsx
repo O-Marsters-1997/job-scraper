@@ -114,7 +114,8 @@ export function ApplicationsBoard(props: {
 			const first = props.statuses
 				.filter((s) => !collapsed()[s.ID])
 				.flatMap((s) => inStatus(s.ID))[0];
-			if (first) setSelectedID(first.ID);
+			if (!first) return false;
+			setSelectedID(first.ID);
 			return;
 		}
 		const column = inStatus(app.StatusID);
