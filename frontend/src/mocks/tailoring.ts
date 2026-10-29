@@ -162,6 +162,9 @@ export function getSuggestions(): Suggestion[] {
 			score: scores[i] ?? 0.1,
 			preselected: i < slots,
 			lines: 1 + (i % 2),
+			...(i === 0 && {
+				quote: "You will build and run the platform that our teams deploy on.",
+			}),
 			state: i === 2 ? "unclear" : i > 2 ? "low" : "fit",
 		}));
 	});
