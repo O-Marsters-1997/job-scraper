@@ -56,7 +56,7 @@ import { ProfileCard } from "./ProfileCard";
 import { RolesDrawer } from "./RolesDrawer";
 import { SkillsPanel } from "./SkillsPanel";
 import { UnlinkedRoles } from "./UnlinkedRoles";
-import { WandMenu } from "./WandMenu";
+import { RedraftWand, WandMenu } from "./WandMenu";
 
 const NO_METRICS: PageMetrics = {
 	contentPt: 0,
@@ -253,8 +253,18 @@ export function DraftEditor(props: {
 	};
 	const wandSlot = () => {
 		const key = activeSlot();
-		return key && editable() && !suggestions.get(key) ? key : undefined;
+		return key && key !== PROFILE_SLOT && editable() && !suggestions.get(key)
+			? key
+			: undefined;
 	};
+	const profileWand = () =>
+		activeSlot() === PROFILE_SLOT && editable() && !!baseProfile();
+	const focusSteer = () =>
+		document
+			.querySelector<HTMLInputElement>(
+				'[data-testid="profile-card"] input[aria-label="Steer the redraft"]',
+			)
+			?.focus();
 	const tailorQuote = (slotId: string) =>
 		insightsQuery.data?.lines.find((l) => l.slotId === slotId && l.anchored);
 	const askOpen = () => askSlot() !== undefined && askSlot() === activeSlot();
@@ -694,6 +704,9 @@ export function DraftEditor(props: {
 											/>
 										)}
 									</Show>
+									<Show when={profileWand()}>
+										<RedraftWand top={wandTop()} onRedraft={focusSteer} />
+									</Show>
 									<Show
 										when={
 											editable() &&
@@ -708,7 +721,7 @@ export function DraftEditor(props: {
 												"absolute top-0",
 												narrow()
 													? "inset-x-2 z-20"
-													: "left-[calc(100%+3rem)] w-80",
+													: "left-[calc(100%+3rem)] z-20 w-80",
 											)}
 										>
 											<ProfileCard
