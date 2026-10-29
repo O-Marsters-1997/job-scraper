@@ -1,4 +1,4 @@
-import { Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,36 @@ import { PickList, type PickListProps } from "./PickList";
 
 const HINT =
 	"Click a row to add it, or its circle to remove it. Press 1–9 to move the selected row to that place. ↑ ↓ to move, Esc to deselect.";
+
+function ClosestLine(props: { quote: string | undefined }) {
+	const [open, setOpen] = createSignal(false);
+	return (
+		<span class="mt-1 block text-xs text-muted">
+			<button
+				type="button"
+				aria-expanded={open()}
+				class="underline decoration-dotted underline-offset-2 hover:text-foreground"
+				onClick={(e) => {
+					e.stopPropagation();
+					setOpen(!open());
+				}}
+				onKeyDown={(e) => e.stopPropagation()}
+			>
+				Why this ranking?
+			</button>
+			<Show when={open()}>
+				<span class="mt-1 block">
+					<span class="font-medium">Closest line in the job ad</span>
+					<span class="block italic">
+						{props.quote
+							? `“${props.quote}”`
+							: "No close match in the job description"}
+					</span>
+				</span>
+			</Show>
+		</span>
+	);
+}
 
 export function AchievementsDrawer(
 	props: Omit<PickListProps, "label" | "items"> & {
@@ -110,6 +140,7 @@ export function AchievementsDrawer(
 											{s.state === "low" ? "Low fit" : "Unclear"}
 										</Badge>
 									</Show>
+									<ClosestLine quote={s.quote} />
 								</>
 							),
 						})),

@@ -15,6 +15,7 @@ export const suggestionSchema = z.object({
 	state: z.enum(["fit", "low", "unclear"]),
 	preselected: z.boolean(),
 	lines: z.number(),
+	quote: z.string().optional(),
 });
 
 const roleBulletSchema = z.object({

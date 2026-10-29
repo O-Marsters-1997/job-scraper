@@ -57,6 +57,7 @@ func TestSuggestionsRankByNetLean(t *testing.T) {
 		questionPrefix + "microfend": {PYes: 0.13, PNo: 0.54, Confidence: 0.4},
 	}}
 	svc, st := newService(t, nil, asker)
+	st.SetJob(dto.Job{ID: "job-1"})
 	p := addPosition(t, st, "Acme", "Engineer")
 	addAchievements(t, p.ID, st, "microfend", "e2e", "digest", "strong")
 
@@ -84,10 +85,31 @@ func TestSuggestionsRankByNetLean(t *testing.T) {
 	}
 }
 
+func TestSuggestionsQuoteClosestJobAdLine(t *testing.T) {
+	svc, st := newService(t, nil, &fakeAsker{answers: map[string]dto.Answer{}})
+	st.SetJob(dto.Job{ID: "job-1", Description: "Join a friendly team. You will build Kubernetes platform tooling."})
+	p := addPosition(t, st, "Acme", "Engineer")
+	addAchievements(t, p.ID, st, "Built Kubernetes tooling", "Won an award")
+
+	got, err := svc.Suggestions(t.Context(), userID, dto.SuggestionsQuery{JobID: "job-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	quotes := map[string]string{}
+	for _, s := range got {
+		quotes[s.Text] = s.Quote
+	}
+	want := map[string]string{"Built Kubernetes tooling": "You will build Kubernetes platform tooling.", "Won an award": ""}
+	if diff := cmp.Diff(want, quotes); diff != "" {
+		t.Errorf("Suggestions() quotes (-want +got):\n%s", diff)
+	}
+}
+
 func TestSuggestionsPreselectSlotCountOfMappedHeading(t *testing.T) {
 	asker := &fakeAsker{answers: map[string]dto.Answer{}}
 	docs := cvtailortest.Docs{TabJSON: cvTab(t, roleBlock{"Engineer, Acme", 2})}
 	svc, st := newService(t, docs, asker)
+	st.SetJob(dto.Job{ID: "job-1"})
 	acme := addPosition(t, st, "Acme", "Engineer")
 	other := addPosition(t, st, "Globex", "Engineer")
 	addAchievements(t, acme.ID, st, "a1", "a2", "a3", "a4")
