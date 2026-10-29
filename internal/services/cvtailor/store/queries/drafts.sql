@@ -22,6 +22,7 @@ LEFT JOIN companies c ON c.id = j.company_id
 WHERE t.id = next.id AND j.id = t.job_id
 RETURNING t.id, t.user_id, t.job_id, t.base_doc_id, t.base_tab_id, t.achievement_ids, t.skill_swaps, t.mode, t.attempts,
     COALESCE(t.draft_doc_id, '')::text AS draft_doc_id,
+    COALESCE(t.kept_tab_id, '')::text AS kept_tab_id,
     t.status = 'keeping' AS keeping,
     j.title AS job_title,
     COALESCE(c.name, j.company_slug)::text AS company_name,
@@ -64,7 +65,15 @@ WHERE id = $1 AND user_id = $2 AND status = 'ready' AND outcome IS NULL
 RETURNING *;
 
 -- name: CompleteKeep :execrows
-UPDATE tailored_cvs SET status = 'ready', outcome = 'kept', kept_as = 'doc', lease_until = NULL, last_error = ''
+UPDATE tailored_cvs SET status = 'ready', outcome = 'kept', lease_until = NULL, last_error = '',
+    kept_as = CASE WHEN sqlc.arg(kept_tab_id)::text = '' THEN 'doc' ELSE 'tab' END,
+    kept_tab_id = NULLIF(sqlc.arg(kept_tab_id)::text, ''),
+    draft_doc_id = sqlc.arg(draft_doc_id)::text,
+    keep_note = sqlc.arg(keep_note)::text
+WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status = 'keeping';
+
+-- name: SetKeptTab :execrows
+UPDATE tailored_cvs SET kept_tab_id = NULLIF(sqlc.arg(kept_tab_id)::text, '')
 WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status = 'keeping';
 
 -- name: FailKeep :execrows

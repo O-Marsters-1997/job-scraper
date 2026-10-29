@@ -42,7 +42,8 @@ type Store interface {
 	ListJobDrafts(ctx context.Context, userID, jobID string) ([]dto.Draft, error)
 	SetDraftOutcome(ctx context.Context, userID, id, outcome string) (dto.Draft, error)
 	QueueKeep(ctx context.Context, userID, id string) (dto.Draft, error)
-	CompleteKeep(ctx context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error
+	SetKeptTab(ctx context.Context, claim dto.DraftClaim, tabID string) error
+	CompleteKeep(ctx context.Context, claim dto.DraftClaim, placement dto.KeepPlacement, outcomes []dto.AchievementOutcome) error
 	FailKeep(ctx context.Context, claim dto.DraftClaim, failure dto.DraftFailure) error
 	ReplaceAchievementOutcomes(ctx context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error
 	SetDraftEdits(ctx context.Context, userID, id string, editSet json.RawMessage, findings []dto.DraftFinding, achievementIDs []string) error

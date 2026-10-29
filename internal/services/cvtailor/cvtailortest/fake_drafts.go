@@ -28,6 +28,7 @@ type draft struct {
 	attempts int
 	dueAt    time.Time
 	leased   bool
+	keptTab  string
 	result   dto.DraftResult
 }
 
@@ -44,6 +45,12 @@ func (f *FakeStore) MakeDraftDue(id string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.drafts[id].dueAt = time.Now()
+}
+
+func (f *FakeStore) LeaveHalfBuiltTab(id, tabID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.drafts[id].keptTab = tabID
 }
 
 func (f *FakeStore) AchievementOutcomes(draftID string) []dto.AchievementOutcome {
@@ -70,7 +77,7 @@ func (f *FakeStore) CreateDraft(_ context.Context, userID string, in dto.DraftIn
 	if in.Mode == "" {
 		in.Mode = dto.DraftModeGenerate
 	}
-	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Mode: in.Mode, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now(), BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIDs: []string{}}, userID: userID, input: in, dueAt: time.Now()}
+	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Mode: in.Mode, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now(), BaseDocID: in.DocID, BaseTabID: in.TabID, DraftTabID: in.TabID, AchievementIDs: []string{}}, userID: userID, input: in, dueAt: time.Now()}
 	f.drafts[d.ID] = d
 	return d.Draft, nil
 }
@@ -164,7 +171,7 @@ func (f *FakeStore) ClaimDraft(_ context.Context) (dto.DraftClaim, error) {
 	job := f.jobs[d.input.JobID]
 	return dto.DraftClaim{
 		ID: d.ID, UserID: d.userID, JobID: d.input.JobID, DocID: d.input.DocID, TabID: d.input.TabID,
-		AchievementIDs: slices.Clone(d.AchievementIDs), Mode: d.Mode, Attempts: d.attempts, DraftDocID: d.DraftDocID,
+		AchievementIDs: slices.Clone(d.AchievementIDs), Mode: d.Mode, Attempts: d.attempts, DraftDocID: d.DraftDocID, KeptTabID: d.keptTab,
 		JobDescription: job.Description, JobFingerprint: job.ContentFingerprint,
 		Keeping: keeping, JobTitle: job.Title, CompanyName: job.CompanySlug,
 	}, nil
@@ -239,7 +246,18 @@ func (f *FakeStore) keeping(claim dto.DraftClaim) (*draft, error) {
 	return d, nil
 }
 
-func (f *FakeStore) CompleteKeep(_ context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error {
+func (f *FakeStore) SetKeptTab(_ context.Context, claim dto.DraftClaim, tabID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, err := f.keeping(claim)
+	if err != nil {
+		return err
+	}
+	d.keptTab = tabID
+	return nil
+}
+
+func (f *FakeStore) CompleteKeep(_ context.Context, claim dto.DraftClaim, placement dto.KeepPlacement, outcomes []dto.AchievementOutcome) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	d, err := f.keeping(claim)
@@ -253,6 +271,10 @@ func (f *FakeStore) CompleteKeep(_ context.Context, claim dto.DraftClaim, outcom
 	}
 	kept := dto.OutcomeKept
 	d.Status, d.Outcome, d.KeptAs, d.leased, d.LastError = "ready", &kept, "doc", false, ""
+	d.DraftDocID, d.KeepNote, d.keptTab = placement.DocID, placement.Note, placement.TabID
+	if placement.TabID != "" {
+		d.KeptAs, d.DraftTabID = "tab", placement.TabID
+	}
 	f.outcomes[d.ID] = slices.Clone(outcomes)
 	return nil
 }

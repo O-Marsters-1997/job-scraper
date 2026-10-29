@@ -6,8 +6,8 @@ Status: accepted. Agreed in the iOS feedback session (#1450). Supersedes the "ke
 ## Context
 
 Keeping a Draft froze it: iOS and the web editor stopped offering edits once `outcome = 'kept'`, though
-`SaveDraftSlots` only ever refused drafts that weren't ready or were discarded. Keep today renames the
-render-cache Doc and marks it `kept_as = 'doc'`; it no longer builds a child Tab. Users found a typo or a
+`SaveDraftSlots` only ever refused drafts that weren't ready or were discarded. Keep builds a child Tab in
+the base CV Doc (ADR 0017), falling back to renaming the render-cache Doc as `kept_as = 'doc'`. Users found a typo or a
 better bullet after keeping and had to discard and redraft to fix it.
 
 Keep also records one `achievement_outcomes` row per bank Achievement (#1236). An edit after keep would

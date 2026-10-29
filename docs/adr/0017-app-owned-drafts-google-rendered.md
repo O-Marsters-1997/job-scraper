@@ -4,8 +4,17 @@ Amended by [ADR 0019](0019-in-app-page-edits-google-renders-record.md): the in-a
 surface and an instant estimate. Google stays the renderer of record. The "Rejected: our own renderer"
 paragraph and the first consequence below are superseded.
 
-Amended by [ADR 0038](0038-kept-drafts-stay-editable.md): keep now names the render-cache Doc
-(`kept_as = 'doc'`) rather than building a child Tab, and a kept Draft stays editable.
+Amended by [ADR 0038](0038-kept-drafts-stay-editable.md): a kept Draft stays editable. Keep first
+tried naming the render-cache Doc (`kept_as = 'doc'`) rather than building a child Tab.
+
+Keep-as-Tab shipped (#1619). Keep adds a child Tab under the base CV Tab, rebuilds the render-cache Doc
+into it with `tabcopy.Requests`, and verifies by page count and extracted PDF text rather than glyph
+runs. On success the Draft repoints at (base Doc, new Tab): `draft_doc_id` is the base Doc,
+`kept_tab_id` the Tab, `kept_as = 'tab'`, and the render-cache Doc is deleted. Edits, layout and
+`DraftPDF` then work on the Tab directly, and discard deletes only the Tab. It falls back to
+`kept_as = 'doc'` with the reason in `keep_note` when the User lacks the Docs write scope, `tabcopy`
+reports `ErrUnsupported`, or verification fails. A Tab left by a crashed attempt is `kept_tab_id` on a
+still-keeping row and is deleted on retry.
 
 ## Context
 

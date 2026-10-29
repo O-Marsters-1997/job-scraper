@@ -346,8 +346,20 @@ func (c *Client) BatchUpdate(ctx context.Context, userID, docID string, requests
 }
 
 func (c *Client) AddTab(ctx context.Context, userID, docID, title string) (string, error) {
+	return c.addTab(ctx, userID, docID, "", title)
+}
+
+func (c *Client) AddChildTab(ctx context.Context, userID, docID, parentTabID, title string) (string, error) {
+	return c.addTab(ctx, userID, docID, parentTabID, title)
+}
+
+func (c *Client) addTab(ctx context.Context, userID, docID, parentTabID, title string) (string, error) {
+	props := map[string]string{"title": title}
+	if parentTabID != "" {
+		props["parentTabId"] = parentTabID
+	}
 	body, err := json.Marshal(map[string]any{"requests": []any{
-		map[string]any{"addDocumentTab": map[string]any{"tabProperties": map[string]string{"title": title}}},
+		map[string]any{"addDocumentTab": map[string]any{"tabProperties": props}},
 	}})
 	if err != nil {
 		return "", fmt.Errorf("google.AddTab marshal: %w", err)

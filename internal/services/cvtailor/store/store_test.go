@@ -230,13 +230,13 @@ func TestCompleteKeepRecordsAchievementOutcomes(t *testing.T) {
 	}
 	stale := claim
 	stale.Attempts++
-	if err := st.CompleteKeep(ctx, stale, outcomes); !errors.Is(err, store.ErrDraftNotFound) {
+	if err := st.CompleteKeep(ctx, stale, dto.KeepPlacement{}, outcomes); !errors.Is(err, store.ErrDraftNotFound) {
 		t.Fatalf("CompleteKeep(stale claim) err = %v, want ErrDraftNotFound", err)
 	}
 	if got := countOutcomes(); got != 0 {
 		t.Fatalf("outcomes after a stale CompleteKeep = %d, want 0", got)
 	}
-	if err := st.CompleteKeep(ctx, claim, outcomes); err != nil {
+	if err := st.CompleteKeep(ctx, claim, dto.KeepPlacement{}, outcomes); err != nil {
 		t.Fatalf("CompleteKeep() err = %v", err)
 	}
 

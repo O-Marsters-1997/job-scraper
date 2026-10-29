@@ -709,6 +709,7 @@ type TailoredCv struct {
 	Mode           string
 	KeptAs         pgtype.Text
 	KeepNote       string
+	KeptTabID      pgtype.Text
 	Attempts       int32
 	DueAt          pgtype.Timestamptz
 	LeaseUntil     pgtype.Timestamptz
