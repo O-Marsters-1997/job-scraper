@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -179,7 +180,7 @@ func validatedPicks(b bank, picks, stored []dto.Pick) (kept []dto.Pick, dropped 
 		}
 		spec := b.dimensions[opt.Dimension]
 		if !stanceAllowed(spec, p.Stance) {
-			return nil, nil, apperr.Invalid("stance not allowed for dimension " + string(opt.Dimension) + ": " + p.Stance)
+			return nil, nil, apperr.Invalid("stance not allowed for dimension " + string(opt.Dimension) + ": " + string(p.Stance))
 		}
 		isLadder := spec.Kind == ladderKind
 		if isLadder && (p.Weight < 1 || p.Weight > maxLadderWeight) {
@@ -207,13 +208,8 @@ func validatedSalaryFloor(floor *dto.Money) (*dto.Money, error) {
 	return &dto.Money{Amount: floor.Amount, Currency: currency}, nil
 }
 
-func stanceAllowed(spec dto.DimensionSpec, stance string) bool {
-	for _, s := range spec.Stances {
-		if s == stance {
-			return true
-		}
-	}
-	return false
+func stanceAllowed(spec dto.DimensionSpec, stance dto.Stance) bool {
+	return slices.Contains(spec.Stances, stance)
 }
 
 func toView(cfg dto.SearchConfig) dto.ScoringConfigView {

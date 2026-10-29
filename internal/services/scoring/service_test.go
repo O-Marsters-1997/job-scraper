@@ -714,7 +714,7 @@ func TestUpdateConfigTextExtraction(t *testing.T) {
 type pickCase struct {
 	id        string
 	dimension dto.Dimension
-	stance    string
+	stance    dto.Stance
 	weight    int
 	retired   bool
 	unpicked  bool
@@ -733,8 +733,8 @@ func avoidPick(id string, pYes, pNo, pNotStated float64) pickCase {
 	return pickCase{id: id, dimension: dto.DimensionTech, stance: "avoid", answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
 }
 
-func blockPick(id string, pYes, pNo, pNotStated float64) pickCase {
-	return pickCase{id: id, dimension: dto.DimensionDomain, stance: "block", answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
+func neverPick(id string, pYes, pNo, pNotStated float64) pickCase {
+	return pickCase{id: id, dimension: dto.DimensionDomain, stance: dto.StanceNever, answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
 }
 
 func unpickedOption(dim dto.Dimension, id string, pYes, pNo, pNotStated float64) pickCase {
@@ -907,21 +907,21 @@ func TestRecompute(t *testing.T) {
 				wantRows:  []dto.ScoreRow{{Resolved: "no", Effect: "neutral"}},
 			},
 			{
-				name: "a block that resolves yes zeroes the score even with nice matches",
+				name: "a never that resolves yes caps the score even with nice matches",
 				picks: []pickCase{
 					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
-					blockPick("domain:gambling", 0.9, 0.05, 0.05),
+					neverPick("domain:gambling", 0.9, 0.05, 0.05),
 				},
-				wantScore: 0,
+				wantScore: 44,
 				wantBand:  "poor",
 				wantRows: []dto.ScoreRow{
 					{Resolved: "yes", Effect: "meets"},
-					{Resolved: "yes", Effect: "blocked"},
+					{Resolved: "yes", Effect: "gated"},
 				},
 			},
 			{
-				name:      "a block the job lacks is neutral",
-				picks:     []pickCase{blockPick("domain:gambling", 0.05, 0.9, 0.05)},
+				name:      "a never the job lacks is neutral",
+				picks:     []pickCase{neverPick("domain:gambling", 0.05, 0.9, 0.05)},
 				wantScore: 50,
 				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "no", Effect: "neutral"}},
@@ -977,65 +977,11 @@ func TestRecompute(t *testing.T) {
 				},
 			},
 			{
-				name: "work gate caps the score when the picked arrangement misses and another matches",
+				name: "an unpicked work option resolving yes no longer gates a missed pick",
 				picks: []pickCase{
 					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionWork, "work:remote", 0.05, 0.9, 0.05),
 					unpickedOption(dto.DimensionWork, "work:onsite", 0.9, 0.05, 0.05),
-				},
-				wantScore: 44,
-				wantBand:  "poor",
-				wantRows: []dto.ScoreRow{
-					{Resolved: "yes", Effect: "meets"},
-					{Resolved: "no", Effect: "gated"},
-				},
-			},
-			{
-				name: "work gate still caps the score when the matching arrangement is avoided",
-				picks: []pickCase{
-					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
-					nicePick(dto.DimensionWork, "work:remote", 0.05, 0.9, 0.05),
-					{id: "work:hybrid", dimension: dto.DimensionWork, stance: "avoid", answer: dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
-				},
-				wantScore: 42,
-				wantBand:  "poor",
-				wantRows: []dto.ScoreRow{
-					{Resolved: "yes", Effect: "meets"},
-					{Resolved: "no", Effect: "gated"},
-					{Resolved: "yes", Effect: "misses"},
-				},
-			},
-			{
-				name: "employment gate caps the score when a permanent Pick meets a contract role",
-				picks: []pickCase{
-					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
-					nicePick(dto.DimensionEmployment, "employment:permanent", 0.05, 0.9, 0.05),
-					unpickedOption(dto.DimensionEmployment, "employment:contract", 0.9, 0.05, 0.05),
-				},
-				wantScore: 44,
-				wantBand:  "poor",
-				wantRows: []dto.ScoreRow{
-					{Resolved: "yes", Effect: "meets"},
-					{Resolved: "no", Effect: "gated"},
-				},
-			},
-			{
-				name: "a gate needs every picked option to resolve no",
-				picks: []pickCase{
-					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
-					nicePick(dto.DimensionWork, "work:remote", 0.05, 0.9, 0.05),
-					nicePick(dto.DimensionWork, "work:hybrid", 0.9, 0.05, 0.05),
-					unpickedOption(dto.DimensionWork, "work:onsite", 0.9, 0.05, 0.05),
-				},
-				wantScore: 83,
-				wantBand:  "great",
-			},
-			{
-				name: "a gate needs an unpicked option to resolve yes",
-				picks: []pickCase{
-					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
-					nicePick(dto.DimensionWork, "work:remote", 0.05, 0.9, 0.05),
-					unpickedOption(dto.DimensionWork, "work:onsite", 0.2, 0.2, 0.6),
 				},
 				wantScore: 55,
 				wantBand:  "fair",
@@ -1045,7 +991,20 @@ func TestRecompute(t *testing.T) {
 				},
 			},
 			{
-				name: "a dimension that is not a gate never caps",
+				name: "a never on employment that resolves yes gates",
+				picks: []pickCase{
+					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
+					{id: "employment:contract", dimension: dto.DimensionEmployment, stance: dto.StanceNever, answer: dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
+				},
+				wantScore: 44,
+				wantBand:  "poor",
+				wantRows: []dto.ScoreRow{
+					{Resolved: "yes", Effect: "meets"},
+					{Resolved: "yes", Effect: "gated"},
+				},
+			},
+			{
+				name: "an unpicked option never caps",
 				picks: []pickCase{
 					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionStage, "stage:seed", 0.05, 0.9, 0.05),
@@ -1224,6 +1183,10 @@ func TestBandFor(t *testing.T) {
 }
 
 func TestFillMissingAnswers(t *testing.T) {
+	workOptions := []dto.ScoringOption{
+		{ID: "work:remote", Dimension: dto.DimensionWork, Label: "Remote", Question: "Is the role remote?"},
+		{ID: "work:onsite", Dimension: dto.DimensionWork, Label: "On-site", Question: "Is the role on-site?"},
+	}
 	tests := []struct {
 		name       string
 		options    []dto.ScoringOption
@@ -1234,9 +1197,10 @@ func TestFillMissingAnswers(t *testing.T) {
 		{"no picks queues nothing", nil, ptr(picking("user-1")), 0},
 		{"no search config queues nothing", nil, nil, 0},
 		{"a retired pick is never asked", []dto.ScoringOption{retiredCobol}, ptr(picking("user-1", "tech:cobol")), 0},
-		{"a Gate pick asks every live option in its dimension", seniorityOptions, ptr(picking("user-1", "seniority:senior")), 3},
-		{"a Gate pick never asks a retired option in its dimension", append(slices.Clone(seniorityOptions), retiredStaff), ptr(picking("user-1", "seniority:senior")), 3},
-		{"a Gate dimension without a pick asks nothing about it", seniorityOptions, ptr(picking("user-1", "tech:go")), 1},
+		{"a ladder pick asks every live option in its dimension", seniorityOptions, new(picking("user-1", "seniority:senior")), 3},
+		{"a ladder pick never asks a retired option in its dimension", append(slices.Clone(seniorityOptions), retiredStaff), new(picking("user-1", "seniority:senior")), 3},
+		{"a ladder dimension without a pick asks nothing about it", seniorityOptions, new(picking("user-1", "tech:go")), 1},
+		{"a work pick asks only the picked option", workOptions, new(picking("user-1", "work:remote")), 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

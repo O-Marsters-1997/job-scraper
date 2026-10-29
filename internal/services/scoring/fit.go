@@ -106,7 +106,7 @@ func (p preparedJob) features() []float64 {
 			continue
 		}
 		switch pk.stance {
-		case "nice":
+		case dto.StanceNice:
 			d, ok := nice[pk.dimension]
 			if !ok {
 				d = &niceDimension{}
@@ -114,7 +114,7 @@ func (p preparedJob) features() []float64 {
 			}
 			d.sumYes += pk.answer.PYes
 			d.evidence = max(d.evidence, pk.answer.PYes+pk.answer.PNo)
-		case "avoid":
+		case dto.StanceAvoid, dto.StanceNever:
 			x[len(Dimensions)] += pk.answer.PYes
 		}
 	}
