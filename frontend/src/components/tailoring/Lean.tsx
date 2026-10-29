@@ -64,6 +64,9 @@ export function Lean(props: {
 							</span>
 						</Show>
 					</p>
+					<Show when={props.lean.state === null}>
+						<p class="text-muted">Not in your Experience Bank.</p>
+					</Show>
 					<Show
 						when={props.line}
 						fallback={
