@@ -36,8 +36,11 @@ func TestModule_ExplainDraft(t *testing.T) {
 
 		_, err := m.ExplainDraft(t.Context(), userID, dto.ExplainDraftInput{ID: id})
 
-		if !apperr.IsKind(err, apperr.KindUpstream) || !strings.Contains(buf.String(), "openrouter said no") {
-			t.Errorf("ExplainDraft() = %v, log %q, want upstream error with the cause logged", err, buf.String())
+		if !apperr.IsKind(err, apperr.KindUpstream) {
+			t.Errorf("ExplainDraft() error = %v, want upstream", err)
+		}
+		if !strings.Contains(buf.String(), "openrouter said no") {
+			t.Errorf("log = %q, want the model failure's cause", buf.String())
 		}
 	})
 
