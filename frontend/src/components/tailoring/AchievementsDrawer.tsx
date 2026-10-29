@@ -24,18 +24,17 @@ function ClosestLine(props: { quote: string | undefined }) {
 					e.stopPropagation();
 					setOpen(!open());
 				}}
-				onKeyDown={(e) => e.stopPropagation()}
+				onKeyDown={(e) => {
+					if (e.key === " " || e.key === "Enter") e.stopPropagation();
+				}}
 			>
-				Why this ranking?
+				Closest line in the job ad
 			</button>
 			<Show when={open()}>
-				<span class="mt-1 block">
-					<span class="font-medium">Closest line in the job ad</span>
-					<span class="block italic">
-						{props.quote
-							? `“${props.quote}”`
-							: "No close match in the job description"}
-					</span>
+				<span class="mt-1 block italic">
+					{props.quote
+						? `“${props.quote}”`
+						: "No close match in the job description"}
 				</span>
 			</Show>
 		</span>

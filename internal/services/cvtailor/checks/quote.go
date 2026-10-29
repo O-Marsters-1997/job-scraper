@@ -14,12 +14,17 @@ var stopwords = func() map[string]bool {
 
 func ClosestSentence(bullet, text string) (string, bool) {
 	want := wordSet(bullet)
+	for w := range want {
+		if stopwords[w] {
+			delete(want, w)
+		}
+	}
 	best, bestShared := "", 0
 	for _, s := range sentenceRe.Split(text, -1) {
 		have := wordSet(s)
 		shared := 0
 		for w := range want {
-			if have[w] && !stopwords[w] {
+			if have[w] {
 				shared++
 			}
 		}
