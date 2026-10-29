@@ -24,4 +24,5 @@ type GradeInput struct {
 type ImpliedLabel struct {
 	JobID  string
 	Source string
+	At     time.Time
 }
