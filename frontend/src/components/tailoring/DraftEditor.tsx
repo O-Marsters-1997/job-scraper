@@ -173,8 +173,12 @@ export function DraftEditor(props: {
 				source: "jd",
 				text: htmlToText(loadedData(job)?.Description ?? ""),
 			},
-			{ label: "Your note", source: "note", text: note.data?.Body ?? "" },
-			...(comments.data ?? []).map(
+			{
+				label: "Your note",
+				source: "note",
+				text: loadedData(note)?.Body ?? "",
+			},
+			...(loadedData(comments) ?? []).map(
 				(c): JobTextBlock => ({
 					label: "Comment",
 					source: "comment",
@@ -185,7 +189,7 @@ export function DraftEditor(props: {
 		return blocks.filter((b) => b.text !== "");
 	};
 	const leanBySlot = createMemo(
-		() => new Map(leanQuery.data?.map((b) => [b.slotId, b])),
+		() => new Map(loadedData(leanQuery)?.map((b) => [b.slotId, b])),
 	);
 
 	const pagePx = () => (props.layout?.page.width ?? 0) * PX_PER_PT;
@@ -266,7 +270,9 @@ export function DraftEditor(props: {
 			)
 			?.focus();
 	const tailorQuote = (slotId: string) =>
-		insightsQuery.data?.lines.find((l) => l.slotId === slotId && l.anchored);
+		loadedData(insightsQuery)?.lines.find(
+			(l) => l.slotId === slotId && l.anchored,
+		);
 	const askOpen = () => askSlot() !== undefined && askSlot() === activeSlot();
 	const setAskOpen = (open: boolean) =>
 		setAskSlot(open ? activeSlot() : undefined);
@@ -298,7 +304,9 @@ export function DraftEditor(props: {
 	};
 	const tabs = (): { id: View; label: string }[] => [
 		{ id: "document", label: "Document" },
-		...(leanQuery.data ? [{ id: "insights" as const, label: "Insights" }] : []),
+		...(loadedData(leanQuery)
+			? [{ id: "insights" as const, label: "Insights" }]
+			: []),
 	];
 	const current = () =>
 		tabs().some((t) => t.id === view()) ? view() : "document";
@@ -323,7 +331,7 @@ export function DraftEditor(props: {
 	const rolePicks = createRolePicks({
 		draft: () => props.draft,
 		editor: ed,
-		bank: () => bank.data ?? [],
+		bank: () => loadedData(bank) ?? [],
 		positions: () => rolePositions(),
 	});
 	const rolesQuery = useDraftRoles(
@@ -331,7 +339,7 @@ export function DraftEditor(props: {
 		() => props.draft.status === "ready",
 	);
 	const budgetOf = (positionId: string) => {
-		const role = rolesQuery.data?.roles.find(
+		const role = loadedData(rolesQuery)?.roles.find(
 			(r) => r.positionId === positionId,
 		);
 		return role && roleBudget(role);
@@ -511,7 +519,7 @@ export function DraftEditor(props: {
 						Draft CV
 					</h1>
 					<p class="truncate text-xs text-faint">
-						{job.data?.Title ?? "Loading job…"}
+						{loadedData(job)?.Title ?? "Loading job…"}
 					</p>
 				</div>
 				<Show when={editable()}>
@@ -630,13 +638,13 @@ export function DraftEditor(props: {
 				}}
 			>
 				<Switch fallback={<LayoutUnavailable reason={props.layoutError} />}>
-					<Match when={current() === "insights" && leanQuery.data}>
+					<Match when={current() === "insights" && loadedData(leanQuery)}>
 						{(lean) => (
 							<div class="mx-auto max-w-6xl px-6 py-10">
 								<Insights
 									lean={lean()}
 									jobText={jobText()}
-									insights={insightsQuery.data}
+									insights={loadedData(insightsQuery)}
 									explaining={explain.isPending}
 									explainError={explain.error?.message}
 									text={ed.text}

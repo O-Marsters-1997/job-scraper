@@ -7,6 +7,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
+import { loadedData } from "@/lib/queryData";
 import { lineWithIds, moveItem } from "@/lib/tailoring";
 import type { Draft, SkillGroup } from "@/types/tailoring";
 import { useBankSkills } from "../../hooks/useBankSkills";
@@ -39,7 +40,7 @@ function SkillsForm(props: {
 	const sourced = createMemo(() => {
 		const names = [
 			...(props.draft.base?.skillGroups.flatMap((g) => g.items) ?? []),
-			...(bank.data?.map((b) => b.name) ?? []),
+			...(loadedData(bank)?.map((b) => b.name) ?? []),
 		];
 		return [...new Set(names)];
 	});
@@ -56,7 +57,7 @@ function SkillsForm(props: {
 	const candidatesFor = (line: number) => {
 		const onCv = new Set(groups().flatMap((g) => g.items.map(normalise)));
 		return (
-			suggestions.data?.lines[line]?.candidates.filter(
+			loadedData(suggestions)?.lines[line]?.candidates.filter(
 				(c) => !onCv.has(normalise(c.name)),
 			) ?? []
 		);
