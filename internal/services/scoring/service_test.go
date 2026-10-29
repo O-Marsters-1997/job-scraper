@@ -1890,6 +1890,7 @@ func TestRunTick_RecordsRejections(t *testing.T) {
 }
 
 func TestPreview(t *testing.T) {
+	t.Parallel()
 	const userID = "user-1"
 	yes := dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}
 	no := dto.Answer{PYes: 0.05, PNo: 0.9, PNotStated: 0.05}
@@ -1917,6 +1918,7 @@ func TestPreview(t *testing.T) {
 	}
 
 	t.Run("counts dismissed jobs in the top five before and after, newest label first", func(t *testing.T) {
+		t.Parallel()
 		got, err := svc.Preview(t.Context(), userID, dto.ScoringPreviewInput{Preferences: picking(userID, "tech:rust").Preferences})
 		if err != nil {
 			t.Fatalf("Preview() err = %v", err)
@@ -1933,6 +1935,7 @@ func TestPreview(t *testing.T) {
 	})
 
 	t.Run("rejects an unknown option", func(t *testing.T) {
+		t.Parallel()
 		in := dto.ScoringPreviewInput{Preferences: picking(userID, "tech:nope").Preferences}
 		if _, err := svc.Preview(t.Context(), userID, in); !apperr.IsKind(err, apperr.KindInvalid) {
 			t.Errorf("Preview() err = %v, want invalid", err)
