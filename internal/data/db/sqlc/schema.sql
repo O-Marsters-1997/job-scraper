@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT        NOT NULL,
     email         TEXT        UNIQUE,
     role          user_role   NOT NULL DEFAULT 'user',
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    cv_filename_pattern TEXT  NOT NULL DEFAULT 'cv-{company}'
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -223,6 +224,7 @@ CREATE TABLE tailored_cvs (
     mode            TEXT        NOT NULL DEFAULT 'generate' CONSTRAINT tailored_cvs_mode_check CHECK (mode IN ('as_is', 'generate')),
     kept_as         TEXT        CHECK (kept_as IN ('tab', 'doc')),
     keep_note       TEXT        NOT NULL DEFAULT '',
+    kept_tab_id     TEXT,
     attempts        INT         NOT NULL DEFAULT 0,
     due_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     lease_until     TIMESTAMPTZ,

@@ -25,6 +25,7 @@ type FakeStore struct {
 	sessions map[string]dto.Session
 	aiCreds  map[string]string
 	roles    map[string]string
+	patterns map[string]string
 }
 
 func NewFakeStore() *FakeStore {
@@ -34,6 +35,7 @@ func NewFakeStore() *FakeStore {
 		sessions: make(map[string]dto.Session),
 		aiCreds:  make(map[string]string),
 		roles:    make(map[string]string),
+		patterns: make(map[string]string),
 	}
 }
 
@@ -157,7 +159,25 @@ func (f *FakeStore) GetProfile(_ context.Context, userID string) (dto.Profile, e
 	if !ok {
 		return dto.Profile{}, data.ErrNotFound
 	}
-	return dto.Profile{Username: u.Username, Email: u.Email}, nil
+	return f.profile(u), nil
+}
+
+func (f *FakeStore) profile(u dto.User) dto.Profile {
+	pattern, ok := f.patterns[u.ID]
+	if !ok {
+		pattern = dto.DefaultCVFilenamePattern
+	}
+	return dto.Profile{Username: u.Username, Email: u.Email, CVFilenamePattern: pattern}
+}
+
+func (f *FakeStore) SetCVFilenamePattern(_ context.Context, userID, pattern string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.users[userID]; !ok {
+		return data.ErrNotFound
+	}
+	f.patterns[userID] = pattern
+	return nil
 }
 
 func (f *FakeStore) UpdateEmail(_ context.Context, userID, email string) (dto.Profile, error) {
@@ -169,7 +189,7 @@ func (f *FakeStore) UpdateEmail(_ context.Context, userID, email string) (dto.Pr
 	}
 	u.Email = email
 	f.users[userID] = u
-	return dto.Profile{Username: u.Username, Email: u.Email}, nil
+	return f.profile(u), nil
 }
 
 func (f *FakeStore) UpsertUserAICredential(_ context.Context, userID string, provider dto.Provider, encKey string) error {

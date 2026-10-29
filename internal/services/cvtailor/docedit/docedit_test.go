@@ -91,7 +91,7 @@ func bullets(texts ...string) []cvedit.Bullet {
 
 func requests(t *testing.T, doc fixtureDoc, positions docedit.PositionSlots, edits cvedit.EditSet) []docedit.Request {
 	t.Helper()
-	reqs, err := docedit.Requests(doc.ds, positions, edits)
+	reqs, err := docedit.Requests(doc.ds, "", positions, edits)
 	if err != nil {
 		t.Fatalf("Requests() error = %v", err)
 	}
@@ -100,6 +100,29 @@ func requests(t *testing.T, doc fixtureDoc, positions docedit.PositionSlots, edi
 
 func TestRequests(t *testing.T) {
 	doc := loadFixture(t, "profile_skills_list.json")
+	t.Run("targets the given tab on every request", func(t *testing.T) {
+		t.Parallel()
+		profile := "Go engineer."
+		reqs, err := docedit.Requests(doc.ds, "t.kept", docedit.PositionSlots{"p1": {"s0", "s1"}}, cvedit.EditSet{
+			Positions: []cvedit.PositionEdit{{PositionID: "p1", Bullets: bullets("Cut latency.")}},
+			Profile:   &profile,
+		})
+		if err != nil || len(reqs) == 0 {
+			t.Fatalf("Requests() = %d requests, %v, want some", len(reqs), err)
+		}
+		for i, r := range reqs {
+			tab := ""
+			switch {
+			case r.DeleteContentRange != nil:
+				tab = r.DeleteContentRange.Range.TabID
+			case r.InsertText != nil:
+				tab = r.InsertText.Location.TabID
+			}
+			if tab != "t.kept" {
+				t.Errorf("request %d tab = %q, want t.kept", i, tab)
+			}
+		}
+	})
 	t.Run("replaces profile, bullets and list skills", func(t *testing.T) {
 		positions := docedit.PositionSlots{"p1": {"s0", "s1"}, "p2": {"s2"}}
 		profile := "Go engineer."
@@ -260,7 +283,7 @@ func TestRequestsSkillLineMismatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := docedit.Requests(doc.ds, nil, cvedit.EditSet{Skills: tt.skills})
+			_, err := docedit.Requests(doc.ds, "", nil, cvedit.EditSet{Skills: tt.skills})
 			if !errors.Is(err, docedit.ErrSkillLines) {
 				t.Errorf("Requests() error = %v, want %v", err, docedit.ErrSkillLines)
 			}
@@ -291,7 +314,7 @@ func TestRequestsErrors(t *testing.T) {
 	doc := loadFixture(t, "profile_skills_list.json")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := docedit.Requests(doc.ds, tt.positions, cvedit.EditSet{Positions: []cvedit.PositionEdit{tt.edit}})
+			_, err := docedit.Requests(doc.ds, "", tt.positions, cvedit.EditSet{Positions: []cvedit.PositionEdit{tt.edit}})
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("Requests() error = %v, want %v", err, tt.wantErr)
 			}

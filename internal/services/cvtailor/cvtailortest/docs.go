@@ -48,6 +48,8 @@ type Drive struct {
 	Updates   [][]json.RawMessage
 	AddedTabs []string
 	AddTabErr error
+	ChildOf   []string
+	TabPages  map[string]int
 }
 
 func (d *Drive) ListTabs(context.Context, string, string) ([]google.Tab, error) {
@@ -62,6 +64,16 @@ func (d *Drive) AddTab(_ context.Context, _, _, title string) (string, error) {
 	}
 	d.AddedTabs = append(d.AddedTabs, title)
 	return fmt.Sprintf("t.added%d", len(d.AddedTabs)), nil
+}
+
+func (d *Drive) AddChildTab(ctx context.Context, userID, docID, parentTabID, title string) (string, error) {
+	id, err := d.AddTab(ctx, userID, docID, title)
+	if err == nil {
+		d.mu.Lock()
+		d.ChildOf = append(d.ChildOf, parentTabID)
+		d.mu.Unlock()
+	}
+	return id, err
 }
 
 func (d *Drive) CopyFile(_ context.Context, _, _, _ string) (string, error) {
@@ -79,7 +91,10 @@ func (d *Drive) BatchUpdate(_ context.Context, _, _ string, reqs []json.RawMessa
 	return nil
 }
 
-func (d *Drive) ExportPDF(_ context.Context, _, _, _ string) (io.ReadCloser, error) {
+func (d *Drive) ExportPDF(_ context.Context, _, _, tabID string) (io.ReadCloser, error) {
+	if n, ok := d.TabPages[tabID]; ok {
+		return pdfWithPages(n), nil
+	}
 	return pdfWithPages(1), nil
 }
 

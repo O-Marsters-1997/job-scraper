@@ -9,6 +9,13 @@ export async function fetchProfile(): Promise<Profile> {
 	);
 }
 
+export async function updateCvFilenamePattern(pattern: string): Promise<void> {
+	return mocked(
+		(db) => db.updateCvFilenamePattern(pattern),
+		() => apiFetchVoid("/profile/cv-filename", jsonInit("PUT", { pattern })),
+	);
+}
+
 export async function updateProfile(payload: { email: string }): Promise<void> {
 	return mocked(
 		(db) => db.updateProfile(payload),

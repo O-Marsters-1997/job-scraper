@@ -33,8 +33,8 @@ type plan struct {
 	unlinked   []dto.DraftPosition
 }
 
-func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) (plan, error) {
-	raw, ds, err := fetchTab(ctx, s.docs, claim.UserID, docID, claim.TabID)
+func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID, tabID string) (plan, error) {
+	raw, ds, err := fetchTab(ctx, s.docs, claim.UserID, docID, tabID)
 	if err != nil {
 		return plan{}, err
 	}

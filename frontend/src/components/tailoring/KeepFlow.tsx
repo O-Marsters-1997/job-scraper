@@ -72,6 +72,11 @@ export function KeepNotices(props: {
 	const google = useGoogleStatus();
 	return (
 		<>
+			<Show when={props.draft.keptAs === "doc" && props.draft.keepNote}>
+				<Notice>
+					<p class="text-foreground">{props.draft.keepNote}</p>
+				</Notice>
+			</Show>
 			<Show
 				when={
 					props.editable &&

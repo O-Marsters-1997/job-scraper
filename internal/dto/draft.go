@@ -57,12 +57,14 @@ type Draft struct {
 	Status       string           `json:"status"`
 	Outcome      *string          `json:"outcome"`
 	KeptAs       string           `json:"keptAs"`
+	KeepNote     string           `json:"keepNote"`
 	DraftDocURL  *string          `json:"draftDocUrl"`
 	LastError    string           `json:"lastError"`
 	CreatedAt    time.Time        `json:"createdAt"`
 	Findings     []DraftFinding   `json:"findings"`
 	Provenance   *DraftProvenance `json:"provenance"`
 	DraftDocID   string           `json:"-"`
+	DraftTabID   string           `json:"-"`
 	EditSet      json.RawMessage  `json:"-"`
 	Content      *DraftContent    `json:"content"`
 	Base         *DraftContent    `json:"base"`
@@ -148,11 +150,18 @@ type DraftClaim struct {
 	Mode           DraftMode
 	Attempts       int
 	DraftDocID     string
+	KeptTabID      string
 	JobDescription string
 	JobFingerprint string
 	Keeping        bool
 	JobTitle       string
 	CompanyName    string
+}
+
+type KeepPlacement struct {
+	DocID string
+	TabID string
+	Note  string
 }
 
 // DraftResult is what a finished generation records on its Draft.

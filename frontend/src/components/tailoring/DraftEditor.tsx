@@ -46,6 +46,7 @@ import {
 	type PageMetrics,
 	PX_PER_PT,
 } from "./DocPage";
+import { DownloadPdfButton } from "./DownloadPdfButton";
 import { PageMeter, SaveIndicator } from "./DraftMeters";
 import { Insights } from "./Insights";
 import type { JobTextBlock } from "./JobText";
@@ -640,6 +641,11 @@ export function DraftEditor(props: {
 						<Icon name="fileText" size={14} />
 						<span class="hidden 2xl:inline">Print preview</span>
 					</Button>
+					<DownloadPdfButton
+						draftId={props.draft.id}
+						jobId={props.draft.jobId}
+						flush={ed.flush}
+					/>
 					<Show when={props.draft.draftDocUrl}>
 						{(url) => (
 							<Button
@@ -851,6 +857,7 @@ export function DraftEditor(props: {
 			<Show when={preview()}>
 				<PrintPreview
 					draftId={props.draft.id}
+					jobId={props.draft.jobId}
 					onClose={() => setPreview(false)}
 				/>
 			</Show>

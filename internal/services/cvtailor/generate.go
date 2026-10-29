@@ -51,6 +51,7 @@ type Credentials interface {
 type Drive interface {
 	ListTabs(ctx context.Context, userID, docID string) ([]google.Tab, error)
 	AddTab(ctx context.Context, userID, docID, title string) (string, error)
+	AddChildTab(ctx context.Context, userID, docID, parentTabID, title string) (string, error)
 	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
 	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
 	DeleteFile(ctx context.Context, userID, fileID string) error
@@ -108,16 +109,21 @@ func (m *Module) keep(ctx context.Context, claim dto.DraftClaim) error {
 	if claim.Attempts > dto.MaxDraftAttempts {
 		return m.store.FailKeep(ctx, claim, dto.DraftFailure{Reason: "gave up after repeated crashes", Terminal: true})
 	}
-	name := claim.CompanyName + " — " + claim.JobTitle
-	cause := m.drive.RenameFile(ctx, claim.UserID, claim.DraftDocID, name)
-	if cause != nil {
-		cause = fmt.Errorf("rename kept doc: %w", cause)
-	} else if outcomes, err := m.svc.keepOutcomes(ctx, claim); err != nil {
-		cause = fmt.Errorf("compute outcomes: %w", err)
-	} else if cause = m.store.CompleteKeep(ctx, claim, outcomes); cause == nil {
-		return nil
-	} else if !errors.Is(cause, store.ErrKeptDraftExists) {
-		return cause
+	placement, cause := m.placeKeep(ctx, claim)
+	if cause == nil {
+		if outcomes, err := m.svc.keepOutcomes(ctx, claim); err != nil {
+			cause = fmt.Errorf("compute outcomes: %w", err)
+		} else if cause = m.store.CompleteKeep(ctx, claim, placement, outcomes); cause == nil {
+			if placement.TabID != "" {
+				m.deleteTempDoc(ctx, claim)
+			}
+			return nil
+		} else if !errors.Is(cause, store.ErrKeptDraftExists) {
+			return cause
+		}
+		if placement.TabID != "" {
+			m.dropKeptTab(ctx, claim, placement.TabID)
+		}
 	}
 	_, terminal := apperr.StatusFor(cause)
 	failure := dto.DraftFailure{Reason: cause.Error(), Terminal: terminal || errors.Is(cause, store.ErrKeptDraftExists)}
@@ -148,7 +154,7 @@ func (m *Module) fail(ctx context.Context, claim dto.DraftClaim, cause error, cl
 
 func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dto.DraftResult, error) {
 	stop := m.stepTimer(ctx, claim.ID, "plan")
-	pl, err := m.svc.plan(ctx, claim, claim.DocID)
+	pl, err := m.svc.plan(ctx, claim, claim.DocID, claim.TabID)
 	stop()
 	if err != nil {
 		return "", dto.DraftResult{}, err
@@ -173,7 +179,7 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 		return docID, dto.DraftResult{}, err
 	}
 	stop = m.stepTimer(ctx, claim.ID, "apply_edits")
-	err = m.svc.applyEdits(ctx, claim.UserID, docID, pl, edits)
+	err = m.svc.applyEdits(ctx, claim.UserID, docID, claim.TabID, pl, edits)
 	stop()
 	if err != nil {
 		return docID, dto.DraftResult{}, err
@@ -281,8 +287,8 @@ func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, err
 	return docID, nil
 }
 
-func (s *Service) applyEdits(ctx context.Context, userID, docID string, pl plan, edits cvedit.EditSet) error {
-	raw, err := s.editRequests(pl, edits)
+func (s *Service) applyEdits(ctx context.Context, userID, docID, tabID string, pl plan, edits cvedit.EditSet) error {
+	raw, err := s.editRequests(pl, tabID, edits)
 	if err != nil || len(raw) == 0 {
 		return err
 	}
@@ -292,8 +298,8 @@ func (s *Service) applyEdits(ctx context.Context, userID, docID string, pl plan,
 	return nil
 }
 
-func (s *Service) editRequests(pl plan, edits cvedit.EditSet) ([]json.RawMessage, error) {
-	requests, err := docedit.Requests(pl.structure, pl.slotIDs(), edits)
+func (s *Service) editRequests(pl plan, tabID string, edits cvedit.EditSet) ([]json.RawMessage, error) {
+	requests, err := docedit.Requests(pl.structure, tabID, pl.slotIDs(), edits)
 	if err != nil {
 		return nil, fmt.Errorf("build doc edits: %w", err)
 	}

@@ -60,7 +60,7 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	}
 
 	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, JobID: draft.JobID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: chosen, Roles: roles, Mode: draft.Mode}
-	basePlan, err := s.plan(ctx, claim, claim.DocID)
+	basePlan, err := s.plan(ctx, claim, claim.DocID, claim.TabID)
 	if err != nil {
 		return dto.Draft{}, err
 	}
@@ -68,7 +68,7 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	docPlan, err := s.plan(ctx, docClaim, draft.DraftDocID)
+	docPlan, err := s.plan(ctx, docClaim, draft.DraftDocID, draft.DraftTabID)
 	if err != nil {
 		return dto.Draft{}, err
 	}
@@ -104,20 +104,20 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	switch {
 	case rebuilt:
 		var ds docparse.DocStructure
-		if ds, err = s.rebuildDoc(ctx, claim, draft.DraftDocID, layout, edits); err == nil {
+		if ds, err = s.rebuildDoc(ctx, claim, draft.DraftDocID, draft.DraftTabID, layout, edits); err == nil {
 			headings = ds.Headings
 		}
 	default:
 		if edits.Roles != nil {
 			headings = docPlan.structure.Headings
 		}
-		err = s.applyEdits(ctx, userID, draft.DraftDocID, docPlan, docEdits)
+		err = s.applyEdits(ctx, userID, draft.DraftDocID, draft.DraftTabID, docPlan, docEdits)
 	}
 	if err != nil {
 		return dto.Draft{}, err
 	}
 
-	basePages, draftPages, draftPDF, err := s.pageCounts(ctx, claim, draft.DraftDocID)
+	basePages, draftPages, draftPDF, err := s.pageCounts(ctx, claim, draft.DraftDocID, draft.DraftTabID)
 	if err != nil {
 		return dto.Draft{}, err
 	}

@@ -273,7 +273,7 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 ### CV tailoring
 
 **Draft**:
-A CV tailored for one Job from a base CV, edited and reviewed in the app until the user keeps or discards it. Its content is owned by the app; once kept it becomes a named Doc (`kept_as = 'doc'`) and stays editable, while a discarded Draft is read-only ([ADR 0038](docs/adr/0038-kept-drafts-stay-editable.md)).
+A CV tailored for one Job from a base CV, edited and reviewed in the app until the user keeps or discards it. Its content is owned by the app; once kept it becomes a child Tab of the base CV Doc (`kept_as = 'tab'`), or a named Doc (`kept_as = 'doc'`) when the Tab cannot be built, and stays editable, while a discarded Draft is read-only ([ADR 0038](docs/adr/0038-kept-drafts-stay-editable.md)).
 _Avoid_: Tailored CV, copy, version
 
 **Profile**:

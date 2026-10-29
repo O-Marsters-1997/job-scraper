@@ -112,7 +112,7 @@ func (s *Service) applyRoles(ctx context.Context, claim dto.DraftClaim, ds docpa
 	return edits, rl, true, nil
 }
 
-func (s *Service) rebuildDoc(ctx context.Context, claim dto.DraftClaim, draftDocID string, rl roleLayout, edits cvedit.EditSet) (docparse.DocStructure, error) {
+func (s *Service) rebuildDoc(ctx context.Context, claim dto.DraftClaim, draftDocID, draftTabID string, rl roleLayout, edits cvedit.EditSet) (docparse.DocStructure, error) {
 	base, err := s.docs.GetDocument(ctx, claim.UserID, claim.DocID, claim.TabID)
 	if err != nil {
 		return docparse.DocStructure{}, fmt.Errorf("load CV tab: %w", err)
@@ -150,15 +150,15 @@ func (s *Service) rebuildDoc(ctx context.Context, claim dto.DraftClaim, draftDoc
 			return docparse.DocStructure{}, err
 		}
 	}
-	current, err := s.docs.GetDocument(ctx, claim.UserID, draftDocID, claim.TabID)
+	current, err := s.docs.GetDocument(ctx, claim.UserID, draftDocID, draftTabID)
 	if err != nil {
 		return docparse.DocStructure{}, fmt.Errorf("load draft doc: %w", err)
 	}
-	cleared, err := tabcopy.Clear(current, claim.TabID)
+	cleared, err := tabcopy.Clear(current, draftTabID)
 	if err != nil {
 		return docparse.DocStructure{}, unrebuildable(err)
 	}
-	rebuild, err := tabcopy.Requests(arranged, claim.TabID)
+	rebuild, err := tabcopy.Requests(arranged, draftTabID)
 	if err != nil {
 		return docparse.DocStructure{}, unrebuildable(err)
 	}
@@ -175,7 +175,7 @@ func (s *Service) rebuildDoc(ctx context.Context, claim dto.DraftClaim, draftDoc
 		return docparse.DocStructure{}, err
 	}
 	reapply := cvedit.EditSet{Positions: edits.Positions, Profile: edits.Profile, Skills: edits.Skills}
-	reqs, err := s.editRequests(pl, reapply)
+	reqs, err := s.editRequests(pl, draftTabID, reapply)
 	if err != nil {
 		return docparse.DocStructure{}, err
 	}

@@ -139,7 +139,7 @@ func TestGeneratorRunTick(t *testing.T) {
 
 		url := "https://docs.google.com/document/d/copy-1/edit"
 		wantDraft := dto.Draft{ID: id, JobID: jobID, Mode: dto.DraftModeGenerate, Status: "ready", DraftDocURL: &url, DraftDocID: "copy-1"}
-		if diff := cmp.Diff(wantDraft, e.draft(t, id), cmpopts.IgnoreFields(dto.Draft{}, "Findings", "CreatedAt", "EditSet", "Provenance", "Content", "Base", "BaseContent", "BaseDocID", "BaseTabID", "AchievementIDs")); diff != "" {
+		if diff := cmp.Diff(wantDraft, e.draft(t, id), cmpopts.IgnoreFields(dto.Draft{}, "Findings", "CreatedAt", "EditSet", "Provenance", "Content", "Base", "BaseContent", "BaseDocID", "BaseTabID", "DraftTabID", "AchievementIDs")); diff != "" {
 			t.Errorf("GetDraft(%s) mismatch (-want +got):\n%s", id, diff)
 		}
 		wantResult := dto.DraftResult{JobFingerprint: "fp-1", DraftDocID: "copy-1"}

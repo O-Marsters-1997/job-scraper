@@ -61,6 +61,7 @@ LEFT JOIN companies c ON c.id = j.company_id
 WHERE t.id = next.id AND j.id = t.job_id
 RETURNING t.id, t.user_id, t.job_id, t.base_doc_id, t.base_tab_id, t.achievement_ids, t.skill_swaps, t.mode, t.attempts,
     COALESCE(t.draft_doc_id, '')::text AS draft_doc_id,
+    COALESCE(t.kept_tab_id, '')::text AS kept_tab_id,
     t.status = 'keeping' AS keeping,
     j.title AS job_title,
     COALESCE(c.name, j.company_slug)::text AS company_name,
@@ -79,6 +80,7 @@ type ClaimDraftRow struct {
 	Mode           string
 	Attempts       int32
 	DraftDocID     string
+	KeptTabID      string
 	Keeping        bool
 	JobTitle       string
 	CompanyName    string
@@ -100,6 +102,7 @@ func (q *Queries) ClaimDraft(ctx context.Context) (ClaimDraftRow, error) {
 		&i.Mode,
 		&i.Attempts,
 		&i.DraftDocID,
+		&i.KeptTabID,
 		&i.Keeping,
 		&i.JobTitle,
 		&i.CompanyName,
@@ -153,17 +156,30 @@ func (q *Queries) CompleteDraft(ctx context.Context, arg CompleteDraftParams) (i
 }
 
 const completeKeep = `-- name: CompleteKeep :execrows
-UPDATE tailored_cvs SET status = 'ready', outcome = 'kept', kept_as = 'doc', lease_until = NULL, last_error = ''
-WHERE id = $1::uuid AND attempts = $2::int AND status = 'keeping'
+UPDATE tailored_cvs SET status = 'ready', outcome = 'kept', lease_until = NULL, last_error = '',
+    kept_as = CASE WHEN $1::text = '' THEN 'doc' ELSE 'tab' END,
+    kept_tab_id = NULLIF($1::text, ''),
+    draft_doc_id = $2::text,
+    keep_note = $3::text
+WHERE id = $4::uuid AND attempts = $5::int AND status = 'keeping'
 `
 
 type CompleteKeepParams struct {
-	ID       pgtype.UUID
-	Attempts int32
+	KeptTabID  string
+	DraftDocID string
+	KeepNote   string
+	ID         pgtype.UUID
+	Attempts   int32
 }
 
 func (q *Queries) CompleteKeep(ctx context.Context, arg CompleteKeepParams) (int64, error) {
-	result, err := q.db.Exec(ctx, completeKeep, arg.ID, arg.Attempts)
+	result, err := q.db.Exec(ctx, completeKeep,
+		arg.KeptTabID,
+		arg.DraftDocID,
+		arg.KeepNote,
+		arg.ID,
+		arg.Attempts,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -250,7 +266,7 @@ func (q *Queries) FailKeep(ctx context.Context, arg FailKeepParams) (int64, erro
 }
 
 const getDraft = `-- name: GetDraft :one
-SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at, insights, insights_for FROM tailored_cvs WHERE id = $1 AND user_id = $2
+SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, kept_tab_id, attempts, due_at, lease_until, last_error, created_at, insights, insights_for FROM tailored_cvs WHERE id = $1 AND user_id = $2
 `
 
 type GetDraftParams struct {
@@ -283,6 +299,7 @@ func (q *Queries) GetDraft(ctx context.Context, arg GetDraftParams) (TailoredCv,
 		&i.Mode,
 		&i.KeptAs,
 		&i.KeepNote,
+		&i.KeptTabID,
 		&i.Attempts,
 		&i.DueAt,
 		&i.LeaseUntil,
@@ -338,7 +355,7 @@ const insertDraft = `-- name: InsertDraft :one
 INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, mode)
 SELECT $1::uuid, j.id, $2::text, $3::text, $4::uuid[], $5::jsonb, $6::text
 FROM jobs j WHERE j.id = $7::uuid
-RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at, insights, insights_for
+RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, kept_tab_id, attempts, due_at, lease_until, last_error, created_at, insights, insights_for
 `
 
 type InsertDraftParams struct {
@@ -384,6 +401,7 @@ func (q *Queries) InsertDraft(ctx context.Context, arg InsertDraftParams) (Tailo
 		&i.Mode,
 		&i.KeptAs,
 		&i.KeepNote,
+		&i.KeptTabID,
 		&i.Attempts,
 		&i.DueAt,
 		&i.LeaseUntil,
@@ -425,7 +443,7 @@ func (q *Queries) ListJobCommentBodies(ctx context.Context, arg ListJobCommentBo
 }
 
 const listJobDrafts = `-- name: ListJobDrafts :many
-SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at, insights, insights_for FROM tailored_cvs WHERE job_id = $1 AND user_id = $2 ORDER BY created_at DESC, id
+SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, kept_tab_id, attempts, due_at, lease_until, last_error, created_at, insights, insights_for FROM tailored_cvs WHERE job_id = $1 AND user_id = $2 ORDER BY created_at DESC, id
 `
 
 type ListJobDraftsParams struct {
@@ -464,6 +482,7 @@ func (q *Queries) ListJobDrafts(ctx context.Context, arg ListJobDraftsParams) ([
 			&i.Mode,
 			&i.KeptAs,
 			&i.KeepNote,
+			&i.KeptTabID,
 			&i.Attempts,
 			&i.DueAt,
 			&i.LeaseUntil,
@@ -577,7 +596,7 @@ func (q *Queries) ListProfileCaptureDrafts(ctx context.Context, userID pgtype.UU
 const queueKeep = `-- name: QueueKeep :one
 UPDATE tailored_cvs SET status = 'keeping', attempts = 0, due_at = NOW(), lease_until = NULL, last_error = ''
 WHERE id = $1 AND user_id = $2 AND status = 'ready' AND outcome IS NULL
-RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at, insights, insights_for
+RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, kept_tab_id, attempts, due_at, lease_until, last_error, created_at, insights, insights_for
 `
 
 type QueueKeepParams struct {
@@ -610,6 +629,7 @@ func (q *Queries) QueueKeep(ctx context.Context, arg QueueKeepParams) (TailoredC
 		&i.Mode,
 		&i.KeptAs,
 		&i.KeepNote,
+		&i.KeptTabID,
 		&i.Attempts,
 		&i.DueAt,
 		&i.LeaseUntil,
@@ -694,7 +714,7 @@ const setDraftOutcome = `-- name: SetDraftOutcome :one
 UPDATE tailored_cvs SET outcome = $1::text,
     draft_doc_id = CASE WHEN $1::text = 'discarded' THEN NULL ELSE draft_doc_id END
 WHERE id = $2::uuid AND user_id = $3::uuid
-RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at, insights, insights_for
+RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, skill_swaps, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, mode, kept_as, keep_note, kept_tab_id, attempts, due_at, lease_until, last_error, created_at, insights, insights_for
 `
 
 type SetDraftOutcomeParams struct {
@@ -728,6 +748,7 @@ func (q *Queries) SetDraftOutcome(ctx context.Context, arg SetDraftOutcomeParams
 		&i.Mode,
 		&i.KeptAs,
 		&i.KeepNote,
+		&i.KeptTabID,
 		&i.Attempts,
 		&i.DueAt,
 		&i.LeaseUntil,
@@ -737,4 +758,23 @@ func (q *Queries) SetDraftOutcome(ctx context.Context, arg SetDraftOutcomeParams
 		&i.InsightsFor,
 	)
 	return i, err
+}
+
+const setKeptTab = `-- name: SetKeptTab :execrows
+UPDATE tailored_cvs SET kept_tab_id = NULLIF($1::text, '')
+WHERE id = $2::uuid AND attempts = $3::int AND status = 'keeping'
+`
+
+type SetKeptTabParams struct {
+	KeptTabID string
+	ID        pgtype.UUID
+	Attempts  int32
+}
+
+func (q *Queries) SetKeptTab(ctx context.Context, arg SetKeptTabParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setKeptTab, arg.KeptTabID, arg.ID, arg.Attempts)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
