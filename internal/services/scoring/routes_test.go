@@ -29,8 +29,9 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"GET /scoring-options",
 		"GET /scores/status",
 		"POST /scores/recompute",
+		"POST /custom-options/draft",
 	)
-	handlerstest.RejectsMalformedBody(t, r, "PUT /scoring-config")
+	handlerstest.RejectsMalformedBody(t, r, "PUT /scoring-config", "POST /custom-options/draft")
 }
 
 func TestRoutesHappyPath(t *testing.T) {

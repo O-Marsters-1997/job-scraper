@@ -355,6 +355,81 @@ func (q *Queries) ListOptionAnswers(ctx context.Context, arg ListOptionAnswersPa
 	return items, nil
 }
 
+const listRecentScoredJobs = `-- name: ListRecentScoredJobs :many
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.first_discovered_at, j.scraped_at, j.description,
+    j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint,
+    COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id OR kc.slug = j.company_slug ORDER BY (kc.id = j.company_id) DESC LIMIT 1), 'unclassified')::text AS company_kind
+FROM job_scores s JOIN jobs j ON j.id = s.job_id
+WHERE s.user_id = $1::uuid AND j.closed_at IS NULL
+ORDER BY s.updated_at DESC
+LIMIT $2::bigint
+`
+
+type ListRecentScoredJobsParams struct {
+	UserID   pgtype.UUID
+	RowLimit int64
+}
+
+type ListRecentScoredJobsRow struct {
+	ID                 pgtype.UUID
+	Title              string
+	Location           string
+	Url                string
+	CompanySlug        string
+	Source             string
+	PostedAt           pgtype.Timestamptz
+	PostedAfter        pgtype.Timestamptz
+	FirstDiscoveredAt  pgtype.Timestamptz
+	ScrapedAt          pgtype.Timestamptz
+	Description        string
+	SalaryRaw          string
+	WorkArrangement    string
+	CompanyID          pgtype.UUID
+	PrimaryBoardID     pgtype.UUID
+	ProviderPostingID  pgtype.Text
+	ContentFingerprint pgtype.Text
+	CompanyKind        string
+}
+
+func (q *Queries) ListRecentScoredJobs(ctx context.Context, arg ListRecentScoredJobsParams) ([]ListRecentScoredJobsRow, error) {
+	rows, err := q.db.Query(ctx, listRecentScoredJobs, arg.UserID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecentScoredJobsRow
+	for rows.Next() {
+		var i ListRecentScoredJobsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Location,
+			&i.Url,
+			&i.CompanySlug,
+			&i.Source,
+			&i.PostedAt,
+			&i.PostedAfter,
+			&i.FirstDiscoveredAt,
+			&i.ScrapedAt,
+			&i.Description,
+			&i.SalaryRaw,
+			&i.WorkArrangement,
+			&i.CompanyID,
+			&i.PrimaryBoardID,
+			&i.ProviderPostingID,
+			&i.ContentFingerprint,
+			&i.CompanyKind,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScoringAnswersForUser = `-- name: ListScoringAnswersForUser :many
 SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confidence
 FROM job_scores s

@@ -10,6 +10,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/scoring-config", handlers.GetAll(m.svc.GetConfig))
 	r.Put("/scoring-config", handlers.Update(m.svc.UpdateConfig))
 	r.Get("/scoring-options", handlers.GetAll(m.svc.Options))
+	r.Post("/custom-options/draft", handlers.Create(m.svc.DraftCustomOption))
 	r.Get("/scores/status", handlers.GetAll(m.store.GetScoringStatus))
 	r.Put("/jobs/{id}/corrections/{optionId}", handlers.Update(m.svc.SetCorrection))
 	r.Delete("/jobs/{id}/corrections/{optionId}", handlers.Update(m.svc.RevertCorrection))

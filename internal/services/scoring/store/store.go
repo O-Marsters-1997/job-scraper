@@ -316,6 +316,22 @@ func (s *Store) GetJobForScoring(ctx context.Context, jobID string) (dto.Job, er
 	return toJobDTO(row), nil
 }
 
+func (s *Store) ListRecentScoredJobs(ctx context.Context, userID string, limit int) ([]dto.Job, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListRecentScoredJobs: user id: %w", err)
+	}
+	rows, err := s.queries.ListRecentScoredJobs(ctx, sqlc.ListRecentScoredJobsParams{UserID: uid, RowLimit: int64(limit)})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListRecentScoredJobs: %w", err)
+	}
+	jobs := make([]dto.Job, len(rows))
+	for i, row := range rows {
+		jobs[i] = toJobDTO(sqlc.GetJobForScoringRow(row))
+	}
+	return jobs, nil
+}
+
 // GetCompanyProfile returns the most recently fetched profile of companyID,
 // or data.ErrNotFound when it has none.
 func (s *Store) GetCompanyProfile(ctx context.Context, companyID string) (dto.CompanyProfile, error) {

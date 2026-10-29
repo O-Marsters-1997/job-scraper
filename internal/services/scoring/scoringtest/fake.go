@@ -58,6 +58,7 @@ type FakeStore struct {
 	evidence    map[string]dto.JobScoreEvidence
 	grades      map[string]map[string]dto.Grade
 	implied     map[string][]dto.ImpliedLabel
+	recent      map[string][]dto.Job
 
 	failed        []dto.ScoringFailure
 	completed     []CompletedEffect
@@ -683,6 +684,21 @@ func (f *FakeStore) SeedImpliedPositives(userID string, labels ...dto.ImpliedLab
 		f.implied = make(map[string][]dto.ImpliedLabel)
 	}
 	f.implied[userID] = labels
+}
+
+func (f *FakeStore) SeedRecentScoredJobs(userID string, jobs ...dto.Job) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.recent == nil {
+		f.recent = make(map[string][]dto.Job)
+	}
+	f.recent[userID] = jobs
+}
+
+func (f *FakeStore) ListRecentScoredJobs(_ context.Context, userID string, limit int) ([]dto.Job, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.recent[userID][:min(limit, len(f.recent[userID]))]), nil
 }
 
 func (f *FakeStore) ListImpliedPositives(_ context.Context, userID string) ([]dto.ImpliedLabel, error) {
