@@ -22,9 +22,13 @@ const (
 	ApplicationCreated       = "application_created"
 	ApplicationStatusChanged = "application_status_changed"
 	AlertOpened              = "alert_opened"
+	JobImpression            = "job_impression"
 )
 
-const maxReasonLen = 500
+const (
+	maxReasonLen       = 500
+	maxImpressionBatch = 50
+)
 
 type Store interface {
 	InsertEvent(ctx context.Context, tx pgx.Tx, userID, eventType, subjectID string, c client.Kind, props []byte) error
@@ -61,6 +65,49 @@ type applicationProps struct {
 	JobID        string `json:"job_id"`
 	FromStatusID string `json:"from_status_id,omitempty"`
 	ToStatusID   string `json:"to_status_id,omitempty"`
+}
+
+type impressionProps struct {
+	jobProps
+	Surface  dto.ImpressionSurface `json:"surface"`
+	Sort     dto.JobSort           `json:"sort,omitempty"`
+	Position int                   `json:"position"`
+}
+
+func (s *Service) RecordImpressions(ctx context.Context, userID string, in dto.ImpressionBatchInput) (struct{}, error) {
+	switch in.Surface {
+	case dto.SurfaceTriage, dto.SurfaceList:
+	default:
+		return struct{}{}, apperr.Invalid("unsupported surface")
+	}
+	switch in.Sort {
+	case "", dto.JobSortRelevant, dto.JobSortNewest, dto.JobSortBest:
+	default:
+		return struct{}{}, apperr.Invalid("unsupported sort")
+	}
+	if len(in.Items) == 0 || len(in.Items) > maxImpressionBatch {
+		return struct{}{}, apperr.Invalid(fmt.Sprintf("items must hold 1 to %d jobs", maxImpressionBatch))
+	}
+	for _, it := range in.Items {
+		if _, err := data.UUID(it.JobID); err != nil {
+			return struct{}{}, apperr.Invalid("invalid job_id")
+		}
+		if it.Position < 1 {
+			return struct{}{}, apperr.Invalid("position must be at least 1")
+		}
+	}
+	for _, it := range in.Items {
+		p := impressionProps{
+			jobProps: stampFrom(s.snapshot(ctx, userID, it.JobID), false),
+			Surface:  in.Surface,
+			Sort:     in.Sort,
+			Position: it.Position,
+		}
+		if err := s.insert(ctx, nil, userID, JobImpression, it.JobID, p); err != nil {
+			return struct{}{}, fmt.Errorf("events.RecordImpressions: %w", err)
+		}
+	}
+	return struct{}{}, nil
 }
 
 // Record stores a frontend-reported event for userID, stamping job events

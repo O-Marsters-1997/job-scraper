@@ -26,9 +26,18 @@ overwrites it on every rescore, so a later join returns today's score, not the o
 ## Consequences
 
 - ADR 0010's events-from-logs stays operational telemetry. Product events live in Postgres.
-- Raw list impressions are not recorded: refreshes, back-navigation and re-mounts make them noise.
+- Impressions are recorded as `job_impression` (see below), not as raw renders.
 - Explicit labels stay in `job_grades`, `score_feedback` and `answer_corrections`. Training queries
   SELECT-join them with `events`.
+
+## Job impressions
+
+`job_impression` records a job shown to a User, so training can tell "not clicked" from "not seen".
+Clients post a batch (1 to 50 items) to `POST /events/impressions`: surface (`triage` or `list`), sort,
+and a 1-based position per job. The server writes one row per item with the scalar score snapshot and
+`props.surface`, `props.sort` and `props.position`; it is server-only on `POST /events`. The web Jobs
+list sends one batch per loaded page and sort, so refreshes and re-renders of the same page add nothing.
+Alert impressions are not recorded.
 
 ## Dismiss reasons and undo
 

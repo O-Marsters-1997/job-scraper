@@ -19,6 +19,7 @@ const (
 	EventTypeApplicationCreated       EventType = "application_created"
 	EventTypeApplicationStatusChanged EventType = "application_status_changed"
 	EventTypeAlertOpened              EventType = "alert_opened"
+	EventTypeJobImpression            EventType = "job_impression"
 )
 
 func (e *EventType) Scan(src interface{}) error {
