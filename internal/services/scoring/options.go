@@ -40,8 +40,6 @@ var ladderLevels = map[string]int{
 	"seniority:principal_head": 5,
 }
 
-// Options returns the dimensions and every non-retired bank option, without
-// question text.
 func (s *Service) Options(ctx context.Context, userID string) (dto.ScoringOptionsView, error) {
 	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
