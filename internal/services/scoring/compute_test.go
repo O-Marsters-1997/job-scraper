@@ -94,6 +94,7 @@ func TestComputeOkStance(t *testing.T) {
 }
 
 func TestCurveCredit(t *testing.T) {
+	t.Parallel()
 	if got := curveCredit(0, 3); got != 0 {
 		t.Errorf("curveCredit(0, 3) = %v, want 0", got)
 	}
@@ -113,6 +114,7 @@ func TestCurveCredit(t *testing.T) {
 }
 
 func TestComputeKeepsRisingPastSaturation(t *testing.T) {
+	t.Parallel()
 	three, _, _ := compute(techPicks("nice", 3), nil, "", nil, false, nil)
 	four, _, _ := compute(techPicks("nice", 4), nil, "", nil, false, nil)
 	if four <= three {
