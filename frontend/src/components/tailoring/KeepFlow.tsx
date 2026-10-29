@@ -2,6 +2,7 @@ import { Link } from "@tanstack/solid-router";
 import { type JSX, Show } from "solid-js";
 import { googleWriteHref } from "@/components/GoogleWriteConsent";
 import { Button } from "@/components/ui/button";
+import { loadedData } from "@/lib/queryData";
 import type { Draft } from "@/types/tailoring";
 import { useGoogleStatus } from "../../hooks/useGoogle";
 import type { KeepFlow } from "../../hooks/useKeepFlow";
@@ -73,7 +74,9 @@ export function KeepNotices(props: {
 		<>
 			<Show
 				when={
-					props.editable && google.data?.connected && !google.data.canEditDocs
+					props.editable &&
+					loadedData(google)?.connected &&
+					!loadedData(google)?.canEditDocs
 				}
 			>
 				<Notice>
