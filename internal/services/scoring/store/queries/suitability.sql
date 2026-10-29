@@ -4,6 +4,15 @@ SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, 
     COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id OR kc.slug = j.company_slug ORDER BY (kc.id = j.company_id) DESC LIMIT 1), 'unclassified')::text AS company_kind
 FROM jobs j WHERE j.id = $1;
 
+-- name: ListRecentScoredJobs :many
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.first_discovered_at, j.scraped_at, j.description,
+    j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint,
+    COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id OR kc.slug = j.company_slug ORDER BY (kc.id = j.company_id) DESC LIMIT 1), 'unclassified')::text AS company_kind
+FROM job_scores s JOIN jobs j ON j.id = s.job_id
+WHERE s.user_id = sqlc.arg(user_id)::uuid AND j.closed_at IS NULL
+ORDER BY s.updated_at DESC
+LIMIT sqlc.arg(row_limit)::bigint;
+
 -- name: ListInterestedConfigs :many
 SELECT u.id AS user_id,
     COALESCE(sc.excluded_title_keywords, '{}')::text[] AS excluded_title_keywords,

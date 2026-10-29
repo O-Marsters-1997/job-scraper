@@ -8,6 +8,7 @@ const BANK_FIRST =
 	"Cut p99 API latency by 40% by moving hot paths to a read-through cache";
 const BANK_THIRD =
 	"Mentored three engineers through their first on-call rotation";
+const PICK_TOGGLE = { name: /^(Add|Remove)$/ };
 
 test.describe("Achievements drawer", () => {
 	test.beforeEach(async ({ draftPage }) => {
@@ -22,17 +23,17 @@ test.describe("Achievements drawer", () => {
 		await expect(rows).toHaveCount(3);
 		await expect(rows.nth(0)).toContainText(BANK_FIRST);
 		await expect(rows.nth(0)).toContainText("91%");
-		await expect(rows.nth(0).getByRole("button")).toHaveText("1");
-		await expect(rows.nth(1).getByRole("button")).toHaveText("2");
+		await expect(rows.nth(0).getByRole("button", PICK_TOGGLE)).toHaveText("1");
+		await expect(rows.nth(1).getByRole("button", PICK_TOGGLE)).toHaveText("2");
 		await expect(rows.nth(2)).toContainText("Unclear");
-		await expect(rows.nth(2).getByRole("button")).toHaveText("");
+		await expect(rows.nth(2).getByRole("button", PICK_TOGGLE)).toHaveText("");
 	});
 
 	test("a pick change rewrites the role's bullets and saves", async ({
 		page,
 		draftPage,
 	}) => {
-		await draftPage.row(BANK_FIRST).getByRole("button").click();
+		await draftPage.row(BANK_FIRST).getByRole("button", PICK_TOGGLE).click();
 		await expect(page.getByRole("textbox", { name: /bullet/ })).toHaveCount(2);
 		await expect(draftPage.line("Senior Backend Engineer bullet 1")).toHaveText(
 			SECOND,
@@ -47,7 +48,9 @@ test.describe("Achievements drawer", () => {
 		draftPage,
 	}) => {
 		await draftPage.row(BANK_THIRD).click();
-		await expect(draftPage.row(BANK_THIRD).getByRole("button")).toHaveText("3");
+		await expect(
+			draftPage.row(BANK_THIRD).getByRole("button", PICK_TOGGLE),
+		).toHaveText("3");
 		await expect(draftPage.line("Senior Backend Engineer bullet 3")).toHaveText(
 			BANK_THIRD,
 			{ timeout: SAVED_TIMEOUT_MS },
@@ -63,7 +66,7 @@ test.describe("Achievements drawer", () => {
 		page,
 		draftPage,
 	}) => {
-		await draftPage.row(BANK_SECOND).getByRole("button").click();
+		await draftPage.row(BANK_SECOND).getByRole("button", PICK_TOGGLE).click();
 		await expect(
 			page.getByRole("textbox").filter({ hasText: SECOND }),
 		).toHaveCount(0);
@@ -83,10 +86,14 @@ test.describe("Achievements drawer", () => {
 			"aria-selected",
 			"true",
 		);
-		await expect(draftPage.row(BANK_FIRST).getByRole("button")).toHaveText("1");
+		await expect(
+			draftPage.row(BANK_FIRST).getByRole("button", PICK_TOGGLE),
+		).toHaveText("1");
 
 		await list.press("2");
-		await expect(draftPage.row(BANK_FIRST).getByRole("button")).toHaveText("2");
+		await expect(
+			draftPage.row(BANK_FIRST).getByRole("button", PICK_TOGGLE),
+		).toHaveText("2");
 		await expect(draftPage.line("Senior Backend Engineer bullet 1")).toHaveText(
 			SECOND,
 		);
@@ -97,10 +104,14 @@ test.describe("Achievements drawer", () => {
 			"aria-selected",
 			"true",
 		);
-		await expect(draftPage.row(BANK_THIRD).getByRole("button")).toHaveText("");
+		await expect(
+			draftPage.row(BANK_THIRD).getByRole("button", PICK_TOGGLE),
+		).toHaveText("");
 
 		await list.press("Space");
-		await expect(draftPage.row(BANK_THIRD).getByRole("button")).toHaveText("3");
+		await expect(
+			draftPage.row(BANK_THIRD).getByRole("button", PICK_TOGGLE),
+		).toHaveText("3");
 
 		await list.press("Escape");
 		await expect(
@@ -113,7 +124,7 @@ test.describe("Achievements drawer", () => {
 
 	test("the line budget follows the page", async ({ draftPage }) => {
 		const before = await draftPage.usedLines();
-		await draftPage.row(BANK_SECOND).getByRole("button").click();
+		await draftPage.row(BANK_SECOND).getByRole("button", PICK_TOGGLE).click();
 		await expect.poll(() => draftPage.usedLines()).toBeLessThan(before);
 	});
 
@@ -121,4 +132,30 @@ test.describe("Achievements drawer", () => {
 		await page.getByRole("heading", { name: "Draft CV" }).click();
 		await expect(draftPage.drawer).toBeHidden();
 	});
+});
+
+test("the editor stays on screen while the bank loads", async ({
+	page,
+	draftPage,
+}) => {
+	await draftPage.goto();
+	await page.evaluate(() => {
+		const w = window as unknown as { editorGone: boolean };
+		w.editorGone = false;
+		const watch = () => {
+			if (!document.querySelector('[role="textbox"]')) w.editorGone = true;
+			requestAnimationFrame(watch);
+		};
+		watch();
+	});
+	await page
+		.getByRole("button", { name: "Choose Achievements for this role" })
+		.first()
+		.click();
+	await expect(draftPage.drawer.getByRole("option")).toHaveCount(3);
+	expect(
+		await page.evaluate(
+			() => (window as unknown as { editorGone: boolean }).editorGone,
+		),
+	).toBe(false);
 });

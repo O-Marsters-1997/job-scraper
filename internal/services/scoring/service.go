@@ -39,9 +39,10 @@ type Store interface {
 	ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error)
 	FailAnswerEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error
 	GetJobForScoring(ctx context.Context, jobID string) (dto.Job, error)
+	ListRecentScoredJobs(ctx context.Context, userID string, limit int) ([]dto.Job, error)
 	GetCompanyProfile(ctx context.Context, companyID string) (dto.CompanyProfile, error)
 	ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error)
-	ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error)
+	ListScoringOptions(ctx context.Context, userID string) ([]dto.ScoringOption, error)
 	ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error)
 	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore, rejections []dto.JobRejection) ([]string, error)
 	SaveAnswers(ctx context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error
@@ -69,6 +70,10 @@ type Store interface {
 	AddScoringOption(ctx context.Context, id, dimension, label, question string) error
 	RewordScoringOption(ctx context.Context, id, question string) error
 	RetireScoringOption(ctx context.Context, id string) error
+	AddCustomOption(ctx context.Context, userID string, opt dto.CustomOption) error
+	ReplaceCustomOption(ctx context.Context, userID, oldID string, opt dto.CustomOption) error
+	RetireCustomOption(ctx context.Context, userID, id string) error
+	CountLiveCustomOptions(ctx context.Context, userID string) (int, error)
 	UpsertPushSubscription(ctx context.Context, userID string, sub dto.PushSubscriptionInput) error
 	ListPushSubscriptions(ctx context.Context, userID string) ([]dto.PushSubscriptionInput, error)
 	DeletePushSubscription(ctx context.Context, userID, endpoint string) error
@@ -97,6 +102,7 @@ type Service struct {
 	profiles      ProfileReader
 	candidates    Reconsiderer
 	extractor     Extractor
+	drafter       Drafter
 	classifier    RecruiterClassifier
 	companyKinds  CompanyKinds
 	tickInterval  time.Duration
@@ -118,7 +124,7 @@ func NewService(deps Deps) *Service {
 	return &Service{
 		store: deps.Store, answerer: deps.Answerer, credentials: deps.Credentials, alerter: deps.Alerter, notifications: notifications,
 		pusher: pusher, vapidKey: deps.VAPIDPublicKey,
-		profiles: deps.Profiles, candidates: deps.Candidates, extractor: deps.Extractor, tickInterval: tickInterval,
+		profiles: deps.Profiles, candidates: deps.Candidates, extractor: deps.Extractor, drafter: deps.Drafter, tickInterval: tickInterval,
 		classifier: deps.Classifier, companyKinds: deps.CompanyKinds,
 	}
 }
@@ -225,15 +231,15 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result 
 
 	s.classifyCompany(ctx, job, surviving)
 
-	bk, err := s.loadBank(ctx)
-	if err != nil {
-		return fail(fmt.Errorf("load scoring options: %w", err))
-	}
-	byID := bk.byID
-
+	banks := make(map[string]bank, len(surviving))
 	asked := make(map[string]string)
 	for _, cfg := range surviving {
-		maps.Copy(asked, pickedQuestionHashes(cfg.Preferences.Picks, byID))
+		bk, err := s.loadBank(ctx, cfg.UserID)
+		if err != nil {
+			return fail(fmt.Errorf("load scoring options: %w", err))
+		}
+		banks[cfg.UserID] = bk
+		maps.Copy(asked, pickedQuestionHashes(cfg.Preferences.Picks, bk.byID))
 	}
 
 	cached, err := s.store.ListAnswers(ctx, effect.JobID, effect.Fingerprint, jev.Model)
@@ -245,7 +251,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result 
 		return fail(fmt.Errorf("load corrections: %w", err))
 	}
 
-	derived, err := s.profileAnswers(ctx, job, byID, asked)
+	derived, err := s.profileAnswers(ctx, job, banks[surviving[0].UserID].byID, asked)
 	if err != nil {
 		return fail(err)
 	}
@@ -271,7 +277,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result 
 
 	scores := make([]dto.JobScore, 0, len(surviving))
 	for _, cfg := range surviving {
-		score := scoreJob(cfg.UserID, cfg, job, byID, allAnswers, corrections[cfg.UserID], cfg.CompanyIsFavourite)
+		score := scoreJob(cfg.UserID, cfg, job, banks[cfg.UserID].byID, allAnswers, corrections[cfg.UserID], cfg.CompanyIsFavourite)
 		score.Cost = cost
 		scores = append(scores, score)
 	}
@@ -478,7 +484,7 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 		return dto.RecomputeResult{}, err
 	}
 
-	bk, err := s.loadBank(ctx)
+	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return dto.RecomputeResult{}, err
 	}
@@ -503,7 +509,7 @@ func (s *Service) CompanyFavouriteChanged(ctx context.Context, tx pgx.Tx, userID
 	if err != nil {
 		return err
 	}
-	bk, err := s.loadBank(ctx)
+	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -525,7 +531,7 @@ func (s *Service) FillMissingAnswers(ctx context.Context, userID string) (int64,
 		return 0, nil
 	}
 
-	bk, err := s.loadBank(ctx)
+	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -542,8 +548,8 @@ func (s *Service) FillMissingAnswers(ctx context.Context, userID string) (int64,
 	return s.store.QueueMissingAnswers(ctx, userID, hashes, jev.Model)
 }
 
-func (s *Service) loadBank(ctx context.Context) (bank, error) {
-	options, err := s.store.ListScoringOptions(ctx)
+func (s *Service) loadBank(ctx context.Context, userID string) (bank, error) {
+	options, err := s.store.ListScoringOptions(ctx, userID)
 	if err != nil {
 		return bank{}, err
 	}
@@ -576,21 +582,23 @@ type preparedJob struct {
 	salaryRaw       string
 	floor           *dto.Money
 	favourite       bool
+	techNeeded      int
 }
 
 func prepareJob(cfg dto.SearchConfig, job dto.Job, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string, favourite bool) preparedJob {
 	picks := dedupeBySource(cfg.Preferences.Picks)
 	return preparedJob{
-		picks:     evaluatedPicksFor(picks, byID, answers, corrections),
-		unpicked:  unpickedGateOptions(picks, byID, answers, corrections),
-		salaryRaw: job.SalaryRaw,
-		floor:     cfg.Preferences.SalaryFloor,
-		favourite: favourite,
+		picks:      evaluatedPicksFor(picks, byID, answers, corrections),
+		unpicked:   unpickedLadderOptions(picks, byID, answers, corrections),
+		salaryRaw:  job.SalaryRaw,
+		floor:      cfg.Preferences.SalaryFloor,
+		favourite:  favourite,
+		techNeeded: cfg.Preferences.TechNeeded,
 	}
 }
 
 func (p preparedJob) compute(params *dto.ScoringParams) (int, string, []dto.ScoreRow) {
-	return compute(p.picks, p.unpicked, p.salaryRaw, p.floor, p.favourite, params)
+	return compute(p.picks, p.unpicked, p.salaryRaw, p.floor, p.favourite, params, p.techNeeded)
 }
 
 func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) []evaluatedPick {
@@ -607,26 +615,26 @@ func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answ
 	return out
 }
 
-func unpickedGateOptions(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) []evaluatedPick {
+func unpickedLadderOptions(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) []evaluatedPick {
 	wantedIDs := make(map[string]bool, len(picks))
-	gateDims := make(map[dto.Dimension]bool)
+	ladderDims := make(map[dto.Dimension]bool)
 	for _, p := range picks {
 		_, wantedIDs[p.OptionID] = pickStrength[p.Stance]
-		if opt, ok := byID[p.OptionID]; ok && dimensionSpecs[opt.Dimension].Gate {
-			gateDims[opt.Dimension] = true
+		if opt, ok := byID[p.OptionID]; ok && dimensionSpecs[opt.Dimension].Kind == ladderKind {
+			ladderDims[opt.Dimension] = true
 		}
 	}
 	var out []evaluatedPick
 	for id, opt := range byID {
-		if wantedIDs[id] || opt.RetiredAt != nil || !gateDims[opt.Dimension] {
+		if wantedIDs[id] || opt.RetiredAt != nil || !ladderDims[opt.Dimension] {
 			continue
 		}
-		out = append(out, evaluate(opt, "nice", answers, corrections))
+		out = append(out, evaluate(opt, dto.StanceNice, answers, corrections))
 	}
 	return out
 }
 
-func evaluate(opt dto.ScoringOption, stance string, answers map[string]dto.Answer, corrections map[string]string) evaluatedPick {
+func evaluate(opt dto.ScoringOption, stance dto.Stance, answers map[string]dto.Answer, corrections map[string]string) evaluatedPick {
 	answer, known := answers[QuestionHash(opt.Question)]
 	value, corrected := corrections[opt.ID]
 	if corrected {

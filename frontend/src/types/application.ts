@@ -24,6 +24,18 @@ export const applicationSchema = z.object({
 
 export type Application = z.infer<typeof applicationSchema>;
 
+export const applicationMoveSchema = z.object({
+	Application: applicationSchema,
+	FilledAppliedAt: z.boolean(),
+});
+
+export type ApplicationMove = z.infer<typeof applicationMoveSchema>;
+
+export interface MoveApplicationPayload {
+	status_id: string;
+	clear_applied_at?: boolean;
+}
+
 export const applicationWithDetailsSchema = applicationSchema.extend({
 	JobTitle: z.string(),
 	JobCompanySlug: z.string(),
@@ -38,6 +50,8 @@ export const applicationWithDetailsSchema = applicationSchema.extend({
 export type ApplicationWithDetails = z.infer<
 	typeof applicationWithDetailsSchema
 >;
+
+export type ApplicationsView = "list" | "board";
 
 export interface JobApplicationSummary {
 	ApplicationID: string;

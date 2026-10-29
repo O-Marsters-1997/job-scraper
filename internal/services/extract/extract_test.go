@@ -32,7 +32,7 @@ func replyWith(t *testing.T, w http.ResponseWriter, content string) {
 
 func TestExtract(t *testing.T) {
 	options := []dto.ScoringOption{{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go"}}
-	dimensions := []dto.DimensionSpec{{Key: dto.DimensionTech, Kind: "pair", Stances: []string{"nice", "avoid"}}}
+	dimensions := []dto.DimensionSpec{{Key: dto.DimensionTech, Kind: "pair", Stances: []dto.Stance{"nice", "avoid"}}}
 
 	t.Run("sends prompt and bank, decodes picks", func(t *testing.T) {
 		var got openrouter.Request

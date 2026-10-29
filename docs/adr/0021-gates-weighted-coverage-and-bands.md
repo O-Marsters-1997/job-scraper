@@ -2,6 +2,8 @@
 
 Supersedes the scoring formula in [ADR 0004](0004-suitability-scoring.md): "any match in a dimension earns its weight" and the `k=3` prior.
 
+Gate dimensions and the block stance are replaced by [ADR 0039](0039-five-level-picks-and-custom-options.md).
+
 ## Context
 
 Suitability resolved each answer to yes, no or unknown at 0.6 and counted a dimension once if any pick matched. In use, 12 of 135 jobs shared the top score of 81. A Staff role met `seniority:senior` and hybrid roles met `work:remote`. One tech match counted the same as seven, and a 60 and a 45 read alike.

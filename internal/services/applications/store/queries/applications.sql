@@ -58,6 +58,25 @@ WHERE a.id = $1 AND a.user_id = $2
        OR EXISTS (SELECT 1 FROM application_statuses s WHERE s.id = $3::uuid AND s.user_id = $2))
 RETURNING *;
 
+-- name: GetApplication :one
+SELECT id, user_id, job_id, status_id, applied_at, salary_info, created_at, updated_at, chase_by
+FROM applications
+WHERE id = $1 AND user_id = $2;
+
+-- name: MoveApplication :one
+UPDATE applications a
+SET status_id = t.id,
+    applied_at = CASE
+        WHEN sqlc.arg(clear_applied_at)::boolean THEN NULL
+        WHEN a.applied_at IS NULL AND t.system_key = 'applied' THEN CURRENT_DATE
+        ELSE a.applied_at END,
+    chase_by = CURRENT_DATE + t.reply_window_days,
+    updated_at = NOW()
+FROM application_statuses t
+WHERE a.id = sqlc.arg(id) AND a.user_id = sqlc.arg(user_id)
+  AND t.id = sqlc.arg(status_id) AND t.user_id = sqlc.arg(user_id)
+RETURNING a.id, a.user_id, a.job_id, a.status_id, a.applied_at, a.salary_info, a.created_at, a.updated_at, a.chase_by;
+
 -- name: SetApplicationChase :one
 UPDATE applications
 SET chase_by = $3

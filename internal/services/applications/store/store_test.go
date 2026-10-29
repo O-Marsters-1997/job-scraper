@@ -465,3 +465,75 @@ func TestApplyTaskSync(t *testing.T) {
 		}
 	})
 }
+
+func TestMoveApplicationAppliedStatus(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+	pgtest.InTx(t, pool, true, func(tx pgx.Tx) error {
+		if err := st.SeedDefaultStatuses(t.Context(), tx, userID); err != nil {
+			return err
+		}
+		return tasks.NewFacade(pool).SeedDefaults(t.Context(), tx, userID)
+	})
+	statuses, err := st.ListApplicationStatusesByUser(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ListApplicationStatusesByUser err = %v", err)
+	}
+	var applied, other string
+	for _, s := range statuses {
+		switch s.SystemKey {
+		case "applied":
+			applied = s.ID
+		case "":
+			other = s.ID
+		}
+	}
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "Engineer")
+	app, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: jobID})
+	if err != nil {
+		t.Fatalf("CreateApplication err = %v", err)
+	}
+	move := func(in dto.MoveApplicationInput) dto.ApplicationMove {
+		t.Helper()
+		in.ID = app.ID
+		got, err := st.MoveApplication(t.Context(), userID, in)
+		if err != nil {
+			t.Fatalf("MoveApplication(%+v) err = %v", in, err)
+		}
+		return got
+	}
+
+	got := move(dto.MoveApplicationInput{StatusID: applied})
+	if got.Application.AppliedAt == nil || !got.FilledAppliedAt {
+		t.Errorf("move into Applied: AppliedAt = %v, FilledAppliedAt = %v, want a date and true", got.Application.AppliedAt, got.FilledAppliedAt)
+	}
+	var open, done int
+	err = pool.QueryRow(t.Context(), `SELECT count(*) FILTER (WHERE completed_at IS NULL),
+		count(*) FILTER (WHERE completed_at IS NOT NULL) FROM tasks WHERE user_id = $1 AND job_id = $2`,
+		userID, jobID).Scan(&open, &done)
+	if err != nil {
+		t.Fatalf("count tasks: %v", err)
+	}
+	if open != 0 || done != 1 {
+		t.Errorf("after move into Applied: open = %d, done = %d, want 0 and 1", open, done)
+	}
+
+	got = move(dto.MoveApplicationInput{StatusID: other})
+	if got.Application.AppliedAt == nil || got.FilledAppliedAt {
+		t.Errorf("move out of Applied: AppliedAt = %v, FilledAppliedAt = %v, want the date kept and false", got.Application.AppliedAt, got.FilledAppliedAt)
+	}
+	got = move(dto.MoveApplicationInput{StatusID: applied, ClearAppliedAt: true})
+	if got.Application.AppliedAt != nil || got.FilledAppliedAt {
+		t.Errorf("move into Applied with clear: AppliedAt = %v, FilledAppliedAt = %v, want nil and false", got.Application.AppliedAt, got.FilledAppliedAt)
+	}
+	move(dto.MoveApplicationInput{StatusID: applied})
+
+	var changed int
+	err = pool.QueryRow(t.Context(), `SELECT count(*) FROM events WHERE user_id = $1 AND type = $2`, userID, events.ApplicationStatusChanged).Scan(&changed)
+	if err != nil {
+		t.Fatalf("count events: %v", err)
+	}
+	if changed != 3 {
+		t.Errorf("status change events = %d, want 3 (the repeat move to the current status records none)", changed)
+	}
+}

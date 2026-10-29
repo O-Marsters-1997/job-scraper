@@ -88,10 +88,13 @@ func TestUpdateConfigRejects(t *testing.T) {
 	}{
 		{"an unknown option", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:cobol", Stance: "nice"}}}}},
 		{"a stance the dimension doesn't allow", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "block"}}}}},
+		{"a never on a ladder dimension", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "seniority:senior", Stance: "never", Weight: 50}}}}},
 		{"a ladder pick without a weight", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "seniority:senior", Stance: "nice"}}}}},
 		{"a ladder weight above 100", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "seniority:senior", Stance: "nice", Weight: 101}}}}},
 		{"a ladder pick with an ok stance", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "seniority:senior", Stance: "ok", Weight: 50}}}}},
 		{"a weight on a non-ladder pick", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Weight: 50}}}}},
+		{"a tech needed above 4", dto.ScoringConfigView{Preferences: dto.Preferences{TechNeeded: 5}}},
+		{"a negative tech needed", dto.ScoringConfigView{Preferences: dto.Preferences{TechNeeded: -1}}},
 		{"a notify threshold below 0", dto.ScoringConfigView{NotifyThreshold: -1}},
 		{"a notify threshold above 100", dto.ScoringConfigView{NotifyThreshold: 101}},
 		{"a negative max job age", dto.ScoringConfigView{MaxJobAgeDays: -1}},
@@ -119,7 +122,7 @@ func TestUpdateConfig(t *testing.T) {
 		Preferences: dto.Preferences{
 			Picks: []dto.Pick{
 				{OptionID: "tech:go", Stance: "nice", Source: "text"},
-				{OptionID: "domain:gambling", Stance: "block"},
+				{OptionID: "domain:gambling", Stance: "never"},
 				{OptionID: "tech:kubernetes", Stance: "ok"},
 				{OptionID: "seniority:senior", Stance: "nice", Weight: 70},
 			},
@@ -134,7 +137,7 @@ func TestUpdateConfig(t *testing.T) {
 	}
 	wantPicks := []dto.Pick{
 		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
-		{OptionID: "domain:gambling", Stance: "block", Source: "manual"},
+		{OptionID: "domain:gambling", Stance: "never", Source: "manual"},
 		{OptionID: "tech:kubernetes", Stance: "ok", Source: "manual"},
 		{OptionID: "seniority:senior", Stance: "nice", Weight: 70, Source: "manual"},
 	}

@@ -15,7 +15,7 @@ import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { inlineMarks } from "@/lib/bulletDiff";
 import { isSparse, maxCharsForFewerLines } from "@/lib/docLayout";
-import { htmlToText } from "@/lib/htmlText";
+import { htmlToParts, joinParts } from "@/lib/htmlText";
 import { loadedData } from "@/lib/queryData";
 import { roleBudget } from "@/lib/tailoring";
 import { cn } from "@/lib/utils";
@@ -166,15 +166,23 @@ export function DraftEditor(props: {
 	const explain = useExplainDraft(() => props.draft.id);
 	const note = useJobNote(() => props.draft.jobId);
 	const comments = useJobComments(() => props.draft.jobId);
+	const jdParts = createMemo(() =>
+		htmlToParts(loadedData(job)?.Description ?? ""),
+	);
 	const jobText = () => {
 		const blocks: JobTextBlock[] = [
 			{
 				label: "Job description",
 				source: "jd",
-				text: htmlToText(loadedData(job)?.Description ?? ""),
+				text: joinParts(jdParts()),
+				parts: jdParts(),
 			},
-			{ label: "Your note", source: "note", text: note.data?.Body ?? "" },
-			...(comments.data ?? []).map(
+			{
+				label: "Your note",
+				source: "note",
+				text: loadedData(note)?.Body ?? "",
+			},
+			...(loadedData(comments) ?? []).map(
 				(c): JobTextBlock => ({
 					label: "Comment",
 					source: "comment",
@@ -185,7 +193,7 @@ export function DraftEditor(props: {
 		return blocks.filter((b) => b.text !== "");
 	};
 	const leanBySlot = createMemo(
-		() => new Map(leanQuery.data?.map((b) => [b.slotId, b])),
+		() => new Map(loadedData(leanQuery)?.map((b) => [b.slotId, b])),
 	);
 
 	const pagePx = () => (props.layout?.page.width ?? 0) * PX_PER_PT;
@@ -259,6 +267,14 @@ export function DraftEditor(props: {
 	};
 	const profileWand = () =>
 		activeSlot() === PROFILE_SLOT && editable() && !!baseProfile();
+	const [steerOpen, setSteerOpen] = createSignal(false);
+	createEffect(() => {
+		if (!profileWand()) setSteerOpen(false);
+	});
+	const openSteer = () => {
+		setSteerOpen(true);
+		queueMicrotask(focusSteer);
+	};
 	const focusSteer = () =>
 		document
 			.querySelector<HTMLInputElement>(
@@ -266,7 +282,9 @@ export function DraftEditor(props: {
 			)
 			?.focus();
 	const tailorQuote = (slotId: string) =>
-		insightsQuery.data?.lines.find((l) => l.slotId === slotId && l.anchored);
+		loadedData(insightsQuery)?.lines.find(
+			(l) => l.slotId === slotId && l.anchored,
+		);
 	const askOpen = () => askSlot() !== undefined && askSlot() === activeSlot();
 	const setAskOpen = (open: boolean) =>
 		setAskSlot(open ? activeSlot() : undefined);
@@ -274,17 +292,23 @@ export function DraftEditor(props: {
 		if (key !== active()) setAskSlot(undefined);
 		setActive(key);
 	};
-	const focusLine = (slotId: string, atEnd = false) => {
+	const focusLine = (slotId: string, at: boolean | number = false) => {
 		const root = stage();
 		queueMicrotask(() => {
 			const line = root?.querySelector<HTMLElement>(
 				`[data-slot-id="${slotId}"] [role="textbox"]`,
 			);
 			line?.focus({ preventScroll: true });
-			if (line && atEnd) {
+			if (line && at !== false) {
 				const caret = document.createRange();
-				caret.selectNodeContents(line);
-				caret.collapse(false);
+				const node = line.firstChild;
+				if (typeof at === "number" && node) {
+					caret.setStart(node, Math.min(at, node.textContent?.length ?? 0));
+					caret.collapse(true);
+				} else {
+					caret.selectNodeContents(line);
+					caret.collapse(false);
+				}
 				const sel = window.getSelection();
 				sel?.removeAllRanges();
 				sel?.addRange(caret);
@@ -298,7 +322,9 @@ export function DraftEditor(props: {
 	};
 	const tabs = (): { id: View; label: string }[] => [
 		{ id: "document", label: "Document" },
-		...(leanQuery.data ? [{ id: "insights" as const, label: "Insights" }] : []),
+		...(loadedData(leanQuery)
+			? [{ id: "insights" as const, label: "Insights" }]
+			: []),
 	];
 	const current = () =>
 		tabs().some((t) => t.id === view()) ? view() : "document";
@@ -323,7 +349,7 @@ export function DraftEditor(props: {
 	const rolePicks = createRolePicks({
 		draft: () => props.draft,
 		editor: ed,
-		bank: () => bank.data ?? [],
+		bank: () => loadedData(bank) ?? [],
 		positions: () => rolePositions(),
 	});
 	const rolesQuery = useDraftRoles(
@@ -331,7 +357,7 @@ export function DraftEditor(props: {
 		() => props.draft.status === "ready",
 	);
 	const budgetOf = (positionId: string) => {
-		const role = rolesQuery.data?.roles.find(
+		const role = loadedData(rolesQuery)?.roles.find(
 			(r) => r.positionId === positionId,
 		);
 		return role && roleBudget(role);
@@ -391,6 +417,12 @@ export function DraftEditor(props: {
 		text: ed.text,
 		label: ed.label,
 		lean: (slotId) => leanBySlot().get(slotId),
+		insightFor: (slotId) =>
+			loadedData(insightsQuery)?.lines.find((l) => l.slotId === slotId),
+		get explaining() {
+			return explain.isPending;
+		},
+		onExplain: () => explain.mutate(),
 		diffFor: (slotId) => {
 			const sug = suggestions.get(slotId);
 			if (!sug || sug.error !== undefined) return null;
@@ -408,6 +440,10 @@ export function DraftEditor(props: {
 		onEnter: (slotId) => {
 			const added = ed.addBullet(slotId);
 			if (added) focusLine(added);
+		},
+		onMove: (slotId, delta, caret) => {
+			const moved = rolePicks.shift(slotId, delta);
+			if (moved) focusLine(moved, caret);
 		},
 		onBackspaceEmpty: (slotId) => {
 			const previous = ed.removeBullet(slotId);
@@ -511,7 +547,7 @@ export function DraftEditor(props: {
 						Draft CV
 					</h1>
 					<p class="truncate text-xs text-faint">
-						{job.data?.Title ?? "Loading job…"}
+						{loadedData(job)?.Title ?? "Loading job…"}
 					</p>
 				</div>
 				<Show when={editable()}>
@@ -630,13 +666,13 @@ export function DraftEditor(props: {
 				}}
 			>
 				<Switch fallback={<LayoutUnavailable reason={props.layoutError} />}>
-					<Match when={current() === "insights" && leanQuery.data}>
+					<Match when={current() === "insights" && loadedData(leanQuery)}>
 						{(lean) => (
 							<div class="mx-auto max-w-6xl px-6 py-10">
 								<Insights
 									lean={lean()}
 									jobText={jobText()}
-									insights={insightsQuery.data}
+									insights={loadedData(insightsQuery)}
 									explaining={explain.isPending}
 									explainError={explain.error?.message}
 									text={ed.text}
@@ -705,7 +741,7 @@ export function DraftEditor(props: {
 										)}
 									</Show>
 									<Show when={profileWand()}>
-										<RedraftWand top={wandTop()} onRedraft={focusSteer} />
+										<RedraftWand top={wandTop()} onRedraft={openSteer} />
 									</Show>
 									<Show
 										when={
@@ -729,6 +765,8 @@ export function DraftEditor(props: {
 												text={ed.text(PROFILE_SLOT)}
 												top={profileTop()}
 												pending={redraft.isPending}
+												steerOpen={steerOpen()}
+												onSteerClose={() => setSteerOpen(false)}
 												{...(redraft.error && {
 													error: redraft.error.message,
 												})}

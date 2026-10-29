@@ -368,16 +368,23 @@ type GoogleOauthToken struct {
 	UpdatedAt       pgtype.Timestamptz
 }
 
+type HarvestCompanyCount struct {
+	Source   string
+	Company  string
+	LiveJobs int32
+}
+
 type HarvestRun struct {
 	Harvester       string
 	LastSucceededAt pgtype.Timestamptz
 }
 
 type HarvestSeenID struct {
-	Source      string
-	ExternalID  string
-	Outcome     string
-	FirstSeenAt pgtype.Timestamptz
+	Source          string
+	ExternalID      string
+	Outcome         string
+	FirstSeenAt     pgtype.Timestamptz
+	LastInSitemapAt pgtype.Timestamptz
 }
 
 type Job struct {
@@ -588,11 +595,12 @@ type ScoreFeedback struct {
 }
 
 type ScoringOption struct {
-	ID        string
-	Dimension ScoringDimension
-	Label     string
-	Question  string
-	RetiredAt pgtype.Timestamptz
+	ID          string
+	Dimension   ScoringDimension
+	Label       string
+	Question    string
+	RetiredAt   pgtype.Timestamptz
+	OwnerUserID pgtype.UUID
 }
 
 type ScrapeRun struct {

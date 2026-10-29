@@ -24,8 +24,9 @@ const (
 
 const (
 	roleFields    = `locationPreferences { location } subFunction { value } minYearsExperienceRequired`
-	listingFields = roleFields + ` originalUrl actualOriginalUrl company { name urlSafeName }`
-	detailFields  = listingFields + ` title firstLiveAt insertedAt involvesBullets { value } requirements { value }`
+	listingFields = roleFields + ` live firstLiveAt originalUrl actualOriginalUrl company { name urlSafeName }`
+	detailFields  = listingFields + ` title insertedAt involvesBullets { value } requirements { value }`
+	liveJobFields = `liveJobs { externalId }`
 	companyFields = `name jobLocations mission parsedHqAddress glassdoorRating yearEmployeeGrowthPercentage
 sectorTags { value } size { value } visaSponsorshipCountries { location offersVisa }
 totalFunding(currency: USD) { amount } fundingRounds(currency: USD) { id }
@@ -49,6 +50,8 @@ type Listing struct {
 	ApplyURL     string
 	CompanyName  string
 	CompanyToken string
+	Live         bool
+	FirstLiveAt  time.Time
 }
 
 const maxMinYears = 5
@@ -66,6 +69,61 @@ func (l Listing) Eligible() bool {
 	}
 	senior := l.MinYears != nil && *l.MinYears > maxMinYears
 	return ukOrRemote && eligibleSubFunction(l.SubFunction) && !senior
+}
+
+func (l Listing) Current(now time.Time) bool {
+	return l.Live && (l.FirstLiveAt.IsZero() || now.Sub(l.FirstLiveAt) <= maxAge)
+}
+
+func (c *Client) LiveJobCounts(ctx context.Context) (map[string]int, error) {
+	var data struct {
+		Companies []struct {
+			URLSafeName    string `json:"urlSafeName"`
+			NumberLiveJobs int    `json:"numberLiveJobs"`
+		} `json:"companies"`
+	}
+	if err := c.query(ctx, "query { companies(limit: 100000) { urlSafeName numberLiveJobs } }", &data); err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int, len(data.Companies))
+	for _, co := range data.Companies {
+		counts[co.URLSafeName] = co.NumberLiveJobs
+	}
+	return counts, nil
+}
+
+func (c *Client) LiveJobIDs(ctx context.Context, tokens []string) ([]string, error) {
+	var out []string
+	size := batchSize(liveJobFields)
+	for start := 0; start < len(tokens); start += size {
+		batch := tokens[start:min(start+size, len(tokens))]
+		var q strings.Builder
+		q.WriteString("query {")
+		for i, token := range batch {
+			if !sourcespec.ValidBoardToken(token) {
+				return out, fmt.Errorf("wttj: invalid company token %q", token)
+			}
+			fmt.Fprintf(&q, " c%d: company(urlSafeName: %q) { %s }", i, token, liveJobFields)
+		}
+		q.WriteString(" }")
+		var data map[string]*struct {
+			LiveJobs []struct {
+				ExternalID string `json:"externalId"`
+			} `json:"liveJobs"`
+		}
+		if err := c.query(ctx, q.String(), &data); err != nil {
+			return out, err
+		}
+		for _, co := range data {
+			if co == nil {
+				continue
+			}
+			for _, j := range co.LiveJobs {
+				out = append(out, j.ExternalID)
+			}
+		}
+	}
+	return out, nil
 }
 
 func (c *Client) EligibleListings(ctx context.Context, ids []string) ([]Listing, error) {
@@ -112,6 +170,7 @@ type apiJob struct {
 	ExternalID        string       `json:"externalId"`
 	OriginalURL       string       `json:"originalUrl"`
 	ActualOriginalURL string       `json:"actualOriginalUrl"`
+	Live              bool         `json:"live"`
 	Title             string       `json:"title"`
 	FirstLiveAt       string       `json:"firstLiveAt"`
 	InsertedAt        string       `json:"insertedAt"`
@@ -135,6 +194,10 @@ func (j apiJob) listing() Listing {
 		CompanyName:  j.Company.Name,
 		CompanyToken: j.Company.URLSafeName,
 		MinYears:     j.MinYears,
+		Live:         j.Live,
+	}
+	if firstLive, err := time.Parse(timeLayout, j.FirstLiveAt); err == nil {
+		l.FirstLiveAt = firstLive
 	}
 	if j.SubFunction != nil {
 		l.SubFunction = j.SubFunction.Value

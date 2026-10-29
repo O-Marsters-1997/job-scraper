@@ -120,7 +120,10 @@ type Store interface {
 	DiscoverMissedSince(ctx context.Context, source, token string, since time.Time) (bool, error)
 	HarvestSeenIDs(ctx context.Context, source string) ([]string, error)
 	RecordHarvestSeenIDs(ctx context.Context, source, outcome string, ids []string) error
-	RetireHarvestSeenIDs(ctx context.Context, source string, ids []string) error
+	MarkHarvestIDsInSitemap(ctx context.Context, source string, ids []string, seenAt time.Time) error
+	CloseJobsAbsentFromSitemap(ctx context.Context, source string, absentSince time.Time) error
+	HarvestCompanyCounts(ctx context.Context, source string) (map[string]int, error)
+	RecordHarvestCompanyCounts(ctx context.Context, source string, counts map[string]int) error
 }
 
 type Deps struct {

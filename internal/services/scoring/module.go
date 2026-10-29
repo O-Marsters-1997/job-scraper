@@ -53,6 +53,7 @@ type Deps struct {
 	Profiles       ProfileReader
 	Candidates     Reconsiderer
 	Extractor      Extractor
+	Drafter        Drafter
 	Classifier     RecruiterClassifier
 	CompanyKinds   CompanyKinds
 	TickInterval   time.Duration
@@ -85,9 +86,10 @@ func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, ca
 	}
 
 	jevClient := jev.NewClient()
+	extractClient := extract.NewClient()
 	return Build(Deps{
 		Store: st, Pusher: pusher, VAPIDPublicKey: vapid.PublicKey, Answerer: jevClient, Credentials: credentials,
-		Alerter: alerter, Notifications: notifications, Profiles: profiles, Candidates: candidates, Extractor: extract.NewClient(),
+		Alerter: alerter, Notifications: notifications, Profiles: profiles, Candidates: candidates, Extractor: extractClient, Drafter: extractClient,
 		Classifier: jevClient, CompanyKinds: companyKinds,
 	})
 }

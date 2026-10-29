@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const stanceSchema = z.enum(["nice", "ok", "avoid", "block"]);
+export const stanceSchema = z.enum(["never", "avoid", "ok", "nice"]);
 
 export type Stance = z.infer<typeof stanceSchema>;
 
@@ -21,7 +21,10 @@ const preferencesSchema = z.object({
 	picks: z.array(pickSchema),
 	salaryFloor: moneySchema.nullable(),
 	preferenceText: z.string(),
+	techNeeded: z.number().int().min(1).max(4).optional(),
 });
+
+export type Preferences = z.infer<typeof preferencesSchema>;
 
 export const scoringConfigSchema = z.object({
 	preferences: preferencesSchema,

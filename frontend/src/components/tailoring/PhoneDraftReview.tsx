@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { useJob } from "@/hooks/useJobs";
+import { loadedData } from "@/lib/queryData";
 import { sharePdf } from "@/lib/sharePdf";
 import type { Draft } from "@/types/tailoring";
 import { fetchDraftPdf } from "../../api/tailoring";
@@ -56,7 +57,7 @@ function Review(props: {
 	const download = useFormSubmit(async () =>
 		sharePdf(
 			await fetchDraftPdf(props.draft.id),
-			`cv-${job.data?.CompanySlug ?? "draft"}.pdf`,
+			`cv-${loadedData(job)?.CompanySlug ?? "draft"}.pdf`,
 		),
 	);
 	const open = () =>

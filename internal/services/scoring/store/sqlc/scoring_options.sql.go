@@ -7,7 +7,70 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const countLiveCustomOptions = `-- name: CountLiveCustomOptions :one
+SELECT COUNT(*) FROM scoring_options WHERE owner_user_id = $1::uuid AND retired_at IS NULL
+`
+
+func (q *Queries) CountLiveCustomOptions(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countLiveCustomOptions, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const dropPick = `-- name: DropPick :exec
+UPDATE search_config SET
+    preferences = jsonb_set(preferences, '{picks}', (
+        SELECT COALESCE(jsonb_agg(t.pick ORDER BY t.ord), '[]'::jsonb)
+        FROM jsonb_array_elements(preferences -> 'picks') WITH ORDINALITY AS t(pick, ord)
+        WHERE t.pick ->> 'optionId' <> $1::text
+    )),
+    updated_at = NOW()
+WHERE user_id = $2::uuid
+    AND jsonb_typeof(preferences -> 'picks') = 'array'
+    AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(preferences -> 'picks') AS p
+        WHERE p ->> 'optionId' = $1::text
+    )
+`
+
+type DropPickParams struct {
+	OptionID string
+	UserID   pgtype.UUID
+}
+
+func (q *Queries) DropPick(ctx context.Context, arg DropPickParams) error {
+	_, err := q.db.Exec(ctx, dropPick, arg.OptionID, arg.UserID)
+	return err
+}
+
+const insertCustomOption = `-- name: InsertCustomOption :exec
+INSERT INTO scoring_options (id, dimension, label, question, owner_user_id)
+VALUES ($1::text, $2::scoring_dimension, $3::text, $4::text, $5::uuid)
+`
+
+type InsertCustomOptionParams struct {
+	ID        string
+	Dimension ScoringDimension
+	Label     string
+	Question  string
+	UserID    pgtype.UUID
+}
+
+func (q *Queries) InsertCustomOption(ctx context.Context, arg InsertCustomOptionParams) error {
+	_, err := q.db.Exec(ctx, insertCustomOption,
+		arg.ID,
+		arg.Dimension,
+		arg.Label,
+		arg.Question,
+		arg.UserID,
+	)
+	return err
+}
 
 const insertScoringOption = `-- name: InsertScoringOption :exec
 INSERT INTO scoring_options (id, dimension, label, question)
@@ -32,11 +95,13 @@ func (q *Queries) InsertScoringOption(ctx context.Context, arg InsertScoringOpti
 }
 
 const listScoringOptions = `-- name: ListScoringOptions :many
-SELECT id, dimension, label, question, retired_at FROM scoring_options ORDER BY dimension, id
+SELECT id, dimension, label, question, retired_at, owner_user_id FROM scoring_options
+WHERE owner_user_id IS NULL OR (owner_user_id = $1::uuid AND retired_at IS NULL)
+ORDER BY dimension, id
 `
 
-func (q *Queries) ListScoringOptions(ctx context.Context) ([]ScoringOption, error) {
-	rows, err := q.db.Query(ctx, listScoringOptions)
+func (q *Queries) ListScoringOptions(ctx context.Context, userID pgtype.UUID) ([]ScoringOption, error) {
+	rows, err := q.db.Query(ctx, listScoringOptions, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +115,7 @@ func (q *Queries) ListScoringOptions(ctx context.Context) ([]ScoringOption, erro
 			&i.Label,
 			&i.Question,
 			&i.RetiredAt,
+			&i.OwnerUserID,
 		); err != nil {
 			return nil, err
 		}
@@ -59,6 +125,54 @@ func (q *Queries) ListScoringOptions(ctx context.Context) ([]ScoringOption, erro
 		return nil, err
 	}
 	return items, nil
+}
+
+const movePick = `-- name: MovePick :exec
+UPDATE search_config SET
+    preferences = jsonb_set(preferences, '{picks}', (
+        SELECT COALESCE(jsonb_agg(
+            CASE WHEN t.pick ->> 'optionId' = $1::text
+                THEN jsonb_set(t.pick, '{optionId}', to_jsonb($2::text))
+                ELSE t.pick END
+            ORDER BY t.ord), '[]'::jsonb)
+        FROM jsonb_array_elements(preferences -> 'picks') WITH ORDINALITY AS t(pick, ord)
+    )),
+    updated_at = NOW()
+WHERE user_id = $3::uuid
+    AND jsonb_typeof(preferences -> 'picks') = 'array'
+    AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(preferences -> 'picks') AS p
+        WHERE p ->> 'optionId' = $1::text
+    )
+`
+
+type MovePickParams struct {
+	OldID  string
+	NewID  string
+	UserID pgtype.UUID
+}
+
+func (q *Queries) MovePick(ctx context.Context, arg MovePickParams) error {
+	_, err := q.db.Exec(ctx, movePick, arg.OldID, arg.NewID, arg.UserID)
+	return err
+}
+
+const retireCustomOption = `-- name: RetireCustomOption :execrows
+UPDATE scoring_options SET retired_at = NOW()
+WHERE id = $1::text AND owner_user_id = $2::uuid AND retired_at IS NULL
+`
+
+type RetireCustomOptionParams struct {
+	ID     string
+	UserID pgtype.UUID
+}
+
+func (q *Queries) RetireCustomOption(ctx context.Context, arg RetireCustomOptionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, retireCustomOption, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const retireScoringOption = `-- name: RetireScoringOption :execrows

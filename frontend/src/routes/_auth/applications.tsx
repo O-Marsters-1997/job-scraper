@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { createEffect, createSignal, For, on, Show } from "solid-js";
+import { createEffect, createSignal, For, on, onMount, Show } from "solid-js";
 import { AddApplicationDialog } from "@/components/jobs/AddApplicationDialog";
 import {
 	TrackApplicationDialog,
@@ -7,9 +7,11 @@ import {
 } from "@/components/jobs/TrackApplicationDialog";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { SearchField } from "@/components/SearchField";
 import { ToggleChip } from "@/components/ToggleChip";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { matchesApplication } from "@/lib/applicationSearch";
 import {
 	completeApps,
 	needsCv,
@@ -34,8 +36,12 @@ import {
 	useClearChase,
 } from "../../hooks/useApplications";
 import { queryClient } from "../../lib/queryClient";
-import type { ApplicationWithDetails } from "../../types/application";
+import type {
+	ApplicationsView,
+	ApplicationWithDetails,
+} from "../../types/application";
 import type { Job } from "../../types/job";
+import { ApplicationsBoard } from "./-applications/ApplicationsBoard";
 import { CreateDraftsDialog } from "./-applications/CreateDraftsDialog";
 import { DeleteApplicationDialog } from "./-applications/DeleteApplicationDialog";
 import { SetAnotherChase } from "./-applications/SetAnotherChase";
@@ -44,7 +50,26 @@ function parseApplicationsSearch(search: Record<string, unknown>) {
 	return {
 		status: typeof search.status === "string" ? search.status : undefined,
 		chase: search.chase === true || search.chase === "true" ? true : undefined,
+		...(search.view === "board" && { view: "board" as const }),
 	};
+}
+
+const VIEW_KEY = "applications-view";
+
+function storedView(): ApplicationsView {
+	try {
+		return localStorage.getItem(VIEW_KEY) === "board" ? "board" : "list";
+	} catch {
+		return "list";
+	}
+}
+
+function rememberView(view: ApplicationsView) {
+	try {
+		localStorage.setItem(VIEW_KEY, view);
+	} catch {
+		return;
+	}
 }
 
 export const Route = createFileRoute("/_auth/applications")({
@@ -65,8 +90,8 @@ function ApplicationsPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate();
 	const query = useApplications(
-		() => search().status,
-		() => search().chase === true,
+		() => (search().view === "board" ? undefined : search().status),
+		() => search().view !== "board" && search().chase === true,
 	);
 	const clearChase = useClearChase();
 	const statusesQuery = useApplicationStatuses();
@@ -86,12 +111,33 @@ function ApplicationsPage() {
 		Pick<Job, "ID" | "Title"> | undefined
 	>();
 
+	const [q, setQ] = createSignal("");
+	const visible = (apps: ApplicationWithDetails[]) =>
+		apps.filter((a) => matchesApplication(a, q()));
+	const isBoard = () => search().view === "board";
+	const showView = (view: ApplicationsView, replace = false) => {
+		rememberView(view);
+		void navigate({
+			to: "/applications",
+			search: {
+				status: undefined,
+				chase: undefined,
+				...(view === "board" && { view }),
+			},
+			replace,
+		});
+	};
+	onMount(() => {
+		const filtered = search().status || search().chase;
+		if (!isBoard() && !filtered && storedView() === "board")
+			showView("board", true);
+	});
 	const [selection, setSelection] = createSignal<Selection>({});
 	const [createOpen, setCreateOpen] = createSignal(false);
 	let anchor: string | undefined;
 	createEffect(
 		on(
-			() => search().status,
+			[() => search().status, q],
 			() => {
 				setSelection({});
 				anchor = undefined;
@@ -175,52 +221,72 @@ function ApplicationsPage() {
 				</Button>
 			</div>
 
+			<SearchField
+				id="applications-search"
+				label="Search applications"
+				placeholder="Search title, company, location"
+				value={q()}
+				onInput={setQ}
+				class="mb-3"
+			/>
+
 			<div class="mb-4 flex flex-wrap items-center gap-1.5">
-				<ToggleChip
-					active={!search().status}
-					onClick={() =>
-						navigate({
-							to: "/applications",
-							search: { status: undefined, chase: search().chase },
-						})
-					}
-				>
-					All
+				<ToggleChip active={!isBoard()} onClick={() => showView("list")}>
+					List
 				</ToggleChip>
-				<For each={statusesQuery.data}>
-					{(s) => (
-						<ToggleChip
-							active={search().status === s.ID}
-							onClick={() =>
-								navigate({
-									to: "/applications",
-									search: { status: s.ID, chase: search().chase },
-								})
-							}
-						>
-							<span
-								class="inline-block size-2 rounded-full"
-								style={{ background: s.Colour }}
-							/>
-							{s.Name}
-						</ToggleChip>
-					)}
-				</For>
-				<span class="mx-1 h-4 w-px bg-border" />
-				<ToggleChip
-					active={search().chase === true}
-					onClick={() =>
-						navigate({
-							to: "/applications",
-							search: {
-								status: search().status,
-								chase: search().chase ? undefined : true,
-							},
-						})
-					}
-				>
-					Needs a chase
+				<ToggleChip active={isBoard()} onClick={() => showView("board")}>
+					Board
 				</ToggleChip>
+				<Show when={!isBoard()}>
+					<span class="mx-1 h-4 w-px bg-border" />
+				</Show>
+				<Show when={!isBoard()}>
+					<ToggleChip
+						active={!search().status}
+						onClick={() =>
+							navigate({
+								to: "/applications",
+								search: { status: undefined, chase: search().chase },
+							})
+						}
+					>
+						All
+					</ToggleChip>
+					<For each={statusesQuery.data}>
+						{(s) => (
+							<ToggleChip
+								active={search().status === s.ID}
+								onClick={() =>
+									navigate({
+										to: "/applications",
+										search: { status: s.ID, chase: search().chase },
+									})
+								}
+							>
+								<span
+									class="inline-block size-2 rounded-full"
+									style={{ background: s.Colour }}
+								/>
+								{s.Name}
+							</ToggleChip>
+						)}
+					</For>
+					<span class="mx-1 h-4 w-px bg-border" />
+					<ToggleChip
+						active={search().chase === true}
+						onClick={() =>
+							navigate({
+								to: "/applications",
+								search: {
+									status: search().status,
+									chase: search().chase ? undefined : true,
+								},
+							})
+						}
+					>
+						Needs a chase
+					</ToggleChip>
+				</Show>
 			</div>
 
 			<For each={chasedApps()}>
@@ -235,192 +301,217 @@ function ApplicationsPage() {
 				)}
 			</For>
 
-			<div class="flex items-start gap-6">
-				<div class="min-w-0 flex-1">
+			<Show
+				when={!isBoard()}
+				fallback={
 					<QueryBoundary query={query} fallbackRows={5}>
 						{(data) => (
-							<Show
-								when={data().length > 0}
-								fallback={
-									<Card class="p-10 text-center">
-										<p class="text-sm text-muted">
-											No applications yet. Track a job from the Jobs page.
-										</p>
-									</Card>
-								}
-							>
-								<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-									<For each={data()}>
-										{(app) => (
-											<div
-												class={cn(
-													"flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted",
-													search().chase &&
-														isOverdue(app) &&
-														"bg-destructive-subtle",
-												)}
-											>
-												<input
-													type="checkbox"
-													aria-label={`Select ${app.JobTitle}`}
-													class="size-4 shrink-0 cursor-pointer accent-primary"
-													checked={!!selection()[app.ID]}
-													onMouseDown={(e) => {
-														if (e.shiftKey) e.preventDefault();
-													}}
-													onClick={(e) => {
-														toggleRow(data(), app.ID, e.shiftKey);
-														e.currentTarget.checked = !!selection()[app.ID];
-													}}
-												/>
-												<div class="min-w-0 flex-1">
-													<Link
-														to="/applications/$id"
-														params={{ id: app.ID }}
-														class="block truncate text-sm font-medium text-foreground hover:underline"
-													>
-														{app.JobTitle}
-													</Link>
-													<p class="text-xs text-faint">
-														{app.JobCompanySlug}
-														{app.JobLocation ? ` · ${app.JobLocation}` : ""}
-													</p>
-												</div>
-												<Show when={app.JobClosedAt}>
-													<span class="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted">
-														Listing closed
-													</span>
-												</Show>
-												<Show when={app.StatusName}>
-													<StatusBadge
-														name={app.StatusName}
-														colour={statusColour(app)}
-													/>
-												</Show>
-												<span
-													class={cn(
-														"shrink-0 text-xs",
-														cvStage(app.Draft) === "failed"
-															? "text-destructive-strong"
-															: "text-muted",
-													)}
-													title={app.Draft?.LastError || undefined}
-												>
-													{CV_STAGE_LABEL[cvStage(app.Draft)]}
-												</span>
-												<Show when={app.AppliedAt}>
-													<span class="shrink-0 font-mono text-xs tabular-nums text-faint">
-														{app.AppliedAt}
-													</span>
-												</Show>
-												<Show when={app.ChaseBy}>
-													{(chaseBy) => (
-														<span
-															class={cn(
-																"shrink-0 font-mono text-xs tabular-nums",
-																isChaseOverdue(chaseBy(), new Date())
-																	? "text-destructive-strong"
-																	: "text-faint",
-															)}
-														>
-															Chase {formatChaseDate(chaseBy())}
-														</span>
-													)}
-												</Show>
-												<Show when={app.ChaseBy}>
-													<button
-														type="button"
-														disabled={clearChase.isPending}
-														onClick={() => markChased(app)}
-														class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
-													>
-														Chased
-													</button>
-												</Show>
-												<button
-													type="button"
-													onClick={() => openEdit(app)}
-													class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle"
-												>
-													Edit
-												</button>
-												<button
-													type="button"
-													onClick={() => setDeletingApps([app])}
-													class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle"
-												>
-													Delete
-												</button>
-											</div>
-										)}
-									</For>
-								</div>
-							</Show>
+							<ApplicationsBoard
+								apps={visible(data())}
+								statuses={statusesQuery.data ?? []}
+							/>
 						)}
 					</QueryBoundary>
-				</div>
-				<Show when={Object.keys(selection()).length > 0}>
-					<aside class="sticky top-6 flex w-64 shrink-0 flex-col gap-3 rounded-xl border border-border bg-surface p-4">
-						<div class="flex items-center justify-between">
-							<span class="font-mono text-xs tabular-nums text-muted">
-								{draftSelected().length} of {Object.keys(selection()).length}{" "}
-								selected in Draft
-							</span>
+				}
+			>
+				<div class="flex items-start gap-6">
+					<div class="min-w-0 flex-1">
+						<QueryBoundary query={query} fallbackRows={5}>
+							{(data) => (
+								<Show
+									when={data().length > 0}
+									fallback={
+										<Card class="p-10 text-center">
+											<p class="text-sm text-muted">
+												No applications yet. Track a job from the Jobs page.
+											</p>
+										</Card>
+									}
+								>
+									<Show
+										when={visible(data()).length > 0}
+										fallback={
+											<Card class="p-10 text-center">
+												<p class="text-sm text-muted">
+													No applications match "{q().trim()}"
+												</p>
+											</Card>
+										}
+									>
+										<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+											<For each={visible(data())}>
+												{(app) => (
+													<div
+														class={cn(
+															"flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted",
+															search().chase &&
+																isOverdue(app) &&
+																"bg-destructive-subtle",
+														)}
+													>
+														<input
+															type="checkbox"
+															aria-label={`Select ${app.JobTitle}`}
+															class="size-4 shrink-0 cursor-pointer accent-primary"
+															checked={!!selection()[app.ID]}
+															onMouseDown={(e) => {
+																if (e.shiftKey) e.preventDefault();
+															}}
+															onClick={(e) => {
+																toggleRow(visible(data()), app.ID, e.shiftKey);
+																e.currentTarget.checked = !!selection()[app.ID];
+															}}
+														/>
+														<div class="min-w-0 flex-1">
+															<Link
+																to="/applications/$id"
+																params={{ id: app.ID }}
+																class="block truncate text-sm font-medium text-foreground hover:underline"
+															>
+																{app.JobTitle}
+															</Link>
+															<p class="text-xs text-faint">
+																{app.JobCompanySlug}
+																{app.JobLocation ? ` · ${app.JobLocation}` : ""}
+															</p>
+														</div>
+														<Show when={app.JobClosedAt}>
+															<span class="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted">
+																Listing closed
+															</span>
+														</Show>
+														<Show when={app.StatusName}>
+															<StatusBadge
+																name={app.StatusName}
+																colour={statusColour(app)}
+															/>
+														</Show>
+														<span
+															class={cn(
+																"shrink-0 text-xs",
+																cvStage(app.Draft) === "failed"
+																	? "text-destructive-strong"
+																	: "text-muted",
+															)}
+															title={app.Draft?.LastError || undefined}
+														>
+															{CV_STAGE_LABEL[cvStage(app.Draft)]}
+														</span>
+														<Show when={app.AppliedAt}>
+															<span class="shrink-0 font-mono text-xs tabular-nums text-faint">
+																{app.AppliedAt}
+															</span>
+														</Show>
+														<Show when={app.ChaseBy}>
+															{(chaseBy) => (
+																<span
+																	class={cn(
+																		"shrink-0 font-mono text-xs tabular-nums",
+																		isChaseOverdue(chaseBy(), new Date())
+																			? "text-destructive-strong"
+																			: "text-faint",
+																	)}
+																>
+																	Chase {formatChaseDate(chaseBy())}
+																</span>
+															)}
+														</Show>
+														<Show when={app.ChaseBy}>
+															<button
+																type="button"
+																disabled={clearChase.isPending}
+																onClick={() => markChased(app)}
+																class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
+															>
+																Chased
+															</button>
+														</Show>
+														<button
+															type="button"
+															onClick={() => openEdit(app)}
+															class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle"
+														>
+															Edit
+														</button>
+														<button
+															type="button"
+															onClick={() => setDeletingApps([app])}
+															class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle"
+														>
+															Delete
+														</button>
+													</div>
+												)}
+											</For>
+										</div>
+									</Show>
+								</Show>
+							)}
+						</QueryBoundary>
+					</div>
+					<Show when={Object.keys(selection()).length > 0}>
+						<aside class="sticky top-6 flex w-64 shrink-0 flex-col gap-3 rounded-xl border border-border bg-surface p-4">
+							<div class="flex items-center justify-between">
+								<span class="font-mono text-xs tabular-nums text-muted">
+									{draftSelected().length} of {Object.keys(selection()).length}{" "}
+									selected in Draft
+								</span>
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() => {
+										setSelection({});
+										anchor = undefined;
+									}}
+								>
+									Clear
+								</Button>
+							</div>
 							<Button
-								variant="ghost"
-								size="sm"
+								disabled={draftSelected().filter(needsCv).length === 0}
+								onClick={() => setCreateOpen(true)}
+							>
+								Create CV drafts ({draftSelected().filter(needsCv).length})
+							</Button>
+							<Button
+								variant="outline"
+								disabled={polishQueue().length === 0}
+								onClick={() =>
+									navigate({
+										to: "/tailoring/drafts/$id",
+										params: { id: polishQueue()[0]?.Draft?.ID ?? "" },
+										search: { queue: draftSelected().map((a) => a.ID) },
+									})
+								}
+							>
+								Polish in editor ({polishQueue().length})
+							</Button>
+							<Button
+								disabled={completeApps(draftSelected()).length === 0}
 								onClick={() => {
-									setSelection({});
-									anchor = undefined;
+									const run = completeApps(draftSelected()).map((a) => a.ID);
+									const [first] = run;
+									if (first)
+										void navigate({
+											to: "/applications/$id",
+											params: { id: first },
+											search: { run },
+										});
 								}}
 							>
-								Clear
+								Send complete ({completeApps(draftSelected()).length})
 							</Button>
-						</div>
-						<Button
-							disabled={draftSelected().filter(needsCv).length === 0}
-							onClick={() => setCreateOpen(true)}
-						>
-							Create CV drafts ({draftSelected().filter(needsCv).length})
-						</Button>
-						<Button
-							variant="outline"
-							disabled={polishQueue().length === 0}
-							onClick={() =>
-								navigate({
-									to: "/tailoring/drafts/$id",
-									params: { id: polishQueue()[0]?.Draft?.ID ?? "" },
-									search: { queue: draftSelected().map((a) => a.ID) },
-								})
-							}
-						>
-							Polish in editor ({polishQueue().length})
-						</Button>
-						<Button
-							disabled={completeApps(draftSelected()).length === 0}
-							onClick={() => {
-								const run = completeApps(draftSelected()).map((a) => a.ID);
-								const [first] = run;
-								if (first)
-									void navigate({
-										to: "/applications/$id",
-										params: { id: first },
-										search: { run },
-									});
-							}}
-						>
-							Send complete ({completeApps(draftSelected()).length})
-						</Button>
-						<Button
-							variant="outline"
-							class="text-destructive-strong"
-							onClick={() => setDeletingApps(selectedApps())}
-						>
-							Delete ({selectedApps().length})
-						</Button>
-					</aside>
-				</Show>
-			</div>
+							<Button
+								variant="outline"
+								class="text-destructive-strong"
+								onClick={() => setDeletingApps(selectedApps())}
+							>
+								Delete ({selectedApps().length})
+							</Button>
+						</aside>
+					</Show>
+				</div>
+			</Show>
 
 			<CreateDraftsDialog
 				open={createOpen()}

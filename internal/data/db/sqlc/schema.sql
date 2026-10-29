@@ -534,7 +534,15 @@ CREATE TABLE harvest_seen_ids (
     external_id   TEXT        NOT NULL,
     outcome       TEXT        NOT NULL CONSTRAINT harvest_seen_ids_outcome_check CHECK (outcome IN ('backfill', 'ineligible', 'exported', 'ats_check')),
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_in_sitemap_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (source, external_id)
+);
+
+CREATE TABLE harvest_company_counts (
+    source     TEXT    NOT NULL,
+    company    TEXT    NOT NULL,
+    live_jobs  INTEGER NOT NULL CONSTRAINT harvest_company_counts_live_jobs_check CHECK (live_jobs >= 0),
+    PRIMARY KEY (source, company)
 );
 
 CREATE TABLE IF NOT EXISTS candidate_assessments (
@@ -549,12 +557,14 @@ CREATE TABLE IF NOT EXISTS candidate_assessments (
 CREATE TYPE scoring_dimension AS ENUM ('tech', 'role', 'domain', 'seniority', 'work', 'stage', 'size', 'employment');
 
 CREATE TABLE scoring_options (
-    id         TEXT PRIMARY KEY,
-    dimension  scoring_dimension NOT NULL,
-    label      TEXT NOT NULL,
-    question   TEXT NOT NULL,
-    retired_at TIMESTAMPTZ
+    id            TEXT PRIMARY KEY,
+    dimension     scoring_dimension NOT NULL,
+    label         TEXT NOT NULL,
+    question      TEXT NOT NULL,
+    retired_at    TIMESTAMPTZ,
+    owner_user_id UUID REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE INDEX scoring_options_owner_live_idx ON scoring_options (owner_user_id) WHERE retired_at IS NULL;
 
 CREATE TABLE option_answers (
     job_id        UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,

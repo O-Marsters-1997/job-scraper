@@ -125,7 +125,7 @@ func run(ctx context.Context) error {
 	domainBase := sources.NewBase(sources.Config{Name: "domain-resolver"})
 	harvesters := []discover.Harvester{
 		commoncrawl.New(&http.Client{Timeout: 2 * time.Minute}, commoncrawl.CollinfoURL),
-		wttjharvest.New(&http.Client{Timeout: time.Minute}, wttjharvest.SitemapURL, wttj.NewClient(time.Second), js.Boards(), exporter),
+		wttjharvest.New(&http.Client{Timeout: time.Minute}, wttjharvest.SitemapURL, wttj.NewClient(time.Second), js.Boards(), exporter, time.Now),
 		untracked.New(js.Boards(), untracked.UK),
 		untracked.New(js.Boards(), untracked.Abroad),
 		workablesearch.New(&http.Client{Timeout: time.Minute}, workablesearch.SearchURL),
@@ -158,7 +158,7 @@ func run(ctx context.Context) error {
 	g.Go(func() error {
 		return schedule.Every(gctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
 	})
-	g.Go(func() error { return schedule.Every(gctx, "harvest", time.Hour, harvest.RunOnce) })
+	g.Go(func() error { return schedule.Every(gctx, "harvest", 15*time.Minute, harvest.RunOnce) })
 	g.Go(func() error {
 		slog.InfoContext(gctx, "RabbitMQ source workers starting")
 		if err := q.Consume(gctx, processor.Process, processor.FailRun); err != nil {

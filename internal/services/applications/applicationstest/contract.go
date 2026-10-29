@@ -291,6 +291,85 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("move changes only the status and the chase date", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		created := createApp(t, f, dto.CreateApplicationInput{SalaryInfo: "60k", AppliedAt: new("2026-01-02")})
+		got, err := f.Store.MoveApplication(t.Context(), f.UserID, dto.MoveApplicationInput{ID: created.ID, StatusID: createWindowStatus(t, f, 3).ID})
+		if err != nil {
+			t.Fatalf("MoveApplication(...) err = %v", err)
+		}
+		want := created
+		want.StatusID, want.ChaseBy = got.Application.StatusID, new(daysFromToday(3))
+		if diff := cmp.Diff(want, got.Application, cmpopts.IgnoreFields(dto.Application{}, "UpdatedAt")); diff != "" {
+			t.Errorf("MoveApplication(...) mismatch (-want +got):\n%s", diff)
+		}
+		if got.Application.StatusID == created.StatusID || got.FilledAppliedAt {
+			t.Errorf("MoveApplication(...) StatusID = %q (was %q), FilledAppliedAt = %v, want a new status and false", got.Application.StatusID, created.StatusID, got.FilledAppliedAt)
+		}
+	})
+
+	t.Run("move to the current status changes nothing", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		window := createWindowStatus(t, f, 3)
+		created := createApp(t, f, dto.CreateApplicationInput{StatusID: window.ID})
+		want := chaseSet(t, f, created.ID)
+		got, err := f.Store.MoveApplication(t.Context(), f.UserID, dto.MoveApplicationInput{ID: created.ID, StatusID: window.ID})
+		if err != nil {
+			t.Fatalf("MoveApplication(same status) err = %v", err)
+		}
+		if got.Application.ChaseBy == nil || !got.Application.ChaseBy.Equal(want) || got.FilledAppliedAt {
+			t.Errorf("MoveApplication(same status) ChaseBy = %v, FilledAppliedAt = %v, want %v and false", got.Application.ChaseBy, got.FilledAppliedAt, want)
+		}
+	})
+
+	t.Run("move clears the applied date when asked", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		created := createApp(t, f, dto.CreateApplicationInput{AppliedAt: new("2026-01-02")})
+		got, err := f.Store.MoveApplication(t.Context(), f.UserID, dto.MoveApplicationInput{ID: created.ID, StatusID: createStatus(t, f, "Offer").ID, ClearAppliedAt: true})
+		if err != nil {
+			t.Fatalf("MoveApplication(clear) err = %v", err)
+		}
+		if got.Application.AppliedAt != nil {
+			t.Errorf("MoveApplication(clear) AppliedAt = %v, want nil", got.Application.AppliedAt)
+		}
+	})
+
+	t.Run("move of a missing application returns not found", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		_, err := f.Store.MoveApplication(t.Context(), f.UserID, dto.MoveApplicationInput{ID: missingID, StatusID: createStatus(t, f, "Offer").ID})
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("MoveApplication(missing) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("move to another user's status returns not found", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		theirs, err := f.Store.CreateApplicationStatus(t.Context(), f.OtherUserID, "Theirs", "#6366f1", nil, false)
+		if err != nil {
+			t.Fatalf("CreateApplicationStatus(other user) err = %v", err)
+		}
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		_, err = f.Store.MoveApplication(t.Context(), f.UserID, dto.MoveApplicationInput{ID: created.ID, StatusID: theirs.ID})
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("MoveApplication(other user's status) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("move of another user's application returns not found", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		_, err := f.Store.MoveApplication(t.Context(), f.OtherUserID, dto.MoveApplicationInput{ID: created.ID, StatusID: createStatus(t, f, "Offer").ID})
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("MoveApplication(other user's application) err = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("create with another user's status returns not found", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)

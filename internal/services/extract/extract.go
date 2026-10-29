@@ -59,8 +59,8 @@ type promptData struct {
 }
 
 type extractedPick struct {
-	OptionID string `json:"optionId"`
-	Stance   string `json:"stance"`
+	OptionID string     `json:"optionId"`
+	Stance   dto.Stance `json:"stance"`
 }
 
 type extractionResult struct {
@@ -73,7 +73,11 @@ type extractionResult struct {
 func (c *Client) Extract(ctx context.Context, apiKey, text string, options []dto.ScoringOption, dimensions []dto.DimensionSpec) ([]dto.Pick, error) {
 	stancesByDim := make(map[dto.Dimension]string, len(dimensions))
 	for _, d := range dimensions {
-		stancesByDim[d.Key] = strings.Join(d.Stances, "/")
+		names := make([]string, len(d.Stances))
+		for i, s := range d.Stances {
+			names[i] = string(s)
+		}
+		stancesByDim[d.Key] = strings.Join(names, "/")
 	}
 	bank := make([]bankOption, len(options))
 	for i, o := range options {

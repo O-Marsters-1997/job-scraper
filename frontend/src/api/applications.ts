@@ -1,10 +1,13 @@
 import type {
 	Application,
+	ApplicationMove,
 	ApplicationWithDetails,
 	CreateApplicationPayload,
+	MoveApplicationPayload,
 	UpdateApplicationPayload,
 } from "../types/application";
 import {
+	applicationMoveSchema,
 	applicationSchema,
 	applicationWithDetailsSchema,
 } from "../types/application";
@@ -55,6 +58,21 @@ export async function updateApplication(
 				`/applications/${id}`,
 				applicationSchema,
 				jsonInit("PATCH", data),
+			),
+	);
+}
+
+export async function moveApplication(
+	id: string,
+	data: MoveApplicationPayload,
+): Promise<ApplicationMove> {
+	return mocked(
+		(db) => db.moveApplication(id, data),
+		() =>
+			apiFetch(
+				`/applications/${id}/status`,
+				applicationMoveSchema,
+				jsonInit("PUT", data),
 			),
 	);
 }

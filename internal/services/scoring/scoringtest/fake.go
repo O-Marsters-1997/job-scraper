@@ -58,6 +58,7 @@ type FakeStore struct {
 	evidence    map[string]dto.JobScoreEvidence
 	grades      map[string]map[string]dto.Grade
 	implied     map[string][]dto.ImpliedLabel
+	recent      map[string][]dto.Job
 
 	failed        []dto.ScoringFailure
 	completed     []CompletedEffect
@@ -205,12 +206,91 @@ func (f *FakeStore) ListInterestedConfigs(_ context.Context, jobID string) ([]dt
 	return f.configs[jobID], nil
 }
 
-func (f *FakeStore) ListScoringOptions(context.Context) ([]dto.ScoringOption, error) {
+func (f *FakeStore) ListScoringOptions(_ context.Context, userID string) ([]dto.ScoringOption, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := make([]dto.ScoringOption, len(f.options))
-	copy(out, f.options)
+	out := make([]dto.ScoringOption, 0, len(f.options))
+	for _, o := range f.options {
+		if o.OwnerID == "" || (o.OwnerID == userID && o.RetiredAt == nil) {
+			out = append(out, o)
+		}
+	}
 	return out, nil
+}
+
+func (f *FakeStore) AddCustomOption(_ context.Context, userID string, opt dto.CustomOption) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.options = append(f.options, customOptionRow(userID, opt))
+	return nil
+}
+
+func (f *FakeStore) ReplaceCustomOption(_ context.Context, userID, oldID string, opt dto.CustomOption) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.retireOwned(userID, oldID) {
+		return data.ErrNotFound
+	}
+	f.options = append(f.options, customOptionRow(userID, opt))
+	f.rewritePicks(userID, func(p dto.Pick) (dto.Pick, bool) {
+		if p.OptionID == oldID {
+			p.OptionID = opt.ID
+		}
+		return p, true
+	})
+	return nil
+}
+
+func (f *FakeStore) RetireCustomOption(_ context.Context, userID, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.retireOwned(userID, id) {
+		return data.ErrNotFound
+	}
+	f.rewritePicks(userID, func(p dto.Pick) (dto.Pick, bool) { return p, p.OptionID != id })
+	return nil
+}
+
+func (f *FakeStore) CountLiveCustomOptions(_ context.Context, userID string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, o := range f.options {
+		if o.OwnerID == userID && o.RetiredAt == nil {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func customOptionRow(userID string, opt dto.CustomOption) dto.ScoringOption {
+	return dto.ScoringOption{ID: opt.ID, Dimension: opt.Dimension, Label: opt.Label, Question: opt.Question, OwnerID: userID}
+}
+
+func (f *FakeStore) retireOwned(userID, id string) bool {
+	for i, o := range f.options {
+		if o.ID == id && o.OwnerID == userID && o.RetiredAt == nil {
+			now := time.Now()
+			f.options[i].RetiredAt = &now
+			return true
+		}
+	}
+	return false
+}
+
+func (f *FakeStore) rewritePicks(userID string, fn func(dto.Pick) (dto.Pick, bool)) {
+	cfg, ok := f.search[userID]
+	if !ok {
+		return
+	}
+	var picks []dto.Pick
+	for _, p := range cfg.Preferences.Picks {
+		if np, keep := fn(p); keep {
+			picks = append(picks, np)
+		}
+	}
+	cfg.Preferences.Picks = picks
+	f.search[userID] = cfg
 }
 
 func (f *FakeStore) ListAnswers(_ context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error) {
@@ -683,6 +763,21 @@ func (f *FakeStore) SeedImpliedPositives(userID string, labels ...dto.ImpliedLab
 		f.implied = make(map[string][]dto.ImpliedLabel)
 	}
 	f.implied[userID] = labels
+}
+
+func (f *FakeStore) SeedRecentScoredJobs(userID string, jobs ...dto.Job) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.recent == nil {
+		f.recent = make(map[string][]dto.Job)
+	}
+	f.recent[userID] = jobs
+}
+
+func (f *FakeStore) ListRecentScoredJobs(_ context.Context, userID string, limit int) ([]dto.Job, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.recent[userID][:min(limit, len(f.recent[userID]))]), nil
 }
 
 func (f *FakeStore) ListImpliedPositives(_ context.Context, userID string) ([]dto.ImpliedLabel, error) {

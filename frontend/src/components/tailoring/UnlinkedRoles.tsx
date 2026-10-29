@@ -1,6 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import { useExperience } from "@/hooks/useExperience";
 import { useSaveHeadings } from "@/hooks/useTailoring";
+import { loadedData } from "@/lib/queryData";
 import type { Draft } from "@/types/tailoring";
 
 export function UnlinkedRoles(props: { draft: Draft }) {
@@ -45,7 +46,7 @@ export function UnlinkedRoles(props: { draft: Draft }) {
 								<option value="" disabled selected>
 									Choose a Position
 								</option>
-								<For each={positions.data ?? []}>
+								<For each={loadedData(positions) ?? []}>
 									{(pos) => (
 										<option value={pos.id}>
 											{pos.title}, {pos.employer}

@@ -34,6 +34,7 @@ func (m *Module) Routes(r chi.Router) {
 		r.Patch("/{id}", handlers.Update(m.service.Update))
 		r.Delete("/{id}", handlers.Delete(m.store.DeleteApplication))
 		r.Post("/delete", handlers.Update(m.service.DeleteApplications))
+		r.Put("/{id}/status", handlers.Update(m.service.Move))
 		r.Put("/{id}/chase", handlers.Update(m.service.SetChase))
 		r.Delete("/{id}/chase", handlers.Delete(m.store.ClearChase))
 		r.Get("/for-jobs", handlers.Query(m.service.ForJobs))
