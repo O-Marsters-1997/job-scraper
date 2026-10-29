@@ -14,9 +14,7 @@ import {
 	useSaveDraftSkills,
 	useSkillSuggestions,
 } from "../../hooks/useTailoring";
-
-const fitPct = (score: number) =>
-	Math.round(Math.min(Math.max(score, 0), 1) * 100);
+import { fitPercent } from "./Lean";
 
 const normalise = (s: string) => s.toLowerCase();
 
@@ -61,6 +59,18 @@ function SkillsForm(props: {
 			) ?? []
 		);
 	};
+	const fitByName = createMemo(() => {
+		const scores = new Map<string, number>();
+		for (const l of suggestions.data?.lines ?? []) {
+			for (const b of l.base) scores.set(normalise(b.text), b.score);
+			for (const c of l.candidates) scores.set(normalise(c.name), c.score);
+		}
+		return scores;
+	});
+	const chipMeta = (name: string) => {
+		const score = fitByName().get(normalise(name));
+		return score === undefined ? undefined : fitPercent(score);
+	};
 	const valid = () => groups().every((g) => g.items.length > 0);
 	const submit = async () => {
 		if (!(await props.flush())) return;
@@ -80,6 +90,7 @@ function SkillsForm(props: {
 							onReorder={(from, to) =>
 								setItems(i, moveItem(group().items, from, to))
 							}
+							chipMeta={chipMeta}
 							placeholder="Add a skill…"
 							chipClass="border-border bg-surface-muted text-foreground"
 						/>
@@ -92,14 +103,14 @@ function SkillsForm(props: {
 											<li>
 												<button
 													type="button"
-													aria-label={`Add ${c.name}, ${fitPct(c.score)}% fit`}
+													aria-label={`Add ${c.name}, ${fitPercent(c.score)} fit`}
 													onClick={() =>
 														setItems(i, [...group().items, c.name])
 													}
 													class="inline-flex h-6 items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 text-xs text-foreground hover:bg-accent-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
 												>
 													{c.name}
-													<span class="text-faint">{fitPct(c.score)}%</span>
+													<span class="text-faint">{fitPercent(c.score)}</span>
 												</button>
 											</li>
 										)}

@@ -41,6 +41,7 @@ export function MultiCombobox(props: {
 	hint?: string;
 	placeholder?: string;
 	chipClass?: string;
+	chipMeta?: (id: string) => string | undefined;
 	creatable?: boolean;
 	onSearch?: (query: string) => void;
 }) {
@@ -138,7 +139,7 @@ export function MultiCombobox(props: {
 							{(o, i) => (
 								<span
 									class={cn(
-										"inline-flex h-6 items-center gap-0.5 rounded-full border pr-0.5 pl-2.5 text-xs font-medium",
+										"group inline-flex h-6 items-center gap-0.5 rounded-full border pr-0.5 pl-2.5 text-xs font-medium",
 										props.chipClass,
 									)}
 								>
@@ -173,6 +174,13 @@ export function MultiCombobox(props: {
 									>
 										{o.label}
 									</button>
+									<Show when={props.chipMeta?.(o.id)}>
+										{(meta) => (
+											<span class="hidden text-faint group-focus-within:inline group-hover:inline">
+												{meta()}
+											</span>
+										)}
+									</Show>
 									<button
 										type="button"
 										aria-label={`Remove ${o.label}`}
