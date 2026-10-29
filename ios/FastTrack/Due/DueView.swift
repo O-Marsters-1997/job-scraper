@@ -2,6 +2,8 @@ import SwiftUI
 
 struct DueView: View {
     let model: DueModel
+    @Binding var focus: DueFocus?
+    @State private var highlighted: String?
     @State private var contactFor: DueJob?
     @State private var openJobID: String?
     @State private var openApplication: DueJob?
@@ -41,10 +43,28 @@ struct DueView: View {
                     Text(model.failureMessage)
                 }
                 .task { await model.load() }
+                .onChange(of: focus, initial: true, resolveFocus)
+                .onChange(of: model.loadState.value != nil, resolveFocus)
                 .task(id: model.hasPendingDraft) { await model.refreshWhilePending() }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active { Task { await model.load() } }
                 }
+        }
+    }
+
+    private func resolveFocus() {
+        guard model.loadState.value != nil, let current = focus else { return }
+        focus = nil
+        query = ""
+        switch current {
+        case .chase(let id):
+            highlighted = id
+        case .apply(let id):
+            if let job = model.jobs.first(where: { $0.id == id }), job.dueDraft?.state == .ready {
+                openApplication = job
+            } else {
+                highlighted = id
+            }
         }
     }
 
@@ -80,12 +100,12 @@ struct DueView: View {
             } else {
                 DueNotebook(model: model, jobs: jobs, showShortlisted: { showingShortlisted = true },
                             logContact: { contactFor = $0 }, openJob: { openJobID = $0.id },
-                            openApplication: { openApplication = $0 })
+                            openApplication: { openApplication = $0 }, highlighted: highlighted)
             }
         }
     }
 }
 
 #Preview {
-    DueView(model: DueModel(client: .mock(due: [.sample])))
+    DueView(model: DueModel(client: .mock(due: [.sample])), focus: .constant(nil))
 }
