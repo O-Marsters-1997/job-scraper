@@ -89,6 +89,8 @@ export const keys = {
 	google: ["google-status"] as const,
 	scoringConfig: ["scoring-config"] as const,
 	scoringOptions: ["scoring-options"] as const,
+	scoringPreview: (preferences: object) =>
+		["scoring-preview", preferences] as const,
 	grade: (jobId: string) => ["grade", jobId] as const,
 	scoreFeedback: ["score-feedback"] as const,
 	me: ["me"] as const,

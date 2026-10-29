@@ -5,6 +5,7 @@ import type {
 	ScoringOption,
 	ScoringOptionsView,
 } from "../types/scoringOptions";
+import type { ScoringPreview } from "../types/scoringPreview";
 import { slugify } from "./helpers";
 
 let scoringConfig: ScoringConfig = {
@@ -159,4 +160,8 @@ export function getScoringStatus(): ScoringStatus {
 export function updateScoringConfig(payload: ScoringConfig): ScoringConfig {
 	scoringConfig = payload;
 	return scoringConfig;
+}
+
+export function previewScoring(): ScoringPreview {
+	return { dismissedInTop5: { before: 0, after: 0 }, jobs: [] };
 }
