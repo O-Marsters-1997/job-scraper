@@ -61,6 +61,11 @@ func TestRoutesHappyPath(t *testing.T) {
 		t.Errorf("GET /scoring-config picks (-want +got):\n%s", diff)
 	}
 
+	preview := handlerstest.Do[dto.ScoringPreview](t, r, http.StatusOK, "POST /scoring-preview", `{"preferences":{"picks":[{"optionId":"tech:go","stance":"nice"}]}}`)
+	if len(preview.Jobs) != 0 {
+		t.Errorf("POST /scoring-preview jobs = %+v, want none for a user with no scored jobs", preview.Jobs)
+	}
+
 	status := handlerstest.Do[dto.ScoringStatus](t, r, http.StatusOK, "GET /scores/status", "")
 	if status.Pending != 0 {
 		t.Errorf("GET /scores/status pending = %d, want 0", status.Pending)
