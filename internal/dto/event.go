@@ -14,6 +14,24 @@ type EventInput struct {
 	Undone    bool   `json:"undone"`
 }
 
+type ImpressionSurface string
+
+const (
+	SurfaceTriage ImpressionSurface = "triage"
+	SurfaceList   ImpressionSurface = "list"
+)
+
+type ImpressionItem struct {
+	JobID    string `json:"job_id"`
+	Position int    `json:"position"`
+}
+
+type ImpressionBatchInput struct {
+	Surface ImpressionSurface `json:"surface"`
+	Sort    JobSort           `json:"sort"`
+	Items   []ImpressionItem  `json:"items"`
+}
+
 // Event is a stored events row; Props is the per-type JSON payload.
 type Event struct {
 	ID        string          `json:"id"`

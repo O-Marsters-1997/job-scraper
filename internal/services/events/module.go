@@ -33,6 +33,7 @@ func New(pool *pgxpool.Pool, snapshots ScoreSnapshotter) *Module {
 
 func (m *Module) Routes(r chi.Router) {
 	r.Post("/events", handlers.Create(m.service.Record))
+	r.Post("/events/impressions", handlers.Create(m.service.RecordImpressions))
 }
 
 // Snapshot returns userID's score for jobID, or nil when it is unscored or

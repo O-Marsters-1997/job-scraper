@@ -173,6 +173,86 @@ func TestRecord(t *testing.T) {
 	})
 }
 
+func TestRecordImpressions(t *testing.T) {
+	item := dto.ImpressionItem{JobID: jobID, Position: 3}
+
+	t.Run("stores one stamped row per item with surface, sort and position", func(t *testing.T) {
+		st := eventstest.NewFakeStore()
+		svc := events.NewService(st, eventstest.ScoresAs(scored))
+		in := dto.ImpressionBatchInput{
+			Surface: dto.SurfaceList, Sort: dto.JobSortBest,
+			Items: []dto.ImpressionItem{{JobID: jobID, Position: 1}, item},
+		}
+
+		if _, err := svc.RecordImpressions(t.Context(), userID, in); err != nil {
+			t.Fatalf("RecordImpressions() err = %v", err)
+		}
+
+		got, _ := st.ListEvents(t.Context(), userID, events.JobImpression)
+		if len(got) != 2 {
+			t.Fatalf("stored %d impressions, want 2", len(got))
+		}
+		want := map[string]any{
+			"score": float64(72), "band": "good", "score_model": "jev-1", "score_fingerprint": "fp-1",
+			"surface": "list", "sort": "best", "position": float64(3),
+		}
+		if diff := cmp.Diff(want, props(t, got[1])); diff != "" {
+			t.Errorf("props (-want +got):\n%s", diff)
+		}
+	})
+
+	tooMany := make([]dto.ImpressionItem, 51)
+	for i := range tooMany {
+		tooMany[i] = item
+	}
+	for name, in := range map[string]dto.ImpressionBatchInput{
+		"unknown surface": {Surface: "feed", Items: []dto.ImpressionItem{item}},
+		"unknown sort":    {Surface: dto.SurfaceList, Sort: "oldest", Items: []dto.ImpressionItem{item}},
+		"empty batch":     {Surface: dto.SurfaceList},
+		"oversized batch": {Surface: dto.SurfaceList, Items: tooMany},
+		"bad job id":      {Surface: dto.SurfaceList, Items: []dto.ImpressionItem{{JobID: "abc", Position: 1}}},
+		"zero position":   {Surface: dto.SurfaceList, Items: []dto.ImpressionItem{{JobID: jobID}}},
+	} {
+		t.Run("rejects "+name, func(t *testing.T) {
+			st := eventstest.NewFakeStore()
+			svc := events.NewService(st, eventstest.ScoresAs(scored))
+
+			_, err := svc.RecordImpressions(t.Context(), userID, in)
+
+			if ae, ok := errors.AsType[*apperr.Error](err); !ok || ae.Kind() != apperr.KindInvalid {
+				t.Errorf("RecordImpressions() err = %v, want invalid", err)
+			}
+			if got, _ := st.ListEvents(t.Context(), userID, ""); len(got) != 0 {
+				t.Errorf("stored %+v, want nothing", got)
+			}
+		})
+	}
+
+	t.Run("keeps the row unscored when the snapshot fails", func(t *testing.T) {
+		st := eventstest.NewFakeStore()
+		svc := events.NewService(st, eventstest.Fails(errors.New("boom")))
+
+		in := dto.ImpressionBatchInput{Surface: dto.SurfaceTriage, Items: []dto.ImpressionItem{item}}
+		if _, err := svc.RecordImpressions(t.Context(), userID, in); err != nil {
+			t.Fatalf("RecordImpressions() err = %v", err)
+		}
+
+		if got := props(t, only(t, st)); got["score"] != nil || got["surface"] != "triage" {
+			t.Errorf("props = %v, want unscored triage impression", got)
+		}
+	})
+
+	t.Run("Record refuses the type", func(t *testing.T) {
+		svc := events.NewService(eventstest.NewFakeStore(), eventstest.Unscored())
+
+		_, err := svc.Record(t.Context(), userID, dto.EventInput{Type: events.JobImpression, SubjectID: jobID})
+
+		if ae, ok := errors.AsType[*apperr.Error](err); !ok || ae.Kind() != apperr.KindInvalid {
+			t.Errorf("Record() err = %v, want invalid", err)
+		}
+	})
+}
+
 func TestApplicationEventRecording(t *testing.T) {
 	t.Run("created carries the job and its score", func(t *testing.T) {
 		st := eventstest.NewFakeStore()
