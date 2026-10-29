@@ -88,8 +88,10 @@ export function htmlToParts(html: string): TextPart[] {
 	return htmlParts(body);
 }
 
+const SEPARATOR = "\n\n";
+
 export function joinParts(parts: TextPart[]): string {
-	return parts.map((p) => p.text).join("\n\n");
+	return parts.map((p) => p.text).join(SEPARATOR);
 }
 
 export function clipSpans(
@@ -100,7 +102,7 @@ export function clipSpans(
 	return parts.map((p) => {
 		const start = offset;
 		const end = start + p.text.length;
-		offset = end + 2;
+		offset = end + SEPARATOR.length;
 		return {
 			part: p,
 			spans: spans

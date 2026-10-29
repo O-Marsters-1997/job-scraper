@@ -1,4 +1,4 @@
-import { For, type JSX, Show } from "solid-js";
+import { For, Index, type JSX, Show } from "solid-js";
 import { clipSpans, type TextPart } from "@/lib/htmlText";
 import { findQuoteSpans, type QuoteSpan } from "@/lib/quoteMarks";
 import { cn } from "@/lib/utils";
@@ -93,19 +93,19 @@ function BlockBody(props: {
 		>
 			{(parts) => (
 				<div class="flex flex-col gap-2">
-					<For each={clipSpans(spans(), parts())}>
+					<Index each={clipSpans(spans(), parts())}>
 						{(item) => (
-							<p class={PART_CLASS[item.part.kind]}>
+							<p class={PART_CLASS[item().part.kind]}>
 								<Marked
-									text={item.part.text}
+									text={item().part.text}
 									marks={props.marks}
-									spans={item.spans}
+									spans={item().spans}
 									selected={props.selected}
 									onSelect={props.onSelect}
 								/>
 							</p>
 						)}
-					</For>
+					</Index>
 				</div>
 			)}
 		</Show>

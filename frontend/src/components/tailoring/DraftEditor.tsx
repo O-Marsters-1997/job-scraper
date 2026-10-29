@@ -166,14 +166,16 @@ export function DraftEditor(props: {
 	const explain = useExplainDraft(() => props.draft.id);
 	const note = useJobNote(() => props.draft.jobId);
 	const comments = useJobComments(() => props.draft.jobId);
+	const jdParts = createMemo(() =>
+		htmlToParts(loadedData(job)?.Description ?? ""),
+	);
 	const jobText = () => {
-		const jdParts = htmlToParts(loadedData(job)?.Description ?? "");
 		const blocks: JobTextBlock[] = [
 			{
 				label: "Job description",
 				source: "jd",
-				text: joinParts(jdParts),
-				parts: jdParts,
+				text: joinParts(jdParts()),
+				parts: jdParts(),
 			},
 			{ label: "Your note", source: "note", text: note.data?.Body ?? "" },
 			...(comments.data ?? []).map(
