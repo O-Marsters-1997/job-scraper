@@ -33,7 +33,7 @@ struct RootView: View {
 
     private func open(_ url: URL) {
         guard let route = Route(url: url) else {
-            dueFocus = DueFocus(url: url)
+            if let focus = DueFocus(url: url) { dueFocus = focus }
             return
         }
         path = [route]
