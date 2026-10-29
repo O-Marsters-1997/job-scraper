@@ -1040,7 +1040,7 @@ func (s *Store) ListImpliedPositives(ctx context.Context, userID string) ([]dto.
 	}
 	out := make([]dto.ImpliedLabel, len(rows))
 	for i, row := range rows {
-		out[i] = dto.ImpliedLabel{JobID: row.JobID.String(), Source: row.Source}
+		out[i] = dto.ImpliedLabel{JobID: row.JobID.String(), Source: row.Source, At: row.At.Time}
 	}
 	return out, nil
 }

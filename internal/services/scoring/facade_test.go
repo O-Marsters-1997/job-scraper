@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -214,8 +215,8 @@ func TestReplay(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Replay() err = %v", err)
 		}
-		if strings.Contains(got, "Concordance") {
-			t.Errorf("Replay() = %q, want no Concordance line", got)
+		if !strings.Contains(got, "Concordance: not enough negatives") {
+			t.Errorf("Replay() = %q, want Concordance reported as not enough negatives", got)
 		}
 		assertGolden(t, "testdata/replay_positives_only.golden.md", got)
 	})
@@ -225,7 +226,7 @@ func TestReplay(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Replay() err = %v", err)
 		}
-		if !strings.Contains(got, "Concordance") {
+		if !strings.Contains(got, "Concordance: 40%") {
 			t.Errorf("Replay() = %q, want a Concordance line", got)
 		}
 		if !strings.Contains(got, "| culture | 4 | 0 |") {
@@ -354,6 +355,86 @@ func TestScoreSnapshot(t *testing.T) {
 		got, err := m.ScoreSnapshot(t.Context(), userID, testJob.ID)
 		if err != nil || got != nil {
 			t.Errorf("ScoreSnapshot() = %+v, %v, want nil, nil", got, err)
+		}
+	})
+}
+
+func TestReplay_ShipMetrics(t *testing.T) {
+	t.Parallel()
+	const userID = "user-1"
+	questions := []string{"Does the role use Go?", "Does the role use Rust?", "Does the role use Kubernetes?", "Is this primarily a backend role?"}
+	yes := dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}
+	no := dto.Answer{PYes: 0.05, PNo: 0.9, PNotStated: 0.05}
+	strong, weak := map[string]dto.Answer{}, map[string]dto.Answer{}
+	for _, q := range questions {
+		strong[scoring.QuestionHash(q)] = yes
+		weak[scoring.QuestionHash(q)] = no
+	}
+
+	seed := func(t *testing.T, positives, negatives int, age time.Duration) *scoring.Module {
+		t.Helper()
+		st := newFakeStore()
+		st.SeedOptions(bank)
+		st.SeedSearchConfig(picking(userID, "tech:go", "tech:rust", "tech:kubernetes", "role:backend"))
+		var inputs []store.ScoringInput
+		var implied []dto.ImpliedLabel
+		for i := range positives {
+			id := fmt.Sprintf("p%02d", i)
+			inputs = append(inputs, store.ScoringInput{Job: dto.Job{ID: id, Title: id, CompanySlug: "acme", ContentFingerprint: "fp"}, Answers: strong})
+			implied = append(implied, dto.ImpliedLabel{JobID: id, Source: "application", At: time.Now().Add(-age)})
+		}
+		var dismissed []string
+		for i := range negatives {
+			id := fmt.Sprintf("n%02d", i)
+			a := weak
+			if i < 5 {
+				a = strong
+			}
+			job := dto.Job{ID: id, Title: id, CompanySlug: "acme", ContentFingerprint: "fp"}
+			st.SeedJob(job, nil)
+			inputs = append(inputs, store.ScoringInput{Job: job, Answers: a})
+			dismissed = append(dismissed, id)
+		}
+		st.SeedScoringInputs(userID, inputs)
+		st.SeedImpliedPositives(userID, implied...)
+		svc := scoring.NewService(newDeps(t, st))
+		for _, id := range dismissed {
+			if _, err := svc.SetGrade(t.Context(), userID, dto.GradeInput{JobID: id, Grade: "no", Reasons: []string{"tech"}}); err != nil {
+				t.Fatalf("SetGrade(%s) err = %v", id, err)
+			}
+		}
+		return scoring.Build(newDeps(t, st))
+	}
+	replay := func(t *testing.T, m *scoring.Module) string {
+		t.Helper()
+		got, err := m.Replay(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("Replay() err = %v", err)
+		}
+		return got
+	}
+
+	t.Run("reports every ship metric over a tied label pool", func(t *testing.T) {
+		t.Parallel()
+		got := replay(t, seed(t, 10, 15, time.Hour))
+		for _, want := range []string{
+			"- Precision@20: 50% of the top 20 labels from the last 28 days are positive",
+			"- Distinct scores in the top 100: 2",
+			"- Dismissed jobs in the top 100: 15",
+			"- Great band size: 15",
+			"- Concordance: 83% of positive/negative pairs score the positive higher",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("Replay() = %q, want %q", got, want)
+			}
+		}
+	})
+
+	t.Run("labels older than the Holdout window do not count", func(t *testing.T) {
+		t.Parallel()
+		got := replay(t, seed(t, 10, 15, 29*24*time.Hour))
+		if want := "- Precision@20: not enough labels (15 in the last 28 days, need 20)"; !strings.Contains(got, want) {
+			t.Errorf("Replay() = %q, want %q", got, want)
 		}
 	})
 }
