@@ -174,9 +174,11 @@ func TestRecord(t *testing.T) {
 }
 
 func TestRecordImpressions(t *testing.T) {
+	t.Parallel()
 	item := dto.ImpressionItem{JobID: jobID, Position: 3}
 
 	t.Run("stores one stamped row per item with surface, sort and position", func(t *testing.T) {
+		t.Parallel()
 		st := eventstest.NewFakeStore()
 		svc := events.NewService(st, eventstest.ScoresAs(scored))
 		in := dto.ImpressionBatchInput{
@@ -214,6 +216,7 @@ func TestRecordImpressions(t *testing.T) {
 		"zero position":   {Surface: dto.SurfaceList, Items: []dto.ImpressionItem{{JobID: jobID}}},
 	} {
 		t.Run("rejects "+name, func(t *testing.T) {
+			t.Parallel()
 			st := eventstest.NewFakeStore()
 			svc := events.NewService(st, eventstest.ScoresAs(scored))
 
@@ -229,6 +232,7 @@ func TestRecordImpressions(t *testing.T) {
 	}
 
 	t.Run("keeps the row unscored when the snapshot fails", func(t *testing.T) {
+		t.Parallel()
 		st := eventstest.NewFakeStore()
 		svc := events.NewService(st, eventstest.Fails(errors.New("boom")))
 
@@ -243,6 +247,7 @@ func TestRecordImpressions(t *testing.T) {
 	})
 
 	t.Run("Record refuses the type", func(t *testing.T) {
+		t.Parallel()
 		svc := events.NewService(eventstest.NewFakeStore(), eventstest.Unscored())
 
 		_, err := svc.Record(t.Context(), userID, dto.EventInput{Type: events.JobImpression, SubjectID: jobID})
