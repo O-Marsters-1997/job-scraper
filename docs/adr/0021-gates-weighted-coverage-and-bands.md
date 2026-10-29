@@ -54,3 +54,7 @@ Seniority now has `Kind: "ladder"` on its `DimensionSpec`. Five tiers carry fixe
 - **Breakdown.** One `seniority` row reads `Seniority: job ≈ 2.6 · you 2.3 ± 0.4`, with Effect meets (d ≤ 1), misses, gated or unknown. Each tier answering yes adds a `level` row, which the user can correct as before.
 
 Existing configs migrated: nice became weight 100, ok became 50, and an old Staff Pick carried to both Lead/Staff and Principal/Head. The reworded questions have new hashes, so every Job's tiers are asked again. The 0.5 floor, the 2× Gate and the Gaussian shape are hand picks that #623 can fit.
+
+## Amendment: a concave curve replaces the credit cap
+
+`min(1, sum / saturation)` gave every job with enough matches the same full credit, so the top of the list tied. Credit per nice dimension is now `1 - e^(-k * sum)` with `k = ln(10) / saturation` and `sum` the strength-weighted sum of P(yes) (`curveCredit` in `compute.go`). It is 0 with no matches, 0.9 at the old cap and still rising after it, so a fourth tech match still helps. Evidence, the missing-evidence term and the bands (80/65/45) are unchanged. Replay and the settings preview share `scoreJob`, so both read the curve. A dimension with saturation 1 now gives 0.9 for a single full match. The `notify_threshold` is to be re-chosen from the curve's replay.

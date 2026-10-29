@@ -226,7 +226,7 @@ func TestReplay(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Replay() err = %v", err)
 		}
-		if !strings.Contains(got, "Concordance: 40%") {
+		if !strings.Contains(got, "Concordance: 43%") {
 			t.Errorf("Replay() = %q, want a Concordance line", got)
 		}
 		if !strings.Contains(got, "| culture | 4 | 0 |") {

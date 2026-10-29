@@ -766,8 +766,8 @@ func TestRecompute(t *testing.T) {
 			t.Fatalf("recomputed = %d, want 1", result.Recomputed)
 		}
 		saved := st.Recomputed()
-		if len(saved) != 1 || saved[0].Score != 37 {
-			t.Fatalf("saved scores = %+v, want one score of 37", saved)
+		if len(saved) != 1 || saved[0].Score != 50 {
+			t.Fatalf("saved scores = %+v, want one score of 50", saved)
 		}
 		if len(alerter.notified) != 0 {
 			t.Fatalf("alerter called on recompute: %v", alerter.notified)
@@ -795,8 +795,8 @@ func TestRecompute(t *testing.T) {
 			t.Fatalf("Recompute: %v", err)
 		}
 		saved := st.Recomputed()
-		if len(saved) != 1 || saved[0].Score != 37 {
-			t.Fatalf("saved scores = %+v, want a nice-stance score of 37 (manual overrides text; a text avoid would score 18)", saved)
+		if len(saved) != 1 || saved[0].Score != 50 {
+			t.Fatalf("saved scores = %+v, want a nice-stance score of 50 (manual overrides text; a text avoid would score 18)", saved)
 		}
 	})
 
@@ -812,26 +812,26 @@ func TestRecompute(t *testing.T) {
 		}{
 			{name: "nothing known scores 50", wantScore: 50, wantBand: "fair"},
 			{
-				name:      "one tech match earns a third of the credit",
+				name:      "one tech match earns over half the credit",
 				picks:     []pickCase{nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05)},
-				wantScore: 37,
-				wantBand:  "poor",
+				wantScore: 50,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "yes", Effect: "meets"}},
 			},
 			{
-				name: "three tech matches saturate the dimension",
+				name: "three tech matches earn 90% of the dimension",
 				picks: []pickCase{
 					nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionTech, "tech:rust", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionTech, "tech:kubernetes", 0.9, 0.05, 0.05),
 				},
-				wantScore: 75,
+				wantScore: 74,
 				wantBand:  "good",
 			},
 			{
-				name:      "one role match saturates the dimension",
+				name:      "one role match earns 90% of the dimension",
 				picks:     []pickCase{nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05)},
-				wantScore: 79,
+				wantScore: 77,
 				wantBand:  "good",
 				wantRows:  []dto.ScoreRow{{Resolved: "yes", Effect: "meets"}},
 			},
@@ -843,21 +843,21 @@ func TestRecompute(t *testing.T) {
 					tierPick("seniority:senior", 100, 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionWork, "work:remote", 0.9, 0.05, 0.05),
 				},
-				wantScore: 76,
+				wantScore: 78,
 				wantBand:  "good",
 			},
 			{
 				name:      "a confident miss pulls a dimension to the floor",
 				picks:     []pickCase{nicePick(dto.DimensionRole, "role:backend", 0.05, 0.9, 0.05)},
-				wantScore: 18,
+				wantScore: 22,
 				wantBand:  "poor",
 				wantRows:  []dto.ScoreRow{{Resolved: "no", Effect: "misses"}},
 			},
 			{
 				name:      "weak evidence moves the score less than a confident miss",
 				picks:     []pickCase{nicePick(dto.DimensionRole, "role:backend", 0.2, 0.2, 0.6)},
-				wantScore: 41,
-				wantBand:  "poor",
+				wantScore: 46,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
 			},
 			{
@@ -870,7 +870,7 @@ func TestRecompute(t *testing.T) {
 			{
 				name:      "a top probability below 0.6 resolves unknown but still counts as evidence",
 				picks:     []pickCase{nicePick(dto.DimensionTech, "tech:go", 0.55, 0.35, 0.1)},
-				wantScore: 31,
+				wantScore: 41,
 				wantBand:  "poor",
 				wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
 			},
@@ -880,8 +880,8 @@ func TestRecompute(t *testing.T) {
 					nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionTech, "tech:rust", 0.05, 0.9, 0.05),
 				},
-				wantScore: 38,
-				wantBand:  "poor",
+				wantScore: 51,
+				wantBand:  "fair",
 				wantRows: []dto.ScoreRow{
 					{Resolved: "yes", Effect: "meets"},
 					{Resolved: "no", Effect: "misses"},
@@ -936,8 +936,8 @@ func TestRecompute(t *testing.T) {
 					nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05),
 					retiredPick(dto.DimensionRole, "role:backend"),
 				},
-				wantScore: 37,
-				wantBand:  "poor",
+				wantScore: 50,
+				wantBand:  "fair",
 				wantRows: []dto.ScoreRow{
 					{Resolved: "yes", Effect: "meets"},
 					{Resolved: "retired", Effect: "retired"},
@@ -965,7 +965,7 @@ func TestRecompute(t *testing.T) {
 					tierPick("seniority:mid", 100, 0.05, 0.9, 0.05),
 					unpickedOption(dto.DimensionSeniority, "seniority:senior", 0.9, 0.05, 0.05),
 				},
-				wantScore: 53,
+				wantScore: 52,
 				wantBand:  "fair",
 				wantRows: []dto.ScoreRow{
 					{Resolved: "yes", Effect: "meets"},
@@ -994,7 +994,7 @@ func TestRecompute(t *testing.T) {
 					nicePick(dto.DimensionWork, "work:remote", 0.05, 0.9, 0.05),
 					{id: "work:hybrid", dimension: dto.DimensionWork, stance: "avoid", answer: dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
 				},
-				wantScore: 42,
+				wantScore: 43,
 				wantBand:  "poor",
 				wantRows: []dto.ScoreRow{
 					{Resolved: "yes", Effect: "meets"},
@@ -1024,7 +1024,7 @@ func TestRecompute(t *testing.T) {
 					nicePick(dto.DimensionWork, "work:hybrid", 0.9, 0.05, 0.05),
 					unpickedOption(dto.DimensionWork, "work:onsite", 0.9, 0.05, 0.05),
 				},
-				wantScore: 83,
+				wantScore: 80,
 				wantBand:  "great",
 			},
 			{
@@ -1692,7 +1692,7 @@ func TestCorrections(t *testing.T) {
 		for _, sc := range st.Completed()[0].Scores {
 			got[sc.UserID] = sc.Score
 		}
-		if diff := cmp.Diff(map[string]int{"user-1": 17, "user-2": 37}, got); diff != "" {
+		if diff := cmp.Diff(map[string]int{"user-1": 17, "user-2": 50}, got); diff != "" {
 			t.Errorf("effect scores (-want +got):\n%s", diff)
 		}
 	})
@@ -1714,8 +1714,8 @@ func TestCorrections(t *testing.T) {
 		if err != nil {
 			t.Fatalf("RevertCorrection: %v", err)
 		}
-		if reverted.Score != 37 || reverted.Rows[0].Corrected {
-			t.Errorf("RevertCorrection = %+v, want score 37 with no correction", reverted)
+		if reverted.Score != 50 || reverted.Rows[0].Corrected {
+			t.Errorf("RevertCorrection = %+v, want score 50 with no correction", reverted)
 		}
 	})
 
