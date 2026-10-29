@@ -55,6 +55,7 @@ type FakeStore struct {
 
 	feedback    map[string][]dto.ScoreFeedback
 	feedbackSeq int
+	playground  map[string][]dto.PlaygroundCandidate
 	evidence    map[string]dto.JobScoreEvidence
 	grades      map[string]map[string]dto.Grade
 	implied     map[string][]dto.ImpliedLabel
@@ -784,4 +785,22 @@ func (f *FakeStore) ListImpliedPositives(_ context.Context, userID string) ([]dt
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return slices.Clone(f.implied[userID]), nil
+}
+
+// SeedPlaygroundCandidates stores what ListPlaygroundCandidates returns for userID.
+func (f *FakeStore) SeedPlaygroundCandidates(userID string, candidates ...dto.PlaygroundCandidate) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.playground == nil {
+		f.playground = map[string][]dto.PlaygroundCandidate{}
+	}
+	f.playground[userID] = candidates
+}
+
+func (f *FakeStore) ListPlaygroundCandidates(_ context.Context, userID, _ string, since time.Time) ([]dto.PlaygroundCandidate, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := slices.DeleteFunc(slices.Clone(f.playground[userID]), func(c dto.PlaygroundCandidate) bool { return c.FirstDiscoveredAt.Before(since) })
+	slices.SortStableFunc(out, func(a, b dto.PlaygroundCandidate) int { return b.FirstDiscoveredAt.Compare(a.FirstDiscoveredAt) })
+	return out, nil
 }

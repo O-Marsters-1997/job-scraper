@@ -175,21 +175,31 @@ function ScoringForm(props: {
 	const [previewOpen, setPreviewOpen] = createSignal(false);
 	const preview = useScoringPreview(preferences, previewOpen);
 
+	const formValues = () => ({
+		notifyThreshold: filters.threshold(),
+		maxJobAgeDays: filters.maxJobAgeDays(),
+		excludedTitleKeywords: filters.titleKeywords(),
+		excludedCompanies: uniqueCapitalised(filters.companies()),
+		excludedLocations: uniqueCapitalised(filters.locations()),
+		requiredLocations: uniqueCapitalised(filters.requiredLocations()),
+		requiredTitleKeywords: filters.requiredTitleKeywords(),
+		preferences: preferences(),
+	});
+	const [savedSnapshot, setSavedSnapshot] = createSignal(
+		untrack(() => JSON.stringify(formValues())),
+	);
+	const dirty = () => JSON.stringify(formValues()) !== savedSnapshot();
+
 	const handleSave = async () => {
 		setNotice(null);
 		setError(null);
 		try {
+			const values = formValues();
 			const result = await mutation.mutateAsync({
-				notifyThreshold: filters.threshold(),
-				maxJobAgeDays: filters.maxJobAgeDays(),
-				excludedTitleKeywords: filters.titleKeywords(),
-				excludedCompanies: uniqueCapitalised(filters.companies()),
-				excludedLocations: uniqueCapitalised(filters.locations()),
-				requiredLocations: uniqueCapitalised(filters.requiredLocations()),
-				requiredTitleKeywords: filters.requiredTitleKeywords(),
-				preferences: preferences(),
+				...values,
 				updatedAt: props.config().updatedAt,
 			});
+			setSavedSnapshot(JSON.stringify(values));
 			flash(
 				result.backfillQueued > 0
 					? `Saved – answering new picks for ${result.backfillQueued} jobs.`
@@ -225,7 +235,7 @@ function ScoringForm(props: {
 			</SettingsActions>
 			<FormFeedback success={notice() ?? false} error={error()} />
 			<Show when={previewOpen()}>
-				<ScorePreview query={preview} />
+				<ScorePreview query={preview} dirty={dirty()} />
 			</Show>
 			<Show when={RATED_SECTIONS.includes(params().section ?? "")}>
 				<RatingKey />

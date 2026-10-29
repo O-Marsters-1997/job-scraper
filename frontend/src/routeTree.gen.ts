@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthTasksRouteImport } from './routes/_auth/tasks'
 import { Route as AuthSettingsRouteImport } from './routes/_auth/settings'
+import { Route as AuthScoringPlaygroundRouteImport } from './routes/_auth/scoring-playground'
 import { Route as AuthOverviewRouteImport } from './routes/_auth/overview'
 import { Route as AuthJobsRouteImport } from './routes/_auth/jobs'
 import { Route as AuthInsightsRouteImport } from './routes/_auth/insights'
@@ -69,6 +70,11 @@ const AuthTasksRoute = AuthTasksRouteImport.update({
 const AuthSettingsRoute = AuthSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthScoringPlaygroundRoute = AuthScoringPlaygroundRouteImport.update({
+  id: '/scoring-playground',
+  path: '/scoring-playground',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthOverviewRoute = AuthOverviewRouteImport.update({
@@ -219,6 +225,7 @@ export interface FileRoutesByFullPath {
   '/insights': typeof AuthInsightsRoute
   '/jobs': typeof AuthJobsRoute
   '/overview': typeof AuthOverviewRoute
+  '/scoring-playground': typeof AuthScoringPlaygroundRoute
   '/settings': typeof AuthSettingsRouteWithChildren
   '/tasks': typeof AuthTasksRoute
   '/applications/$id': typeof AuthApplicationsIdRoute
@@ -252,6 +259,7 @@ export interface FileRoutesByTo {
   '/insights': typeof AuthInsightsRoute
   '/jobs': typeof AuthJobsRoute
   '/overview': typeof AuthOverviewRoute
+  '/scoring-playground': typeof AuthScoringPlaygroundRoute
   '/tasks': typeof AuthTasksRoute
   '/applications/$id': typeof AuthApplicationsIdRoute
   '/companies/$id': typeof AuthCompaniesIdRoute
@@ -285,6 +293,7 @@ export interface FileRoutesById {
   '/_auth/insights': typeof AuthInsightsRoute
   '/_auth/jobs': typeof AuthJobsRoute
   '/_auth/overview': typeof AuthOverviewRoute
+  '/_auth/scoring-playground': typeof AuthScoringPlaygroundRoute
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
   '/_auth/tasks': typeof AuthTasksRoute
   '/_auth/applications_/$id': typeof AuthApplicationsIdRoute
@@ -320,6 +329,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/jobs'
     | '/overview'
+    | '/scoring-playground'
     | '/settings'
     | '/tasks'
     | '/applications/$id'
@@ -353,6 +363,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/jobs'
     | '/overview'
+    | '/scoring-playground'
     | '/tasks'
     | '/applications/$id'
     | '/companies/$id'
@@ -385,6 +396,7 @@ export interface FileRouteTypes {
     | '/_auth/insights'
     | '/_auth/jobs'
     | '/_auth/overview'
+    | '/_auth/scoring-playground'
     | '/_auth/settings'
     | '/_auth/tasks'
     | '/_auth/applications_/$id'
@@ -455,6 +467,13 @@ declare module '@tanstack/solid-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthSettingsRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/scoring-playground': {
+      id: '/_auth/scoring-playground'
+      path: '/scoring-playground'
+      fullPath: '/scoring-playground'
+      preLoaderRoute: typeof AuthScoringPlaygroundRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/overview': {
@@ -693,6 +712,7 @@ interface AuthRouteChildren {
   AuthInsightsRoute: typeof AuthInsightsRoute
   AuthJobsRoute: typeof AuthJobsRoute
   AuthOverviewRoute: typeof AuthOverviewRoute
+  AuthScoringPlaygroundRoute: typeof AuthScoringPlaygroundRoute
   AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
   AuthTasksRoute: typeof AuthTasksRoute
   AuthApplicationsIdRoute: typeof AuthApplicationsIdRoute
@@ -713,6 +733,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthInsightsRoute: AuthInsightsRoute,
   AuthJobsRoute: AuthJobsRoute,
   AuthOverviewRoute: AuthOverviewRoute,
+  AuthScoringPlaygroundRoute: AuthScoringPlaygroundRoute,
   AuthSettingsRoute: AuthSettingsRouteWithChildren,
   AuthTasksRoute: AuthTasksRoute,
   AuthApplicationsIdRoute: AuthApplicationsIdRoute,

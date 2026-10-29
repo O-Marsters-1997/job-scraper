@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/solid-router";
 import type { Accessor } from "solid-js";
 import { For, Match, Show, Switch } from "solid-js";
 import { Badge } from "@/components/ui/badge";
@@ -30,20 +31,43 @@ const reasonTone = (effect: ScoreRow["effect"]) =>
 			? "text-muted"
 			: "text-accent-text";
 
-export function ScorePreview(props: { query: PreviewQuery }) {
+export function ScorePreview(props: { query: PreviewQuery; dirty: boolean }) {
 	return (
 		<section class="flex flex-col gap-3" aria-labelledby="preview-heading">
-			<div>
-				<h2
-					id="preview-heading"
-					class="text-base font-semibold text-foreground"
+			<div class="flex items-start justify-between gap-3">
+				<div>
+					<h2
+						id="preview-heading"
+						class="text-base font-semibold text-foreground"
+					>
+						Preview
+					</h2>
+					<p class="text-xs text-faint">
+						Your recent jobs, scored with the settings on this page. Nothing is
+						saved.
+					</p>
+				</div>
+				<Show
+					when={!props.dirty}
+					fallback={
+						<span
+							class="flex shrink-0 flex-col items-end text-sm text-faint"
+							aria-disabled="true"
+						>
+							Open playground →
+							<span class="text-xs">
+								Save first, the playground uses saved settings
+							</span>
+						</span>
+					}
 				>
-					Preview
-				</h2>
-				<p class="text-xs text-faint">
-					Your recent jobs, scored with the settings on this page. Nothing is
-					saved.
-				</p>
+					<Link
+						to="/scoring-playground"
+						class="shrink-0 text-sm text-accent-text hover:underline"
+					>
+						Open playground →
+					</Link>
+				</Show>
 			</div>
 			<Switch>
 				<Match when={props.query.isPending}>

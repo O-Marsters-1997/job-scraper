@@ -11,6 +11,7 @@ import type {
 	ScoringOption,
 	ScoringOptionsView,
 } from "../types/scoringOptions";
+import type { PlaygroundQueue } from "../types/scoringPlayground";
 import type { ScoringPreview } from "../types/scoringPreview";
 import { slugify } from "./helpers";
 
@@ -220,4 +221,15 @@ export function updateScoringConfig(payload: ScoringConfig): ScoringConfig {
 
 export function previewScoring(): ScoringPreview {
 	return { dismissedInTop5: { before: 0, after: 0 }, jobs: [] };
+}
+
+export function playgroundQueue(): PlaygroundQueue {
+	return {
+		jobIds: [],
+		bands: (["great", "good", "fair", "poor"] as const).map((band) => ({
+			band,
+			reviewed: 0,
+			remaining: 0,
+		})),
+	};
 }

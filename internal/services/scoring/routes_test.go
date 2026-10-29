@@ -284,3 +284,14 @@ func TestCorrectionRoutes(t *testing.T) {
 		t.Errorf("DELETE correction = %+v, want the uncorrected score 50", reverted)
 	}
 }
+
+func TestPlaygroundQueueRoute(t *testing.T) {
+	t.Parallel()
+	r := newTestRouter(t)
+	handlerstest.RequiresAuth(t, r, "GET /scoring-playground/queue")
+
+	got := handlerstest.Do[dto.PlaygroundQueue](t, r, http.StatusOK, "GET /scoring-playground/queue", "")
+	if len(got.JobIDs) != 0 || len(got.Bands) != 4 {
+		t.Errorf("GET /scoring-playground/queue = %+v, want no jobs and four bands", got)
+	}
+}

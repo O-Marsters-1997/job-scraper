@@ -1621,3 +1621,48 @@ func TestListJobRejections(t *testing.T) {
 		}
 	})
 }
+
+func TestStore_ListPlaygroundCandidates(t *testing.T) {
+	t.Parallel()
+	st, pool := newStore(t)
+	userID := pgtest.InsertUser(t, pool)
+	score := func(jobID, band string, discovered string) {
+		exec(t, pool, `UPDATE jobs SET first_discovered_at = `+discovered+` WHERE id = $1`, jobID)
+		exec(t, pool, `INSERT INTO job_scores (job_id, user_id, suitability_score, band, breakdown) VALUES ($1, $2, 50, $3, '[]')`, jobID, userID, band)
+	}
+	fresh := pgtest.InsertJob(t, pool, "Fresh", "fp-fresh")
+	reviewed := pgtest.InsertJob(t, pool, "Reviewed", "fp-reviewed")
+	drifted := pgtest.InsertJob(t, pool, "Drifted", "fp-drifted")
+	stale := pgtest.InsertJob(t, pool, "Stale", "fp-stale")
+	unscored := pgtest.InsertJob(t, pool, "Unscored", "fp-unscored")
+	score(fresh, "great", "NOW()")
+	score(reviewed, "good", "NOW() - interval '1 day'")
+	score(drifted, "fair", "NOW() - interval '2 days'")
+	score(stale, "poor", "NOW() - interval '40 days'")
+	exec(t, pool, `INSERT INTO job_scores (job_id, user_id, breakdown) VALUES ($1, $2, '[]')`, unscored, userID)
+
+	feedback := func(jobID, model string) {
+		entry := dto.ScoreFeedback{Kind: "job", Direction: new("higher"), JobID: &jobID, Reason: "r", Picks: []dto.Pick{}, Model: model}
+		if _, err := st.InsertScoreFeedback(t.Context(), userID, entry); err != nil {
+			t.Fatalf("InsertScoreFeedback() err = %v", err)
+		}
+	}
+	feedback(reviewed, "m")
+	feedback(drifted, "old-model")
+
+	got, err := st.ListPlaygroundCandidates(t.Context(), userID, "m", time.Now().Add(-30*24*time.Hour))
+	if err != nil {
+		t.Fatalf("ListPlaygroundCandidates() err = %v", err)
+	}
+	want := map[string]bool{fresh: false, reviewed: true, drifted: false}
+	gotReviewed := map[string]bool{}
+	for _, c := range got {
+		gotReviewed[c.JobID] = c.Reviewed
+	}
+	if diff := cmp.Diff(want, gotReviewed); diff != "" {
+		t.Errorf("ListPlaygroundCandidates() reviewed by job (-want +got):\n%s", diff)
+	}
+	if len(got) == 3 && (got[0].JobID != fresh || got[0].Band != "great") {
+		t.Errorf("ListPlaygroundCandidates()[0] = %+v, want newest first (the fresh great job)", got[0])
+	}
+}

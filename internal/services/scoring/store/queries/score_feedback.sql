@@ -44,3 +44,20 @@ SELECT j.id, j.title, j.company_slug, js.suitability_score AS score, COALESCE(js
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)
 WHERE j.id = ANY(sqlc.arg(job_ids)::uuid[]);
+
+-- name: ListPlaygroundCandidates :many
+SELECT js.job_id, js.band::text AS band, j.first_discovered_at,
+       EXISTS (
+           SELECT 1
+           FROM score_feedback sf
+           WHERE sf.user_id = js.user_id AND sf.job_id = js.job_id AND sf.kind = 'job'
+             AND sf.model = sqlc.arg(model)::text
+             AND sf.picks IS NOT DISTINCT FROM COALESCE(NULLIF((SELECT preferences->'picks' FROM search_config WHERE user_id = sf.user_id), 'null'::jsonb), '[]'::jsonb)
+       ) AS reviewed
+FROM job_scores js
+JOIN jobs j ON j.id = js.job_id
+WHERE js.user_id = sqlc.arg(user_id)
+  AND js.suitability_score IS NOT NULL
+  AND js.band IS NOT NULL
+  AND j.first_discovered_at >= sqlc.arg(since)::timestamptz
+ORDER BY j.first_discovered_at DESC, js.job_id;
