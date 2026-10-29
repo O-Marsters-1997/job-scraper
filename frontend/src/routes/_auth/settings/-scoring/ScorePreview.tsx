@@ -1,19 +1,12 @@
-import { For, Match, Show, Switch } from "solid-js";
+import type { CreateQueryResult } from "@tanstack/solid-query";
+import { For, Show } from "solid-js";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { SkeletonList } from "@/components/ui/skeleton";
 import { rowLabel } from "@/lib/scoreRows";
 import { cn } from "@/lib/utils";
 import { GRADE_LABEL } from "@/types/grade";
 import type { ScoreRow } from "@/types/job";
 import type { ScoringPreview } from "@/types/scoringPreview";
-
-type PreviewQuery = {
-	isPending: boolean;
-	isError: boolean;
-	refetch: () => unknown;
-	data: ScoringPreview | undefined;
-};
 
 const REASON_EFFECTS: ScoreRow["effect"][] = [
 	"gated",
@@ -33,7 +26,9 @@ function reasonTone(effect: ScoreRow["effect"]) {
 	}
 }
 
-export function ScorePreview(props: { query: PreviewQuery }) {
+export function ScorePreview(props: {
+	query: CreateQueryResult<ScoringPreview>;
+}) {
 	return (
 		<section class="flex flex-col gap-3" aria-labelledby="preview-heading">
 			<div>
@@ -48,26 +43,9 @@ export function ScorePreview(props: { query: PreviewQuery }) {
 					saved.
 				</p>
 			</div>
-			<Switch>
-				<Match when={props.query.isPending}>
-					<SkeletonList rows={3} />
-				</Match>
-				<Match when={props.query.isError}>
-					<div class="flex items-center justify-between gap-3 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive-strong">
-						<span>Couldn't load the preview.</span>
-						<Button
-							size="sm"
-							variant="outline"
-							onClick={() => props.query.refetch()}
-						>
-							Retry
-						</Button>
-					</div>
-				</Match>
-				<Match when={props.query.data}>
-					{(data) => <PreviewList data={data()} />}
-				</Match>
-			</Switch>
+			<QueryBoundary query={props.query} fallbackRows={3}>
+				{(data) => <PreviewList data={data()} />}
+			</QueryBoundary>
 		</section>
 	);
 }

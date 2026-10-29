@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GRADES } from "./grade";
 import { bandSchema, scoreRowSchema } from "./job";
 
 export const scoringPreviewSchema = z.object({
@@ -11,7 +12,7 @@ export const scoringPreviewSchema = z.object({
 			jobId: z.string(),
 			title: z.string(),
 			company: z.string(),
-			grade: z.enum(["great", "ok", "no"]).optional(),
+			grade: z.enum(GRADES).optional(),
 			before: z.number().int(),
 			after: z.number().int(),
 			afterBand: bandSchema,

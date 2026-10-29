@@ -163,5 +163,46 @@ export function updateScoringConfig(payload: ScoringConfig): ScoringConfig {
 }
 
 export function previewScoring(): ScoringPreview {
-	return { dismissedInTop5: { before: 0, after: 0 }, jobs: [] };
+	return {
+		dismissedInTop5: { before: 2, after: 1 },
+		jobs: [
+			{
+				jobId: "preview-1",
+				title: "Senior Go Engineer",
+				company: "Acme",
+				grade: "great",
+				before: 58,
+				after: 81,
+				afterBand: "great",
+				afterRows: [
+					{
+						key: "tech:go",
+						label: "Go",
+						stance: "nice",
+						resolved: "yes",
+						effect: "meets",
+						overridden: false,
+					},
+				],
+			},
+			{
+				jobId: "preview-2",
+				title: "Java Developer",
+				company: "Globex",
+				before: 64,
+				after: 12,
+				afterBand: "poor",
+				afterRows: [
+					{
+						key: "tech:java",
+						label: "Java",
+						stance: "never",
+						resolved: "yes",
+						effect: "gated",
+						overridden: false,
+					},
+				],
+			},
+		],
+	};
 }
