@@ -27,8 +27,8 @@ export function SeniorityLadder(props: {
 		<fieldset>
 			<legend class="text-sm font-medium text-foreground">Seniority</legend>
 			<p class="mt-0.5 text-xs text-faint">
-				Weight each level you'd consider. Postings that don't state a level are
-				never penalised.
+				Weight each level you'd consider. Postings that don't state a level get
+				half credit.
 			</p>
 			<div class="mt-2 flex max-w-md flex-col gap-2">
 				<For each={tiers()}>
