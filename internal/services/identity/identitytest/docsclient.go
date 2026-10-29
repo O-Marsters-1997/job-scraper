@@ -158,6 +158,10 @@ func (d *DocsClient) AddTab(context.Context, string, string, string) (string, er
 	return "t.added", nil
 }
 
+func (d *DocsClient) AddChildTab(context.Context, string, string, string, string) (string, error) {
+	return "t.added", nil
+}
+
 func (d *DocsClient) BatchUpdate(context.Context, string, string, []json.RawMessage) error {
 	return nil
 }

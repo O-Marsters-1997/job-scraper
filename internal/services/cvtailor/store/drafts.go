@@ -41,8 +41,12 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 	if t.Outcome.Valid {
 		outcome = &t.Outcome.String
 	}
+	draftTabID := t.BaseTabID
+	if t.KeptAs.String == "tab" {
+		draftTabID = t.KeptTabID.String
+	}
 	return dto.Draft{
-		ID: t.ID.String(), JobID: t.JobID.String(), Mode: dto.DraftMode(t.Mode), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, LastError: t.LastError,
+		ID: t.ID.String(), JobID: t.JobID.String(), Mode: dto.DraftMode(t.Mode), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, KeepNote: t.KeepNote, DraftTabID: draftTabID, LastError: t.LastError,
 		CreatedAt: t.CreatedAt.Time, Findings: findings, DraftDocID: t.DraftDocID.String, EditSet: t.EditSet, BaseContent: t.BaseContent,
 		BaseDocID: t.BaseDocID, BaseTabID: t.BaseTabID, AchievementIDs: achievementIDs,
 		InsightLines: t.Insights, InsightsFor: t.InsightsFor,
@@ -191,7 +195,7 @@ func (s *Store) ClaimDraft(ctx context.Context) (dto.DraftClaim, error) {
 		Mode: dto.DraftMode(row.Mode),
 		ID:   row.ID.String(), UserID: row.UserID.String(), JobID: row.JobID.String(),
 		DocID: row.BaseDocID, TabID: row.BaseTabID, AchievementIDs: ids,
-		Attempts: int(row.Attempts), DraftDocID: row.DraftDocID,
+		Attempts: int(row.Attempts), DraftDocID: row.DraftDocID, KeptTabID: row.KeptTabID,
 		JobDescription: row.JobDescription, JobFingerprint: row.JobFingerprint,
 		Keeping: row.Keeping, JobTitle: row.JobTitle, CompanyName: row.CompanyName,
 	}, nil
@@ -277,7 +281,7 @@ func (s *Store) QueueKeep(ctx context.Context, userID, id string) (dto.Draft, er
 
 // CompleteKeep marks the claimed Draft kept as a Doc. A stale claim is
 // ErrDraftNotFound; a second kept Draft of the Job is ErrKeptDraftExists.
-func (s *Store) CompleteKeep(ctx context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error {
+func (s *Store) CompleteKeep(ctx context.Context, claim dto.DraftClaim, placement dto.KeepPlacement, outcomes []dto.AchievementOutcome) error {
 	id, uid, jid, err := claimIDs(claim)
 	if err != nil {
 		return err
@@ -287,7 +291,7 @@ func (s *Store) CompleteKeep(ctx context.Context, claim dto.DraftClaim, outcomes
 		return fmt.Errorf("store.CompleteKeep: %w", err)
 	}
 	return s.inTx(ctx, func(q *sqlc.Queries) error {
-		n, err := q.CompleteKeep(ctx, sqlc.CompleteKeepParams{ID: id, Attempts: int32(claim.Attempts)}) //nolint:gosec // G115: pedantic, attempts never exceed dto.MaxDraftAttempts
+		n, err := q.CompleteKeep(ctx, sqlc.CompleteKeepParams{ID: id, Attempts: int32(claim.Attempts), KeptTabID: placement.TabID, DraftDocID: placement.DocID, KeepNote: placement.Note}) //nolint:gosec // G115: pedantic, attempts never exceed dto.MaxDraftAttempts
 		if data.IsUniqueViolation(err) {
 			return ErrKeptDraftExists
 		}
@@ -302,6 +306,17 @@ func (s *Store) CompleteKeep(ctx context.Context, claim dto.DraftClaim, outcomes
 		}
 		return nil
 	})
+}
+
+func (s *Store) SetKeptTab(ctx context.Context, claim dto.DraftClaim, tabID string) error {
+	id, err := parseID(claim.ID, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	if _, err := s.queries.SetKeptTab(ctx, sqlc.SetKeptTabParams{KeptTabID: tabID, ID: id, Attempts: int32(claim.Attempts)}); err != nil { //nolint:gosec // G115: pedantic, attempts never exceed dto.MaxDraftAttempts
+		return fmt.Errorf("store.SetKeptTab: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) ReplaceAchievementOutcomes(ctx context.Context, claim dto.DraftClaim, outcomes []dto.AchievementOutcome) error {

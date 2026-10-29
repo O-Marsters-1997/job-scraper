@@ -33,6 +33,7 @@ type googleClient interface {
 	GetDocument(ctx context.Context, userID, docID, tabID string) (json.RawMessage, error)
 	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
 	AddTab(ctx context.Context, userID, docID, title string) (string, error)
+	AddChildTab(ctx context.Context, userID, docID, parentTabID, title string) (string, error)
 	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
 	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
 	DeleteFile(ctx context.Context, userID, fileID string) error
