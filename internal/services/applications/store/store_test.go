@@ -481,9 +481,10 @@ func TestMoveApplicationAppliedStatus(t *testing.T) {
 	}
 	var applied, other string
 	for _, s := range statuses {
-		if s.SystemKey == "applied" {
+		switch s.SystemKey {
+		case "applied":
 			applied = s.ID
-		} else if s.SystemKey == "" {
+		case "":
 			other = s.ID
 		}
 	}
