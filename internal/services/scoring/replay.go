@@ -67,7 +67,7 @@ func (s *Service) loadLabelPool(ctx context.Context, userID string) (labelPool, 
 	if err != nil {
 		return labelPool{}, err
 	}
-	bk, err := s.loadBank(ctx)
+	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return labelPool{}, err
 	}

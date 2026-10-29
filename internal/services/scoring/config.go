@@ -38,7 +38,7 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 	if in.MaxJobAgeDays < 0 || in.MaxJobAgeDays > maxJobAgeDaysLimit {
 		return dto.ScoringConfigView{}, apperr.Invalid(fmt.Sprintf("max job age must be between 0 and %d days", maxJobAgeDaysLimit))
 	}
-	b, err := s.loadBank(ctx)
+	b, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
