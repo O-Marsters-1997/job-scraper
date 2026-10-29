@@ -534,7 +534,15 @@ CREATE TABLE harvest_seen_ids (
     external_id   TEXT        NOT NULL,
     outcome       TEXT        NOT NULL CONSTRAINT harvest_seen_ids_outcome_check CHECK (outcome IN ('backfill', 'ineligible', 'exported', 'ats_check')),
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_in_sitemap_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (source, external_id)
+);
+
+CREATE TABLE harvest_company_counts (
+    source     TEXT    NOT NULL,
+    company    TEXT    NOT NULL,
+    live_jobs  INTEGER NOT NULL CONSTRAINT harvest_company_counts_live_jobs_check CHECK (live_jobs >= 0),
+    PRIMARY KEY (source, company)
 );
 
 CREATE TABLE IF NOT EXISTS candidate_assessments (

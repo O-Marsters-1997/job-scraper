@@ -17,6 +17,8 @@ const (
 	baseURL = "https://app.welcometothejungle.com"
 	maxAge  = 90 * 24 * time.Hour
 
+	timeLayout = "2006-01-02T15:04:05"
+
 	otherPollIn = 90 * 24 * time.Hour
 )
 
@@ -135,7 +137,7 @@ func (j apiJob) toJob() dto.Job {
 		Source:            name,
 		Description:       strings.TrimSpace(bullets(j.InvolvesBullets) + "\n\n" + bullets(j.Requirements)),
 	}
-	if posted, err := time.Parse("2006-01-02T15:04:05", cmp.Or(j.FirstLiveAt, j.InsertedAt)); err == nil {
+	if posted, err := time.Parse(timeLayout, cmp.Or(j.FirstLiveAt, j.InsertedAt)); err == nil {
 		job.PostedAt = &posted
 	}
 	return job

@@ -7,39 +7,59 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const closeJobsByPostingID = `-- name: CloseJobsByPostingID :exec
+const closeJobsAbsentFromSitemap = `-- name: CloseJobsAbsentFromSitemap :exec
 WITH closed AS (
     UPDATE jobs SET closed_at = NOW()
-    WHERE source = $1 AND provider_posting_id = ANY($2::text[]) AND closed_at IS NULL
-    RETURNING id
+    WHERE jobs.source = $1 AND jobs.closed_at IS NULL AND jobs.provider_posting_id IN (
+        SELECT h.external_id FROM harvest_seen_ids h
+        WHERE h.source = $1 AND h.last_in_sitemap_at < $2
+    )
+    RETURNING jobs.id
 )
 DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed)
 `
 
-type CloseJobsByPostingIDParams struct {
-	Source     string
-	PostingIds []string
+type CloseJobsAbsentFromSitemapParams struct {
+	Source      string
+	AbsentSince pgtype.Timestamptz
 }
 
-func (q *Queries) CloseJobsByPostingID(ctx context.Context, arg CloseJobsByPostingIDParams) error {
-	_, err := q.db.Exec(ctx, closeJobsByPostingID, arg.Source, arg.PostingIds)
+func (q *Queries) CloseJobsAbsentFromSitemap(ctx context.Context, arg CloseJobsAbsentFromSitemapParams) error {
+	_, err := q.db.Exec(ctx, closeJobsAbsentFromSitemap, arg.Source, arg.AbsentSince)
 	return err
 }
 
-const deleteHarvestSeenIDs = `-- name: DeleteHarvestSeenIDs :exec
-DELETE FROM harvest_seen_ids WHERE source = $1 AND external_id = ANY($2::text[])
+const listHarvestCompanyCounts = `-- name: ListHarvestCompanyCounts :many
+SELECT company, live_jobs FROM harvest_company_counts WHERE source = $1
 `
 
-type DeleteHarvestSeenIDsParams struct {
-	Source      string
-	ExternalIds []string
+type ListHarvestCompanyCountsRow struct {
+	Company  string
+	LiveJobs int32
 }
 
-func (q *Queries) DeleteHarvestSeenIDs(ctx context.Context, arg DeleteHarvestSeenIDsParams) error {
-	_, err := q.db.Exec(ctx, deleteHarvestSeenIDs, arg.Source, arg.ExternalIds)
-	return err
+func (q *Queries) ListHarvestCompanyCounts(ctx context.Context, source string) ([]ListHarvestCompanyCountsRow, error) {
+	rows, err := q.db.Query(ctx, listHarvestCompanyCounts, source)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListHarvestCompanyCountsRow
+	for rows.Next() {
+		var i ListHarvestCompanyCountsRow
+		if err := rows.Scan(&i.Company, &i.LiveJobs); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listHarvestSeenIDs = `-- name: ListHarvestSeenIDs :many
@@ -64,6 +84,40 @@ func (q *Queries) ListHarvestSeenIDs(ctx context.Context, source string) ([]stri
 		return nil, err
 	}
 	return items, nil
+}
+
+const markHarvestIDsInSitemap = `-- name: MarkHarvestIDsInSitemap :exec
+UPDATE harvest_seen_ids SET last_in_sitemap_at = $1
+WHERE source = $2 AND external_id = ANY($3::text[])
+`
+
+type MarkHarvestIDsInSitemapParams struct {
+	SeenAt      pgtype.Timestamptz
+	Source      string
+	ExternalIds []string
+}
+
+func (q *Queries) MarkHarvestIDsInSitemap(ctx context.Context, arg MarkHarvestIDsInSitemapParams) error {
+	_, err := q.db.Exec(ctx, markHarvestIDsInSitemap, arg.SeenAt, arg.Source, arg.ExternalIds)
+	return err
+}
+
+const recordHarvestCompanyCounts = `-- name: RecordHarvestCompanyCounts :exec
+INSERT INTO harvest_company_counts (source, company, live_jobs)
+SELECT $1::text, unnest($2::text[]), unnest($3::bigint[])
+ON CONFLICT (source, company) DO UPDATE SET live_jobs = EXCLUDED.live_jobs
+WHERE harvest_company_counts.live_jobs <> EXCLUDED.live_jobs
+`
+
+type RecordHarvestCompanyCountsParams struct {
+	Source    string
+	Companies []string
+	LiveJobs  []int64
+}
+
+func (q *Queries) RecordHarvestCompanyCounts(ctx context.Context, arg RecordHarvestCompanyCountsParams) error {
+	_, err := q.db.Exec(ctx, recordHarvestCompanyCounts, arg.Source, arg.Companies, arg.LiveJobs)
+	return err
 }
 
 const recordHarvestSeenIDs = `-- name: RecordHarvestSeenIDs :exec

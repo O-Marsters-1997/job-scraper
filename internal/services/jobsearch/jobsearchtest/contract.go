@@ -107,7 +107,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
-	t.Run("harvest seen ids are kept per source until retired", func(t *testing.T) {
+	t.Run("harvest seen ids are kept per source, including ones absent from the sitemap", func(t *testing.T) {
 		t.Parallel()
 		st, _ := newStore(t)
 		ctx := t.Context()
@@ -120,7 +120,10 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if err := st.RecordHarvestSeenIDs(ctx, "other", "backfill", []string{"x"}); err != nil {
 			t.Fatal(err)
 		}
-		if err := st.RetireHarvestSeenIDs(ctx, "wttj", []string{"a"}); err != nil {
+		if err := st.MarkHarvestIDsInSitemap(ctx, "wttj", []string{"b", "c", "unknown"}, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.CloseJobsAbsentFromSitemap(ctx, "wttj", time.Now().Add(time.Hour)); err != nil {
 			t.Fatal(err)
 		}
 		got, err := st.HarvestSeenIDs(ctx, "wttj")
@@ -128,8 +131,30 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			t.Fatal(err)
 		}
 		slices.Sort(got)
-		if diff := cmp.Diff([]string{"b", "c"}, got); diff != "" {
+		if diff := cmp.Diff([]string{"a", "b", "c"}, got); diff != "" {
 			t.Errorf("HarvestSeenIDs (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("harvest company counts are kept per source and overwritten", func(t *testing.T) {
+		t.Parallel()
+		st, _ := newStore(t)
+		ctx := t.Context()
+		if err := st.RecordHarvestCompanyCounts(ctx, "wttj", map[string]int{"Acme": 2, "Steno": 1}); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.RecordHarvestCompanyCounts(ctx, "wttj", map[string]int{"Acme": 3}); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.RecordHarvestCompanyCounts(ctx, "other", map[string]int{"Acme": 9}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := st.HarvestCompanyCounts(ctx, "wttj")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(map[string]int{"Acme": 3, "Steno": 1}, got); diff != "" {
+			t.Errorf("HarvestCompanyCounts (-want +got):\n%s", diff)
 		}
 	})
 
