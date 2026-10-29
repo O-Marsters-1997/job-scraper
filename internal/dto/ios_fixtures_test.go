@@ -57,7 +57,7 @@ func TestIOSFixtures(t *testing.T) {
 				Band:             "Great",
 				CompanyKind:      dto.KindAgency,
 				Breakdown: []dto.ScoreRow{
-					{Key: "tech:go", Label: "Go", Stance: "want", Resolved: "yes", Effect: "meets"},
+					{Key: "tech:go", Label: "Go", Stance: "want", Resolved: "yes", Effect: "meets", Impact: 1.5},
 					{Key: "domain:fintech", Label: "Fintech", Stance: "want", Resolved: "no", Effect: "misses"},
 				},
 			}},

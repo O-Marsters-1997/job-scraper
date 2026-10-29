@@ -37,7 +37,8 @@
           "resolved": "yes",
           "effect": "meets",
           "overridden": false,
-          "corrected": false
+          "corrected": false,
+          "impact": 1.5
         },
         {
           "key": "domain:fintech",
@@ -46,7 +47,8 @@
           "resolved": "no",
           "effect": "misses",
           "overridden": false,
-          "corrected": false
+          "corrected": false,
+          "impact": 0
         }
       ],
       "Listings": null
