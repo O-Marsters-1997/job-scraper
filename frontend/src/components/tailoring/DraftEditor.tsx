@@ -15,7 +15,7 @@ import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { inlineMarks } from "@/lib/bulletDiff";
 import { isSparse, maxCharsForFewerLines } from "@/lib/docLayout";
-import { htmlToText } from "@/lib/htmlText";
+import { htmlToParts, joinParts } from "@/lib/htmlText";
 import { loadedData } from "@/lib/queryData";
 import { roleBudget } from "@/lib/tailoring";
 import { cn } from "@/lib/utils";
@@ -167,11 +167,13 @@ export function DraftEditor(props: {
 	const note = useJobNote(() => props.draft.jobId);
 	const comments = useJobComments(() => props.draft.jobId);
 	const jobText = () => {
+		const jdParts = htmlToParts(loadedData(job)?.Description ?? "");
 		const blocks: JobTextBlock[] = [
 			{
 				label: "Job description",
 				source: "jd",
-				text: htmlToText(loadedData(job)?.Description ?? ""),
+				text: joinParts(jdParts),
+				parts: jdParts,
 			},
 			{ label: "Your note", source: "note", text: note.data?.Body ?? "" },
 			...(comments.data ?? []).map(

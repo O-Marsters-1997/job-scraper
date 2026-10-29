@@ -1,19 +1,115 @@
-const BLOCK_END = /<\/(p|li|div|h[1-6]|ul|ol)>|<br\s*\/?>/gi;
-const LOOKS_HTML = /<[a-z][\s\S]*?>/i;
+import type { QuoteSpan } from "./quoteMarks";
 
-function strip(html: string): string {
-	const doc = new DOMParser().parseFromString(
-		html.replace(BLOCK_END, "$&\n"),
-		"text/html",
-	);
-	return doc.body.textContent ?? "";
+export type TextPart = { kind: "p" | "h" | "li"; text: string };
+
+const LOOKS_HTML = /<[a-z][\s\S]*?>/i;
+const BULLET = /^\s*[-*•]\s+/;
+const BLOCK_TAGS = new Set([
+	"P",
+	"DIV",
+	"UL",
+	"OL",
+	"SECTION",
+	"ARTICLE",
+	"TABLE",
+	"TR",
+	"BLOCKQUOTE",
+]);
+
+function plainParts(text: string): TextPart[] {
+	const parts: TextPart[] = [];
+	for (const para of text.split(/\n\s*\n/)) {
+		let current: TextPart | undefined;
+		for (const line of para.split("\n")) {
+			const bullet = BULLET.test(line);
+			const clean = line.replace(BULLET, "").replace(/\s+/g, " ").trim();
+			if (!clean) continue;
+			if (current && !bullet) {
+				current.text += ` ${clean}`;
+				continue;
+			}
+			current = { kind: bullet ? "li" : "p", text: clean };
+			parts.push(current);
+		}
+	}
+	return parts;
 }
 
-export function htmlToText(html: string): string {
-	let text = strip(html);
-	if (LOOKS_HTML.test(text)) text = strip(text);
-	return text
-		.replace(/[ \t]+\n/g, "\n")
-		.replace(/\n{3,}/g, "\n\n")
-		.trim();
+function partKind(tag: string): TextPart["kind"] | null {
+	if (/^H[1-6]$/.test(tag)) return "h";
+	return tag === "LI" ? "li" : null;
+}
+
+function isBlock(tag: string): boolean {
+	return partKind(tag) !== null || BLOCK_TAGS.has(tag);
+}
+
+function htmlParts(root: Node): TextPart[] {
+	const parts: TextPart[] = [];
+	let kind: TextPart["kind"] = "p";
+	let buf = "";
+	const flush = () => {
+		const text = buf.replace(/\s+/g, " ").trim();
+		if (text) parts.push({ kind, text });
+		buf = "";
+	};
+	const visit = (n: Node) => {
+		if (n.nodeType === Node.TEXT_NODE) {
+			buf += n.textContent ?? "";
+			return;
+		}
+		if (n.nodeType !== Node.ELEMENT_NODE) return;
+		const tag = (n as Element).tagName;
+		if (tag === "BR") {
+			flush();
+			return;
+		}
+		const next = partKind(tag);
+		const block = isBlock(tag);
+		if (block) flush();
+		const prev = kind;
+		if (next) kind = next;
+		for (const child of n.childNodes) visit(child);
+		if (block) flush();
+		kind = prev;
+	};
+	visit(root);
+	flush();
+	return parts;
+}
+
+export function htmlToParts(html: string): TextPart[] {
+	const parse = (s: string) =>
+		new DOMParser().parseFromString(s, "text/html").body;
+	if (!LOOKS_HTML.test(html)) return plainParts(html);
+	let body = parse(html);
+	const text = body.textContent ?? "";
+	if (LOOKS_HTML.test(text)) body = parse(text);
+	return htmlParts(body);
+}
+
+export function joinParts(parts: TextPart[]): string {
+	return parts.map((p) => p.text).join("\n\n");
+}
+
+export function clipSpans(
+	spans: QuoteSpan[],
+	parts: TextPart[],
+): { part: TextPart; spans: QuoteSpan[] }[] {
+	let offset = 0;
+	return parts.map((p) => {
+		const start = offset;
+		const end = start + p.text.length;
+		offset = end + 2;
+		return {
+			part: p,
+			spans: spans
+				.filter((s) => s.start < end && s.end > start)
+				.map((s) => ({
+					key: s.key,
+					start: Math.max(s.start, start) - start,
+					end: Math.min(s.end, end) - start,
+				})),
+		};
+	});
 }

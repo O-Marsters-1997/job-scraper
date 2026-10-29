@@ -1,5 +1,6 @@
 import { For, type JSX, Show } from "solid-js";
-import { findQuoteSpans } from "@/lib/quoteMarks";
+import { clipSpans, type TextPart } from "@/lib/htmlText";
+import { findQuoteSpans, type QuoteSpan } from "@/lib/quoteMarks";
 import { cn } from "@/lib/utils";
 import type { DraftInsights } from "@/types/tailoring";
 
@@ -7,6 +8,7 @@ export type JobTextBlock = {
 	label: string;
 	source: DraftInsights["lines"][number]["source"];
 	text: string;
+	parts?: TextPart[];
 };
 
 type Mark = { slotId: string; n: number; quote: string };
@@ -14,6 +16,7 @@ type Mark = { slotId: string; n: number; quote: string };
 function Marked(props: {
 	text: string;
 	marks: Mark[];
+	spans: QuoteSpan[];
 	selected: string | undefined;
 	onSelect: (slotId: string) => void;
 }) {
@@ -21,10 +24,7 @@ function Marked(props: {
 		const byKey = new Map(props.marks.map((m) => [m.slotId, m]));
 		const out: JSX.Element[] = [];
 		let i = 0;
-		for (const span of findQuoteSpans(
-			props.text,
-			props.marks.map((m) => ({ key: m.slotId, quote: m.quote })),
-		)) {
+		for (const span of props.spans) {
 			const mark = byKey.get(span.key);
 			if (!mark) continue;
 			out.push(props.text.slice(i, span.start));
@@ -59,6 +59,59 @@ function Marked(props: {
 	return <>{parts()}</>;
 }
 
+const PART_CLASS: Record<TextPart["kind"], string> = {
+	p: "",
+	h: "mt-2 text-base font-semibold",
+	li: "ml-5 list-item list-disc",
+};
+
+function BlockBody(props: {
+	block: JobTextBlock;
+	marks: Mark[];
+	selected: string | undefined;
+	onSelect: (slotId: string) => void;
+}) {
+	const spans = () =>
+		findQuoteSpans(
+			props.block.text,
+			props.marks.map((m) => ({ key: m.slotId, quote: m.quote })),
+		);
+	return (
+		<Show
+			when={props.block.parts}
+			fallback={
+				<p class="whitespace-pre-wrap">
+					<Marked
+						text={props.block.text}
+						marks={props.marks}
+						spans={spans()}
+						selected={props.selected}
+						onSelect={props.onSelect}
+					/>
+				</p>
+			}
+		>
+			{(parts) => (
+				<div class="flex flex-col gap-2">
+					<For each={clipSpans(spans(), parts())}>
+						{(item) => (
+							<p class={PART_CLASS[item.part.kind]}>
+								<Marked
+									text={item.part.text}
+									marks={props.marks}
+									spans={item.spans}
+									selected={props.selected}
+									onSelect={props.onSelect}
+								/>
+							</p>
+						)}
+					</For>
+				</div>
+			)}
+		</Show>
+	);
+}
+
 export function JobText(props: {
 	blocks: JobTextBlock[];
 	marks: (Mark & { source: JobTextBlock["source"] })[];
@@ -74,14 +127,12 @@ export function JobText(props: {
 				{(block) => (
 					<div>
 						<p class="mb-1 text-xs font-medium text-muted">{block.label}</p>
-						<p class="whitespace-pre-wrap">
-							<Marked
-								text={block.text}
-								marks={props.marks.filter((m) => m.source === block.source)}
-								selected={props.selected}
-								onSelect={props.onSelect}
-							/>
-						</p>
+						<BlockBody
+							block={block}
+							marks={props.marks.filter((m) => m.source === block.source)}
+							selected={props.selected}
+							onSelect={props.onSelect}
+						/>
 					</div>
 				)}
 			</For>
