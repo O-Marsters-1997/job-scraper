@@ -28,6 +28,11 @@ struct NextUpTests {
         #expect(pick(items) == .chase(items[1], overdueDays: 0))
     }
 
+    @Test func jobWithDueChaseAndReadyDraftIsAChase() {
+        let items = [item("a", chase: 0, ready: true, score: 99)]
+        #expect(pick(items) == .chase(items[0], overdueDays: 0))
+    }
+
     @Test func highestScoringReadyToApplyWhenNoChaseDue() {
         let items = [item("a", ready: true, score: 70), item("b", ready: true, score: 90), item("c", chase: 2)]
         #expect(pick(items) == .apply(items[1]))
@@ -50,7 +55,7 @@ struct NextUpTests {
 
     @Test func isStaleOnlyPastTwentyFourHours() {
         let snapshot = NextUpSnapshot(writtenAt: today, items: [])
-        #expect(snapshot.isStale(at: day(0, hour: 24)) == false)
-        #expect(snapshot.isStale(at: day(0, hour: 25)))
+        #expect(snapshot.isStale(at: today.addingTimeInterval(24 * 3600)) == false)
+        #expect(snapshot.isStale(at: today.addingTimeInterval(24 * 3600 + 1)))
     }
 }
