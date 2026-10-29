@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -16,6 +17,7 @@ import (
 const (
 	defaultMaxJobAgeDays = 7
 	maxJobAgeDaysLimit   = 365
+	maxTechNeeded        = 4
 )
 
 func notFound(err error) bool {
@@ -38,7 +40,10 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 	if in.MaxJobAgeDays < 0 || in.MaxJobAgeDays > maxJobAgeDaysLimit {
 		return dto.ScoringConfigView{}, apperr.Invalid(fmt.Sprintf("max job age must be between 0 and %d days", maxJobAgeDaysLimit))
 	}
-	b, err := s.loadBank(ctx)
+	if in.Preferences.TechNeeded < 0 || in.Preferences.TechNeeded > maxTechNeeded {
+		return dto.ScoringConfigView{}, apperr.Invalid(fmt.Sprintf("tech needed must be unset or between 1 and %d", maxTechNeeded))
+	}
+	b, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
@@ -76,6 +81,7 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 			SalaryFloor:        floor,
 			PreferenceText:     text,
 			PreferenceTextHash: hash,
+			TechNeeded:         in.Preferences.TechNeeded,
 			Scoring:            existing.Preferences.Scoring,
 		},
 	}
@@ -179,7 +185,7 @@ func validatedPicks(b bank, picks, stored []dto.Pick) (kept []dto.Pick, dropped 
 		}
 		spec := b.dimensions[opt.Dimension]
 		if !stanceAllowed(spec, p.Stance) {
-			return nil, nil, apperr.Invalid("stance not allowed for dimension " + string(opt.Dimension) + ": " + p.Stance)
+			return nil, nil, apperr.Invalid("stance not allowed for dimension " + string(opt.Dimension) + ": " + string(p.Stance))
 		}
 		isLadder := spec.Kind == ladderKind
 		if isLadder && (p.Weight < 1 || p.Weight > maxLadderWeight) {
@@ -207,13 +213,8 @@ func validatedSalaryFloor(floor *dto.Money) (*dto.Money, error) {
 	return &dto.Money{Amount: floor.Amount, Currency: currency}, nil
 }
 
-func stanceAllowed(spec dto.DimensionSpec, stance string) bool {
-	for _, s := range spec.Stances {
-		if s == stance {
-			return true
-		}
-	}
-	return false
+func stanceAllowed(spec dto.DimensionSpec, stance dto.Stance) bool {
+	return slices.Contains(spec.Stances, stance)
 }
 
 func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
@@ -222,6 +223,7 @@ func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 			Picks:          picksView(cfg.Preferences.Picks),
 			SalaryFloor:    cfg.Preferences.SalaryFloor,
 			PreferenceText: cfg.Preferences.PreferenceText,
+			TechNeeded:     cfg.Preferences.TechNeeded,
 		},
 		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
 		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),

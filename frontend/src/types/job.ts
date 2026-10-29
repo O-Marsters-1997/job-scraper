@@ -17,7 +17,6 @@ export const scoreRowSchema = z.object({
 		"unknown",
 		"neutral",
 		"retired",
-		"blocked",
 		"gated",
 		"favourite",
 		"level",

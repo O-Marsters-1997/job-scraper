@@ -4,9 +4,15 @@ import { scoringOptionsSchema } from "../types/scoringOptions";
 const base = {
 	dimensions: [{ key: "tech", kind: "pair", stances: ["nice", "avoid"] }],
 	options: [{ id: "tech:go", dimension: "tech", label: "Go" }],
+	custom: [
+		{ id: "custom:1", dimension: "domain", label: "AI agents", question: "?" },
+	],
+	customCap: 10,
 };
 
 const valid = scoringOptionsSchema.parse(base);
+assert.ok(valid.custom[0]?.id === "custom:1", "custom options parse");
+assert.ok(valid.customCap === 10, "customCap parses");
 assert.ok(valid.dimensions.length === 1, "dimensions parse");
 assert.ok(valid.options[0]?.id === "tech:go", "options parse");
 

@@ -75,7 +75,7 @@ func (s *Service) AppendJobFeedback(ctx context.Context, userID string, in dto.J
 	if err != nil {
 		return dto.ScoreFeedback{}, err
 	}
-	b, err := s.loadBank(ctx)
+	b, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return dto.ScoreFeedback{}, err
 	}
@@ -116,7 +116,7 @@ func feedbackOptions(picks []dto.Pick, b bank, answers map[string]dto.Answer) []
 			resolved = resolveAnswer(a)
 		}
 		out = append(out, dto.FeedbackOption{
-			OptionID: opt.ID, Label: opt.Label, Question: opt.Question, Stance: p.Stance, Resolved: resolved,
+			OptionID: opt.ID, Label: opt.Label, Question: opt.Question, Stance: string(p.Stance), Resolved: resolved,
 			PYes: a.PYes, PNo: a.PNo, PNotStated: a.PNotStated, Confidence: a.Confidence, Known: known,
 		})
 	}
@@ -180,7 +180,7 @@ func (s *Service) ExportFeedback(ctx context.Context, userID string, includeOutd
 	if err != nil {
 		return "", err
 	}
-	b, err := s.loadBank(ctx)
+	b, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return "", err
 	}

@@ -594,11 +594,12 @@ type ScoreFeedback struct {
 }
 
 type ScoringOption struct {
-	ID        string
-	Dimension ScoringDimension
-	Label     string
-	Question  string
-	RetiredAt pgtype.Timestamptz
+	ID          string
+	Dimension   ScoringDimension
+	Label       string
+	Question    string
+	RetiredAt   pgtype.Timestamptz
+	OwnerUserID pgtype.UUID
 }
 
 type ScrapeRun struct {

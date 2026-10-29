@@ -168,7 +168,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		if err := st.AddScoringOption(ctx, optionID, "tech", "Go", "Does the role use Go?"); err != nil {
 			t.Fatalf("AddScoringOption(...) = %v", err)
 		}
-		options, err := st.ListScoringOptions(ctx)
+		options, err := st.ListScoringOptions(ctx, missingID)
 		if err != nil || len(options) != 1 || options[0].Question != "Does the role use Go?" {
 			t.Fatalf("ListScoringOptions(...) = %+v, %v, want one Go option", options, err)
 		}
@@ -176,7 +176,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		if err := st.RewordScoringOption(ctx, optionID, "Does the role primarily use Go?"); err != nil {
 			t.Fatalf("RewordScoringOption(...) = %v", err)
 		}
-		options, err = st.ListScoringOptions(ctx)
+		options, err = st.ListScoringOptions(ctx, missingID)
 		if err != nil || options[0].Question != "Does the role primarily use Go?" {
 			t.Fatalf("ListScoringOptions(...) = %+v, %v, want the reworded question", options, err)
 		}
@@ -184,7 +184,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		if err := st.RetireScoringOption(ctx, optionID); err != nil {
 			t.Fatalf("RetireScoringOption(...) = %v", err)
 		}
-		options, err = st.ListScoringOptions(ctx)
+		options, err = st.ListScoringOptions(ctx, missingID)
 		if err != nil || options[0].RetiredAt == nil {
 			t.Fatalf("ListScoringOptions(...) = %+v, %v, want retired_at set", options, err)
 		}
@@ -202,6 +202,77 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		}
 		if err := st.RetireScoringOption(ctx, optionID); !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("RetireScoringOption(...) again err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("custom options are private to their owner and reword moves the pick", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t)
+		ctx := t.Context()
+		owner, other := f.NewUser(), f.NewUser()
+		first := dto.CustomOption{ID: "custom:00000000-0000-0000-0000-000000000001", Dimension: dto.DimensionTech, Label: "Agents", Question: "Does the role build agents?"}
+		if err := f.Store.AddCustomOption(ctx, owner, first); err != nil {
+			t.Fatalf("AddCustomOption() = %v", err)
+		}
+		pick := dto.Pick{OptionID: first.ID, Stance: "nice", Source: "manual"}
+		if _, err := f.Store.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: owner, NotifyThreshold: 70, Preferences: dto.Preferences{Picks: []dto.Pick{pick}}}); err != nil {
+			t.Fatalf("UpsertSearchConfig() = %v", err)
+		}
+
+		idsFor := func(user string) []string {
+			t.Helper()
+			options, err := f.Store.ListScoringOptions(ctx, user)
+			if err != nil {
+				t.Fatalf("ListScoringOptions(%s) = %v", user, err)
+			}
+			var ids []string
+			for _, o := range options {
+				ids = append(ids, o.ID)
+			}
+			return ids
+		}
+		if diff := cmp.Diff([]string{first.ID}, idsFor(owner)); diff != "" {
+			t.Errorf("owner options (-want +got):\n%s", diff)
+		}
+		if got := idsFor(other); len(got) != 0 {
+			t.Errorf("other user options = %v, want none", got)
+		}
+		if n, err := f.Store.CountLiveCustomOptions(ctx, owner); err != nil || n != 1 {
+			t.Fatalf("CountLiveCustomOptions() = %d, %v, want 1", n, err)
+		}
+
+		second := dto.CustomOption{ID: "custom:00000000-0000-0000-0000-000000000002", Dimension: dto.DimensionTech, Label: "Agents", Question: "Does the role build LLM agents?"}
+		if err := f.Store.ReplaceCustomOption(ctx, other, first.ID, second); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("ReplaceCustomOption(other user) err = %v, want ErrNotFound", err)
+		}
+		if err := f.Store.ReplaceCustomOption(ctx, owner, first.ID, second); err != nil {
+			t.Fatalf("ReplaceCustomOption() = %v", err)
+		}
+		cfg, err := f.Store.GetSearchConfig(ctx, owner)
+		if err != nil {
+			t.Fatalf("GetSearchConfig() = %v", err)
+		}
+		wantPick := pick
+		wantPick.OptionID = second.ID
+		if diff := cmp.Diff([]dto.Pick{wantPick}, cfg.Preferences.Picks); diff != "" {
+			t.Errorf("picks after reword (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([]string{second.ID}, idsFor(owner)); diff != "" {
+			t.Errorf("owner options after reword (-want +got):\n%s", diff)
+		}
+
+		if err := f.Store.RetireCustomOption(ctx, owner, second.ID); err != nil {
+			t.Fatalf("RetireCustomOption() = %v", err)
+		}
+		cfg, err = f.Store.GetSearchConfig(ctx, owner)
+		if err != nil {
+			t.Fatalf("GetSearchConfig() = %v", err)
+		}
+		if len(cfg.Preferences.Picks) != 0 {
+			t.Errorf("picks after remove = %v, want none", cfg.Preferences.Picks)
+		}
+		if err := f.Store.RetireCustomOption(ctx, owner, second.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("RetireCustomOption() again err = %v, want ErrNotFound", err)
 		}
 	})
 

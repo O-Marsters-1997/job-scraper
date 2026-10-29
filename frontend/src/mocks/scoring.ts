@@ -1,3 +1,9 @@
+import type {
+	CustomOption,
+	CustomOptionDraft,
+	CustomOptionDraftInput,
+	CustomOptionInput,
+} from "../types/customOption";
 import type { ScoringStatus } from "../types/scores";
 import type { ScoringConfig } from "../types/scoringConfig";
 import type {
@@ -5,6 +11,7 @@ import type {
 	ScoringOption,
 	ScoringOptionsView,
 } from "../types/scoringOptions";
+import type { ScoringPreview } from "../types/scoringPreview";
 import { slugify } from "./helpers";
 
 let scoringConfig: ScoringConfig = {
@@ -44,14 +51,18 @@ let scoringConfig: ScoringConfig = {
 };
 
 const scoringDimensions: DimensionSpec[] = [
-	{ key: "tech", kind: "pair", stances: ["nice", "ok", "avoid"] },
-	{ key: "role", kind: "pair", stances: ["nice", "ok", "avoid"] },
-	{ key: "domain", kind: "pair", stances: ["nice", "ok", "avoid", "block"] },
+	{ key: "tech", kind: "pair", stances: ["never", "avoid", "ok", "nice"] },
+	{ key: "role", kind: "pair", stances: ["never", "avoid", "ok", "nice"] },
+	{ key: "domain", kind: "pair", stances: ["never", "avoid", "ok", "nice"] },
 	{ key: "seniority", kind: "ladder", stances: ["nice"] },
-	{ key: "work", kind: "multi", stances: ["nice", "ok", "avoid"] },
-	{ key: "stage", kind: "multi", stances: ["nice", "ok"] },
-	{ key: "size", kind: "multi", stances: ["nice", "ok"] },
-	{ key: "employment", kind: "multi", stances: ["nice", "ok"] },
+	{ key: "work", kind: "multi", stances: ["never", "avoid", "ok", "nice"] },
+	{ key: "stage", kind: "multi", stances: ["never", "avoid", "ok", "nice"] },
+	{ key: "size", kind: "multi", stances: ["never", "avoid", "ok", "nice"] },
+	{
+		key: "employment",
+		kind: "multi",
+		stances: ["never", "avoid", "ok", "nice"],
+	},
 ];
 
 const scoringOptions: ScoringOption[] = [
@@ -145,7 +156,57 @@ export function isCompanyExcluded(companySlug: string): boolean {
 }
 
 export function getScoringOptions(): ScoringOptionsView {
-	return { dimensions: scoringDimensions, options: scoringOptions };
+	return {
+		dimensions: scoringDimensions,
+		options: scoringOptions,
+		custom: structuredClone(customOptions),
+		customCap: 10,
+	};
+}
+
+let customOptions: CustomOption[] = [];
+
+export function draftCustomOption(
+	input: CustomOptionDraftInput,
+): CustomOptionDraft {
+	return {
+		question: input.question ?? `Does the job involve ${input.phrase}?`,
+		dimension: input.dimension ?? "domain",
+		answers: [
+			{
+				jobId: "1",
+				title: "Backend Engineer",
+				company: "Acme",
+				resolved: "yes",
+			},
+			{
+				jobId: "2",
+				title: "Platform Engineer",
+				company: "Globex",
+				resolved: "no",
+			},
+			{ jobId: "3", title: "SRE", company: "Initech", resolved: "unknown" },
+		],
+	};
+}
+
+export function createCustomOption(input: CustomOptionInput): CustomOption {
+	const option = { ...input, id: `custom:${crypto.randomUUID()}` };
+	customOptions = [...customOptions, option];
+	return option;
+}
+
+export function updateCustomOption(
+	id: string,
+	input: CustomOptionInput,
+): CustomOption {
+	const option = { ...input, id };
+	customOptions = customOptions.map((o) => (o.id === id ? option : o));
+	return option;
+}
+
+export function deleteCustomOption(id: string): void {
+	customOptions = customOptions.filter((o) => o.id !== id);
 }
 
 export function getScoringStatus(): ScoringStatus {
@@ -155,4 +216,8 @@ export function getScoringStatus(): ScoringStatus {
 export function updateScoringConfig(payload: ScoringConfig): ScoringConfig {
 	scoringConfig = payload;
 	return scoringConfig;
+}
+
+export function previewScoring(): ScoringPreview {
+	return { dismissedInTop5: { before: 0, after: 0 }, jobs: [] };
 }

@@ -51,8 +51,8 @@ func TestComputeUsesParams(t *testing.T) {
 	miss := evaluatedPick{dimension: dto.DimensionRole, key: "role:backend", stance: "nice", answer: dto.Answer{PNo: 1}, known: true}
 	picks := []evaluatedPick{pick, miss}
 
-	base, _, _ := compute(picks, nil, "", nil, false, nil)
-	heavy, _, _ := compute(picks, nil, "", nil, false, &dto.ScoringParams{Weights: map[dto.Dimension]float64{dto.DimensionTech: 10}})
+	base, _, _ := compute(picks, nil, "", nil, false, nil, 0)
+	heavy, _, _ := compute(picks, nil, "", nil, false, &dto.ScoringParams{Weights: map[dto.Dimension]float64{dto.DimensionTech: 10}}, 0)
 	if heavy <= base {
 		t.Errorf("score with tech weight 10 = %d, want above the default's %d", heavy, base)
 	}

@@ -37,7 +37,7 @@ func TestFavouriteLiftShrinksTowardsTop(t *testing.T) {
 	}
 }
 
-func techPicks(stance string, n int) []evaluatedPick {
+func techPicks(stance dto.Stance, n int) []evaluatedPick {
 	picks := make([]evaluatedPick, n)
 	for i := range picks {
 		picks[i] = evaluatedPick{
@@ -59,8 +59,8 @@ func TestComputeOkStance(t *testing.T) {
 		{"eight ok matches cap at saturation", techPicks("ok", 8), techPicks("nice", 3)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			okScore, _, _ := compute(tt.ok, nil, "", nil, false, nil)
-			niceScore, _, _ := compute(tt.nice, nil, "", nil, false, nil)
+			okScore, _, _ := compute(tt.ok, nil, "", nil, false, nil, 0)
+			niceScore, _, _ := compute(tt.nice, nil, "", nil, false, nil, 0)
 			if okScore != niceScore {
 				t.Errorf("ok score = %d, want %d (the nice score)", okScore, niceScore)
 			}
@@ -68,28 +68,81 @@ func TestComputeOkStance(t *testing.T) {
 	}
 
 	t.Run("one ok match scores below one nice match", func(t *testing.T) {
-		okScore, _, _ := compute(techPicks("ok", 1), nil, "", nil, false, nil)
-		niceScore, _, _ := compute(techPicks("nice", 1), nil, "", nil, false, nil)
+		okScore, _, _ := compute(techPicks("ok", 1), nil, "", nil, false, nil, 0)
+		niceScore, _, _ := compute(techPicks("nice", 1), nil, "", nil, false, nil, 0)
 		if okScore >= niceScore {
 			t.Errorf("ok score = %d, want below %d", okScore, niceScore)
 		}
 	})
 
-	t.Run("ok pick resolving no still gates", func(t *testing.T) {
-		remote := evaluatedPick{
-			dimension: dto.DimensionWork, key: "work:remote", stance: "ok",
-			answer: dto.Answer{PNo: 1}, known: true,
+}
+
+func TestComputeTechNeeded(t *testing.T) {
+	t.Parallel()
+	t.Run("two needed gives one nice match less credit than two", func(t *testing.T) {
+		t.Parallel()
+		one, _, _ := compute(techPicks("nice", 1), nil, "", nil, false, nil, 2)
+		two, _, _ := compute(techPicks("nice", 2), nil, "", nil, false, nil, 2)
+		three, _, _ := compute(techPicks("nice", 3), nil, "", nil, false, nil, 2)
+		if one >= two || two != three {
+			t.Errorf("scores one=%d two=%d three=%d, want one < two == three", one, two, three)
 		}
-		onsite := evaluatedPick{
-			dimension: dto.DimensionWork, key: "work:onsite",
-			answer: dto.Answer{PYes: 1}, known: true,
+	})
+	t.Run("two needed counts a nice match as half and two ok matches as the same half", func(t *testing.T) {
+		t.Parallel()
+		oneNice, _, _ := compute(techPicks("nice", 1), nil, "", nil, false, nil, 2)
+		twoOK, _, _ := compute(techPicks("ok", 2), nil, "", nil, false, nil, 2)
+		fourOK, _, _ := compute(techPicks("ok", 4), nil, "", nil, false, nil, 2)
+		twoNice, _, _ := compute(techPicks("nice", 2), nil, "", nil, false, nil, 2)
+		if oneNice != twoOK || fourOK != twoNice {
+			t.Errorf("one nice=%d two ok=%d, four ok=%d two nice=%d, want pairs equal", oneNice, twoOK, fourOK, twoNice)
 		}
-		score, _, rows := compute([]evaluatedPick{remote}, []evaluatedPick{onsite}, "", nil, false, nil)
-		if score > gateCap {
-			t.Errorf("score = %d, want at most %d", score, gateCap)
+	})
+	t.Run("unset matches a need of three", func(t *testing.T) {
+		t.Parallel()
+		unset, _, _ := compute(techPicks("nice", 2), nil, "", nil, false, nil, 0)
+		three, _, _ := compute(techPicks("nice", 2), nil, "", nil, false, nil, 3)
+		if unset != three {
+			t.Errorf("unset score = %d, want %d", unset, three)
 		}
-		if rows[0].Effect != "gated" {
-			t.Errorf("row effect = %q, want gated", rows[0].Effect)
+	})
+}
+
+func TestComputeNeverStance(t *testing.T) {
+	t.Parallel()
+	for _, dim := range []dto.Dimension{
+		dto.DimensionTech, dto.DimensionRole, dto.DimensionDomain, dto.DimensionWork,
+		dto.DimensionStage, dto.DimensionSize, dto.DimensionEmployment,
+	} {
+		never := func(answer dto.Answer) evaluatedPick {
+			return evaluatedPick{dimension: dim, key: string(dim) + ":x", stance: dto.StanceNever, answer: answer, known: true}
+		}
+		t.Run(string(dim)+" never resolving yes gates", func(t *testing.T) {
+			t.Parallel()
+			score, _, rows := compute(append(techPicks(dto.StanceNice, 3), never(dto.Answer{PYes: 1})), nil, "", nil, false, nil, 0)
+			if score > gateCap || score == 0 {
+				t.Errorf("score = %d, want 1..%d", score, gateCap)
+			}
+			if got := gatedRows(rows); !slices.Contains(got, string(dim)+":x") {
+				t.Errorf("gated rows = %v, want the never row gated", got)
+			}
+		})
+		t.Run(string(dim)+" never the job lacks is neutral", func(t *testing.T) {
+			t.Parallel()
+			_, _, rows := compute([]evaluatedPick{never(dto.Answer{PNo: 1})}, nil, "", nil, false, nil, 0)
+			if rows[0].Effect != "neutral" {
+				t.Errorf("effect = %q, want neutral", rows[0].Effect)
+			}
+		})
+	}
+
+	t.Run("unpicked options never gate a work dimension", func(t *testing.T) {
+		t.Parallel()
+		remote := evaluatedPick{dimension: dto.DimensionWork, key: "work:remote", stance: dto.StanceOK, answer: dto.Answer{PNo: 1}, known: true}
+		onsite := evaluatedPick{dimension: dto.DimensionWork, key: "work:onsite", stance: dto.StanceNice, answer: dto.Answer{PYes: 1}, known: true}
+		_, _, rows := compute([]evaluatedPick{remote}, []evaluatedPick{onsite}, "", nil, false, nil, 0)
+		if got := gatedRows(rows); len(got) > 0 {
+			t.Errorf("gated rows = %v, want none", got)
 		}
 	})
 }
@@ -100,7 +153,7 @@ func TestComputeRowImpact(t *testing.T) {
 	avoid := evaluatedPick{dimension: dto.DimensionTech, key: "tech:php", stance: "avoid", answer: yes, known: true}
 	unknown := evaluatedPick{dimension: dto.DimensionTech, key: "tech:rust", stance: "nice"}
 
-	_, _, rows := compute([]evaluatedPick{nice, avoid, unknown}, nil, "", nil, false, nil)
+	_, _, rows := compute([]evaluatedPick{nice, avoid, unknown}, nil, "", nil, false, nil, 0)
 
 	want := []float64{2.0 / 3, -avoidWeight, 0}
 	for i, row := range rows {
@@ -142,14 +195,14 @@ func TestComputeMissingEvidence(t *testing.T) {
 		{"unpicked dimensions never count", slices.Concat(matched, silent), unpicked, 83},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got, _, _ := compute(tt.picks, tt.unpicked, "", nil, false, nil); got != tt.want {
+			if got, _, _ := compute(tt.picks, tt.unpicked, "", nil, false, nil, 0); got != tt.want {
 				t.Errorf("compute() score = %d, want %d", got, tt.want)
 			}
 		})
 	}
 }
 
-func scoreHybridJob(stances map[string]string, officeDays int) (int, []dto.ScoreRow) {
+func scoreHybridJob(stances map[string]dto.Stance, officeDays int) (int, []dto.ScoreRow) {
 	answers := map[string]dto.Answer{
 		"work:remote": {PNo: 1}, "work:hybrid": {PYes: 1}, "work:onsite": {PNo: 1},
 	}
@@ -173,7 +226,7 @@ func scoreHybridJob(stances map[string]string, officeDays int) (int, []dto.Score
 			unpicked = append(unpicked, p)
 		}
 	}
-	score, _, rows := compute(picks, unpicked, "", nil, false, nil)
+	score, _, rows := compute(picks, unpicked, "", nil, false, nil, 0)
 	return score, rows
 }
 
@@ -193,7 +246,7 @@ func TestComputeOfficeDays(t *testing.T) {
 	}
 
 	t.Run("with hybrid picked, avoided 4+ days scores below 2 days", func(t *testing.T) {
-		stances := map[string]string{"work:hybrid": "nice", "work:office_2": "nice", "work:office_4plus": "avoid"}
+		stances := map[string]dto.Stance{"work:hybrid": "nice", "work:office_2": "nice", "work:office_4plus": "avoid"}
 		twoDays, _ := scoreHybridJob(stances, 2)
 		fourDays, _ := scoreHybridJob(stances, 4)
 		if fourDays >= twoDays || fourDays <= gateCap {
@@ -202,16 +255,16 @@ func TestComputeOfficeDays(t *testing.T) {
 	})
 
 	t.Run("with hybrid picked, a missed day bucket never gates", func(t *testing.T) {
-		stances := map[string]string{"work:hybrid": "nice", "work:office_2": "nice"}
+		stances := map[string]dto.Stance{"work:hybrid": "nice", "work:office_2": "nice"}
 		if score, rows := scoreHybridJob(stances, 3); score <= gateCap || len(gatedRows(rows)) > 0 {
 			t.Errorf("3-day score = %d, gated rows %v, want above %d and none gated", score, gatedRows(rows), gateCap)
 		}
 	})
 
 	t.Run("without hybrid, day buckets grade the job", func(t *testing.T) {
-		stances := map[string]string{
+		stances := map[string]dto.Stance{
 			"work:remote": "nice", "work:office_1": "nice", "work:office_2": "nice",
-			"work:office_3": "ok", "work:office_4plus": "avoid",
+			"work:office_3": "ok", "work:office_4plus": "never",
 		}
 		twoDays, _ := scoreHybridJob(stances, 2)
 		threeDays, _ := scoreHybridJob(stances, 3)
@@ -222,10 +275,10 @@ func TestComputeOfficeDays(t *testing.T) {
 	})
 
 	t.Run("an unstated day count changes nothing", func(t *testing.T) {
-		withBuckets, _ := scoreHybridJob(map[string]string{
+		withBuckets, _ := scoreHybridJob(map[string]dto.Stance{
 			"work:hybrid": "nice", "work:office_2": "nice", "work:office_4plus": "avoid",
 		}, 0)
-		hybridOnly, _ := scoreHybridJob(map[string]string{"work:hybrid": "nice"}, 0)
+		hybridOnly, _ := scoreHybridJob(map[string]dto.Stance{"work:hybrid": "nice"}, 0)
 		if withBuckets != hybridOnly {
 			t.Errorf("unstated score = %d, want %d (hybrid with no buckets picked)", withBuckets, hybridOnly)
 		}
@@ -251,7 +304,7 @@ func scoreLadderJob(weights, jobYes map[string]float64) (int, []dto.ScoreRow) {
 			unpicked = append(unpicked, tierPick(key, 0, answer))
 		}
 	}
-	score, _, rows := compute(picks, unpicked, "", nil, false, nil)
+	score, _, rows := compute(picks, unpicked, "", nil, false, nil, 0)
 	return score, rows
 }
 
@@ -315,15 +368,15 @@ func TestComputeFavourite(t *testing.T) {
 		dimension: dto.Dimension("tech"), key: "tech:go", label: "Go", stance: "nice",
 		answer: dto.Answer{PYes: 1}, known: true,
 	}
-	block := evaluatedPick{
-		dimension: dto.Dimension("tech"), key: "tech:php", label: "PHP", stance: "block",
+	never := evaluatedPick{
+		dimension: dto.Dimension("tech"), key: "tech:php", label: "PHP", stance: dto.StanceNever,
 		answer: dto.Answer{PYes: 1}, known: true,
 	}
 	salaryFloor := &dto.Money{Amount: 100000, Currency: "USD"}
 
 	t.Run("favourite lifts and adds its row", func(t *testing.T) {
-		base, _, _ := compute([]evaluatedPick{nice}, nil, "", nil, false, nil)
-		score, _, rows := compute([]evaluatedPick{nice}, nil, "", nil, true, nil)
+		base, _, _ := compute([]evaluatedPick{nice}, nil, "", nil, false, nil, 0)
+		score, _, rows := compute([]evaluatedPick{nice}, nil, "", nil, true, nil, 0)
 		if score <= base {
 			t.Errorf("favourite score = %d, want above %d", score, base)
 		}
@@ -334,7 +387,7 @@ func TestComputeFavourite(t *testing.T) {
 	})
 
 	t.Run("not favourite leaves rows untouched", func(t *testing.T) {
-		_, _, rows := compute([]evaluatedPick{nice}, nil, "", nil, false, nil)
+		_, _, rows := compute([]evaluatedPick{nice}, nil, "", nil, false, nil, 0)
 		for _, r := range rows {
 			if r.Effect == "favourite" {
 				t.Errorf("unexpected favourite row %+v", r)
@@ -342,20 +395,16 @@ func TestComputeFavourite(t *testing.T) {
 		}
 	})
 
-	t.Run("blocked favourite stays zero without the row", func(t *testing.T) {
-		score, _, rows := compute([]evaluatedPick{nice, block}, nil, "", nil, true, nil)
-		if score != 0 {
-			t.Errorf("score = %d, want 0", score)
-		}
-		for _, r := range rows {
-			if r.Effect == "favourite" {
-				t.Errorf("unexpected favourite row %+v", r)
-			}
+	t.Run("favourite with a never match still caps at gate", func(t *testing.T) {
+		t.Parallel()
+		score, _, _ := compute([]evaluatedPick{nice, never}, nil, "", nil, true, nil, 0)
+		if score > gateCap {
+			t.Errorf("score = %d, want at most %d", score, gateCap)
 		}
 	})
 
 	t.Run("gated favourite caps at gate", func(t *testing.T) {
-		score, _, _ := compute([]evaluatedPick{nice}, nil, "$50000 a year", salaryFloor, true, nil)
+		score, _, _ := compute([]evaluatedPick{nice}, nil, "$50000 a year", salaryFloor, true, nil, 0)
 		if score > gateCap {
 			t.Errorf("score = %d, want at most %d", score, gateCap)
 		}

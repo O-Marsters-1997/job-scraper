@@ -193,6 +193,35 @@ func TestSeniorityLadderMigration(t *testing.T) {
 	}
 }
 
+func TestBlockStanceMigration(t *testing.T) {
+	t.Parallel()
+	st, pool := newStore(t)
+	ctx := t.Context()
+	userID := pgtest.InsertUser(t, pool)
+	if _, err := st.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: userID, Preferences: dto.Preferences{Picks: []dto.Pick{
+		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+		{OptionID: "domain:gambling", Stance: "block", Source: "manual"},
+		{OptionID: "domain:crypto", Stance: "block", Source: "text"},
+	}}}); err != nil {
+		t.Fatalf("UpsertSearchConfig() err = %v", err)
+	}
+
+	exec(t, pool, migrationSection(t, "scripts/migrations/20261028090000_block_stance_to_never.sql", "Up"))
+
+	cfg, err := st.GetSearchConfig(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetSearchConfig() err = %v", err)
+	}
+	want := []dto.Pick{
+		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+		{OptionID: "domain:gambling", Stance: "never", Source: "manual"},
+		{OptionID: "domain:crypto", Stance: "never", Source: "text"},
+	}
+	if diff := cmp.Diff(want, cfg.Preferences.Picks); diff != "" {
+		t.Errorf("picks after Up (-want +got):\n%s", diff)
+	}
+}
+
 func TestAddScoringOption_QueuesBackfillForScoredOpenJobsOnly(t *testing.T) {
 	t.Parallel()
 	st, pool := newStore(t)
@@ -493,6 +522,40 @@ func TestSaveScores(t *testing.T) {
 	}
 	if band != "great" {
 		t.Errorf("band = %q, want great", band)
+	}
+}
+
+func TestStore_ListRecentScoredJobs(t *testing.T) {
+	t.Parallel()
+	st, pool := newStore(t)
+	userID := pgtest.InsertUser(t, pool)
+	otherID := pgtest.InsertUser(t, pool)
+	older := pgtest.InsertJob(t, pool, "Older", "fp-older")
+	newer := pgtest.InsertJob(t, pool, "Newer", "fp-newer")
+	closed := pgtest.InsertJob(t, pool, "Closed", "fp-closed")
+	unscored := pgtest.InsertJob(t, pool, "Other user's", "fp-other")
+	insertScore(t, pool, older, userID)
+	insertScore(t, pool, newer, userID)
+	insertScore(t, pool, closed, userID)
+	insertScore(t, pool, unscored, otherID)
+	exec(t, pool, `UPDATE job_scores SET updated_at = now() - interval '1 hour' WHERE job_id = $1`, older)
+	exec(t, pool, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closed)
+
+	got, err := st.ListRecentScoredJobs(t.Context(), userID, 5)
+	if err != nil {
+		t.Fatalf("ListRecentScoredJobs() err = %v", err)
+	}
+	var titles []string
+	for _, j := range got {
+		titles = append(titles, j.Title)
+	}
+	if diff := cmp.Diff([]string{"Newer", "Older"}, titles); diff != "" {
+		t.Errorf("titles (-want +got):\n%s", diff)
+	}
+
+	limited, err := st.ListRecentScoredJobs(t.Context(), userID, 1)
+	if err != nil || len(limited) != 1 {
+		t.Errorf("ListRecentScoredJobs(limit 1) = %d jobs, err %v, want 1", len(limited), err)
 	}
 }
 

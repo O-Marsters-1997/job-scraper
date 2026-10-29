@@ -106,7 +106,7 @@ func (p preparedJob) features() []float64 {
 			continue
 		}
 		switch pk.stance {
-		case "nice":
+		case dto.StanceNice:
 			d, ok := nice[pk.dimension]
 			if !ok {
 				d = &niceDimension{}
@@ -114,13 +114,13 @@ func (p preparedJob) features() []float64 {
 			}
 			d.sumYes += pk.answer.PYes
 			d.evidence = max(d.evidence, pk.answer.PYes+pk.answer.PNo)
-		case "avoid":
+		case dto.StanceAvoid, dto.StanceNever:
 			x[len(Dimensions)] += pk.answer.PYes
 		}
 	}
 	for i, spec := range Dimensions {
 		if d, ok := nice[spec.Key]; ok {
-			x[i] = d.evidence * min(1, d.sumYes/float64(spec.Saturation))
+			x[i] = d.evidence * min(1, d.sumYes/saturationFor(spec.Key, p.techNeeded))
 		}
 	}
 	return x

@@ -557,12 +557,14 @@ CREATE TABLE IF NOT EXISTS candidate_assessments (
 CREATE TYPE scoring_dimension AS ENUM ('tech', 'role', 'domain', 'seniority', 'work', 'stage', 'size', 'employment');
 
 CREATE TABLE scoring_options (
-    id         TEXT PRIMARY KEY,
-    dimension  scoring_dimension NOT NULL,
-    label      TEXT NOT NULL,
-    question   TEXT NOT NULL,
-    retired_at TIMESTAMPTZ
+    id            TEXT PRIMARY KEY,
+    dimension     scoring_dimension NOT NULL,
+    label         TEXT NOT NULL,
+    question      TEXT NOT NULL,
+    retired_at    TIMESTAMPTZ,
+    owner_user_id UUID REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE INDEX scoring_options_owner_live_idx ON scoring_options (owner_user_id) WHERE retired_at IS NULL;
 
 CREATE TABLE option_answers (
     job_id        UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,

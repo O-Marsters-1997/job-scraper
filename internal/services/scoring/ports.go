@@ -44,6 +44,10 @@ type Extractor interface {
 	Extract(ctx context.Context, apiKey, text string, options []dto.ScoringOption, dimensions []dto.DimensionSpec) ([]dto.Pick, error)
 }
 
+type Drafter interface {
+	Draft(ctx context.Context, apiKey, phrase string, dimensions []dto.DimensionSpec) (dto.DraftedQuestion, error)
+}
+
 // Reconsiderer re-evaluates a user's discovered-job candidates against an
 // updated Search Config.
 type Reconsiderer interface {

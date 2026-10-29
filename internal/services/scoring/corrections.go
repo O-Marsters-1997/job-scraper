@@ -38,7 +38,7 @@ func (s *Service) RevertCorrection(ctx context.Context, userID string, in dto.Re
 }
 
 func (s *Service) checkCorrectable(ctx context.Context, userID, jobID, optionID string) error {
-	bk, err := s.loadBank(ctx)
+	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("scoring.checkCorrectable: %w", err)
 	}
@@ -64,7 +64,7 @@ func (s *Service) rescoreJob(ctx context.Context, userID, jobID string) (dto.Job
 	if err != nil {
 		return dto.JobScore{}, err
 	}
-	bk, err := s.loadBank(ctx)
+	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return dto.JobScore{}, err
 	}

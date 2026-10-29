@@ -9,15 +9,17 @@ import (
 // Dimensions is the fixed set of dimensions the bank's options are grouped
 // into, with the kind and stances the frontend and validation both need.
 var Dimensions = []dto.DimensionSpec{
-	{Key: dto.DimensionTech, Kind: "pair", Stances: []string{"nice", "ok", "avoid"}, Weight: 2, Saturation: 3},
-	{Key: dto.DimensionRole, Kind: "pair", Stances: []string{"nice", "ok", "avoid"}, Weight: 3, Saturation: 1},
-	{Key: dto.DimensionDomain, Kind: "pair", Stances: []string{"nice", "ok", "avoid", "block"}, Weight: 2, Saturation: 1},
-	{Key: dto.DimensionSeniority, Kind: ladderKind, Stances: []string{"nice"}, Gate: true, Weight: 3, Saturation: 1},
-	{Key: dto.DimensionWork, Kind: "multi", Stances: []string{"nice", "ok", "avoid"}, Gate: true, Weight: 2, Saturation: 1},
-	{Key: dto.DimensionStage, Kind: "multi", Stances: []string{"nice", "ok"}, Weight: 1, Saturation: 1},
-	{Key: dto.DimensionSize, Kind: "multi", Stances: []string{"nice", "ok"}, Weight: 1, Saturation: 1},
-	{Key: dto.DimensionEmployment, Kind: "multi", Stances: []string{"nice", "ok"}, Gate: true, Weight: 2, Saturation: 1},
+	{Key: dto.DimensionTech, Kind: "pair", Stances: allStances, Weight: 2, Saturation: 3},
+	{Key: dto.DimensionRole, Kind: "pair", Stances: allStances, Weight: 3, Saturation: 1},
+	{Key: dto.DimensionDomain, Kind: "pair", Stances: allStances, Weight: 2, Saturation: 1},
+	{Key: dto.DimensionSeniority, Kind: ladderKind, Stances: []dto.Stance{dto.StanceNice}, Weight: 3, Saturation: 1},
+	{Key: dto.DimensionWork, Kind: "multi", Stances: allStances, Weight: 2, Saturation: 1},
+	{Key: dto.DimensionStage, Kind: "multi", Stances: allStances, Weight: 1, Saturation: 1},
+	{Key: dto.DimensionSize, Kind: "multi", Stances: allStances, Weight: 1, Saturation: 1},
+	{Key: dto.DimensionEmployment, Kind: "multi", Stances: allStances, Weight: 2, Saturation: 1},
 }
+
+var allStances = []dto.Stance{dto.StanceNever, dto.StanceAvoid, dto.StanceOK, dto.StanceNice}
 
 var dimensionSpecs = func() map[dto.Dimension]dto.DimensionSpec {
 	specs := make(map[dto.Dimension]dto.DimensionSpec, len(Dimensions))
@@ -40,17 +42,19 @@ var ladderLevels = map[string]int{
 	"seniority:principal_head": 5,
 }
 
-// Options returns the dimensions and every non-retired bank option, without
-// question text.
-func (s *Service) Options(ctx context.Context, _ string) (dto.ScoringOptionsView, error) {
-	bk, err := s.loadBank(ctx)
+func (s *Service) Options(ctx context.Context, userID string) (dto.ScoringOptionsView, error) {
+	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return dto.ScoringOptionsView{}, err
 	}
-	live := bk.live
-	out := make([]dto.ScoringOption, len(live))
-	for i, o := range live {
-		out[i] = dto.ScoringOption{ID: o.ID, Dimension: o.Dimension, Label: o.Label, Level: ladderLevels[o.ID]}
+	out := make([]dto.ScoringOption, 0, len(bk.live))
+	custom := make([]dto.CustomOption, 0)
+	for _, o := range bk.live {
+		if o.OwnerID != "" {
+			custom = append(custom, dto.CustomOption{ID: o.ID, Dimension: o.Dimension, Label: o.Label, Question: o.Question})
+			continue
+		}
+		out = append(out, dto.ScoringOption{ID: o.ID, Dimension: o.Dimension, Label: o.Label, Level: ladderLevels[o.ID]})
 	}
-	return dto.ScoringOptionsView{Dimensions: Dimensions, Options: out}, nil
+	return dto.ScoringOptionsView{Dimensions: Dimensions, Options: out, Custom: custom, CustomCap: maxCustomOptions}, nil
 }

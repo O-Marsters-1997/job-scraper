@@ -17,7 +17,7 @@ const GROUPS: {
 }[] = [
 	{
 		label: "Gates",
-		keep: (r) => r.effect === "gated" || r.effect === "blocked",
+		keep: (r) => r.effect === "gated",
 		style: tintedChip(MISSING_COLOUR),
 	},
 	{
