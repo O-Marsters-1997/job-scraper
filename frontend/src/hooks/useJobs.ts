@@ -3,6 +3,7 @@ import {
 	queryOptions,
 	useQueryClient,
 } from "@tanstack/solid-query";
+import { createMemo } from "solid-js";
 import {
 	fetchJob,
 	fetchJobInsights,
@@ -70,7 +71,8 @@ export function jobQueryOptions(id: string) {
 }
 
 export function useJob(id: () => string) {
-	return createQuery(() => jobQueryOptions(id()));
+	const stableId = createMemo(id);
+	return createQuery(() => jobQueryOptions(stableId()));
 }
 
 export function useMarkJobsSeen() {

@@ -7,6 +7,10 @@ import type { DraftEditorState } from "./useDraftEditor";
 
 type AddedRole = { positionId: string; head: LayoutBlock };
 
+const CARRIED = "carried:";
+const carriedId = (positionId: string, at: number) =>
+	`${CARRIED}${positionId}:${at}`;
+
 export function createRolePicks(opts: {
 	draft: Accessor<Draft>;
 	editor: DraftEditorState;
@@ -16,19 +20,34 @@ export function createRolePicks(opts: {
 	const roles = () => opts.draft().provenance?.positions ?? [];
 	const [added, setAdded] = createSignal<AddedRole[]>([]);
 
-	const [picks, setPicks] = createSignal<Record<string, string[]>>(
-		untrack(() =>
-			Object.fromEntries(
-				roles().map((p) => [
-					p.positionId,
-					p.bullets.flatMap((b) => b.achievements.map((a) => a.id)),
-				]),
-			),
+	const carried = untrack(() => {
+		const out = new Map<string, string>();
+		for (const c of opts.draft().content?.positions ?? [])
+			c.bullets.forEach((b, i) => {
+				if (b.achievementIds.length === 0 && b.text.trim())
+					out.set(carriedId(c.positionId, i), b.text);
+			});
+		return out;
+	});
+
+	const initial = untrack(() =>
+		Object.fromEntries(
+			roles().map((p) => [
+				p.positionId,
+				p.bullets.flatMap((b, i) =>
+					b.achievements.length > 0
+						? b.achievements.map((a) => a.id)
+						: carried.has(carriedId(p.positionId, i))
+							? [carriedId(p.positionId, i)]
+							: [],
+				),
+			]),
 		),
 	);
+	const [picks, setPicks] = createSignal<Record<string, string[]>>(initial);
 
 	const generated = untrack(() => {
-		const out = new Map<string, string>();
+		const out = new Map(carried);
 		for (const p of opts.draft().content?.positions ?? [])
 			for (const b of p.bullets) {
 				const [only] = b.achievementIds;
@@ -112,16 +131,20 @@ export function createRolePicks(opts: {
 			.find((a) => a.id === id)?.text ??
 		"";
 
-	const setPicksFor = (positionId: string, ids: string[]) => {
+	const setPicksFor = (positionId: string, ids: string[], fresh = false) => {
+		const slots = roleSlots(positionId);
+		const now = picksFor(positionId);
 		setPicks({ ...picks(), [positionId]: ids });
-		if (ids.length === 0) return;
 		opts.editor.replaceRole(
 			positionId,
-			roleSlots(positionId),
-			ids.map((id) => ({
-				text: textOf(id),
-				achievementIds: [id],
-			})),
+			slots,
+			ids.map((id) => {
+				const slot = fresh ? undefined : slots[now.indexOf(id)];
+				return {
+					text: slot ? opts.editor.text(slot) : textOf(id),
+					achievementIds: id.startsWith(CARRIED) ? [] : [id],
+				};
+			}),
 		);
 	};
 
@@ -220,6 +243,16 @@ export function createRolePicks(opts: {
 			rest.splice(Math.min(place - 1, rest.length), 0, positionId);
 			arrange(rest);
 		},
-		clear: (positionId: string) => setPicks({ ...picks(), [positionId]: [] }),
+		carriedFor: (positionId: string) =>
+			(initial[positionId] ?? [])
+				.filter((id) => id.startsWith(CARRIED))
+				.map((id) => ({ id, text: generated.get(id) ?? "" })),
+		isPlaceholder: (slotId: string) =>
+			[...headings().values()].some(
+				(id) => picksFor(id).length === 0 && roleSlots(id)[0] === slotId,
+			),
+		empty: (positionId: string) => setPicksFor(positionId, []),
+		reset: (positionId: string) =>
+			setPicksFor(positionId, initial[positionId] ?? [], true),
 	};
 }

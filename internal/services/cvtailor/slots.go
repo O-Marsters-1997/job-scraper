@@ -130,7 +130,7 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 		checked.BaseSkills = cvedit.CheckLines(edits.Skills)
 	}
 	checked.Parse = parseInput(ctx, draftPDF, headings)
-	findings := toDraftFindings(checks.Run(checked))
+	findings := toDraftFindings(checks.RunUserEdited(checked))
 	if err := s.store.SetDraftEdits(ctx, userID, draft.ID, editSet, findings, citedAchievements(bank, edits, draft.AchievementIDs)); err != nil {
 		return dto.Draft{}, err
 	}

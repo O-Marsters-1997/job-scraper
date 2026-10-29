@@ -1,16 +1,13 @@
 import Foundation
 
 extension Job {
-    private static let hiddenEffects: Set<ScoreEffect> = [.neutral, .retired, .unknown, .level]
-
     var gate: ScoreRow? { breakdown.first { $0.effect.isGate } }
 
     var topRows: [ScoreRow] {
-        let shown = breakdown.filter { !Self.hiddenEffects.contains($0.effect) }
-        let rest = shown.filter { !$0.effect.isGate }
-        let favourites = rest.filter { $0.effect == .favourite }
-        let ranked = rest.filter { $0.effect != .favourite }.sorted { abs($0.impact ?? 0) > abs($1.impact ?? 0) }
-        return Array((shown.filter { $0.effect.isGate } + favourites + ranked).prefix(3))
+        let negatives = breakdown.filter { $0.effect.isGate }
+            + breakdown.filter { $0.stance == "avoid" && $0.effect == .misses }
+        let matches = breakdown.filter { $0.effect == .meets }.sorted { abs($0.impact ?? 0) > abs($1.impact ?? 0) }
+        return Array((negatives + breakdown.filter { $0.effect == .favourite } + matches).prefix(3))
     }
 
     func bandReason(_ scoring: ScoringBands?) -> String? {

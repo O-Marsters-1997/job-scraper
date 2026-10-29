@@ -3,30 +3,53 @@ import Testing
 @testable import FastTrack
 
 struct JobTopRowsTests {
-    private func job(_ breakdown: [ScoreRow]) -> Job {
-        let s = Job.sample
-        return Job(id: s.id, title: s.title, companyID: s.companyID, companySlug: s.companySlug, location: s.location,
-                   workArrangement: s.workArrangement, salaryRaw: s.salaryRaw, url: s.url, postedAt: s.postedAt,
-                   firstDiscoveredAt: s.firstDiscoveredAt, band: s.band, score: s.score, breakdown: breakdown,
-                   description: s.description, companyKind: s.companyKind)
+    private func job(_ rows: [ScoreRow]) -> Job {
+        var job = Job.sample
+        job = Job(
+            id: job.id, title: job.title, companyID: job.companyID, companySlug: job.companySlug,
+            location: job.location, workArrangement: job.workArrangement, salaryRaw: job.salaryRaw,
+            url: job.url, postedAt: job.postedAt, firstDiscoveredAt: job.firstDiscoveredAt,
+            band: job.band, score: job.score, breakdown: rows, description: job.description,
+            companyKind: job.companyKind
+        )
+        return job
     }
 
-    @Test func gateThenFavouriteThenLargestImpactWithinCap() {
+    @Test func unmetNiceToHaveIsNeverShown() {
+        let rows = [ScoreRow(key: "role:backend", label: "Backend", effect: .misses, stance: "nice")]
+        #expect(job(rows).topRows.isEmpty)
+    }
+
+    @Test func avoidHitShowsAndNeutralAvoidDoesNot() {
+        let hit = ScoreRow(key: "domain:gambling", label: "Gambling", effect: .misses, stance: "avoid")
+        let clear = ScoreRow(key: "domain:crypto", label: "Crypto", effect: .neutral, stance: "avoid")
+        #expect(job([clear, hit]).topRows.map(\.key) == ["domain:gambling"])
+    }
+
+    @Test func ordersGateThenAvoidThenFavouriteThenMatchesCappedAtThree() {
+        let rows = [
+            ScoreRow(key: "tech:go", label: "Go", effect: .meets),
+            ScoreRow(key: "company:fav", label: "Favourite", effect: .favourite),
+            ScoreRow(key: "domain:gambling", label: "Gambling", effect: .misses, stance: "avoid"),
+            ScoreRow(key: "gate:visa", label: "Visa", effect: .gated),
+            ScoreRow(key: "work:hybrid", label: "Hybrid", effect: .meets),
+        ]
+        #expect(job(rows).topRows.map(\.key) == ["gate:visa", "domain:gambling", "company:fav"])
+    }
+
+    @Test func matchesRankByLargestImpactWithinCap() {
         let rows = [
             ScoreRow(key: "a", label: "A", effect: .meets, impact: 0.2),
-            ScoreRow(key: "b", label: "B", effect: .misses, impact: -2),
-            ScoreRow(key: "fav", label: "Fav", effect: .favourite),
             ScoreRow(key: "c", label: "C", effect: .meets, impact: 1),
-            ScoreRow(key: "gate", label: "G", effect: .gated),
+            ScoreRow(key: "fav", label: "Fav", effect: .favourite),
+            ScoreRow(key: "d", label: "D", effect: .meets, impact: 3),
         ]
-
-        #expect(job(rows).topRows.map(\.key) == ["gate", "fav", "b"])
+        #expect(job(rows).topRows.map(\.key) == ["fav", "d", "c"])
     }
 
     @Test func missingImpactKeepsStoredOrder() throws {
         let json = #"[{"key":"a","label":"A","effect":"meets"},{"key":"b","label":"B","effect":"meets"}]"#
         let rows = try JSONDecoder().decode([ScoreRow].self, from: Data(json.utf8))
-
         #expect(job(rows).topRows.map(\.key) == ["a", "b"])
     }
 }
