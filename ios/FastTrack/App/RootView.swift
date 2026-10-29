@@ -5,6 +5,7 @@ struct RootView: View {
     @Environment(\.apiClient) private var client
     @State private var path: [Route] = []
     @State private var openedNotification: String?
+    @State private var dueFocus: DueFocus?
 
     var body: some View {
         Group {
@@ -14,7 +15,8 @@ struct RootView: View {
             case .signedOut:
                 LoginView()
             case .signedIn:
-                MainTabs(client: client, path: $path, openedNotification: $openedNotification)
+                MainTabs(client: client, path: $path, openedNotification: $openedNotification,
+                         dueFocus: $dueFocus)
             case .unreachable(let message):
                 ContentUnavailableView {
                     Label("Can't reach FastTrack", systemImage: "wifi.exclamationmark")
@@ -30,7 +32,10 @@ struct RootView: View {
     }
 
     private func open(_ url: URL) {
-        guard let route = Route(url: url) else { return }
+        guard let route = Route(url: url) else {
+            dueFocus = DueFocus(url: url)
+            return
+        }
         path = [route]
         openedNotification = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "n" }?.value
     }
