@@ -1,5 +1,5 @@
 import { createFileRoute, useParams } from "@tanstack/solid-router";
-import type { Accessor } from "solid-js";
+import type { Accessor, JSX } from "solid-js";
 import {
 	createMemo,
 	createSignal,
@@ -10,9 +10,8 @@ import {
 	untrack,
 } from "solid-js";
 import { createStore } from "solid-js/store";
-import { ChoiceGroup, Field } from "@/components/Field";
+import { Field } from "@/components/Field";
 import { FormFeedback } from "@/components/FormFeedback";
-import { MultiCombobox } from "@/components/MultiCombobox";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { SettingsActions } from "@/components/SettingsLayout";
 import { Button } from "@/components/ui/button";
@@ -31,9 +30,11 @@ import type {
 	ScoringOptionsView,
 } from "../../../types/scoringOptions";
 import { FiltersSection } from "./-scoring/FiltersSection";
+import { RatingKey } from "./-scoring/RatingKey";
 import { RecomputeControls } from "./-scoring/RecomputeControls";
 import { SeniorityLadder } from "./-scoring/SeniorityLadder";
-import { STANCE_LABEL, STANCE_TONE } from "./-scoring/stance";
+import { StanceRow } from "./-scoring/StanceRow";
+import { STANCE_TONE } from "./-scoring/stance";
 import { useExclusionFilters } from "./-scoring/useExclusionFilters";
 
 export const Route = createFileRoute("/_auth/settings/scoring")({
@@ -42,8 +43,7 @@ export const Route = createFileRoute("/_auth/settings/scoring")({
 
 type StanceMap = Record<string, Stance | undefined>;
 
-const PICKER_STANCES: (Stance | undefined)[] = ["nice", "ok", "avoid"];
-const CYCLE_STANCES: Stance[] = ["nice", "ok", "avoid", "never"];
+const RATED_SECTIONS = ["role", "stack", "work"];
 type Dim = ScoringOption["dimension"];
 
 function ScoringPage() {
@@ -85,29 +85,30 @@ function ScoringForm(props: {
 
 	const optionsFor = (dim: Dim) =>
 		props.options().options.filter((o) => o.dimension === dim);
-	const idsWith = (dim: Dim, stance: Stance) =>
-		optionsFor(dim)
-			.filter((o) => stances[o.id] === stance)
-			.map((o) => o.id);
-	const setStance = (dim: Dim, stance: Stance, ids: string[]) => {
-		for (const o of optionsFor(dim)) {
-			if (ids.includes(o.id)) setStances(o.id, stance);
-			else if (stances[o.id] === stance) setStances(o.id, undefined);
-		}
-	};
-	const choiceOf = (id: string) => {
-		const stance = stances[id];
-		return stance && { label: STANCE_LABEL[stance], tone: STANCE_TONE[stance] };
-	};
-	const cycleStance = (dim: Dim) => (id: string) => {
-		const allowed =
+	const rows = (dim: Dim) => {
+		const allowed = () =>
 			props.options().dimensions.find((d) => d.key === dim)?.stances ?? [];
-		const order = [
-			undefined,
-			...CYCLE_STANCES.filter((s) => allowed.includes(s)),
-		];
-		setStances(id, order[(order.indexOf(stances[id]) + 1) % order.length]);
+		return (
+			<div class="flex flex-col">
+				<For each={optionsFor(dim)}>
+					{(o) => (
+						<StanceRow
+							option={o}
+							stance={stances[o.id]}
+							allowed={allowed()}
+							onChange={(s) => setStances(o.id, s)}
+						/>
+					)}
+				</For>
+			</div>
+		);
 	};
+	const section = (title: string, children: JSX.Element) => (
+		<section class="flex flex-col gap-3">
+			<h2 class="text-base font-semibold text-foreground">{title}</h2>
+			{children}
+		</section>
+	);
 
 	const textPicks = createMemo(() =>
 		props.config().preferences.picks.filter((p) => p.source === "text"),
@@ -182,26 +183,6 @@ function ScoringForm(props: {
 		}
 	};
 
-	const stancePicker = (dim: Dim, stance: Stance, label: string) => (
-		<MultiCombobox
-			label={label}
-			options={optionsFor(dim).filter(
-				(o) =>
-					stances[o.id] === stance || !PICKER_STANCES.includes(stances[o.id]),
-			)}
-			value={idsWith(dim, stance)}
-			onChange={(ids) => setStance(dim, stance, ids)}
-			chipClass={STANCE_TONE[stance]}
-		/>
-	);
-	const pairPickers = (dim: Dim, noun: string, want: string) => (
-		<>
-			{stancePicker(dim, "nice", `${noun} you most want to ${want}`)}
-			{stancePicker(dim, "ok", `${noun} you'd be happy with`)}
-			{stancePicker(dim, "avoid", `${noun} to avoid`)}
-		</>
-	);
-
 	return (
 		<>
 			<SettingsActions>
@@ -218,69 +199,62 @@ function ScoringForm(props: {
 				</Button>
 			</SettingsActions>
 			<FormFeedback success={notice() ?? false} error={error()} />
+			<Show when={RATED_SECTIONS.includes(params().section ?? "")}>
+				<RatingKey />
+			</Show>
 			<Switch>
 				<Match when={params().section === "role"}>
-					<ChoiceGroup
-						legend="Which roles are you looking for?"
-						options={optionsFor("role")}
-						choiceOf={choiceOf}
-						cycle={cycleStance("role")}
-					/>
-					<Field
-						label="Minimum salary"
-						for="salary-floor"
-						hint="Jobs that don't state a salary are never penalised."
-					>
-						<div class="relative w-44">
-							<span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-faint">
-								£
-							</span>
-							<Input
-								id="salary-floor"
-								type="number"
-								step="5000"
-								min="0"
-								value={salaryFloor()}
-								onInput={(e) => setSalaryFloor(e.currentTarget.value)}
-								placeholder="No minimum"
-								class="pl-7 font-mono tabular-nums"
-							/>
-						</div>
-					</Field>
+					{section("Role", rows("role"))}
 					<SeniorityLadder
 						tiers={optionsFor("seniority")}
 						weightOf={(id) => weights[id] ?? 0}
 						setWeight={(id, weight) => setWeights(id, weight)}
 					/>
-					<ChoiceGroup
-						legend="Employment type"
-						options={optionsFor("employment")}
-						choiceOf={choiceOf}
-						cycle={cycleStance("employment")}
-					/>
-					<ChoiceGroup
-						legend="Working arrangement"
-						hint="To prefer some office days over others, pick the day counts instead of Hybrid."
-						options={optionsFor("work")}
-						choiceOf={choiceOf}
-						cycle={cycleStance("work")}
-					/>
+					{section(
+						"Pay and contract",
+						<>
+							<Field
+								label="Minimum salary"
+								for="salary-floor"
+								hint="Jobs that don't state a salary are never penalised."
+							>
+								<div class="relative w-44">
+									<span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-faint">
+										£
+									</span>
+									<Input
+										id="salary-floor"
+										type="number"
+										step="5000"
+										min="0"
+										value={salaryFloor()}
+										onInput={(e) => setSalaryFloor(e.currentTarget.value)}
+										placeholder="No minimum"
+										class="pl-7 font-mono tabular-nums"
+									/>
+								</div>
+							</Field>
+							{rows("employment")}
+						</>,
+					)}
 				</Match>
 				<Match when={params().section === "stack"}>
-					{pairPickers("tech", "Technologies", "work with")}
-					{pairPickers("domain", "Industries", "work in")}
-					<ChoiceGroup
-						legend="Company stage"
-						options={optionsFor("stage")}
-						choiceOf={choiceOf}
-						cycle={cycleStance("stage")}
-					/>
-					<ChoiceGroup
-						legend="Company size"
-						options={optionsFor("size")}
-						choiceOf={choiceOf}
-						cycle={cycleStance("size")}
-					/>
+					{section("Tech stack", rows("tech"))}
+					{section("Industries", rows("domain"))}
+				</Match>
+				<Match when={params().section === "work"}>
+					{section(
+						"Working arrangement",
+						<>
+							<p class="text-xs text-faint">
+								To prefer some office days over others, rate the day counts
+								instead of Hybrid.
+							</p>
+							{rows("work")}
+						</>,
+					)}
+					{section("Company size", rows("size"))}
+					{section("Company stage", rows("stage"))}
 				</Match>
 				<Match when={params().section === "filters"}>
 					<FiltersSection filters={filters} />

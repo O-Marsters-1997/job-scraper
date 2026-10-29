@@ -32,6 +32,7 @@ export const SETTINGS_SECTIONS: SettingsGroup[] = [
 				children: [
 					{ to: "/settings/scoring/role", label: "Role" },
 					{ to: "/settings/scoring/stack", label: "Tech & industry" },
+					{ to: "/settings/scoring/work", label: "Work & company" },
 					{ to: "/settings/scoring/filters", label: "Filters & alerts" },
 					{ to: "/settings/scoring/other", label: "Other details" },
 				],
