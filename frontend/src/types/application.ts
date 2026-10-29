@@ -51,6 +51,8 @@ export type ApplicationWithDetails = z.infer<
 	typeof applicationWithDetailsSchema
 >;
 
+export type ApplicationsView = "list" | "board";
+
 export interface JobApplicationSummary {
 	ApplicationID: string;
 	StatusID: string;
