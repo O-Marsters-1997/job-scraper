@@ -23,6 +23,8 @@ const preferencesSchema = z.object({
 	preferenceText: z.string(),
 });
 
+export type Preferences = z.infer<typeof preferencesSchema>;
+
 export const scoringConfigSchema = z.object({
 	preferences: preferencesSchema,
 	excludedTitleKeywords: z.array(z.string()),
