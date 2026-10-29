@@ -78,7 +78,9 @@ func TestComputeOkStance(t *testing.T) {
 }
 
 func TestComputeTechNeeded(t *testing.T) {
+	t.Parallel()
 	t.Run("two needed gives one nice match less credit than two", func(t *testing.T) {
+		t.Parallel()
 		one, _, _ := compute(techPicks("nice", 1), nil, "", nil, false, nil, 2)
 		two, _, _ := compute(techPicks("nice", 2), nil, "", nil, false, nil, 2)
 		three, _, _ := compute(techPicks("nice", 3), nil, "", nil, false, nil, 2)
@@ -87,6 +89,7 @@ func TestComputeTechNeeded(t *testing.T) {
 		}
 	})
 	t.Run("two needed counts a nice match as half and two ok matches as the same half", func(t *testing.T) {
+		t.Parallel()
 		oneNice, _, _ := compute(techPicks("nice", 1), nil, "", nil, false, nil, 2)
 		twoOK, _, _ := compute(techPicks("ok", 2), nil, "", nil, false, nil, 2)
 		fourOK, _, _ := compute(techPicks("ok", 4), nil, "", nil, false, nil, 2)
@@ -96,6 +99,7 @@ func TestComputeTechNeeded(t *testing.T) {
 		}
 	})
 	t.Run("unset matches a need of three", func(t *testing.T) {
+		t.Parallel()
 		unset, _, _ := compute(techPicks("nice", 2), nil, "", nil, false, nil, 0)
 		three, _, _ := compute(techPicks("nice", 2), nil, "", nil, false, nil, 3)
 		if unset != three {
