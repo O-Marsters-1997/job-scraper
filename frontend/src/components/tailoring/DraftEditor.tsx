@@ -257,7 +257,8 @@ export function DraftEditor(props: {
 			? key
 			: undefined;
 	};
-	const profileWand = () => activeSlot() === PROFILE_SLOT && editable();
+	const profileWand = () =>
+		activeSlot() === PROFILE_SLOT && editable() && !!baseProfile();
 	const focusSteer = () =>
 		document
 			.querySelector<HTMLInputElement>(
