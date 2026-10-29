@@ -1,5 +1,12 @@
 import { Combobox, useComboboxContext } from "@kobalte/core/combobox";
-import { createMemo, createSignal, For, Show } from "solid-js";
+import {
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	onCleanup,
+	Show,
+} from "solid-js";
 import { Icon } from "@/components/Icon";
 import { cn } from "@/lib/utils";
 
@@ -46,8 +53,25 @@ export function MultiCombobox(props: {
 }) {
 	const [query, setQuery] = createSignal("");
 	const [dragFrom, setDragFrom] = createSignal<number>();
+	const [picked, setPicked] = createSignal<string>();
+	createEffect(() => {
+		if (picked() === undefined) return;
+		const away = (e: PointerEvent) => {
+			if (!(e.target as Element).closest('[data-chip][aria-pressed="true"]'))
+				setPicked(undefined);
+		};
+		document.addEventListener("pointerdown", away);
+		onCleanup(() => document.removeEventListener("pointerdown", away));
+	});
 	const nudge = (e: KeyboardEvent, i: number) => {
-		if (!props.onReorder || !e.altKey) return;
+		if (!props.onReorder) return;
+		if (e.key === "Escape" && picked() !== undefined) {
+			e.preventDefault();
+			e.stopPropagation();
+			setPicked(undefined);
+			return;
+		}
+		if (!e.altKey && picked() !== props.value[i]) return;
 		const to =
 			e.key === "ArrowLeft" ? i - 1 : e.key === "ArrowRight" ? i + 1 : i;
 		if (to === i || to < 0 || to >= props.value.length) return;
@@ -67,7 +91,7 @@ export function MultiCombobox(props: {
 	const shown = createMemo(() => {
 		const q = query().trim();
 		const lower = q.toLowerCase();
-		const picked = new Set(props.value);
+		const taken = new Set(props.value);
 		const exists = [...selected(), ...props.options].some(
 			(o) => o.label.toLowerCase() === lower,
 		);
@@ -78,7 +102,7 @@ export function MultiCombobox(props: {
 		const matches = props.options
 			.filter(
 				(o) =>
-					!picked.has(o.id) &&
+					!taken.has(o.id) &&
 					(props.onSearch || o.label.toLowerCase().includes(lower)),
 			)
 			.slice(0, MAX_RENDERED);
@@ -147,11 +171,19 @@ export function MultiCombobox(props: {
 										data-chip
 										tabindex={props.onReorder ? 0 : -1}
 										draggable={props.onReorder ? true : undefined}
+										aria-pressed={
+											props.onReorder ? picked() === o.id : undefined
+										}
 										title={
 											props.onReorder
-												? "Drag to reorder, or Alt+Arrow keys"
+												? "Click to select, then use the arrow keys. Or drag, or Alt+Arrow."
 												: undefined
 										}
+										onClick={(e) => {
+											if (!props.onReorder) return;
+											e.currentTarget.focus();
+											setPicked((p) => (p === o.id ? undefined : o.id));
+										}}
 										onPointerDown={(e) => e.preventDefault()}
 										onDragStart={(e) => {
 											e.dataTransfer?.setData("text/plain", o.label);
@@ -169,7 +201,7 @@ export function MultiCombobox(props: {
 										}}
 										onDragEnd={() => setDragFrom(undefined)}
 										onKeyDown={(e) => nudge(e, i())}
-										class="cursor-default rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+										class="cursor-default rounded-full aria-pressed:bg-primary/15 aria-pressed:px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
 									>
 										{o.label}
 									</button>
