@@ -200,8 +200,7 @@ func (m *Module) Replay(ctx context.Context, userID string) (string, error) {
 	return m.svc.Replay(ctx, userID)
 }
 
-// Fit refits userID's weights from their labels and recomputes their scores,
-// returning a report of what changed.
+// Fit is disabled and returns an error until the weights fit is replaced.
 func (m *Module) Fit(ctx context.Context, userID string) (string, error) {
 	return m.svc.Fit(ctx, userID)
 }
