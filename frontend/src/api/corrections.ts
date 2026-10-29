@@ -8,7 +8,7 @@ import { apiFetch, jsonInit } from "./client";
 import { mocked } from "./config";
 
 const path = ({ jobId, optionId }: CorrectionTarget) =>
-	`/jobs/${encodeURIComponent(jobId)}/corrections/${encodeURIComponent(optionId)}`;
+	`/jobs/${encodeURIComponent(jobId)}/corrections/${optionId}`;
 
 export async function setCorrection(
 	target: CorrectionTarget & { value: CorrectionValue },

@@ -45,7 +45,7 @@ export async function updateCustomOption(
 		(db) => db.updateCustomOption(id, input),
 		() =>
 			apiFetch(
-				`/scoring-options/custom/${encodeURIComponent(id)}`,
+				`/scoring-options/custom/${id}`,
 				customOptionSchema,
 				jsonInit("PUT", input),
 			),
@@ -56,7 +56,7 @@ export async function deleteCustomOption(id: string): Promise<void> {
 	return mocked(
 		(db) => db.deleteCustomOption(id),
 		() =>
-			apiFetchVoid(`/scoring-options/custom/${encodeURIComponent(id)}`, {
+			apiFetchVoid(`/scoring-options/custom/${id}`, {
 				method: "DELETE",
 			}),
 	);
