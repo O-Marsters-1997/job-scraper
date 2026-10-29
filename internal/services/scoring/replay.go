@@ -252,7 +252,6 @@ func writeReplaySummary(sb *strings.Builder, r replayReport) {
 	} else {
 		fmt.Fprintf(sb, "- Low-scored positives: %d in the bottom half: %s\n", len(low), strings.Join(low, "; "))
 	}
-
 }
 
 func computeReplayMetrics(r replayReport, now time.Time) replayMetrics {
@@ -284,8 +283,8 @@ func computeReplayMetrics(r replayReport, now time.Time) replayMetrics {
 		c := concordance(positives, negatives)
 		m.Concordance = &c
 	}
-	top := slices.Sorted(slices.Values(r.Scores))
-	slices.Reverse(top)
+	top := slices.Clone(r.Scores)
+	slices.SortFunc(top, func(a, b int) int { return cmp.Compare(b, a) })
 	top = top[:min(len(top), replayTopWindow)]
 	m.DistinctTop100 = len(slices.Compact(top))
 	m.GreatBand = countWhere(r.Bands, func(b string) bool { return b == replayBandGreat })
