@@ -86,6 +86,37 @@ func TestDraftLayout(t *testing.T) {
 			t.Errorf("DraftLayout() fetched %d Docs, want 1", counted.gets)
 		}
 	})
+
+	t.Run("tags every linked role's bullets in an as-is draft, even a role with no chosen achievements", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		e.input.Mode = dto.DraftModeAsIs
+		second, err := e.store.CreatePosition(t.Context(), userID, dto.PositionInput{Employer: "Beta", Title: "Dev"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		mappings := []dto.HeadingMapping{{HeadingText: heading, PositionID: &e.pos.ID}, {HeadingText: "Beta", PositionID: &second.ID}}
+		if err := e.store.SaveHeadingMappings(t.Context(), userID, docID, tabID, mappings); err != nil {
+			t.Fatal(err)
+		}
+		base := tabJSON(t, head(heading), bullet("a0"), head("Beta"), bullet("b0"))
+		docs := cvtailortest.EditedCopyDocs{BaseDocID: docID, Base: base, Copy: base}
+		edits := cvedit.EditSet{Positions: []cvedit.PositionEdit{
+			{PositionID: e.pos.ID, Bullets: []cvedit.Bullet{{AchievementIDs: []string{e.pos.Achievements[0].ID}, Text: "a0"}}},
+			{PositionID: second.ID, Bullets: []cvedit.Bullet{{Text: "b0", Keep: true}}},
+		}}
+		id := e.readyWith(t, tick{docs: docs}, edits)
+
+		got, err := cvtailor.NewService(e.store, docs, nil, e.drive).DraftLayout(t.Context(), userID, dto.DraftQuery{ID: id})
+
+		if err != nil {
+			t.Fatalf("DraftLayout(%s) error = %v", id, err)
+		}
+		want := []string{"", "s0", "", "s1"}
+		if diff := cmp.Diff(want, slotIDsOf(got)); diff != "" {
+			t.Errorf("DraftLayout() slot IDs (-want +got):\n%s", diff)
+		}
+	})
 }
 
 func TestDraftLayoutRefusals(t *testing.T) {
