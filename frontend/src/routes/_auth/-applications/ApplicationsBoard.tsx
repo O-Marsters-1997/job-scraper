@@ -5,6 +5,7 @@ import {
 	createSignal,
 	For,
 	type JSX,
+	onCleanup,
 	Show,
 } from "solid-js";
 import { Kbd } from "@/components/Kbd";
@@ -14,8 +15,12 @@ import { formatChaseDate, isChaseOverdue } from "@/lib/chase";
 import { CV_STAGE_LABEL, cvStage } from "@/lib/cvStage";
 import { assignStatusKeys, BOARD_NAV_KEYS } from "@/lib/statusKeys";
 import { cn } from "@/lib/utils";
-import type { ApplicationWithDetails } from "../../../types/application";
+import type {
+	ApplicationWithDetails,
+	MoveApplicationPayload,
+} from "../../../types/application";
 import type { ApplicationStatus } from "../../../types/applicationStatus";
+import { UndoToast } from "./UndoToast";
 
 function AppCard(props: {
 	app: ApplicationWithDetails;
@@ -103,10 +108,41 @@ export function ApplicationsBoard(props: {
 	const toggle = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
 	const inStatus = (id: string) => props.apps.filter((a) => a.StatusID === id);
 	const selected = () => props.apps.find((a) => a.ID === selectedID());
+	const [undo, setUndo] = createSignal<{
+		message: string;
+		revert: { id: string; data: MoveApplicationPayload };
+	}>();
+	let dismiss: ReturnType<typeof setTimeout> | undefined;
+	onCleanup(() => clearTimeout(dismiss));
+
 	const moveTo = (app: ApplicationWithDetails, statusID: string) => {
 		if (app.StatusID === statusID) return;
 		setCollapsed((c) => ({ ...c, [statusID]: false }));
-		move.mutate({ id: app.ID, data: { status_id: statusID } });
+		const name = props.statuses.find((s) => s.ID === statusID)?.Name;
+		move.mutateAsync({ id: app.ID, data: { status_id: statusID } }).then(
+			(res) => {
+				clearTimeout(dismiss);
+				dismiss = setTimeout(() => setUndo(undefined), 8000);
+				setUndo({
+					message: `${app.JobTitle} moved to ${name ?? "new status"}`,
+					revert: {
+						id: app.ID,
+						data: {
+							status_id: app.StatusID,
+							clear_applied_at: res.FilledAppliedAt,
+						},
+					},
+				});
+			},
+			() => undefined,
+		);
+	};
+	const undoMove = () => {
+		const u = undo();
+		if (!u) return false;
+		clearTimeout(dismiss);
+		setUndo(undefined);
+		move.mutate(u.revert);
 	};
 	const step = (delta: number) => {
 		const app = selected();
@@ -142,6 +178,7 @@ export function ApplicationsBoard(props: {
 	);
 	useShortcuts({
 		...letters,
+		z: undoMove,
 		j: () => step(1),
 		ArrowDown: () => step(1),
 		k: () => step(-1),
@@ -292,6 +329,9 @@ export function ApplicationsBoard(props: {
 						</Show>
 					)}
 				</For>
+				<Show when={undo()}>
+					{(u) => <UndoToast message={u().message} onUndo={undoMove} />}
+				</Show>
 			</div>
 		</>
 	);
