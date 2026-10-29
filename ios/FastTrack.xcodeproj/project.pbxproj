@@ -84,6 +84,11 @@
 			path = FastTrackWidget;
 			sourceTree = "<group>";
 		};
+		D20000000000000000000001 /* WidgetShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WidgetShared;
+			sourceTree = "<group>";
+		};
 		B20000000000000000000001 /* FastTrackTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = FastTrackTests;
@@ -123,6 +128,7 @@
 				A10000000000000000000003 /* Info.plist */,
 				A20000000000000000000001 /* FastTrack */,
 				C20000000000000000000001 /* FastTrackWidget */,
+				D20000000000000000000001 /* WidgetShared */,
 				B20000000000000000000001 /* FastTrackTests */,
 				A40000000000000000000002 /* Products */,
 			);
@@ -157,6 +163,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				A20000000000000000000001 /* FastTrack */,
+				D20000000000000000000001 /* WidgetShared */,
 			);
 			name = FastTrack;
 			productName = FastTrack;
@@ -198,6 +205,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				C20000000000000000000001 /* FastTrackWidget */,
+				D20000000000000000000001 /* WidgetShared */,
 			);
 			name = FastTrackWidget;
 			productName = FastTrackWidget;

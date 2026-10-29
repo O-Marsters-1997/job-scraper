@@ -20,6 +20,14 @@ enum NextUp: Equatable {
         }
     }
 
+    var focus: DueFocus? {
+        switch self {
+        case .chase(let item, _), .comingUp(let item): .chase(jobID: item.jobID)
+        case .apply(let item): .apply(jobID: item.jobID)
+        case .allClear: nil
+        }
+    }
+
     static func isChaseDue(_ chaseBy: Date, at: Date, calendar: Calendar) -> Bool {
         guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: at)) else { return false }
         return chaseBy < tomorrow
