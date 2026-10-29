@@ -193,6 +193,62 @@ func (q *Queries) ListJobScoresForCollection(ctx context.Context, arg ListJobSco
 	return items, nil
 }
 
+const listPlaygroundCandidates = `-- name: ListPlaygroundCandidates :many
+SELECT js.job_id, js.band::text AS band, j.first_discovered_at,
+       EXISTS (
+           SELECT 1
+           FROM score_feedback sf
+           WHERE sf.user_id = js.user_id AND sf.job_id = js.job_id AND sf.kind = 'job'
+             AND sf.model = $1::text
+             AND sf.picks IS NOT DISTINCT FROM COALESCE(NULLIF((SELECT preferences->'picks' FROM search_config WHERE user_id = sf.user_id), 'null'::jsonb), '[]'::jsonb)
+       ) AS reviewed
+FROM job_scores js
+JOIN jobs j ON j.id = js.job_id
+WHERE js.user_id = $2
+  AND js.suitability_score IS NOT NULL
+  AND js.band IS NOT NULL
+  AND j.first_discovered_at >= $3::timestamptz
+ORDER BY j.first_discovered_at DESC, js.job_id
+`
+
+type ListPlaygroundCandidatesParams struct {
+	Model  string
+	UserID pgtype.UUID
+	Since  pgtype.Timestamptz
+}
+
+type ListPlaygroundCandidatesRow struct {
+	JobID             pgtype.UUID
+	Band              string
+	FirstDiscoveredAt pgtype.Timestamptz
+	Reviewed          bool
+}
+
+func (q *Queries) ListPlaygroundCandidates(ctx context.Context, arg ListPlaygroundCandidatesParams) ([]ListPlaygroundCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listPlaygroundCandidates, arg.Model, arg.UserID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPlaygroundCandidatesRow
+	for rows.Next() {
+		var i ListPlaygroundCandidatesRow
+		if err := rows.Scan(
+			&i.JobID,
+			&i.Band,
+			&i.FirstDiscoveredAt,
+			&i.Reviewed,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScoreFeedback = `-- name: ListScoreFeedback :many
 SELECT sf.id, sf.user_id, sf.job_id, sf.kind, sf.direction, sf.reason, sf.picks, sf.model, sf.snapshot, sf.created_at, d.picks_changed, d.model_changed
 FROM score_feedback sf

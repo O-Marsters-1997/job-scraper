@@ -84,6 +84,7 @@ type Store interface {
 	ClearScoreFeedback(ctx context.Context, userID string) (int64, error)
 	GetJobScoreForFeedback(ctx context.Context, userID, jobID string) (dto.JobScoreEvidence, error)
 	ListJobScoresForCollection(ctx context.Context, userID string, jobIDs []string) ([]dto.CollectionJobScore, error)
+	ListPlaygroundCandidates(ctx context.Context, userID, model string, since time.Time) ([]dto.PlaygroundCandidate, error)
 	UpsertGrade(ctx context.Context, userID string, grade dto.Grade) (dto.Grade, error)
 	GetGrade(ctx context.Context, userID, jobID string) (dto.Grade, error)
 	DeleteGrade(ctx context.Context, userID, jobID string) error

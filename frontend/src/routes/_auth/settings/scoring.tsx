@@ -175,21 +175,31 @@ function ScoringForm(props: {
 	const [previewOpen, setPreviewOpen] = createSignal(false);
 	const preview = useScoringPreview(preferences, previewOpen);
 
+	const formValues = () => ({
+		notifyThreshold: filters.threshold(),
+		maxJobAgeDays: filters.maxJobAgeDays(),
+		excludedTitleKeywords: filters.titleKeywords(),
+		excludedCompanies: uniqueCapitalised(filters.companies()),
+		excludedLocations: uniqueCapitalised(filters.locations()),
+		requiredLocations: uniqueCapitalised(filters.requiredLocations()),
+		requiredTitleKeywords: filters.requiredTitleKeywords(),
+		preferences: preferences(),
+	});
+	const [savedSnapshot, setSavedSnapshot] = createSignal(
+		untrack(() => JSON.stringify(formValues())),
+	);
+	const dirty = () => JSON.stringify(formValues()) !== savedSnapshot();
+
 	const handleSave = async () => {
 		setNotice(null);
 		setError(null);
 		try {
+			const values = formValues();
 			const result = await mutation.mutateAsync({
-				notifyThreshold: filters.threshold(),
-				maxJobAgeDays: filters.maxJobAgeDays(),
-				excludedTitleKeywords: filters.titleKeywords(),
-				excludedCompanies: uniqueCapitalised(filters.companies()),
-				excludedLocations: uniqueCapitalised(filters.locations()),
-				requiredLocations: uniqueCapitalised(filters.requiredLocations()),
-				requiredTitleKeywords: filters.requiredTitleKeywords(),
-				preferences: preferences(),
+				...values,
 				updatedAt: props.config().updatedAt,
 			});
+			setSavedSnapshot(JSON.stringify(values));
 			flash(
 				result.backfillQueued > 0
 					? `Saved – answering new picks for ${result.backfillQueued} jobs.`
@@ -232,7 +242,7 @@ function ScoringForm(props: {
 			>
 				<Show when={previewOpen()}>
 					<div class="xl:sticky xl:top-20 xl:col-start-2 xl:row-start-1 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto">
-						<ScorePreview query={preview} />
+						<ScorePreview query={preview} dirty={dirty()} />
 					</div>
 				</Show>
 				<div class="flex min-w-0 flex-col gap-6 xl:col-start-1 xl:row-start-1">
