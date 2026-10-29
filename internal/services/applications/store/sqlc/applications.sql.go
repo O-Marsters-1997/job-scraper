@@ -137,6 +137,34 @@ func (q *Queries) DeleteApplications(ctx context.Context, arg DeleteApplications
 	return items, nil
 }
 
+const getApplication = `-- name: GetApplication :one
+SELECT id, user_id, job_id, status_id, applied_at, salary_info, created_at, updated_at, chase_by
+FROM applications
+WHERE id = $1 AND user_id = $2
+`
+
+type GetApplicationParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) GetApplication(ctx context.Context, arg GetApplicationParams) (Application, error) {
+	row := q.db.QueryRow(ctx, getApplication, arg.ID, arg.UserID)
+	var i Application
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.JobID,
+		&i.StatusID,
+		&i.AppliedAt,
+		&i.SalaryInfo,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ChaseBy,
+	)
+	return i, err
+}
+
 const getApplicationState = `-- name: GetApplicationState :one
 SELECT job_id, status_id FROM applications
 WHERE id = $1 AND user_id = $2
@@ -362,6 +390,50 @@ func (q *Queries) MarkApplicationApplied(ctx context.Context, arg MarkApplicatio
 	row := q.db.QueryRow(ctx, markApplicationApplied, arg.Now, arg.UserID, arg.JobID)
 	var i MarkApplicationAppliedRow
 	err := row.Scan(&i.ID, &i.FromStatusID, &i.ToStatusID)
+	return i, err
+}
+
+const moveApplication = `-- name: MoveApplication :one
+UPDATE applications a
+SET status_id = t.id,
+    applied_at = CASE
+        WHEN $1::boolean THEN NULL
+        WHEN a.applied_at IS NULL AND t.system_key = 'applied' THEN CURRENT_DATE
+        ELSE a.applied_at END,
+    chase_by = CURRENT_DATE + t.reply_window_days,
+    updated_at = NOW()
+FROM application_statuses t
+WHERE a.id = $2 AND a.user_id = $3
+  AND t.id = $4 AND t.user_id = $3
+RETURNING a.id, a.user_id, a.job_id, a.status_id, a.applied_at, a.salary_info, a.created_at, a.updated_at, a.chase_by
+`
+
+type MoveApplicationParams struct {
+	ClearAppliedAt bool
+	ID             pgtype.UUID
+	UserID         pgtype.UUID
+	StatusID       pgtype.UUID
+}
+
+func (q *Queries) MoveApplication(ctx context.Context, arg MoveApplicationParams) (Application, error) {
+	row := q.db.QueryRow(ctx, moveApplication,
+		arg.ClearAppliedAt,
+		arg.ID,
+		arg.UserID,
+		arg.StatusID,
+	)
+	var i Application
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.JobID,
+		&i.StatusID,
+		&i.AppliedAt,
+		&i.SalaryInfo,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ChaseBy,
+	)
 	return i, err
 }
 
