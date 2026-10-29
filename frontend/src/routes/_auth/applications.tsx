@@ -7,9 +7,11 @@ import {
 } from "@/components/jobs/TrackApplicationDialog";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { SearchField } from "@/components/SearchField";
 import { ToggleChip } from "@/components/ToggleChip";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { matchesApplication } from "@/lib/applicationSearch";
 import {
 	completeApps,
 	needsCv,
@@ -86,12 +88,15 @@ function ApplicationsPage() {
 		Pick<Job, "ID" | "Title"> | undefined
 	>();
 
+	const [q, setQ] = createSignal("");
+	const visible = (apps: ApplicationWithDetails[]) =>
+		apps.filter((a) => matchesApplication(a, q()));
 	const [selection, setSelection] = createSignal<Selection>({});
 	const [createOpen, setCreateOpen] = createSignal(false);
 	let anchor: string | undefined;
 	createEffect(
 		on(
-			() => search().status,
+			[() => search().status, q],
 			() => {
 				setSelection({});
 				anchor = undefined;
@@ -175,6 +180,15 @@ function ApplicationsPage() {
 				</Button>
 			</div>
 
+			<SearchField
+				id="applications-search"
+				label="Search applications"
+				placeholder="Search title, company, location"
+				value={q()}
+				onInput={setQ}
+				class="mb-3"
+			/>
+
 			<div class="mb-4 flex flex-wrap items-center gap-1.5">
 				<ToggleChip
 					active={!search().status}
@@ -249,112 +263,123 @@ function ApplicationsPage() {
 									</Card>
 								}
 							>
-								<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-									<For each={data()}>
-										{(app) => (
-											<div
-												class={cn(
-													"flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted",
-													search().chase &&
-														isOverdue(app) &&
-														"bg-destructive-subtle",
-												)}
-											>
-												<input
-													type="checkbox"
-													aria-label={`Select ${app.JobTitle}`}
-													class="size-4 shrink-0 cursor-pointer accent-primary"
-													checked={!!selection()[app.ID]}
-													onMouseDown={(e) => {
-														if (e.shiftKey) e.preventDefault();
-													}}
-													onClick={(e) => {
-														toggleRow(data(), app.ID, e.shiftKey);
-														e.currentTarget.checked = !!selection()[app.ID];
-													}}
-												/>
-												<div class="min-w-0 flex-1">
-													<Link
-														to="/applications/$id"
-														params={{ id: app.ID }}
-														class="block truncate text-sm font-medium text-foreground hover:underline"
-													>
-														{app.JobTitle}
-													</Link>
-													<p class="text-xs text-faint">
-														{app.JobCompanySlug}
-														{app.JobLocation ? ` · ${app.JobLocation}` : ""}
-													</p>
-												</div>
-												<Show when={app.JobClosedAt}>
-													<span class="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted">
-														Listing closed
-													</span>
-												</Show>
-												<Show when={app.StatusName}>
-													<StatusBadge
-														name={app.StatusName}
-														colour={statusColour(app)}
-													/>
-												</Show>
-												<span
+								<Show
+									when={visible(data()).length > 0}
+									fallback={
+										<Card class="p-10 text-center">
+											<p class="text-sm text-muted">
+												No applications match "{q().trim()}"
+											</p>
+										</Card>
+									}
+								>
+									<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+										<For each={visible(data())}>
+											{(app) => (
+												<div
 													class={cn(
-														"shrink-0 text-xs",
-														cvStage(app.Draft) === "failed"
-															? "text-destructive-strong"
-															: "text-muted",
+														"flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted",
+														search().chase &&
+															isOverdue(app) &&
+															"bg-destructive-subtle",
 													)}
-													title={app.Draft?.LastError || undefined}
 												>
-													{CV_STAGE_LABEL[cvStage(app.Draft)]}
-												</span>
-												<Show when={app.AppliedAt}>
-													<span class="shrink-0 font-mono text-xs tabular-nums text-faint">
-														{app.AppliedAt}
-													</span>
-												</Show>
-												<Show when={app.ChaseBy}>
-													{(chaseBy) => (
-														<span
-															class={cn(
-																"shrink-0 font-mono text-xs tabular-nums",
-																isChaseOverdue(chaseBy(), new Date())
-																	? "text-destructive-strong"
-																	: "text-faint",
-															)}
+													<input
+														type="checkbox"
+														aria-label={`Select ${app.JobTitle}`}
+														class="size-4 shrink-0 cursor-pointer accent-primary"
+														checked={!!selection()[app.ID]}
+														onMouseDown={(e) => {
+															if (e.shiftKey) e.preventDefault();
+														}}
+														onClick={(e) => {
+															toggleRow(visible(data()), app.ID, e.shiftKey);
+															e.currentTarget.checked = !!selection()[app.ID];
+														}}
+													/>
+													<div class="min-w-0 flex-1">
+														<Link
+															to="/applications/$id"
+															params={{ id: app.ID }}
+															class="block truncate text-sm font-medium text-foreground hover:underline"
 														>
-															Chase {formatChaseDate(chaseBy())}
+															{app.JobTitle}
+														</Link>
+														<p class="text-xs text-faint">
+															{app.JobCompanySlug}
+															{app.JobLocation ? ` · ${app.JobLocation}` : ""}
+														</p>
+													</div>
+													<Show when={app.JobClosedAt}>
+														<span class="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted">
+															Listing closed
 														</span>
-													)}
-												</Show>
-												<Show when={app.ChaseBy}>
+													</Show>
+													<Show when={app.StatusName}>
+														<StatusBadge
+															name={app.StatusName}
+															colour={statusColour(app)}
+														/>
+													</Show>
+													<span
+														class={cn(
+															"shrink-0 text-xs",
+															cvStage(app.Draft) === "failed"
+																? "text-destructive-strong"
+																: "text-muted",
+														)}
+														title={app.Draft?.LastError || undefined}
+													>
+														{CV_STAGE_LABEL[cvStage(app.Draft)]}
+													</span>
+													<Show when={app.AppliedAt}>
+														<span class="shrink-0 font-mono text-xs tabular-nums text-faint">
+															{app.AppliedAt}
+														</span>
+													</Show>
+													<Show when={app.ChaseBy}>
+														{(chaseBy) => (
+															<span
+																class={cn(
+																	"shrink-0 font-mono text-xs tabular-nums",
+																	isChaseOverdue(chaseBy(), new Date())
+																		? "text-destructive-strong"
+																		: "text-faint",
+																)}
+															>
+																Chase {formatChaseDate(chaseBy())}
+															</span>
+														)}
+													</Show>
+													<Show when={app.ChaseBy}>
+														<button
+															type="button"
+															disabled={clearChase.isPending}
+															onClick={() => markChased(app)}
+															class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
+														>
+															Chased
+														</button>
+													</Show>
 													<button
 														type="button"
-														disabled={clearChase.isPending}
-														onClick={() => markChased(app)}
-														class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
+														onClick={() => openEdit(app)}
+														class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle"
 													>
-														Chased
+														Edit
 													</button>
-												</Show>
-												<button
-													type="button"
-													onClick={() => openEdit(app)}
-													class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle"
-												>
-													Edit
-												</button>
-												<button
-													type="button"
-													onClick={() => setDeletingApps([app])}
-													class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle"
-												>
-													Delete
-												</button>
-											</div>
-										)}
-									</For>
-								</div>
+													<button
+														type="button"
+														onClick={() => setDeletingApps([app])}
+														class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle"
+													>
+														Delete
+													</button>
+												</div>
+											)}
+										</For>
+									</div>
+								</Show>
 							</Show>
 						)}
 					</QueryBoundary>
