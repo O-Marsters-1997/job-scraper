@@ -26,6 +26,9 @@ func TestExportFeedback(t *testing.T) {
 	if _, err := scoring.NewService(newDeps(t, st)).AppendJobFeedback(t.Context(), userID, dto.JobFeedbackInput{JobID: testJob.ID, Direction: "lower", Reason: "Go is a given here."}); err != nil {
 		t.Fatalf("AppendJobFeedback() err = %v", err)
 	}
+	if _, err := scoring.NewService(newDeps(t, st)).AppendJobFeedback(t.Context(), userID, dto.JobFeedbackInput{JobID: testJob.ID, Direction: "accurate"}); err != nil {
+		t.Fatalf("AppendJobFeedback(accurate) err = %v", err)
+	}
 
 	if _, err := scoring.NewService(newDeps(t, st)).AppendCollectionFeedback(t.Context(), userID, dto.CollectionFeedbackInput{
 		JobIDs: []string{"missing", testJob.ID}, Filters: map[string]string{"q": "go", "scored": "true"}, Reason: "The ranking is off.",

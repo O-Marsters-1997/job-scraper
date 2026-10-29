@@ -20,6 +20,7 @@ const (
 	feedbackKindOverall    = "overall"
 	feedbackHigher         = "higher"
 	feedbackLower          = "lower"
+	feedbackAccurate       = "accurate"
 	maxFeedbackPage        = 100000
 	maxCollectionJobs      = 500
 	feedbackPageSize       = 20
@@ -51,11 +52,10 @@ func (s *Service) AppendOverallFeedback(ctx context.Context, userID string, in d
 // as Jev saw it. The browser sends none of that evidence.
 func (s *Service) AppendJobFeedback(ctx context.Context, userID string, in dto.JobFeedbackInput) (dto.ScoreFeedback, error) {
 	reason := strings.TrimSpace(in.Reason)
-	if reason == "" {
-		return dto.ScoreFeedback{}, apperr.Invalid("reason must not be blank")
-	}
-	if in.Direction != feedbackHigher && in.Direction != feedbackLower {
-		return dto.ScoreFeedback{}, apperr.Invalid("direction must be higher or lower")
+	switch in.Direction {
+	case feedbackHigher, feedbackLower, feedbackAccurate:
+	default:
+		return dto.ScoreFeedback{}, apperr.Invalid("direction must be higher, lower or accurate")
 	}
 	job, err := s.store.GetJobForScoring(ctx, in.JobID)
 	if notFound(err) {

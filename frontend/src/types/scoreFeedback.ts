@@ -32,7 +32,7 @@ const snapshotSchema = z.object({
 export const scoreFeedbackSchema = z.object({
 	id: z.string(),
 	kind: z.enum(["job", "collection", "overall"]),
-	direction: z.enum(["higher", "lower"]).optional(),
+	direction: z.enum(["higher", "lower", "accurate"]).optional(),
 	jobId: z.string().optional(),
 	reason: z.string(),
 	model: z.string(),
