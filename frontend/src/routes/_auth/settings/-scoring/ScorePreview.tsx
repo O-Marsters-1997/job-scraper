@@ -1,4 +1,3 @@
-import type { Accessor } from "solid-js";
 import { For, Match, Show, Switch } from "solid-js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,7 @@ import { rowLabel } from "@/lib/scoreRows";
 import { cn } from "@/lib/utils";
 import { GRADE_LABEL } from "@/types/grade";
 import type { ScoreRow } from "@/types/job";
-import type { ScoringPreview } from "../../../../types/scoringPreview";
+import type { ScoringPreview } from "@/types/scoringPreview";
 
 type PreviewQuery = {
 	isPending: boolean;
@@ -23,12 +22,16 @@ const REASON_EFFECTS: ScoreRow["effect"][] = [
 	"misses",
 ];
 
-const reasonTone = (effect: ScoreRow["effect"]) =>
-	effect === "gated"
-		? "font-medium text-destructive-strong"
-		: effect === "misses"
-			? "text-muted"
-			: "text-accent-text";
+function reasonTone(effect: ScoreRow["effect"]) {
+	switch (effect) {
+		case "gated":
+			return "font-medium text-destructive-strong";
+		case "misses":
+			return "text-muted";
+		default:
+			return "text-accent-text";
+	}
+}
 
 export function ScorePreview(props: { query: PreviewQuery }) {
 	return (
@@ -62,7 +65,7 @@ export function ScorePreview(props: { query: PreviewQuery }) {
 					</div>
 				</Match>
 				<Match when={props.query.data}>
-					{(data: Accessor<ScoringPreview>) => <PreviewList data={data()} />}
+					{(data) => <PreviewList data={data()} />}
 				</Match>
 			</Switch>
 		</section>
