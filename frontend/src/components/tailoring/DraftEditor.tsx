@@ -260,9 +260,12 @@ export function DraftEditor(props: {
 	const profileWand = () =>
 		activeSlot() === PROFILE_SLOT && editable() && !!baseProfile();
 	const [steerOpen, setSteerOpen] = createSignal(false);
+	createEffect(() => {
+		if (!profileWand()) setSteerOpen(false);
+	});
 	const openSteer = () => {
 		setSteerOpen(true);
-		focusSteer();
+		queueMicrotask(focusSteer);
 	};
 	const focusSteer = () =>
 		document
