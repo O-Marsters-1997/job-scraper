@@ -118,11 +118,11 @@ export function ApplicationsBoard(props: {
 	const moveTo = (app: ApplicationWithDetails, statusID: string) => {
 		if (app.StatusID === statusID) return;
 		setCollapsed((c) => ({ ...c, [statusID]: false }));
+		const name = props.statuses.find((s) => s.ID === statusID)?.Name;
 		move.mutateAsync({ id: app.ID, data: { status_id: statusID } }).then(
 			(res) => {
 				clearTimeout(dismiss);
 				dismiss = setTimeout(() => setUndo(undefined), 8000);
-				const name = props.statuses.find((s) => s.ID === statusID)?.Name;
 				setUndo({
 					message: `${app.JobTitle} moved to ${name ?? "new status"}`,
 					revert: {
