@@ -33,7 +33,7 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 	if outcome(draft) == dto.OutcomeDiscarded {
 		return dto.Draft{}, apperr.Conflict("this draft was discarded")
 	}
-	var base dto.DraftContent
+	var base baseContent
 	if len(draft.BaseContent) == 0 || json.Unmarshal(draft.BaseContent, &base) != nil || base.Profile == nil {
 		return dto.Draft{}, apperr.Unprocessable("this CV has no profile to redraft")
 	}
