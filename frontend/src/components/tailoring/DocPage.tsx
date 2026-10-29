@@ -29,7 +29,7 @@ import type {
 	LayoutBorder,
 	LayoutRun,
 } from "@/types/tailoring";
-import { Lean } from "./Lean";
+import { type InsightLine, Lean } from "./Lean";
 
 const INK = "#000000";
 const LINK_INK = "#1155cc";
@@ -63,12 +63,16 @@ export type PageEditor = {
 	text: (slotId: string) => string;
 	label: (slotId: string) => string;
 	lean?: ((slotId: string) => BulletLean | undefined) | undefined;
+	insightFor?: ((slotId: string) => InsightLine | undefined) | undefined;
+	explaining?: boolean | undefined;
+	onExplain?: (() => void) | undefined;
 	diffFor: (slotId: string) => WordOp[] | null;
 	onInput: (slotId: string, text: string) => void;
 	onFocus: (slotId: string) => void;
 	onDismissSuggestion: (slotId: string) => void;
 	onBlur: (slotId: string) => void;
 	onEnter?: ((slotId: string) => void) | undefined;
+	onMove?: ((slotId: string, delta: -1 | 1, caret: number) => void) | undefined;
 	onBackspaceEmpty?: ((slotId: string) => boolean) | undefined;
 	onEditSkills?: (() => void) | undefined;
 	roleFor?: ((block: LayoutBlock) => string | undefined) | undefined;
@@ -324,6 +328,7 @@ function EditableLine(props: {
 						props.editor.onBackspaceEmpty?.(props.slotId)
 					)
 						e.preventDefault();
+					moveOnAltArrow(e, props.editor, props.slotId);
 					if (e.key === "Escape") e.currentTarget.blur();
 				}}
 				onFocus={() => {
@@ -350,6 +355,20 @@ function EditableLine(props: {
 			</Show>
 		</span>
 	);
+}
+
+function moveOnAltArrow(
+	e: KeyboardEvent & { currentTarget: HTMLElement },
+	ed: PageEditor,
+	slotId: string,
+) {
+	if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+	e.preventDefault();
+	const sel = getSelection();
+	const caret = sel?.anchorNode
+		? sel.anchorOffset
+		: (e.currentTarget.textContent?.length ?? 0);
+	ed.onMove?.(slotId, e.key === "ArrowUp" ? -1 : 1, caret);
 }
 
 type CaretBox = { x: number; y: number; h: number };
@@ -521,7 +540,14 @@ function Block(props: {
 							/>
 						</Show>
 						<Show when={ed().lean?.(props.block.slotId)}>
-							{(lean) => <Lean lean={lean()} />}
+							{(lean) => (
+								<Lean
+									lean={lean()}
+									line={ed().insightFor?.(props.block.slotId)}
+									explaining={ed().explaining ?? false}
+									onExplain={() => ed().onExplain?.()}
+								/>
+							)}
 						</Show>
 						<Show when={ed().showCounts && props.fit}>
 							{(fit) => (

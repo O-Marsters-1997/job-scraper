@@ -172,6 +172,6 @@ func hasProfile(draft dto.Draft, edits cvedit.EditSet) bool {
 	if edits.Profile != nil {
 		return true
 	}
-	var base dto.DraftContent
+	var base baseContent
 	return len(draft.BaseContent) > 0 && json.Unmarshal(draft.BaseContent, &base) == nil && base.Profile != nil
 }

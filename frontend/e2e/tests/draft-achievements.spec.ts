@@ -133,3 +133,29 @@ test.describe("Achievements drawer", () => {
 		await expect(draftPage.drawer).toBeHidden();
 	});
 });
+
+test("the editor stays on screen while the bank loads", async ({
+	page,
+	draftPage,
+}) => {
+	await draftPage.goto();
+	await page.evaluate(() => {
+		const w = window as unknown as { editorGone: boolean };
+		w.editorGone = false;
+		const watch = () => {
+			if (!document.querySelector('[role="textbox"]')) w.editorGone = true;
+			requestAnimationFrame(watch);
+		};
+		watch();
+	});
+	await page
+		.getByRole("button", { name: "Choose Achievements for this role" })
+		.first()
+		.click();
+	await expect(draftPage.drawer.getByRole("option")).toHaveCount(3);
+	expect(
+		await page.evaluate(
+			() => (window as unknown as { editorGone: boolean }).editorGone,
+		),
+	).toBe(false);
+});

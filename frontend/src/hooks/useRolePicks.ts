@@ -1,4 +1,5 @@
 import { type Accessor, createMemo, createSignal, untrack } from "solid-js";
+import { matchCarried } from "@/lib/carriedMatch";
 import { ADDED_PREFIX } from "@/lib/draftSlots";
 import { cloneRoleHeading } from "@/lib/roleHeading";
 import type { Position } from "@/types/experience";
@@ -123,6 +124,14 @@ export function createRolePicks(opts: {
 			.filter((s) => s.positionId === positionId)
 			.sort((a, b) => b.score - a.score);
 
+	const resolve = (positionId: string, ids: string[]) =>
+		matchCarried(
+			ids,
+			(id) => id.startsWith(CARRIED),
+			(id) => generated.get(id) ?? "",
+			bankFor(positionId),
+		);
+
 	const textOf = (id: string) =>
 		generated.get(id) ??
 		opts.bank().find((s) => s.achievementId === id)?.text ??
@@ -148,7 +157,8 @@ export function createRolePicks(opts: {
 		);
 	};
 
-	const picksFor = (positionId: string) => picks()[positionId] ?? [];
+	const picksFor = (positionId: string) =>
+		resolve(positionId, picks()[positionId] ?? []);
 	const order = () => onPage().map((r) => r.id);
 
 	const addRole = (position: Position) => {
@@ -227,6 +237,23 @@ export function createRolePicks(opts: {
 			rest.splice(Math.min(place - 1, rest.length), 0, id);
 			setPicksFor(positionId, rest);
 		},
+		shift(slotId: string, delta: -1 | 1) {
+			const positionId = [...headings().values()].find((id) =>
+				roleSlots(id).includes(slotId),
+			);
+			if (!positionId) return undefined;
+			const ids = picksFor(positionId);
+			const slots = roleSlots(positionId);
+			const from = slots.indexOf(slotId);
+			const to = from + delta;
+			const id = ids[from];
+			if (slots.length !== ids.length || id === undefined) return undefined;
+			if (to < 0 || to >= ids.length) return undefined;
+			const next = ids.filter((x) => x !== id);
+			next.splice(to, 0, id);
+			setPicksFor(positionId, next);
+			return slots[to];
+		},
 		order,
 		toggleRole(positionId: string) {
 			const ids = order();
@@ -244,7 +271,7 @@ export function createRolePicks(opts: {
 			arrange(rest);
 		},
 		carriedFor: (positionId: string) =>
-			(initial[positionId] ?? [])
+			resolve(positionId, initial[positionId] ?? [])
 				.filter((id) => id.startsWith(CARRIED))
 				.map((id) => ({ id, text: generated.get(id) ?? "" })),
 		isPlaceholder: (slotId: string) =>
@@ -253,6 +280,10 @@ export function createRolePicks(opts: {
 			),
 		empty: (positionId: string) => setPicksFor(positionId, []),
 		reset: (positionId: string) =>
-			setPicksFor(positionId, initial[positionId] ?? [], true),
+			setPicksFor(
+				positionId,
+				resolve(positionId, initial[positionId] ?? []),
+				true,
+			),
 	};
 }

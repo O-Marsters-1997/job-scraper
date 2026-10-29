@@ -85,7 +85,7 @@ function LetterRow(props: { letter: CoverLetter }) {
 					{errorMessage(check.isError ? check.error : done.error)}
 				</p>
 			</Show>
-			<Show when={check.data}>
+			<Show when={loadedData(check)}>
 				{(result) => (
 					<div class="grid gap-1">
 						<p class="text-muted">{result().words} words</p>
