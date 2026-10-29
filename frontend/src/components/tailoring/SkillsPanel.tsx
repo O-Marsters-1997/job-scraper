@@ -1,5 +1,4 @@
 import { createMemo, createSignal, For, Index, Show } from "solid-js";
-import { Icon } from "@/components/Icon";
 import { MultiCombobox } from "@/components/MultiCombobox";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +10,15 @@ import {
 import { lineWithIds, moveItem } from "@/lib/tailoring";
 import type { Draft, SkillGroup } from "@/types/tailoring";
 import { useBankSkills } from "../../hooks/useBankSkills";
-import { useSaveDraftSkills } from "../../hooks/useTailoring";
+import {
+	useSaveDraftSkills,
+	useSkillSuggestions,
+} from "../../hooks/useTailoring";
+
+const fitPct = (score: number) =>
+	Math.round(Math.min(Math.max(score, 0), 1) * 100);
+
+const normalise = (s: string) => s.toLowerCase();
 
 const lineName = (g: SkillGroup) => g.label || "Skills";
 
@@ -23,6 +30,10 @@ function SkillsForm(props: {
 }) {
 	const bank = useBankSkills();
 	const save = useSaveDraftSkills(() => props.draft.id);
+	const suggestions = useSkillSuggestions(
+		() => props.draft.jobId,
+		() => ({ docId: props.draft.baseDocId, tabId: props.draft.baseTabId }),
+	);
 	// eslint-disable-next-line solid/reactivity -- pedantic: the panel is seeded once on open
 	const [groups, setGroups] = createSignal(props.groups);
 	const sourced = createMemo(() => {
@@ -42,6 +53,14 @@ function SkillsForm(props: {
 			.filter((name) => !elsewhere.has(name))
 			.map((name) => ({ id: name, label: name }));
 	};
+	const candidatesFor = (line: number) => {
+		const onCv = new Set(groups().flatMap((g) => g.items.map(normalise)));
+		return (
+			suggestions.data?.lines[line]?.candidates.filter(
+				(c) => !onCv.has(normalise(c.name)),
+			) ?? []
+		);
+	};
 	const valid = () => groups().every((g) => g.items.length > 0);
 	const submit = async () => {
 		if (!(await props.flush())) return;
@@ -58,40 +77,36 @@ function SkillsForm(props: {
 							options={optionsFor(i)}
 							value={group().items}
 							onChange={(ids) => setItems(i, lineWithIds(group().items, ids))}
+							onReorder={(from, to) =>
+								setItems(i, moveItem(group().items, from, to))
+							}
 							placeholder="Add a skill…"
 							chipClass="border-border bg-surface-muted text-foreground"
 						/>
-						<ol class="flex flex-col gap-1">
-							<For each={group().items}>
-								{(item, j) => (
-									<li class="flex items-center gap-1 text-sm text-foreground">
-										<span class="flex-1">{item}</span>
-										<Button
-											variant="ghost"
-											size="sm"
-											aria-label={`Move ${item} up`}
-											disabled={j() === 0}
-											onClick={() =>
-												setItems(i, moveItem(group().items, j(), j() - 1))
-											}
-										>
-											<Icon name="chevronUp" size={14} />
-										</Button>
-										<Button
-											variant="ghost"
-											size="sm"
-											aria-label={`Move ${item} down`}
-											disabled={j() === group().items.length - 1}
-											onClick={() =>
-												setItems(i, moveItem(group().items, j(), j() + 1))
-											}
-										>
-											<Icon name="chevronDown" size={14} />
-										</Button>
-									</li>
-								)}
-							</For>
-						</ol>
+						<Show when={candidatesFor(i).length > 0}>
+							<div class="space-y-1">
+								<p class="text-xs font-medium text-faint">From your bank</p>
+								<ul class="flex flex-wrap gap-1.5">
+									<For each={candidatesFor(i)}>
+										{(c) => (
+											<li>
+												<button
+													type="button"
+													aria-label={`Add ${c.name}, ${fitPct(c.score)}% fit`}
+													onClick={() =>
+														setItems(i, [...group().items, c.name])
+													}
+													class="inline-flex h-6 items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 text-xs text-foreground hover:bg-accent-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+												>
+													{c.name}
+													<span class="text-faint">{fitPct(c.score)}%</span>
+												</button>
+											</li>
+										)}
+									</For>
+								</ul>
+							</div>
+						</Show>
 					</section>
 				)}
 			</Index>

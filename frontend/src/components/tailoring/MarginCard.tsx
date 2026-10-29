@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { For, onCleanup, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { charsToSave, isSparse, type LineFit } from "@/lib/docLayout";
@@ -82,8 +82,11 @@ export function MarginCard(props: {
 	editor: DraftEditorState;
 	fit: LineFit | undefined;
 	active: boolean;
+	hovered: boolean;
+	onHover: (key: string, over: boolean) => void;
 	editable: boolean;
 	onOpen: () => void;
+	onCollapse?: (() => void) | undefined;
 	onResolve: () => void;
 	onFit?: ((slotId: string) => void) | undefined;
 }) {
@@ -92,15 +95,22 @@ export function MarginCard(props: {
 	const edited = () => props.editor.edited(key());
 	const header = () => cardHeader(props.editor, key());
 	const sparseFit = () => (isSparse(props.fit) ? props.fit : undefined);
+	onCleanup(() => props.onHover(key(), false));
 	return (
 		<div
 			data-testid="margin-card"
 			data-card-key={key()}
+			onPointerEnter={(e) => {
+				if (e.pointerType === "mouse") props.onHover(key(), true);
+			}}
+			onPointerLeave={() => props.onHover(key(), false)}
 			class={cn(
 				"rounded-xl bg-surface text-sm transition-shadow duration-300",
 				props.active
 					? "shadow-xl ring-1 ring-accent-border"
-					: "ring-1 ring-border",
+					: props.hovered
+						? "shadow-md ring-1 ring-accent-border"
+						: "ring-1 ring-border",
 				resolved() && !props.active && "opacity-60",
 			)}
 		>
@@ -108,7 +118,11 @@ export function MarginCard(props: {
 				type="button"
 				aria-expanded={props.active}
 				class="flex w-full items-center gap-2 px-3.5 py-2.5 text-left"
-				onClick={() => props.onOpen()}
+				onClick={() =>
+					resolved() && props.active && props.onCollapse
+						? props.onCollapse()
+						: props.onOpen()
+				}
 			>
 				<Show
 					when={!resolved()}
@@ -132,6 +146,9 @@ export function MarginCard(props: {
 							{fit().lines} {fit().lines === 1 ? "line" : "lines"}
 						</span>
 					)}
+				</Show>
+				<Show when={resolved() && props.active && props.onCollapse}>
+					<Icon name="chevronUp" size={14} class="shrink-0 text-muted" />
 				</Show>
 			</button>
 

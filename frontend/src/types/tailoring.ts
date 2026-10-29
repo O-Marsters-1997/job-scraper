@@ -15,6 +15,7 @@ export const suggestionSchema = z.object({
 	state: z.enum(["fit", "low", "unclear"]),
 	preselected: z.boolean(),
 	lines: z.number(),
+	quote: z.string().optional(),
 });
 
 const roleBulletSchema = z.object({
@@ -44,6 +45,34 @@ export const draftRolesSchema = z.object({
 	),
 });
 export type DraftRoles = z.infer<typeof draftRolesSchema>;
+
+const suggestionStateSchema = z.enum(["fit", "low", "unclear"]);
+
+const skillCandidateSchema = z.object({
+	bankSkillId: z.string(),
+	name: z.string(),
+	score: z.number(),
+	state: suggestionStateSchema,
+	preselected: z.boolean(),
+	replaces: z.string(),
+});
+
+export const skillSuggestionsSchema = z.object({
+	lines: z.array(
+		z.object({
+			label: z.string(),
+			base: z.array(
+				z.object({
+					text: z.string(),
+					score: z.number(),
+					state: suggestionStateSchema,
+				}),
+			),
+			candidates: z.array(skillCandidateSchema),
+		}),
+	),
+	unplaced: z.array(skillCandidateSchema),
+});
 
 export const experienceMatchSchema = z.object({
 	score: z.number().nullable(),
@@ -251,6 +280,7 @@ export const draftInsightsSchema = z.object({
 export type DraftInsights = z.infer<typeof draftInsightsSchema>;
 export type CVHeading = z.infer<typeof cvHeadingSchema>;
 export type Suggestion = z.infer<typeof suggestionSchema>;
+export type SkillSuggestions = z.infer<typeof skillSuggestionsSchema>;
 export type ExperienceMatch = z.infer<typeof experienceMatchSchema>;
 export type HeadingMapping = z.infer<typeof headingMappingSchema>;
 export type LayoutBorder = z.infer<typeof layoutBorderSchema>;

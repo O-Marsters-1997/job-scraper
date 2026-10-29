@@ -82,6 +82,18 @@ test.describe("Roles drawer", () => {
 		await expect(draftPage.drawer).toContainText("Software Engineer, Globex");
 	});
 
+	test("the Roles breadcrumb returns from the picker to the Roles list", async ({
+		draftPage,
+	}) => {
+		await draftPage.rolesDrawer.getByRole("option").nth(1).click();
+		await draftPage.rolesDrawer
+			.getByRole("button", { name: "Choose its Achievements" })
+			.click();
+		await draftPage.drawer.getByRole("button", { name: /^Roles/ }).click();
+		await expect(draftPage.drawer).toBeHidden();
+		await expect(draftPage.rolesDrawer).toBeVisible();
+	});
+
 	test("the circle removes a role, but never the last one", async ({
 		page,
 		draftPage,

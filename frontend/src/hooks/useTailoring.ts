@@ -1,5 +1,5 @@
 import { createQuery, queryOptions } from "@tanstack/solid-query";
-import type { Accessor } from "solid-js";
+import { type Accessor, createMemo } from "solid-js";
 import { keys } from "../api/keys";
 import {
 	createDraft,
@@ -12,6 +12,7 @@ import {
 	fetchDraftRoles,
 	fetchExperienceMatch,
 	fetchJobDrafts,
+	fetchSkillSuggestions,
 	fetchSuggestions,
 	keepDraft,
 	redraftProfile,
@@ -54,6 +55,23 @@ export function useSuggestions(
 	});
 }
 
+export function useSkillSuggestions(
+	jobId: Accessor<string>,
+	cv: Accessor<CVRef | undefined>,
+) {
+	return createQuery(() => {
+		const ref = cv();
+		const { docId = "", tabId = "" } = ref ?? {};
+		return {
+			queryKey: keys.tailoring.skillSuggestions(jobId(), docId, tabId),
+			queryFn: () => fetchSkillSuggestions(jobId(), docId, tabId),
+			enabled: ref !== undefined,
+			retry: false,
+			staleTime: 5 * 60 * 1000,
+		};
+	});
+}
+
 export const experienceMatchQueryOptions = (jobId: string) =>
 	queryOptions({
 		queryKey: keys.tailoring.experienceMatch(jobId),
@@ -86,9 +104,10 @@ export function useDraft(id: Accessor<string | undefined>) {
 }
 
 export function useDraftLayout(id: Accessor<string>) {
+	const stableId = createMemo(id);
 	return createQuery(() => ({
-		queryKey: keys.tailoring.draftLayout(id()),
-		queryFn: () => fetchDraftLayout(id()),
+		queryKey: keys.tailoring.draftLayout(stableId()),
+		queryFn: () => fetchDraftLayout(stableId()),
 		retry: false,
 		refetchOnWindowFocus: false,
 		gcTime: 0,

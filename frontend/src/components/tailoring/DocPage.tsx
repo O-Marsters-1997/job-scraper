@@ -1,5 +1,6 @@
 import {
 	createEffect,
+	createSignal,
 	For,
 	type JSX,
 	onCleanup,
@@ -39,6 +40,7 @@ export const DEFAULT_BODY_LINE_PT = 15;
 const DEFAULT_FONT_PT = 11;
 const LINE_COUNT_GUTTER_PT = 14;
 const SAME_ROW_TOLERANCE_PX = 2;
+const FILL_EPSILON = 0.005;
 
 export type PageMetrics = {
 	contentPt: number;
@@ -47,22 +49,31 @@ export type PageMetrics = {
 	fits: Record<string, LineFit>;
 };
 
+export type PageDiff = {
+	added: ReadonlySet<string>;
+	removedAfter: Readonly<Record<string, string[]>>;
+};
+
 export type PageEditor = {
 	editable: boolean;
 	showCounts: boolean;
 	active: string | undefined;
+	hasCard: (slotId: string) => boolean;
+	onHover: (slotId: string, over: boolean) => void;
 	text: (slotId: string) => string;
 	label: (slotId: string) => string;
 	lean?: ((slotId: string) => BulletLean | undefined) | undefined;
 	diffFor: (slotId: string) => WordOp[] | null;
 	onInput: (slotId: string, text: string) => void;
 	onFocus: (slotId: string) => void;
+	onDismissSuggestion: (slotId: string) => void;
 	onBlur: (slotId: string) => void;
 	onEnter?: ((slotId: string) => void) | undefined;
 	onBackspaceEmpty?: ((slotId: string) => boolean) | undefined;
 	onEditSkills?: (() => void) | undefined;
 	roleFor?: ((block: LayoutBlock) => string | undefined) | undefined;
 	onEditRole?: ((positionId: string) => void) | undefined;
+	isPlaceholder?: ((slotId: string) => boolean) | undefined;
 };
 
 const ALIGN: Record<string, JSX.CSSProperties["text-align"]> = {
@@ -184,6 +195,34 @@ function measureFit(el: HTMLElement): LineFit {
 	};
 }
 
+function heightWithoutGhosts(content: HTMLElement) {
+	const ghosts = content.querySelectorAll<HTMLElement>("[data-diff-removed]");
+	for (const g of ghosts) g.style.display = "none";
+	const px = content.offsetHeight;
+	for (const g of ghosts) g.style.display = "";
+	return px;
+}
+
+function sameMetrics(a: PageMetrics, b: PageMetrics) {
+	const ids = Object.keys(b.fits);
+	return (
+		a.contentPt === b.contentPt &&
+		a.availablePt === b.availablePt &&
+		a.bodyLinePt === b.bodyLinePt &&
+		Object.keys(a.fits).length === ids.length &&
+		ids.every((id) => {
+			const x = a.fits[id];
+			const y = b.fits[id];
+			return (
+				x &&
+				y &&
+				x.lines === y.lines &&
+				Math.abs(x.lastLineFill - y.lastLineFill) < FILL_EPSILON
+			);
+		})
+	);
+}
+
 function caretAtEnd(el: HTMLElement): boolean {
 	const sel = window.getSelection();
 	if (!sel?.isCollapsed || !sel.focusNode || !el.contains(sel.focusNode))
@@ -203,6 +242,19 @@ function EditableLine(props: {
 	let el: HTMLElement | undefined;
 	const text = () => props.editor.text(props.slotId);
 	const diff = () => props.editor.diffFor(props.slotId);
+	const [caret, setCaret] = createSignal<CaretBox>();
+	const placeCaret = () => {
+		if (el) setCaret(caretBox(el));
+	};
+	const trackCaret = () => {
+		document.addEventListener("selectionchange", placeCaret);
+		placeCaret();
+	};
+	const untrackCaret = () => {
+		document.removeEventListener("selectionchange", placeCaret);
+		setCaret(undefined);
+	};
+	onCleanup(untrackCaret);
 	createEffect(() => {
 		const value = text();
 		if (el && el.textContent !== value) el.textContent = value;
@@ -244,8 +296,9 @@ function EditableLine(props: {
 					props.editor.editable && !diff() ? "plaintext-only" : false
 				}
 				spellcheck={false}
+				style={{ "caret-color": "transparent" }}
 				class={cn(
-					"relative block cursor-text caret-primary outline-none selection:bg-accent-border",
+					"relative block cursor-text outline-none selection:bg-primary/30",
 					diff() && "pointer-events-none invisible absolute inset-x-0 top-0",
 				)}
 				onInput={(e) =>
@@ -273,11 +326,88 @@ function EditableLine(props: {
 						e.preventDefault();
 					if (e.key === "Escape") e.currentTarget.blur();
 				}}
-				onFocus={() => props.editor.onFocus(props.slotId)}
-				onBlur={() => props.editor.onBlur(props.slotId)}
+				onFocus={() => {
+					trackCaret();
+					props.editor.onFocus(props.slotId);
+				}}
+				onBlur={() => {
+					untrackCaret();
+					props.editor.onBlur(props.slotId);
+				}}
 			/>
+			<Show when={caret()}>
+				{(box) => (
+					<span
+						aria-hidden="true"
+						class="doc-caret pointer-events-none absolute w-0.5 bg-black"
+						style={{
+							left: `${box().x - 1}px`,
+							top: `${box().y}px`,
+							height: `${box().h}px`,
+						}}
+					/>
+				)}
+			</Show>
 		</span>
 	);
+}
+
+type CaretBox = { x: number; y: number; h: number };
+
+function caretBox(line: HTMLElement): CaretBox | undefined {
+	const sel = document.getSelection();
+	const host = line.parentElement;
+	if (!sel || !host || !sel.isCollapsed || !line.contains(sel.anchorNode))
+		return undefined;
+	const at =
+		sel.getRangeAt(0).getClientRects()[0] ?? line.getBoundingClientRect();
+	const origin = host.getBoundingClientRect();
+	const k = origin.width / host.offsetWidth || 1;
+	return {
+		x: (at.left - origin.left) / k,
+		y: (at.top - origin.top) / k,
+		h: at.height / k,
+	};
+}
+
+function caretAt(line: HTMLElement, x: number, y: number) {
+	const box = line.getBoundingClientRect();
+	const px = Math.min(Math.max(x, box.left + 1), box.right - 1);
+	const py = Math.min(Math.max(y, box.top + 1), box.bottom - 1);
+	const pos = document.caretPositionFromPoint?.(px, py);
+	if (pos && line.contains(pos.offsetNode)) return pos;
+	const range = document.caretRangeFromPoint?.(px, py);
+	if (range && line.contains(range.startContainer))
+		return { offsetNode: range.startContainer, offset: range.startOffset };
+	return undefined;
+}
+
+function claimClick(e: MouseEvent, ed: PageEditor, slotId: string) {
+	const block = e.currentTarget;
+	if (!(block instanceof HTMLElement) || e.button !== 0 || !ed.editable) return;
+	const line = block.querySelector<HTMLElement>('[role="textbox"]');
+	if (!line) return;
+	const suggested = ed.diffFor(slotId) !== null;
+	if (!suggested && e.target instanceof Node && line.contains(e.target)) return;
+	e.preventDefault();
+	if (suggested) ed.onDismissSuggestion(slotId);
+	const { clientX, clientY } = e;
+	queueMicrotask(() => {
+		line.focus({ preventScroll: true });
+		const sel = getSelection();
+		if (!sel) return;
+		const at = caretAt(line, clientX, clientY);
+		const range = document.createRange();
+		if (at) {
+			range.setStart(at.offsetNode, at.offset);
+			range.collapse(true);
+		} else {
+			range.selectNodeContents(line);
+			range.collapse(false);
+		}
+		sel.removeAllRanges();
+		sel.addRange(range);
+	});
 }
 
 function LineCount(props: {
@@ -304,12 +434,20 @@ function LineCount(props: {
 	);
 }
 
+const removedBlock = (anchor: LayoutBlock, text: string): LayoutBlock => ({
+	...anchor,
+	slotId: "",
+	runs: anchor.runs.slice(0, 1).map((r) => ({ ...r, text })),
+});
+
 function Block(props: {
 	block: LayoutBlock;
 	draw: BorderDraw;
 	page: DraftLayout["page"];
 	editor: PageEditor | undefined;
 	fit: LineFit | undefined;
+	added?: boolean | undefined;
+	removed?: boolean;
 	register: (slotId: string, el: HTMLElement) => void;
 }) {
 	const spacer = () => isSpacer(props.block);
@@ -330,9 +468,25 @@ function Block(props: {
 	return (
 		<div
 			data-slot-id={props.block.slotId || undefined}
+			data-diff-removed={props.removed || undefined}
 			data-section={props.block.section || undefined}
 			data-skill-line={props.block.skillLine ?? undefined}
-			class="relative whitespace-pre-wrap [font-kerning:normal] [font-variant-ligatures:none] [tab-size:36pt]"
+			class={cn(
+				"relative whitespace-pre-wrap [font-kerning:normal] [font-variant-ligatures:none] [tab-size:36pt]",
+				editor()?.editable && "cursor-text",
+				props.added && "bg-accent-subtle",
+				props.removed && "text-destructive-strong line-through",
+			)}
+			on:mouseenter={() => {
+				const ed = editor();
+				if (ed?.hasCard(props.block.slotId))
+					ed.onHover(props.block.slotId, true);
+			}}
+			on:mouseleave={() => editor()?.onHover(props.block.slotId, false)}
+			on:mousedown={(e) => {
+				const ed = editor();
+				if (ed) claimClick(e, ed, props.block.slotId);
+			}}
 			style={blockStyle(props.block, lead(), props.draw, spacer())}
 		>
 			<Show when={onEditSkills()}>
@@ -363,7 +517,7 @@ function Block(props: {
 						<Show when={ed().active === props.block.slotId}>
 							<span
 								aria-hidden="true"
-								class="absolute -left-2 inset-y-0 w-0.5 rounded-full bg-primary"
+								class="absolute -left-2 inset-y-0 w-1.5 rounded-full bg-primary"
 							/>
 						</Show>
 						<Show when={ed().lean?.(props.block.slotId)}>
@@ -381,11 +535,14 @@ function Block(props: {
 					</>
 				)}
 			</Show>
+			<Show when={props.added || props.removed}>
+				<span class="sr-only">{props.added ? "Added: " : "Removed: "}</span>
+			</Show>
 			<Show when={props.block.bullet}>
 				{(bullet) => (
 					<span
 						aria-hidden="true"
-						class="absolute"
+						class="pointer-events-none absolute"
 						style={{
 							left: `${Math.min(props.block.indentFirstLine, Math.max(props.block.indentStart - bullet().size, 0))}pt`,
 							"font-size": bullet().size > 0 ? `${bullet().size}pt` : undefined,
@@ -406,12 +563,19 @@ function Block(props: {
 					}
 				>
 					{(ed) => (
-						<EditableLine
-							slotId={props.block.slotId}
-							editor={ed()}
-							style={leadStyle()}
-							ref={(el) => props.register(props.block.slotId, el)}
-						/>
+						<Show
+							when={!ed().isPlaceholder?.(props.block.slotId)}
+							fallback={
+								<span class="italic text-faint">Nothing selected yet</span>
+							}
+						>
+							<EditableLine
+								slotId={props.block.slotId}
+								editor={ed()}
+								style={leadStyle()}
+								ref={(el) => props.register(props.block.slotId, el)}
+							/>
+						</Show>
 					)}
 				</Show>
 			</Show>
@@ -422,6 +586,7 @@ function Block(props: {
 export function DocPage(props: {
 	layout: DraftLayout;
 	editor?: PageEditor;
+	diff?: PageDiff | undefined;
 	onMetrics?: (metrics: PageMetrics) => void;
 	onMeasurer?: (lines: (slotId: string, text: string) => number) => void;
 	class?: string;
@@ -431,6 +596,7 @@ export function DocPage(props: {
 	const lines = new Map<string, HTMLElement>();
 	const [fits, setFits] = createStore<Record<string, LineFit>>({});
 	let content: HTMLDivElement | undefined;
+	let lastMetrics: PageMetrics | undefined;
 
 	const measure = () => {
 		if (!content) return;
@@ -442,12 +608,16 @@ export function DocPage(props: {
 			bodyLinePx ||= Number.parseFloat(getComputedStyle(el).lineHeight);
 		}
 		setFits(reconcile(next));
-		props.onMetrics?.({
-			contentPt: content.offsetHeight / PX_PER_PT,
+		const contentPx = heightWithoutGhosts(content);
+		const metrics: PageMetrics = {
+			contentPt: contentPx / PX_PER_PT,
 			availablePt: page().height - page().marginTop - page().marginBottom,
 			bodyLinePt: bodyLinePx ? bodyLinePx / PX_PER_PT : DEFAULT_BODY_LINE_PT,
 			fits: next,
-		});
+		};
+		if (lastMetrics && sameMetrics(lastMetrics, metrics)) return;
+		lastMetrics = metrics;
+		props.onMetrics?.(metrics);
 	};
 	const remeasure = () => queueMicrotask(measure);
 
@@ -482,6 +652,7 @@ export function DocPage(props: {
 	createEffect(() => {
 		for (const b of props.layout.blocks)
 			if (b.slotId) props.editor?.text(b.slotId);
+		void props.diff;
 		remeasure();
 	});
 
@@ -502,17 +673,33 @@ export function DocPage(props: {
 			<div ref={content} class="flow-root">
 				<For each={props.layout.blocks}>
 					{(block, i) => (
-						<Block
-							block={block}
-							page={page()}
-							editor={props.editor}
-							fit={fits[block.slotId]}
-							draw={draws()[i()] ?? { top: true, bottom: true }}
-							register={(id, el) => {
-								lines.set(id, el);
-								remeasure();
-							}}
-						/>
+						<>
+							<Block
+								block={block}
+								page={page()}
+								editor={props.editor}
+								fit={fits[block.slotId]}
+								added={props.diff?.added.has(block.slotId)}
+								draw={draws()[i()] ?? { top: true, bottom: true }}
+								register={(id, el) => {
+									lines.set(id, el);
+									remeasure();
+								}}
+							/>
+							<For each={props.diff?.removedAfter[block.slotId]}>
+								{(text) => (
+									<Block
+										removed
+										block={removedBlock(block, text)}
+										page={page()}
+										editor={undefined}
+										fit={undefined}
+										draw={{ top: false, bottom: false }}
+										register={() => {}}
+									/>
+								)}
+							</For>
+						</>
 					)}
 				</For>
 			</div>

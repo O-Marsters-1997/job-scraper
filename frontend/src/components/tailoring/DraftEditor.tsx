@@ -13,6 +13,7 @@ import {
 } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
+import { inlineMarks } from "@/lib/bulletDiff";
 import { isSparse, maxCharsForFewerLines } from "@/lib/docLayout";
 import { htmlToText } from "@/lib/htmlText";
 import { loadedData } from "@/lib/queryData";
@@ -37,10 +38,10 @@ import {
 	useRedraftProfile,
 } from "../../hooks/useTailoring";
 import { AchievementsDrawer } from "./AchievementsDrawer";
-import { ChangesDiff } from "./ChangesDiff";
 import {
 	DEFAULT_BODY_LINE_PT,
 	DocPage,
+	type PageDiff,
 	type PageEditor,
 	type PageMetrics,
 	PX_PER_PT,
@@ -55,7 +56,7 @@ import { ProfileCard } from "./ProfileCard";
 import { RolesDrawer } from "./RolesDrawer";
 import { SkillsPanel } from "./SkillsPanel";
 import { UnlinkedRoles } from "./UnlinkedRoles";
-import { WandMenu } from "./WandMenu";
+import { RedraftWand, WandMenu } from "./WandMenu";
 
 const NO_METRICS: PageMetrics = {
 	contentPt: 0,
@@ -64,7 +65,7 @@ const NO_METRICS: PageMetrics = {
 	fits: {},
 };
 
-type View = "document" | "changes" | "insights";
+type View = "document" | "insights";
 
 const RAIL_PX = 320;
 const RAIL_GAP_PX = 48;
@@ -109,9 +110,14 @@ export function DraftEditor(props: {
 	const job = useJob(() => props.draft.jobId);
 
 	const [active, setActive] = createSignal<string>();
+	const [hovered, setHovered] = createSignal<string>();
+	const hover = (key: string, over: boolean) =>
+		setHovered((cur) => (over ? key : cur === key ? undefined : cur));
 	const [metrics, setMetrics] = createSignal(NO_METRICS);
 	const [showCounts, setShowCounts] = createSignal(true);
 	const [view, setView] = createSignal<View>("document");
+	const [showResolved, setShowResolved] = createSignal(false);
+	const [showDiff, setShowDiff] = createSignal(false);
 	const [preview, setPreview] = createSignal(false);
 	const [skillsOpen, setSkillsOpen] = createSignal(false);
 	const [stage, setStage] = createSignal<HTMLDivElement>();
@@ -127,6 +133,26 @@ export function DraftEditor(props: {
 	const changes = () => {
 		const { base, content } = props.draft;
 		return base && content ? { base, content } : null;
+	};
+	const pageDiff = (): PageDiff | undefined => {
+		const c = changes();
+		if (!showDiff() || !c) return undefined;
+		const added = new Set<string>();
+		const removedAfter: Record<string, string[]> = {};
+		for (const p of props.draft.provenance?.positions ?? []) {
+			const slots = p.bullets.map((b) => b.slotId);
+			const base = c.base.positions.find((x) => x.positionId === p.positionId);
+			const marks = inlineMarks(
+				base?.bullets.map((b) => b.text) ?? [],
+				slots.map(ed.text),
+			);
+			slots.forEach((s, i) => {
+				if (marks.added[i]) added.add(s);
+			});
+			const last = slots.at(-1);
+			if (last && marks.removed.length > 0) removedAfter[last] = marks.removed;
+		}
+		return { added, removedAfter };
 	};
 
 	const leanQuery = useDraftLean(
@@ -227,8 +253,18 @@ export function DraftEditor(props: {
 	};
 	const wandSlot = () => {
 		const key = activeSlot();
-		return key && editable() && !suggestions.get(key) ? key : undefined;
+		return key && key !== PROFILE_SLOT && editable() && !suggestions.get(key)
+			? key
+			: undefined;
 	};
+	const profileWand = () =>
+		activeSlot() === PROFILE_SLOT && editable() && !!baseProfile();
+	const focusSteer = () =>
+		document
+			.querySelector<HTMLInputElement>(
+				'[data-testid="profile-card"] input[aria-label="Steer the redraft"]',
+			)
+			?.focus();
 	const tailorQuote = (slotId: string) =>
 		insightsQuery.data?.lines.find((l) => l.slotId === slotId && l.anchored);
 	const askOpen = () => askSlot() !== undefined && askSlot() === activeSlot();
@@ -262,7 +298,6 @@ export function DraftEditor(props: {
 	};
 	const tabs = (): { id: View; label: string }[] => [
 		{ id: "document", label: "Document" },
-		...(changes() ? [{ id: "changes" as const, label: "Changes" }] : []),
 		...(leanQuery.data ? [{ id: "insights" as const, label: "Insights" }] : []),
 	];
 	const current = () =>
@@ -319,7 +354,9 @@ export function DraftEditor(props: {
 		setBankWanted(true);
 		setRolesOpen(true);
 	};
+	const [roleFromList, setRoleFromList] = createSignal(false);
 	const openRole = (positionId: string) => {
+		setRoleFromList(rolesOpen());
 		closeRoles();
 		setSelectedPick(undefined);
 		setBankWanted(true);
@@ -349,6 +386,8 @@ export function DraftEditor(props: {
 		get active() {
 			return active();
 		},
+		hasCard: (slotId) => cardKeys().includes(slotId),
+		onHover: hover,
 		text: ed.text,
 		label: ed.label,
 		lean: (slotId) => leanBySlot().get(slotId),
@@ -364,6 +403,7 @@ export function DraftEditor(props: {
 		},
 		onInput: ed.setText,
 		onFocus: activate,
+		onDismissSuggestion: suggestions.reject,
 		onBlur: () => void ed.flush(),
 		onEnter: (slotId) => {
 			const added = ed.addBullet(slotId);
@@ -381,6 +421,7 @@ export function DraftEditor(props: {
 				: undefined;
 		},
 		roleFor: (block) => rolePicks.headings().get(block),
+		isPlaceholder: rolePicks.isPlaceholder,
 		get onEditRole() {
 			return editable() ? openRole : undefined;
 		},
@@ -440,11 +481,14 @@ export function DraftEditor(props: {
 			narrow={narrowRail}
 			editor={ed}
 			keys={cardKeys()}
+			showResolved={showResolved()}
 			suggestions={suggestions}
 			measureLines={(id, text) => measureLines(id, text)}
 			stage={stage()}
 			fits={metrics().fits}
 			active={active()}
+			hovered={hovered()}
+			onHover={hover}
 			editable={editable()}
 			onActive={activate}
 			onFit={editable() ? fitSlot : undefined}
@@ -491,6 +535,14 @@ export function DraftEditor(props: {
 						<Button
 							variant="ghost"
 							size="sm"
+							aria-pressed={showResolved()}
+							onClick={() => setShowResolved((v) => !v)}
+						>
+							Show resolved
+						</Button>
+						<Button
+							variant="ghost"
+							size="sm"
 							aria-pressed={showCounts()}
 							onClick={() => setShowCounts((v) => !v)}
 						>
@@ -514,6 +566,14 @@ export function DraftEditor(props: {
 						</For>
 					</nav>
 					<Show when={editable() && props.layout}>
+						<Button
+							variant="ghost"
+							size="sm"
+							aria-pressed={showDiff()}
+							onClick={() => setShowDiff((v) => !v)}
+						>
+							Diff
+						</Button>
 						<Button
 							variant="ghost"
 							size="sm"
@@ -586,26 +646,6 @@ export function DraftEditor(props: {
 							</div>
 						)}
 					</Match>
-					<Match when={current() === "changes" && changes()}>
-						{(c) => (
-							<div class="mx-auto max-w-3xl px-6 py-10">
-								<section
-									aria-label="Changes from your base CV"
-									class="rounded-xl border border-border bg-surface p-6"
-								>
-									<h2 class="mb-3 text-sm font-semibold">
-										Changes from your base CV
-									</h2>
-									<ChangesDiff
-										base={c().base}
-										content={c().content}
-										provenance={props.draft.provenance}
-										onUndo={editable() ? ed.setText : undefined}
-									/>
-								</section>
-							</div>
-						)}
-					</Match>
 					<Match when={props.layout}>
 						{(layout) => (
 							<div
@@ -643,6 +683,7 @@ export function DraftEditor(props: {
 										<DocPage
 											layout={{ ...layout(), blocks: ed.blocks() }}
 											editor={pageEditor}
+											diff={pageDiff()}
 											onMetrics={setMetrics}
 											onMeasurer={(fn) => {
 												measureLines = fn;
@@ -663,6 +704,9 @@ export function DraftEditor(props: {
 											/>
 										)}
 									</Show>
+									<Show when={profileWand()}>
+										<RedraftWand top={wandTop()} onRedraft={focusSteer} />
+									</Show>
 									<Show
 										when={
 											editable() &&
@@ -677,7 +721,7 @@ export function DraftEditor(props: {
 												"absolute top-0",
 												narrow()
 													? "inset-x-2 z-20"
-													: "left-[calc(100%+3rem)] w-80",
+													: "left-[calc(100%+3rem)] z-20 w-80",
 											)}
 										>
 											<ProfileCard
@@ -738,7 +782,10 @@ export function DraftEditor(props: {
 							onSelect={setSelectedPick}
 							onToggle={(id) => rolePicks.toggle(positionId(), id)}
 							onMove={(id, place) => rolePicks.move(positionId(), id, place)}
-							onClear={() => rolePicks.clear(positionId())}
+							carried={rolePicks.carriedFor(positionId())}
+							onEmpty={() => rolePicks.empty(positionId())}
+							onReset={() => rolePicks.reset(positionId())}
+							onBackToRoles={roleFromList() ? openRoles : undefined}
 							onClose={closeRole}
 						/>
 					);

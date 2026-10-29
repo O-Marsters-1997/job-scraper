@@ -68,6 +68,10 @@ func Run(d Draft) []Finding {
 	return slices.Concat(Grounding(d), SkillLines(d), BannedWords(d), SlotLength(d), PageCount(d), Contact(d), Parse(d))
 }
 
+func RunUserEdited(d Draft) []Finding {
+	return slices.DeleteFunc(Run(d), func(f Finding) bool { return f.Check == checkLength })
+}
+
 func Blocking(findings []Finding) []Finding {
 	return slices.DeleteFunc(slices.Clone(findings), func(f Finding) bool { return f.Severity != Block })
 }

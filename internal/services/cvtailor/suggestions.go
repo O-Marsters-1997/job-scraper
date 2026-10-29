@@ -9,6 +9,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/tabcopy"
 )
 
@@ -54,6 +55,15 @@ func (s *Service) Suggestions(ctx context.Context, userID string, q dto.Suggesti
 		return nil, err
 	}
 	out := rankSuggestions(positions, answers, slots)
+	description, err := s.store.JobDescription(ctx, q.JobID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if quote, ok := checks.ClosestSentence(out[i].Text, description); ok {
+			out[i].Quote = quote
+		}
+	}
 	if err := s.fillSuggestionLines(ctx, userID, q, out); err != nil {
 		return nil, err
 	}

@@ -13,7 +13,7 @@ export function SaveIndicator(props: {
 }) {
 	return (
 		<output
-			class="flex items-center gap-1.5 text-xs text-faint"
+			class="flex h-8 w-48 shrink-0 items-center gap-1.5 text-xs text-faint"
 			data-testid="save-status"
 		>
 			<span
