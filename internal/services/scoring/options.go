@@ -42,15 +42,19 @@ var ladderLevels = map[string]int{
 
 // Options returns the dimensions and every non-retired bank option, without
 // question text.
-func (s *Service) Options(ctx context.Context, _ string) (dto.ScoringOptionsView, error) {
-	bk, err := s.loadBank(ctx)
+func (s *Service) Options(ctx context.Context, userID string) (dto.ScoringOptionsView, error) {
+	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return dto.ScoringOptionsView{}, err
 	}
-	live := bk.live
-	out := make([]dto.ScoringOption, len(live))
-	for i, o := range live {
-		out[i] = dto.ScoringOption{ID: o.ID, Dimension: o.Dimension, Label: o.Label, Level: ladderLevels[o.ID]}
+	out := make([]dto.ScoringOption, 0, len(bk.live))
+	custom := make([]dto.CustomOption, 0)
+	for _, o := range bk.live {
+		if o.OwnerID != "" {
+			custom = append(custom, dto.CustomOption{ID: o.ID, Dimension: o.Dimension, Label: o.Label, Question: o.Question})
+			continue
+		}
+		out = append(out, dto.ScoringOption{ID: o.ID, Dimension: o.Dimension, Label: o.Label, Level: ladderLevels[o.ID]})
 	}
-	return dto.ScoringOptionsView{Dimensions: Dimensions, Options: out}, nil
+	return dto.ScoringOptionsView{Dimensions: Dimensions, Options: out, Custom: custom, CustomCap: maxCustomOptions}, nil
 }

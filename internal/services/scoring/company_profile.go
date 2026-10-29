@@ -15,7 +15,7 @@ func (m *Module) CompanyProfiles(ctx context.Context, userID string, companyIDs 
 	if err != nil && !notFound(err) {
 		return nil, err
 	}
-	options, err := m.store.ListScoringOptions(ctx)
+	options, err := m.store.ListScoringOptions(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
