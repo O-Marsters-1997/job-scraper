@@ -29,6 +29,7 @@ import type {
 	ScoringOption,
 	ScoringOptionsView,
 } from "../../../types/scoringOptions";
+import { CustomOptions } from "./-scoring/CustomOptions";
 import { FiltersSection } from "./-scoring/FiltersSection";
 import { RatingKey } from "./-scoring/RatingKey";
 import { RecomputeControls } from "./-scoring/RecomputeControls";
@@ -43,7 +44,7 @@ export const Route = createFileRoute("/_auth/settings/scoring")({
 
 type StanceMap = Record<string, Stance | undefined>;
 
-const RATED_SECTIONS = ["role", "stack", "work"];
+const RATED_SECTIONS = ["role", "stack", "work", "custom"];
 type Dim = ScoringOption["dimension"];
 
 function ScoringPage() {
@@ -255,6 +256,13 @@ function ScoringForm(props: {
 					)}
 					{section("Company size", rows("size"))}
 					{section("Company stage", rows("stage"))}
+				</Match>
+				<Match when={params().section === "custom"}>
+					<CustomOptions
+						options={props.options()}
+						stanceOf={(id) => stances[id]}
+						onRate={(id, s) => setStances(id, s)}
+					/>
 				</Match>
 				<Match when={params().section === "filters"}>
 					<FiltersSection filters={filters} />

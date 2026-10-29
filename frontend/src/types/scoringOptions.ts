@@ -1,16 +1,7 @@
 import { z } from "zod";
+import { customOptionSchema } from "./customOption";
+import { dimensionKeySchema } from "./dimension";
 import { stanceSchema } from "./scoringConfig";
-
-const dimensionKeySchema = z.enum([
-	"tech",
-	"role",
-	"domain",
-	"seniority",
-	"work",
-	"stage",
-	"size",
-	"employment",
-]);
 
 const dimensionSpecSchema = z.object({
 	key: dimensionKeySchema,
@@ -32,6 +23,8 @@ export type ScoringOption = z.infer<typeof scoringOptionSchema>;
 export const scoringOptionsSchema = z.object({
 	dimensions: z.array(dimensionSpecSchema),
 	options: z.array(scoringOptionSchema),
+	custom: z.array(customOptionSchema),
+	customCap: z.number().int(),
 });
 
 export type ScoringOptionsView = z.infer<typeof scoringOptionsSchema>;
