@@ -41,7 +41,7 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 		return dto.ScoringConfigView{}, apperr.Invalid(fmt.Sprintf("max job age must be between 0 and %d days", maxJobAgeDaysLimit))
 	}
 	if in.Preferences.TechNeeded < 0 || in.Preferences.TechNeeded > maxTechNeeded {
-		return dto.ScoringConfigView{}, apperr.Invalid(fmt.Sprintf("tech needed must be between 1 and %d", maxTechNeeded))
+		return dto.ScoringConfigView{}, apperr.Invalid(fmt.Sprintf("tech needed must be unset or between 1 and %d", maxTechNeeded))
 	}
 	b, err := s.loadBank(ctx, userID)
 	if err != nil {

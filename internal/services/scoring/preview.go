@@ -27,7 +27,7 @@ func (s *Service) Preview(ctx context.Context, userID string, in dto.ScoringPrev
 		return dto.ScoringPreview{}, err
 	}
 	unsaved := pool.cfg
-	unsaved.Preferences = dto.Preferences{Picks: picks, SalaryFloor: floor, Scoring: pool.cfg.Preferences.Scoring}
+	unsaved.Preferences = dto.Preferences{Picks: picks, SalaryFloor: floor, TechNeeded: pool.cfg.Preferences.TechNeeded, Scoring: pool.cfg.Preferences.Scoring}
 
 	before := scoreInputs(userID, pool.cfg, pool.bank.byID, pool.inputs)
 	after := scoreInputs(userID, unsaved, pool.bank.byID, pool.inputs)

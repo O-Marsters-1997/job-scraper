@@ -86,6 +86,15 @@ func TestComputeTechNeeded(t *testing.T) {
 			t.Errorf("scores one=%d two=%d three=%d, want one < two == three", one, two, three)
 		}
 	})
+	t.Run("two needed counts a nice match as half and two ok matches as the same half", func(t *testing.T) {
+		oneNice, _, _ := compute(techPicks("nice", 1), nil, "", nil, false, nil, 2)
+		twoOK, _, _ := compute(techPicks("ok", 2), nil, "", nil, false, nil, 2)
+		fourOK, _, _ := compute(techPicks("ok", 4), nil, "", nil, false, nil, 2)
+		twoNice, _, _ := compute(techPicks("nice", 2), nil, "", nil, false, nil, 2)
+		if oneNice != twoOK || fourOK != twoNice {
+			t.Errorf("one nice=%d two ok=%d, four ok=%d two nice=%d, want pairs equal", oneNice, twoOK, fourOK, twoNice)
+		}
+	})
 	t.Run("unset matches a need of three", func(t *testing.T) {
 		unset, _, _ := compute(techPicks("nice", 2), nil, "", nil, false, nil, 0)
 		three, _, _ := compute(techPicks("nice", 2), nil, "", nil, false, nil, 3)
