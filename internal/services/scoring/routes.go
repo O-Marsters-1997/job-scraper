@@ -9,6 +9,7 @@ import (
 func (m *Module) Routes(r chi.Router) {
 	r.Get("/scoring-config", handlers.GetAll(m.svc.GetConfig))
 	r.Put("/scoring-config", handlers.Update(m.svc.UpdateConfig))
+	r.Post("/scoring-preview", handlers.Update(m.svc.Preview))
 	r.Get("/scoring-options", handlers.GetAll(m.svc.Options))
 	r.Get("/scores/status", handlers.GetAll(m.store.GetScoringStatus))
 	r.Put("/jobs/{id}/corrections/{optionId}", handlers.Update(m.svc.SetCorrection))
