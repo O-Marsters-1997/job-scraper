@@ -259,6 +259,14 @@ export function DraftEditor(props: {
 	};
 	const profileWand = () =>
 		activeSlot() === PROFILE_SLOT && editable() && !!baseProfile();
+	const [steerOpen, setSteerOpen] = createSignal(false);
+	createEffect(() => {
+		if (!profileWand()) setSteerOpen(false);
+	});
+	const openSteer = () => {
+		setSteerOpen(true);
+		queueMicrotask(focusSteer);
+	};
 	const focusSteer = () =>
 		document
 			.querySelector<HTMLInputElement>(
@@ -705,7 +713,7 @@ export function DraftEditor(props: {
 										)}
 									</Show>
 									<Show when={profileWand()}>
-										<RedraftWand top={wandTop()} onRedraft={focusSteer} />
+										<RedraftWand top={wandTop()} onRedraft={openSteer} />
 									</Show>
 									<Show
 										when={
@@ -729,6 +737,8 @@ export function DraftEditor(props: {
 												text={ed.text(PROFILE_SLOT)}
 												top={profileTop()}
 												pending={redraft.isPending}
+												steerOpen={steerOpen()}
+												onSteerClose={() => setSteerOpen(false)}
 												{...(redraft.error && {
 													error: redraft.error.message,
 												})}
