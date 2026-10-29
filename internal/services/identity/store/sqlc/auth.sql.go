@@ -39,7 +39,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, password_hash, email)
 VALUES ($1, $2, $3)
-RETURNING id, username, password_hash, email, role, created_at
+RETURNING id, username, password_hash, email, role, created_at, cv_filename_pattern
 `
 
 type CreateUserParams struct {
@@ -58,6 +58,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Email,
 		&i.Role,
 		&i.CreatedAt,
+		&i.CvFilenamePattern,
 	)
 	return i, err
 }
@@ -120,7 +121,7 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, email, role, created_at FROM users WHERE username = $1
+SELECT id, username, password_hash, email, role, created_at, cv_filename_pattern FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -133,6 +134,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Email,
 		&i.Role,
 		&i.CreatedAt,
+		&i.CvFilenamePattern,
 	)
 	return i, err
 }

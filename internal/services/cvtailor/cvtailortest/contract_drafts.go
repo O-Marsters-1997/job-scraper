@@ -356,15 +356,35 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if _, err := f.Store.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
 			t.Errorf("ClaimDraft() while leased err = %v, want ErrNotFound", err)
 		}
-		if err := f.Store.CompleteKeep(ctx, c, nil); err != nil {
+		if err := f.Store.CompleteKeep(ctx, c, dto.KeepPlacement{DocID: "doc-copy", Note: "why"}, nil); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
-		if got.Status != "ready" || got.Outcome == nil || *got.Outcome != dto.OutcomeKept || got.KeptAs != "doc" {
-			t.Errorf("GetDraft() = %+v, want ready, kept as a doc", got)
+		if got.Status != "ready" || got.Outcome == nil || *got.Outcome != dto.OutcomeKept || got.KeptAs != "doc" || got.KeepNote != "why" {
+			t.Errorf("GetDraft() = %+v, want ready, kept as a doc with its note", got)
 		}
 		if _, err := f.Store.QueueKeep(ctx, f.UserID, d.ID); err == nil {
 			t.Error("QueueKeep(kept) err = nil, want not found")
+		}
+	})
+
+	t.Run("a kept Tab repoints the Draft at the base Doc and the Tab", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		d := ready(t, f)
+		if _, err := f.Store.QueueKeep(ctx, f.UserID, d.ID); err != nil {
+			t.Fatal(err)
+		}
+		c := claim(t, f)
+		if err := f.Store.SetKeptTab(ctx, c, "t.kept"); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Store.CompleteKeep(ctx, c, dto.KeepPlacement{DocID: c.DocID, TabID: "t.kept"}, nil); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
+		if got.KeptAs != "tab" || got.DraftDocID != c.DocID || got.DraftTabID != "t.kept" || got.BaseTabID == "t.kept" {
+			t.Errorf("GetDraft() = %+v, want kept as tab t.kept in the base doc", got)
 		}
 	})
 

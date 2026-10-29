@@ -157,6 +157,7 @@ export const draftSchema = z.object({
 	status: draftStatusSchema,
 	outcome: draftOutcomeSchema.nullable(),
 	keptAs: z.string(),
+	keepNote: z.string(),
 	draftDocUrl: z.string().nullable(),
 	lastError: z.string(),
 	createdAt: z.string(),

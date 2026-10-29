@@ -709,6 +709,7 @@ type TailoredCv struct {
 	Mode           string
 	KeptAs         pgtype.Text
 	KeepNote       string
+	KeptTabID      pgtype.Text
 	Attempts       int32
 	DueAt          pgtype.Timestamptz
 	LeaseUntil     pgtype.Timestamptz
@@ -768,12 +769,13 @@ type TrackedDocTab struct {
 }
 
 type User struct {
-	ID           pgtype.UUID
-	Username     string
-	PasswordHash string
-	Email        pgtype.Text
-	Role         UserRole
-	CreatedAt    pgtype.Timestamptz
+	ID                pgtype.UUID
+	Username          string
+	PasswordHash      string
+	Email             pgtype.Text
+	Role              UserRole
+	CreatedAt         pgtype.Timestamptz
+	CvFilenamePattern string
 }
 
 type UserAiCredential struct {
