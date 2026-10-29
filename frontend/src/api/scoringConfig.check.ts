@@ -94,6 +94,17 @@ try {
 }
 assert.ok(threw, "a negative salary floor amount is rejected");
 
+threw = false;
+try {
+	scoringConfigSchema.parse({
+		...base,
+		preferences: { ...base.preferences, techNeeded: 5 },
+	});
+} catch {
+	threw = true;
+}
+assert.ok(threw, "a techNeeded above 4 is rejected");
+
 const withFloor = scoringConfigSchema.parse({
 	...base,
 	preferences: {

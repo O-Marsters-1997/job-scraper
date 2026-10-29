@@ -40,6 +40,13 @@ func weightFor(p *dto.ScoringParams, dim dto.Dimension) float64 {
 	return dimensionSpecs[dim].Weight
 }
 
+func saturationFor(dim dto.Dimension, techNeeded int) float64 {
+	if dim == dto.DimensionTech && techNeeded > 0 {
+		return float64(techNeeded)
+	}
+	return float64(dimensionSpecs[dim].Saturation)
+}
+
 type evaluatedPick struct {
 	dimension dto.Dimension
 	key       string
@@ -70,7 +77,7 @@ type niceDimension struct {
 	sumYes, evidence float64
 }
 
-func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money, favourite bool, params *dto.ScoringParams) (int, string, []dto.ScoreRow) {
+func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money, favourite bool, params *dto.ScoringParams, techNeeded int) (int, string, []dto.ScoreRow) {
 	if floor != nil {
 		picks = append(picks, salaryPick(*floor, salaryRaw))
 	}
@@ -106,7 +113,7 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 			if p.known {
 				d.sumYes += pickStrength[p.stance] * p.answer.PYes
 				d.evidence = max(d.evidence, p.answer.PYes+p.answer.PNo)
-				row.Impact = weightFor(params, p.dimension) * pickStrength[p.stance] * p.answer.PYes / float64(dimensionSpecs[p.dimension].Saturation)
+				row.Impact = weightFor(params, p.dimension) * pickStrength[p.stance] * p.answer.PYes / saturationFor(p.dimension, techNeeded)
 			}
 			switch resolved {
 			case "yes":
@@ -157,7 +164,7 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 
 	coverage := make(map[dto.Dimension]dimensionCoverage, len(nice)+len(ladders))
 	for dim, d := range nice {
-		coverage[dim] = dimensionCoverage{credit: min(1, d.sumYes/float64(dimensionSpecs[dim].Saturation)), evidence: d.evidence}
+		coverage[dim] = dimensionCoverage{credit: min(1, d.sumYes/saturationFor(dim, techNeeded)), evidence: d.evidence}
 	}
 	for dim, tiers := range ladders {
 		l, ok := scoreLadder(dim, tiers)

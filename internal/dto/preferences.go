@@ -21,6 +21,7 @@ type Preferences struct {
 	SalaryFloor        *Money `json:"salaryFloor"`
 	PreferenceText     string `json:"preferenceText"`
 	PreferenceTextHash string `json:"preferenceTextHash"`
+	TechNeeded         int    `json:"techNeeded,omitempty"`
 	// Scoring is nil until a fit has run; nil means the Go defaults apply.
 	Scoring *ScoringParams `json:"scoring,omitempty"`
 }
