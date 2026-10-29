@@ -113,6 +113,7 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 			if p.known {
 				d.sumYes += pickStrength[p.stance] * p.answer.PYes
 				d.evidence = max(d.evidence, p.answer.PYes+p.answer.PNo)
+				row.Impact = weightFor(params, p.dimension) * pickStrength[p.stance] * p.answer.PYes / float64(dimensionSpecs[p.dimension].Saturation)
 			}
 			switch resolved {
 			case "yes":
@@ -137,6 +138,7 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 		case "avoid":
 			if p.known {
 				avoidCost += avoidWeight * p.answer.PYes
+				row.Impact = -avoidWeight * p.answer.PYes
 			}
 			switch resolved {
 			case "yes":

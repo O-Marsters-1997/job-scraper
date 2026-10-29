@@ -40,6 +40,7 @@ func (f *fakeStore) ListNotifications(context.Context, string) ([]dto.Notificati
 }
 
 func (f *fakeStore) MarkNotificationRead(context.Context, string, string) error { return nil }
+func (f *fakeStore) DeleteNotification(context.Context, string, string) error   { return nil }
 
 func (f *fakeStore) MarkAllNotificationsRead(context.Context, string) error { return nil }
 

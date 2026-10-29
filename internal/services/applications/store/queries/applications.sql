@@ -69,13 +69,15 @@ UPDATE applications
 SET chase_by = NULL
 WHERE id = $1 AND user_id = $2;
 
--- name: DeleteApplication :exec
+-- name: DeleteApplication :many
 DELETE FROM applications
-WHERE id = $1 AND user_id = $2;
+WHERE id = $1 AND user_id = $2
+RETURNING job_id;
 
--- name: DeleteApplications :exec
+-- name: DeleteApplications :many
 DELETE FROM applications
-WHERE user_id = sqlc.arg(user_id) AND id = ANY(sqlc.arg(ids)::uuid[]);
+WHERE user_id = sqlc.arg(user_id) AND id = ANY(sqlc.arg(ids)::uuid[])
+RETURNING job_id;
 
 -- name: GetApplicationsForJobs :many
 SELECT

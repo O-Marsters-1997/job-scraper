@@ -538,3 +538,43 @@ func TestSaveDraftSlotsSkills(t *testing.T) {
 		})
 	}
 }
+
+func TestSaveDraftSlotsReorder(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name string
+		kept bool
+	}{{"ready draft", false}, {"kept draft", true}} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			e := newDraftEnv(t)
+			id := e.readyDrafts(t, 1)[0]
+			if tt.kept {
+				if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+					t.Fatal(err)
+				}
+				e.run(t, tick{})
+			}
+			a := e.pos.Achievements[0]
+			bullets := []dto.DraftBullet{
+				{Text: "Cut p99 latency by quickly moving queries to Postgres", AchievementIDs: []string{a.ID}},
+				{Text: "Ran on-call", AchievementIDs: []string{}},
+				{Text: "Wrote docs", AchievementIDs: []string{}},
+				{Text: "Mentored four engineers", AchievementIDs: []string{e.pos.Achievements[1].ID}},
+			}
+			for _, order := range [][]int{{0, 1, 2, 3}, {3, 0, 1, 2}, {1, 0, 3, 2}} {
+				rep := dto.DraftPosition{PositionID: e.pos.ID}
+				for _, i := range order {
+					rep.Bullets = append(rep.Bullets, bullets[i])
+				}
+				got, err := e.svc.SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{rep}})
+				if err != nil {
+					t.Fatalf("SaveDraftSlots(order %v) error = %v, want nil", order, err)
+				}
+				if diff := cmp.Diff(rep.Bullets, got.Content.Positions[0].Bullets); diff != "" {
+					t.Errorf("SaveDraftSlots(order %v).Content bullets mismatch (-want +got):\n%s", order, diff)
+				}
+			}
+		})
+	}
+}

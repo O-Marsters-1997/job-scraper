@@ -5,12 +5,16 @@ struct TriageView: View {
     @State private var progress: CGFloat = 0
     @State private var expandedID: Job.ID?
     @State private var showReasons = false
+    @State private var whyDecision: TriageDecision?
     @State private var showNote = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(Session.self) private var session
 
-    init(client: APIClient, store: OfflineStore = .live) {
+    let refresh: Int
+
+    init(client: APIClient, store: OfflineStore = .live, refresh: Int = 0) {
+        self.refresh = refresh
         _model = State(initialValue: TriageModel(client: client, store: store))
     }
 
@@ -49,6 +53,7 @@ struct TriageView: View {
                     onSync: sync,
                     onClearNote: model.clearSyncNote)
             }
+            .onChange(of: refresh) { sync() }
             .onChange(of: scenePhase) {
                 if scenePhase == .active, model.isOffline || !model.queued.isEmpty { sync() }
             }
@@ -56,11 +61,16 @@ struct TriageView: View {
                 if model.sessionExpired { session.expire() }
             }
             .safeAreaInset(edge: .bottom, spacing: 8) {
-                UndoBanner(decision: model.banner, onUndo: undo, onExpire: model.dismissBanner, onDraftCV: { model.draftCV($0) })
+                UndoBanner(
+                    decision: model.banner, onUndo: undo, isPaused: whyDecision != nil, onExpire: model.dismissBanner,
+                    onDraftCV: { model.draftCV($0) }, onWhy: { whyDecision = $0 })
                     .animation(.snappy, value: model.banner)
             }
             .sheet(isPresented: $showReasons) {
                 DismissReasonSheet { decide(.dismiss(reasons: $0)) }
+            }
+            .sheet(item: $whyDecision) { decision in
+                DismissReasonSheet(confirmTitle: "Save") { model.setReasons($0, for: decision) }
             }
             .sheet(isPresented: $showNote) {
                 NoteSheet(load: model.currentNote) { decide(.note($0)) }
@@ -115,6 +125,7 @@ struct TriageView: View {
                 DeckEdges(count: model.upcoming.count)
                     .opacity(isExpanded ? 0 : 1)
                 TriageCard(job: job, bandReason: job.bandReason(model.scoring), isExpanded: isExpanded) { toggle(job) }
+                    .contextMenu { actions(for: job) }
                     .overlay { decisionWash }
                     .swipeToDecide(allowsUp: !isExpanded, onProgress: { progress = $0 }) { direction in
                         switch direction {
@@ -133,7 +144,7 @@ struct TriageView: View {
             }
             .padding(.horizontal)
             .padding(.bottom, isExpanded ? 0 : CGFloat(model.upcoming.count) * 6)
-            actionBar
+            actionBar(job)
                 .scaleEffect(isExpanded && !reduceMotion ? 0.9 : 1)
                 .opacity(isExpanded ? 0.6 : 1)
         }
@@ -149,7 +160,12 @@ struct TriageView: View {
             .allowsHitTesting(false)
     }
 
-    private var actionBar: some View {
+    private func actions(for job: Job) -> some View {
+        JobActionsMenu(
+            job: job, onDecide: decide, onDismissWithReason: { showReasons = true }, onAddNote: { showNote = true })
+    }
+
+    private func actionBar(_ job: Job) -> some View {
         let right = max(min(progress, 1), 0)
         let left = max(min(-progress, 1), 0)
         return HStack(spacing: 28) {
@@ -166,15 +182,7 @@ struct TriageView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Dismiss")
             Menu {
-                Button("Shortlist and draft CV", systemImage: "doc.badge.plus") { decide(.shortlist(draftCV: true)) }
-                Button("Dismiss with reason…", systemImage: "text.badge.xmark") { showReasons = true }
-                Button("Add note…", systemImage: "note.text") { showNote = true }
-                if isAgency {
-                    Button("Not an agency", systemImage: "building.2") { decide(.reclassify(to: .direct)) }
-                } else {
-                    Button("This is an agency", systemImage: "person.2") { decide(.reclassify(to: .agency)) }
-                }
-                Button("Exclude company", systemImage: "nosign", role: .destructive) { decide(.excludeCompany) }
+                actions(for: job)
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.body.weight(.semibold))

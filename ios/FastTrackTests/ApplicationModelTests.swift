@@ -131,6 +131,15 @@ struct ApplicationModelTests {
         #expect(role.fits(role.bank[0]) == false)
     }
 
+    @Test func rolesDecodeWithoutExcludedKey() throws {
+        let json = """
+            {"draftId":"d","kept":false,"spills":false,"roles":[{"employer":"Acme","title":"Eng","budget":3,"bullets":[],"bank":[]}]}
+            """
+        let decoded = try JSONDecoder.api.decode(DraftRoles.self, from: Data(json.utf8))
+
+        #expect(decoded.roles.first?.excluded.isEmpty == true)
+    }
+
     @Test func goldenRolesDecode() throws {
         let url = try #require(Bundle(for: BundleToken.self).url(forResource: "draft_roles", withExtension: "json"))
         let decoded = try JSONDecoder.api.decode(DraftRoles.self, from: Data(contentsOf: url))

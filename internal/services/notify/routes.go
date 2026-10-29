@@ -11,6 +11,7 @@ import (
 func (m *Module) Routes(r chi.Router) {
 	r.Get("/notifications", handlers.GetAll(m.store.ListNotifications))
 	r.Post("/notifications/read-all", handlers.GetAll(m.readAll))
+	r.Delete("/notifications/{id}", handlers.Delete(m.store.DeleteNotification))
 	r.Post("/notifications/{id}/read", handlers.Delete(m.store.MarkNotificationRead))
 }
 

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import FastTrack
 
@@ -34,5 +35,21 @@ struct JobTopRowsTests {
             ScoreRow(key: "work:hybrid", label: "Hybrid", effect: .meets),
         ]
         #expect(job(rows).topRows.map(\.key) == ["gate:visa", "domain:gambling", "company:fav"])
+    }
+
+    @Test func matchesRankByLargestImpactWithinCap() {
+        let rows = [
+            ScoreRow(key: "a", label: "A", effect: .meets, impact: 0.2),
+            ScoreRow(key: "c", label: "C", effect: .meets, impact: 1),
+            ScoreRow(key: "fav", label: "Fav", effect: .favourite),
+            ScoreRow(key: "d", label: "D", effect: .meets, impact: 3),
+        ]
+        #expect(job(rows).topRows.map(\.key) == ["fav", "d", "c"])
+    }
+
+    @Test func missingImpactKeepsStoredOrder() throws {
+        let json = #"[{"key":"a","label":"A","effect":"meets"},{"key":"b","label":"B","effect":"meets"}]"#
+        let rows = try JSONDecoder().decode([ScoreRow].self, from: Data(json.utf8))
+        #expect(job(rows).topRows.map(\.key) == ["a", "b"])
     }
 }

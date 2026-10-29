@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DismissReasonSheet: View {
+    var confirmTitle = "Dismiss"
     let onDismissJob: ([GradeReason]) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var selected: Set<GradeReason> = []
@@ -24,7 +25,7 @@ struct DismissReasonSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Dismiss") {
+                    Button(confirmTitle) {
                         dismiss()
                         onDismissJob(GradeReason.allCases.filter(selected.contains))
                     }

@@ -6,8 +6,8 @@ extension Job {
     var topRows: [ScoreRow] {
         let negatives = breakdown.filter { $0.effect.isGate }
             + breakdown.filter { $0.stance == "avoid" && $0.effect == .misses }
-        let positives = breakdown.filter { $0.effect == .favourite } + breakdown.filter { $0.effect == .meets }
-        return Array((negatives + positives).prefix(3))
+        let matches = breakdown.filter { $0.effect == .meets }.sorted { abs($0.impact ?? 0) > abs($1.impact ?? 0) }
+        return Array((negatives + breakdown.filter { $0.effect == .favourite } + matches).prefix(3))
     }
 
     func bandReason(_ scoring: ScoringBands?) -> String? {

@@ -75,9 +75,10 @@ func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationPa
 	return i, err
 }
 
-const deleteApplication = `-- name: DeleteApplication :exec
+const deleteApplication = `-- name: DeleteApplication :many
 DELETE FROM applications
 WHERE id = $1 AND user_id = $2
+RETURNING job_id
 `
 
 type DeleteApplicationParams struct {
@@ -85,14 +86,30 @@ type DeleteApplicationParams struct {
 	UserID pgtype.UUID
 }
 
-func (q *Queries) DeleteApplication(ctx context.Context, arg DeleteApplicationParams) error {
-	_, err := q.db.Exec(ctx, deleteApplication, arg.ID, arg.UserID)
-	return err
+func (q *Queries) DeleteApplication(ctx context.Context, arg DeleteApplicationParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, deleteApplication, arg.ID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var job_id pgtype.UUID
+		if err := rows.Scan(&job_id); err != nil {
+			return nil, err
+		}
+		items = append(items, job_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const deleteApplications = `-- name: DeleteApplications :exec
+const deleteApplications = `-- name: DeleteApplications :many
 DELETE FROM applications
 WHERE user_id = $1 AND id = ANY($2::uuid[])
+RETURNING job_id
 `
 
 type DeleteApplicationsParams struct {
@@ -100,9 +117,24 @@ type DeleteApplicationsParams struct {
 	Ids    []pgtype.UUID
 }
 
-func (q *Queries) DeleteApplications(ctx context.Context, arg DeleteApplicationsParams) error {
-	_, err := q.db.Exec(ctx, deleteApplications, arg.UserID, arg.Ids)
-	return err
+func (q *Queries) DeleteApplications(ctx context.Context, arg DeleteApplicationsParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, deleteApplications, arg.UserID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var job_id pgtype.UUID
+		if err := rows.Scan(&job_id); err != nil {
+			return nil, err
+		}
+		items = append(items, job_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getApplicationState = `-- name: GetApplicationState :one

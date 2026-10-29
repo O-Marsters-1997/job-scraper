@@ -80,6 +80,19 @@ struct DraftRoles: Decodable {
     }
 }
 
+extension DraftRoles.Role {
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        positionID = try c.decodeIfPresent(String.self, forKey: .positionID)
+        employer = try c.decode(String.self, forKey: .employer)
+        title = try c.decode(String.self, forKey: .title)
+        budget = try c.decode(Int.self, forKey: .budget)
+        bullets = try c.decode([DraftRoles.Bullet].self, forKey: .bullets)
+        bank = try c.decode([DraftRoles.Bullet].self, forKey: .bank)
+        excluded = try c.decodeIfPresent([DraftRoles.Bullet].self, forKey: .excluded) ?? []
+    }
+}
+
 extension DraftRoles {
     static let sample = DraftRoles(
         draftID: "draft-1", kept: false, spills: false,

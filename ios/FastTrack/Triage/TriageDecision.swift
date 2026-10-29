@@ -14,6 +14,17 @@ enum TriageAction: Hashable {
         case .shortlist, .dismiss, .skip, .excludeCompany: false
         }
     }
+
+    func kind(on job: Job) -> QueuedAction.Kind {
+        switch self {
+        case .shortlist(let draftCV): .shortlist(draftCV: draftCV)
+        case .dismiss(let reasons): .dismiss(reasons: reasons)
+        case .skip: .skip
+        case .excludeCompany: .excludeCompany(companyID: job.companyID)
+        case .reclassify(let kind): .reclassify(companyID: job.companyID, to: kind)
+        case .note(let body): .note(body: body)
+        }
+    }
 }
 
 enum UndoReceipt: Hashable {

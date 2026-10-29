@@ -3,6 +3,7 @@ package scoring
 import (
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"testing"
 
@@ -91,6 +92,22 @@ func TestComputeOkStance(t *testing.T) {
 			t.Errorf("row effect = %q, want gated", rows[0].Effect)
 		}
 	})
+}
+
+func TestComputeRowImpact(t *testing.T) {
+	yes := dto.Answer{PYes: 1}
+	nice := evaluatedPick{dimension: dto.DimensionTech, key: "tech:go", stance: "nice", answer: yes, known: true}
+	avoid := evaluatedPick{dimension: dto.DimensionTech, key: "tech:php", stance: "avoid", answer: yes, known: true}
+	unknown := evaluatedPick{dimension: dto.DimensionTech, key: "tech:rust", stance: "nice"}
+
+	_, _, rows := compute([]evaluatedPick{nice, avoid, unknown}, nil, "", nil, false, nil)
+
+	want := []float64{2.0 / 3, -avoidWeight, 0}
+	for i, row := range rows {
+		if math.Abs(row.Impact-want[i]) > 1e-9 {
+			t.Errorf("%s impact = %v, want %v", row.Key, row.Impact, want[i])
+		}
+	}
 }
 
 func nicePick(dim dto.Dimension, key string, answer dto.Answer, known bool) evaluatedPick {

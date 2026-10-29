@@ -158,6 +158,14 @@ WHERE tt.user_id = sqlc.arg(user_id)::uuid AND tt.system_key = 'apply'
       WHERE t.type_id = tt.id AND t.job_id = sqlc.arg(job_id)::uuid AND t.completed_at IS NULL
   );
 
+-- name: DeleteOpenApplyTasks :exec
+DELETE FROM tasks t
+USING task_types tt
+WHERE tt.id = t.type_id AND tt.system_key = 'apply'
+  AND t.user_id = sqlc.arg(user_id)::uuid
+  AND t.job_id = ANY(sqlc.arg(job_ids)::uuid[])
+  AND t.completed_at IS NULL;
+
 -- name: CompleteApplyTasks :exec
 UPDATE tasks t
 SET completed_at = sqlc.arg(now)::timestamptz, updated_at = sqlc.arg(now)::timestamptz

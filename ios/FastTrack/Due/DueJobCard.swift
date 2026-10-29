@@ -26,7 +26,7 @@ struct DueJobCard: View {
 
     private var rows: [DueRow] {
         (model.hasChaseDue(job) ? [.chase(job)] : [])
-            + (job.isAtDesk ? [] : job.draft.map { [.draft($0)] } ?? [])
+            + (job.isAtDesk ? [] : job.dueDraft.map { [.draft($0)] } ?? [])
             + job.tasks.map(DueRow.task)
     }
 
@@ -47,9 +47,11 @@ struct DueJobCard: View {
             }
         }
         .hairlineCard()
-        .swipeToDelete {
-            if job.hasCV { confirmingDelete = true } else { delete() }
-        }
+        .iconSwipeActions([
+            .deleteApplication {
+                if job.hasCV { confirmingDelete = true } else { delete() }
+            }
+        ])
         .confirmationDialog("Delete this application?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete application", role: .destructive, action: delete)
         } message: {
@@ -89,7 +91,7 @@ struct DueJobCard: View {
             return days > 0 ? ("\(days)d overdue", .red) : ("Chase today", .orange)
         }
         if job.isAtDesk { return ("At desk", .secondary) }
-        switch job.draft?.state {
+        switch job.dueDraft?.state {
         case .failed: return ("Draft failed", .red)
         case .ready: return ("CV ready", .brandTint)
         default: return nil
@@ -101,15 +103,22 @@ struct DueCardHeadline: View {
     let job: DueJob
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(job.companyName).font(.system(.title3, design: .serif))
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                if let band = job.band { DotLabel(text: band.title, hue: band.colour) }
-                if let score = job.score {
-                    Text(score, format: .number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            if job.band != nil || job.score != nil || job.companyKind.badge != nil {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) { chips }
+                    VStack(alignment: .leading, spacing: 4) { chips }
                 }
             }
-            CompanyKindBadge(kind: job.companyKind)
         }
+    }
+
+    @ViewBuilder private var chips: some View {
+        if let band = job.band { DotLabel(text: band.title, hue: band.colour) }
+        if let score = job.score {
+            Text(score, format: .number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+        }
+        CompanyKindBadge(kind: job.companyKind).lineLimit(1).fixedSize()
     }
 }

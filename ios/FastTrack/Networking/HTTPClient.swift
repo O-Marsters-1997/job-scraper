@@ -55,9 +55,9 @@ struct HTTPClient {
         switch (response as? HTTPURLResponse)?.statusCode ?? 0 {
         case 200..<300: return data
         case 401: throw APIError.unauthorized
-        case 422:
+        case let code where code == 409 || code == 422:
             let message = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.error
-            throw message.map(APIError.unprocessable) ?? APIError.status(422)
+            throw message.map(APIError.unprocessable) ?? APIError.status(code)
         case let code: throw APIError.status(code)
         }
     }
