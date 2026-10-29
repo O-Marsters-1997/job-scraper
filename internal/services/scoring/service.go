@@ -42,7 +42,7 @@ type Store interface {
 	ListRecentScoredJobs(ctx context.Context, userID string, limit int) ([]dto.Job, error)
 	GetCompanyProfile(ctx context.Context, companyID string) (dto.CompanyProfile, error)
 	ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error)
-	ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error)
+	ListScoringOptions(ctx context.Context, userID string) ([]dto.ScoringOption, error)
 	ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error)
 	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore, rejections []dto.JobRejection) ([]string, error)
 	SaveAnswers(ctx context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error
@@ -70,6 +70,10 @@ type Store interface {
 	AddScoringOption(ctx context.Context, id, dimension, label, question string) error
 	RewordScoringOption(ctx context.Context, id, question string) error
 	RetireScoringOption(ctx context.Context, id string) error
+	AddCustomOption(ctx context.Context, userID string, opt dto.CustomOption) error
+	ReplaceCustomOption(ctx context.Context, userID, oldID string, opt dto.CustomOption) error
+	RetireCustomOption(ctx context.Context, userID, id string) error
+	CountLiveCustomOptions(ctx context.Context, userID string) (int, error)
 	UpsertPushSubscription(ctx context.Context, userID string, sub dto.PushSubscriptionInput) error
 	ListPushSubscriptions(ctx context.Context, userID string) ([]dto.PushSubscriptionInput, error)
 	DeletePushSubscription(ctx context.Context, userID, endpoint string) error
@@ -227,15 +231,15 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result 
 
 	s.classifyCompany(ctx, job, surviving)
 
-	bk, err := s.loadBank(ctx)
-	if err != nil {
-		return fail(fmt.Errorf("load scoring options: %w", err))
-	}
-	byID := bk.byID
-
+	banks := make(map[string]bank, len(surviving))
 	asked := make(map[string]string)
 	for _, cfg := range surviving {
-		maps.Copy(asked, pickedQuestionHashes(cfg.Preferences.Picks, byID))
+		bk, err := s.loadBank(ctx, cfg.UserID)
+		if err != nil {
+			return fail(fmt.Errorf("load scoring options: %w", err))
+		}
+		banks[cfg.UserID] = bk
+		maps.Copy(asked, pickedQuestionHashes(cfg.Preferences.Picks, bk.byID))
 	}
 
 	cached, err := s.store.ListAnswers(ctx, effect.JobID, effect.Fingerprint, jev.Model)
@@ -247,7 +251,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result 
 		return fail(fmt.Errorf("load corrections: %w", err))
 	}
 
-	derived, err := s.profileAnswers(ctx, job, byID, asked)
+	derived, err := s.profileAnswers(ctx, job, banks[surviving[0].UserID].byID, asked)
 	if err != nil {
 		return fail(err)
 	}
@@ -273,7 +277,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result 
 
 	scores := make([]dto.JobScore, 0, len(surviving))
 	for _, cfg := range surviving {
-		score := scoreJob(cfg.UserID, cfg, job, byID, allAnswers, corrections[cfg.UserID], cfg.CompanyIsFavourite)
+		score := scoreJob(cfg.UserID, cfg, job, banks[cfg.UserID].byID, allAnswers, corrections[cfg.UserID], cfg.CompanyIsFavourite)
 		score.Cost = cost
 		scores = append(scores, score)
 	}
@@ -480,7 +484,7 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 		return dto.RecomputeResult{}, err
 	}
 
-	bk, err := s.loadBank(ctx)
+	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return dto.RecomputeResult{}, err
 	}
@@ -505,7 +509,7 @@ func (s *Service) CompanyFavouriteChanged(ctx context.Context, tx pgx.Tx, userID
 	if err != nil {
 		return err
 	}
-	bk, err := s.loadBank(ctx)
+	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -527,7 +531,7 @@ func (s *Service) FillMissingAnswers(ctx context.Context, userID string) (int64,
 		return 0, nil
 	}
 
-	bk, err := s.loadBank(ctx)
+	bk, err := s.loadBank(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -544,8 +548,8 @@ func (s *Service) FillMissingAnswers(ctx context.Context, userID string) (int64,
 	return s.store.QueueMissingAnswers(ctx, userID, hashes, jev.Model)
 }
 
-func (s *Service) loadBank(ctx context.Context) (bank, error) {
-	options, err := s.store.ListScoringOptions(ctx)
+func (s *Service) loadBank(ctx context.Context, userID string) (bank, error) {
+	options, err := s.store.ListScoringOptions(ctx, userID)
 	if err != nil {
 		return bank{}, err
 	}

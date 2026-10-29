@@ -195,8 +195,12 @@ func (s *Store) RemoveExcludedCompany(ctx context.Context, userID, name string) 
 	return nil
 }
 
-func (s *Store) ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error) {
-	rows, err := s.queries.ListScoringOptions(ctx)
+func (s *Store) ListScoringOptions(ctx context.Context, userID string) ([]dto.ScoringOption, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListScoringOptions(ctx, uid)
 	if err != nil {
 		return nil, fmt.Errorf("store.ListScoringOptions: %w", err)
 	}
@@ -256,6 +260,80 @@ func (s *Store) RetireScoringOption(ctx context.Context, id string) error {
 		return fmt.Errorf("store.RetireScoringOption: option %q: %w", id, data.ErrNotFound)
 	}
 	return nil
+}
+
+func (s *Store) AddCustomOption(ctx context.Context, userID string, opt dto.CustomOption) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	err = s.queries.InsertCustomOption(ctx, sqlc.InsertCustomOptionParams{
+		ID: opt.ID, Dimension: sqlc.ScoringDimension(opt.Dimension), Label: opt.Label, Question: opt.Question, UserID: uid,
+	})
+	if err != nil {
+		return fmt.Errorf("store.AddCustomOption: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ReplaceCustomOption(ctx context.Context, userID, oldID string, opt dto.CustomOption) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		queries := s.queries.WithTx(tx)
+		rows, err := queries.RetireCustomOption(ctx, sqlc.RetireCustomOptionParams{ID: oldID, UserID: uid})
+		if err != nil {
+			return fmt.Errorf("store.ReplaceCustomOption: retire: %w", err)
+		}
+		if rows == 0 {
+			return fmt.Errorf("store.ReplaceCustomOption: option %q: %w", oldID, data.ErrNotFound)
+		}
+		err = queries.InsertCustomOption(ctx, sqlc.InsertCustomOptionParams{
+			ID: opt.ID, Dimension: sqlc.ScoringDimension(opt.Dimension), Label: opt.Label, Question: opt.Question, UserID: uid,
+		})
+		if err != nil {
+			return fmt.Errorf("store.ReplaceCustomOption: insert: %w", err)
+		}
+		if err := queries.MovePick(ctx, sqlc.MovePickParams{UserID: uid, OldID: oldID, NewID: opt.ID}); err != nil {
+			return fmt.Errorf("store.ReplaceCustomOption: move pick: %w", err)
+		}
+		return nil
+	})
+}
+
+func (s *Store) RetireCustomOption(ctx context.Context, userID, id string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		queries := s.queries.WithTx(tx)
+		rows, err := queries.RetireCustomOption(ctx, sqlc.RetireCustomOptionParams{ID: id, UserID: uid})
+		if err != nil {
+			return fmt.Errorf("store.RetireCustomOption: %w", err)
+		}
+		if rows == 0 {
+			return fmt.Errorf("store.RetireCustomOption: option %q: %w", id, data.ErrNotFound)
+		}
+		if err := queries.DropPick(ctx, sqlc.DropPickParams{UserID: uid, OptionID: id}); err != nil {
+			return fmt.Errorf("store.RetireCustomOption: drop pick: %w", err)
+		}
+		return nil
+	})
+}
+
+func (s *Store) CountLiveCustomOptions(ctx context.Context, userID string) (int, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return 0, err
+	}
+	n, err := s.queries.CountLiveCustomOptions(ctx, uid)
+	if err != nil {
+		return 0, fmt.Errorf("store.CountLiveCustomOptions: %w", err)
+	}
+	return int(n), nil
 }
 
 // QueueMissingAnswers queues an answer effect, without alerting, for each of

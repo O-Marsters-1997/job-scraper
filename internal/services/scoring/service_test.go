@@ -1891,3 +1891,57 @@ func TestRunTick_RecordsRejections(t *testing.T) {
 		}
 	})
 }
+
+func TestPreview(t *testing.T) {
+	t.Parallel()
+	const userID = "user-1"
+	yes := dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}
+	no := dto.Answer{PYes: 0.05, PNo: 0.9, PNotStated: 0.05}
+	goHash, rustHash := scoring.QuestionHash("Does the role use Go?"), scoring.QuestionHash("Does the role use Rust?")
+
+	st := newFakeStore()
+	st.SeedSearchConfig(picking(userID, "tech:go"))
+	var inputs []store.ScoringInput
+	for i := range 12 {
+		job := dto.Job{ID: fmt.Sprintf("job-%02d", i), Title: fmt.Sprintf("Job %d", i), CompanySlug: "acme", ContentFingerprint: "fp"}
+		answers := map[string]dto.Answer{goHash: no, rustHash: no}
+		switch {
+		case i == 0:
+			answers = map[string]dto.Answer{goHash: yes, rustHash: no}
+		case i <= 5:
+			answers = map[string]dto.Answer{goHash: no, rustHash: yes}
+		}
+		st.SeedJob(job, nil)
+		inputs = append(inputs, store.ScoringInput{Job: job, Answers: answers})
+	}
+	st.SeedScoringInputs(userID, inputs)
+	svc := scoring.NewService(newDeps(t, st))
+	if _, err := svc.SetGrade(t.Context(), userID, dto.GradeInput{JobID: "job-00", Grade: "no"}); err != nil {
+		t.Fatalf("SetGrade() err = %v", err)
+	}
+
+	t.Run("counts dismissed jobs in the top five before and after, newest label first", func(t *testing.T) {
+		t.Parallel()
+		got, err := svc.Preview(t.Context(), userID, dto.ScoringPreviewInput{Preferences: picking(userID, "tech:rust").Preferences})
+		if err != nil {
+			t.Fatalf("Preview() err = %v", err)
+		}
+		if want := (dto.BeforeAfter{Before: 1, After: 0}); got.DismissedInTop5 != want {
+			t.Errorf("Preview() dismissedInTop5 = %+v, want %+v", got.DismissedInTop5, want)
+		}
+		if len(got.Jobs) != 10 || got.Jobs[0].JobID != "job-00" || got.Jobs[0].Grade != "no" {
+			t.Fatalf("Preview() jobs = %+v, want 10 jobs starting with the graded job-00", got.Jobs)
+		}
+		if first := got.Jobs[0]; first.After >= first.Before || len(first.AfterRows) == 0 {
+			t.Errorf("Preview() job-00 = %+v, want a lower After than Before and rows", first)
+		}
+	})
+
+	t.Run("rejects an unknown option", func(t *testing.T) {
+		t.Parallel()
+		in := dto.ScoringPreviewInput{Preferences: picking(userID, "tech:nope").Preferences}
+		if _, err := svc.Preview(t.Context(), userID, in); !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("Preview() err = %v, want invalid", err)
+		}
+	})
+}
