@@ -1662,7 +1662,7 @@ func TestStore_ListPlaygroundCandidates(t *testing.T) {
 	if diff := cmp.Diff(want, gotReviewed); diff != "" {
 		t.Errorf("ListPlaygroundCandidates() reviewed by job (-want +got):\n%s", diff)
 	}
-	if len(got) == 3 && (got[0].JobID != fresh || got[0].Band != "great") {
-		t.Errorf("ListPlaygroundCandidates()[0] = %+v, want newest first (the fresh great job)", got[0])
+	if len(got) != 3 || got[0].JobID != fresh || got[0].Band != "great" {
+		t.Errorf("ListPlaygroundCandidates() = %+v, want the fresh great job first", got)
 	}
 }
