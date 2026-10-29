@@ -243,7 +243,16 @@ function ScoringForm(props: {
 					{section("Industries", rows("domain"))}
 				</Match>
 				<Match when={params().section === "work"}>
-					{section("Working arrangement", rows("work"))}
+					{section(
+						"Working arrangement",
+						<>
+							<p class="text-xs text-faint">
+								To prefer some office days over others, rate the day counts
+								instead of Hybrid.
+							</p>
+							{rows("work")}
+						</>,
+					)}
 					{section("Company size", rows("size"))}
 					{section("Company stage", rows("stage"))}
 				</Match>
