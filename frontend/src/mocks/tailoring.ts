@@ -60,7 +60,24 @@ export function saveHeadings(
 }
 
 export function getDraftLean(): BulletLean[] {
-	return [];
+	const bullet = (
+		slotId: string,
+		achievementId: string,
+		lean: number,
+		state: "fit" | "low",
+	) => ({
+		slotId,
+		achievementId,
+		lean,
+		state,
+		replacedFrom: null,
+		replacedLean: null,
+		closerMatch: null,
+	});
+	return [
+		bullet("s1", "achievement-1", 0.8, "fit"),
+		bullet("s2", "achievement-2", -0.6, "low"),
+	];
 }
 
 export function getDraftRoles(): DraftRoles {

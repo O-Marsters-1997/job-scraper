@@ -195,6 +195,14 @@ export function DraftEditor(props: {
 	const leanBySlot = createMemo(
 		() => new Map(loadedData(leanQuery)?.map((b) => [b.slotId, b])),
 	);
+	const leanByAchievement = createMemo(
+		() =>
+			new Map(
+				loadedData(leanQuery)?.flatMap((b) =>
+					b.achievementId ? [[b.achievementId, b] as const] : [],
+				),
+			),
+	);
 
 	const pagePx = () => (props.layout?.page.width ?? 0) * PX_PER_PT;
 	const narrow = () =>
@@ -416,7 +424,10 @@ export function DraftEditor(props: {
 		onHover: hover,
 		text: ed.text,
 		label: ed.label,
-		lean: (slotId) => leanBySlot().get(slotId),
+		lean: (slotId) => {
+			const id = rolePicks.achievementOf(slotId);
+			return id ? leanByAchievement().get(id) : leanBySlot().get(slotId);
+		},
 		insightFor: (slotId) =>
 			loadedData(insightsQuery)?.lines.find((l) => l.slotId === slotId),
 		get explaining() {

@@ -9,6 +9,17 @@ test.describe("Draft editor", () => {
 		await draftPage.goto();
 	});
 
+	test("a moved bullet keeps its fit percentage", async ({ draftPage }) => {
+		const lean = (slot: string) => draftPage.slot(slot).getByTestId("lean");
+		await expect(lean("s1")).toHaveText("90%");
+		await expect(lean("s2")).toHaveText("20%");
+		await draftPage.line(BULLET).click();
+		await draftPage.line(BULLET).press("Alt+ArrowDown");
+		await expect(draftPage.line(BULLET)).toHaveText(/Kubernetes/);
+		await expect(lean("s1")).toHaveText("20%");
+		await expect(lean("s2")).toHaveText("90%");
+	});
+
 	test("shows Saving after an edit, then Saved", async ({ draftPage }) => {
 		await expect(draftPage.saveStatus).toHaveText("Saved");
 		await draftPage.type(BULLET, " again");
