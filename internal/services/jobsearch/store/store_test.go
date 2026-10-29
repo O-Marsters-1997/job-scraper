@@ -95,23 +95,40 @@ func TestStoreSatisfiesContract(t *testing.T) {
 	})
 }
 
-func TestStore_RetireHarvestSeenIDs(t *testing.T) {
+func TestStore_CloseJobsAbsentFromSitemap(t *testing.T) {
 	t.Parallel()
 	st, pool := newStore(t)
 	ctx := t.Context()
-	wttjJob := baseJob
-	wttjJob.Source, wttjJob.URL, wttjJob.ProviderPostingID = "wttj", "https://app.welcometothejungle.com/jobs/gone", "gone"
+	goneJob := baseJob
+	goneJob.Source, goneJob.URL, goneJob.ProviderPostingID = "wttj", "https://app.welcometothejungle.com/jobs/gone", "gone"
+	listedJob := baseJob
+	listedJob.Source, listedJob.URL, listedJob.ProviderPostingID = "wttj", "https://app.welcometothejungle.com/jobs/listed", "listed"
+	listedJob.Title = "Frontend Engineer"
 	otherJob := baseJob
 	otherJob.Source, otherJob.URL, otherJob.ProviderPostingID = "greenhouse", "https://boards.greenhouse.io/acme/jobs/gone", "gone"
 	otherJob.Title, otherJob.CompanySlug = "Data Analyst", "other"
-	wttjSaved, _ := saveJob(t, st, wttjJob)
+	goneSaved, _ := saveJob(t, st, goneJob)
+	listedSaved, _ := saveJob(t, st, listedJob)
 	otherSaved, _ := saveJob(t, st, otherJob)
-
-	if err := st.RetireHarvestSeenIDs(ctx, "wttj", []string{"gone"}); err != nil {
+	if err := st.RecordHarvestSeenIDs(ctx, "wttj", "exported", []string{"gone", "listed"}); err != nil {
 		t.Fatal(err)
 	}
-	if !jobClosed(t, pool, wttjSaved.URL) {
-		t.Error("wttj job still open after its ID was retired")
+	lastWeek := time.Now().Add(-8 * 24 * time.Hour)
+	if err := st.MarkHarvestIDsInSitemap(ctx, "wttj", []string{"gone", "listed"}, lastWeek); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.MarkHarvestIDsInSitemap(ctx, "wttj", []string{"listed"}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := st.CloseJobsAbsentFromSitemap(ctx, "wttj", time.Now().Add(-7*24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if !jobClosed(t, pool, goneSaved.URL) {
+		t.Error("wttj job absent from the sitemap for over a week still open")
+	}
+	if jobClosed(t, pool, listedSaved.URL) {
+		t.Error("wttj job listed in the latest sitemap was closed")
 	}
 	if jobClosed(t, pool, otherSaved.URL) {
 		t.Error("another source's job with the same posting ID was closed")

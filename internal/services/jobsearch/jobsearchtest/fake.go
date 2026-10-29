@@ -57,6 +57,10 @@ type FakeStore struct {
 	harvestSeen map[string]map[string]string
 	profiles    map[string]dto.CompanyProfile
 
+	harvestInSitemap map[string]time.Time
+	harvestClosed    map[string][]string
+	harvestCounts    map[string]map[string]int
+
 	sourceTargets map[string]dto.SourceTarget
 	targetByKey   map[string]string
 
@@ -83,29 +87,32 @@ func (f *FakeStore) JobInsightGroups(context.Context, string, dto.JobInsightsOpt
 
 func NewFakeStore() *FakeStore {
 	return &FakeStore{
-		jobs:           make(map[string]dto.Job),
-		seen:           make(map[string]map[string]bool),
-		byURL:          make(map[string]string),
-		byBoard:        make(map[string]string),
-		listings:       make(map[string][]dto.JobListing),
-		companies:      make(map[string]dto.Company),
-		companyBySlug:  make(map[string]string),
-		tracking:       make(map[string]dto.CompanyTracking),
-		favourites:     make(map[string]bool),
-		boards:         make(map[string]dto.CompanyBoard),
-		pollState:      make(map[string]*boardPollState),
-		lastScraped:    make(map[string]time.Time),
-		fetches:        make(map[string]dto.CachedResponse),
-		misses:         make(map[string]time.Time),
-		harvestSeen:    make(map[string]map[string]string),
-		profiles:       make(map[string]dto.CompanyProfile),
-		sourceTargets:  make(map[string]dto.SourceTarget),
-		targetByKey:    make(map[string]string),
-		candidates:     make(map[string]sourcetargets.Candidate),
-		candidateByURL: make(map[string]string),
-		discoveries:    make(map[string]map[string]discovery),
-		detailPending:  make(map[string]bool),
-		datedCards:     make(map[string]dto.Job),
+		jobs:             make(map[string]dto.Job),
+		seen:             make(map[string]map[string]bool),
+		byURL:            make(map[string]string),
+		byBoard:          make(map[string]string),
+		listings:         make(map[string][]dto.JobListing),
+		companies:        make(map[string]dto.Company),
+		companyBySlug:    make(map[string]string),
+		tracking:         make(map[string]dto.CompanyTracking),
+		favourites:       make(map[string]bool),
+		boards:           make(map[string]dto.CompanyBoard),
+		pollState:        make(map[string]*boardPollState),
+		lastScraped:      make(map[string]time.Time),
+		fetches:          make(map[string]dto.CachedResponse),
+		misses:           make(map[string]time.Time),
+		harvestSeen:      make(map[string]map[string]string),
+		harvestInSitemap: make(map[string]time.Time),
+		harvestClosed:    make(map[string][]string),
+		harvestCounts:    make(map[string]map[string]int),
+		profiles:         make(map[string]dto.CompanyProfile),
+		sourceTargets:    make(map[string]dto.SourceTarget),
+		targetByKey:      make(map[string]string),
+		candidates:       make(map[string]sourcetargets.Candidate),
+		candidateByURL:   make(map[string]string),
+		discoveries:      make(map[string]map[string]discovery),
+		detailPending:    make(map[string]bool),
+		datedCards:       make(map[string]dto.Job),
 	}
 }
 
@@ -1465,16 +1472,54 @@ func (f *FakeStore) RecordHarvestSeenIDs(_ context.Context, source, outcome stri
 		f.harvestSeen[source] = make(map[string]string)
 	}
 	for _, id := range ids {
+		if _, ok := f.harvestSeen[source][id]; !ok {
+			f.harvestInSitemap[source+"/"+id] = time.Now()
+		}
 		f.harvestSeen[source][id] = outcome
 	}
 	return nil
 }
 
-func (f *FakeStore) RetireHarvestSeenIDs(_ context.Context, source string, ids []string) error {
+func (f *FakeStore) MarkHarvestIDsInSitemap(_ context.Context, source string, ids []string, seenAt time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, id := range ids {
-		delete(f.harvestSeen[source], id)
+		if _, ok := f.harvestSeen[source][id]; ok {
+			f.harvestInSitemap[source+"/"+id] = seenAt
+		}
 	}
+	return nil
+}
+
+func (f *FakeStore) CloseJobsAbsentFromSitemap(_ context.Context, source string, absentSince time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id := range f.harvestSeen[source] {
+		if f.harvestInSitemap[source+"/"+id].Before(absentSince) && !slices.Contains(f.harvestClosed[source], id) {
+			f.harvestClosed[source] = append(f.harvestClosed[source], id)
+		}
+	}
+	return nil
+}
+
+func (f *FakeStore) HarvestClosedIDs(source string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Sorted(slices.Values(f.harvestClosed[source]))
+}
+
+func (f *FakeStore) HarvestCompanyCounts(_ context.Context, source string) (map[string]int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return maps.Clone(f.harvestCounts[source]), nil
+}
+
+func (f *FakeStore) RecordHarvestCompanyCounts(_ context.Context, source string, counts map[string]int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.harvestCounts[source] == nil {
+		f.harvestCounts[source] = make(map[string]int)
+	}
+	maps.Copy(f.harvestCounts[source], counts)
 	return nil
 }

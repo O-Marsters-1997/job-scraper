@@ -226,6 +226,29 @@ func TestListing_Eligible(t *testing.T) {
 	}
 }
 
+func TestListing_Current(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		l    wttj.Listing
+		want bool
+	}{
+		{"live this week", wttj.Listing{Live: true, FirstLiveAt: now.Add(-7 * 24 * time.Hour)}, true},
+		{"live with no first-live date", wttj.Listing{Live: true}, true},
+		{"live 89 days ago", wttj.Listing{Live: true, FirstLiveAt: now.Add(-89 * 24 * time.Hour)}, true},
+		{"live 91 days ago", wttj.Listing{Live: true, FirstLiveAt: now.Add(-91 * 24 * time.Hour)}, false},
+		{"no longer live", wttj.Listing{Live: false, FirstLiveAt: now.Add(-24 * time.Hour)}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.l.Current(now); got != tt.want {
+				t.Errorf("Current(%v) = %v, want %v", now, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestPollBoard(t *testing.T) {
 	t.Parallel()
 	t.Run("a UK company gets no poll hint and a non-UK one is next due in 90 days", func(t *testing.T) {

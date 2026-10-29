@@ -28,8 +28,11 @@ const (
 
 	source    = "wttj"
 	userAgent = "Mozilla/5.0 (compatible; job-scraper/1.0)"
-	interval  = 30 * time.Minute
+	interval  = 10 * time.Minute
 	jobPath   = "/jobs/"
+
+	sitemapInterval = 24 * time.Hour
+	absentFor       = 7 * 24 * time.Hour
 
 	listingBase = "https://app.welcometothejungle.com" + jobPath
 
@@ -42,7 +45,10 @@ const (
 type SeenStore interface {
 	HarvestSeenIDs(ctx context.Context, source string) ([]string, error)
 	RecordHarvestSeenIDs(ctx context.Context, source, outcome string, ids []string) error
-	RetireHarvestSeenIDs(ctx context.Context, source string, ids []string) error
+	MarkHarvestIDsInSitemap(ctx context.Context, source string, ids []string, seenAt time.Time) error
+	CloseJobsAbsentFromSitemap(ctx context.Context, source string, absentSince time.Time) error
+	HarvestCompanyCounts(ctx context.Context, source string) (map[string]int, error)
+	RecordHarvestCompanyCounts(ctx context.Context, source string, counts map[string]int) error
 }
 
 type Exporter interface {
@@ -55,64 +61,123 @@ type Harvester struct {
 	api        *wttj.Client
 	seen       SeenStore
 	exporter   Exporter
+	now        func() time.Time
+	sitemapAt  time.Time
 }
 
-func New(client *http.Client, sitemapURL string, api *wttj.Client, seen SeenStore, exporter Exporter) *Harvester {
-	return &Harvester{client: client, sitemapURL: sitemapURL, api: api, seen: seen, exporter: exporter}
+func New(client *http.Client, sitemapURL string, api *wttj.Client, seen SeenStore, exporter Exporter, now func() time.Time) *Harvester {
+	return &Harvester{client: client, sitemapURL: sitemapURL, api: api, seen: seen, exporter: exporter, now: now}
 }
 
 func (h *Harvester) Name() string            { return source }
 func (h *Harvester) Interval() time.Duration { return interval }
 
 func (h *Harvester) Harvest(ctx context.Context) (discover.Harvest, error) {
-	body, err := discover.Get(ctx, h.client, h.sitemapURL, userAgent)
-	if err != nil {
-		return discover.Harvest{}, err
-	}
-	ids, skipped, err := parseSitemap(body)
-	if err != nil {
-		return discover.Harvest{}, err
-	}
 	known, err := h.seen.HarvestSeenIDs(ctx, source)
 	if err != nil {
 		return discover.Harvest{}, err
 	}
-	out := discover.Harvest{Skipped: skipped}
-	if len(known) == 0 {
-		return out, h.seen.RecordHarvestSeenIDs(ctx, source, outcomeBackfill, ids)
-	}
-	inSitemap := make(map[string]bool, len(ids))
-	for _, id := range ids {
-		inSitemap[id] = true
-	}
-	knownSet := make(map[string]bool, len(known))
-	for _, id := range known {
-		knownSet[id] = true
-	}
-	var fresh []string
-	for id := range inSitemap {
-		if !knownSet[id] {
-			fresh = append(fresh, id)
+	now := h.now()
+	var out discover.Harvest
+	var sitemapIDs []string
+	sitemapDue := now.Sub(h.sitemapAt) >= sitemapInterval
+	if sitemapDue {
+		if sitemapIDs, out.Skipped, err = h.fetchSitemap(ctx); err != nil {
+			return discover.Harvest{}, err
 		}
-	}
-	slices.Sort(fresh)
-	if err := h.handleNew(ctx, fresh, &out); err != nil {
-		return discover.Harvest{}, err
-	}
-	if len(ids)*2 >= len(known) {
-		gone := slices.DeleteFunc(known, func(id string) bool { return inSitemap[id] })
-		if err := h.seen.RetireHarvestSeenIDs(ctx, source, gone); err != nil {
+		if len(known) == 0 {
+			h.sitemapAt = now
+			return out, h.seen.RecordHarvestSeenIDs(ctx, source, outcomeBackfill, sitemapIDs)
+		}
+		if err := h.markSitemap(ctx, sitemapIDs, now); err != nil {
 			return discover.Harvest{}, err
 		}
 	}
-	return out, nil
+	counts, liveIDs, err := h.liveFeed(ctx)
+	if err != nil {
+		return discover.Harvest{}, err
+	}
+	complete, err := h.handleNew(ctx, now, unseen(known, sitemapIDs, liveIDs), &out)
+	if err != nil {
+		return discover.Harvest{}, err
+	}
+	if !complete {
+		return out, nil
+	}
+	if sitemapDue {
+		h.sitemapAt = now
+	}
+	return out, h.seen.RecordHarvestCompanyCounts(ctx, source, counts)
 }
 
-func (h *Harvester) handleNew(ctx context.Context, fresh []string, out *discover.Harvest) error {
-	listings, err := h.api.EligibleListings(ctx, fresh)
-	if err != nil && (!errors.Is(err, sources.ErrDeferred) || len(listings) == 0 || ctx.Err() != nil) {
+func (h *Harvester) fetchSitemap(ctx context.Context) ([]string, int, error) {
+	body, err := discover.Get(ctx, h.client, h.sitemapURL, userAgent)
+	if err != nil {
+		return nil, 0, err
+	}
+	return parseSitemap(body)
+}
+
+func (h *Harvester) markSitemap(ctx context.Context, ids []string, now time.Time) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := h.seen.MarkHarvestIDsInSitemap(ctx, source, ids, now); err != nil {
 		return err
 	}
+	return h.seen.CloseJobsAbsentFromSitemap(ctx, source, now.Add(-absentFor))
+}
+
+func (h *Harvester) liveFeed(ctx context.Context) (map[string]int, []string, error) {
+	prev, err := h.seen.HarvestCompanyCounts(ctx, source)
+	if err != nil {
+		return nil, nil, err
+	}
+	counts, err := h.api.LiveJobCounts(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(prev) == 0 {
+		return counts, nil, nil
+	}
+	var risen []string
+	for token, n := range counts {
+		if n > prev[token] && sourcespec.ValidBoardToken(token) {
+			risen = append(risen, token)
+		}
+	}
+	slices.Sort(risen)
+	ids, err := h.api.LiveJobIDs(ctx, risen)
+	if err != nil {
+		return nil, nil, err
+	}
+	return counts, ids, nil
+}
+
+func unseen(known []string, candidates ...[]string) []string {
+	skip := make(map[string]bool, len(known))
+	for _, id := range known {
+		skip[id] = true
+	}
+	var fresh []string
+	for _, ids := range candidates {
+		for _, id := range ids {
+			if !skip[id] {
+				skip[id] = true
+				fresh = append(fresh, id)
+			}
+		}
+	}
+	slices.Sort(fresh)
+	return fresh
+}
+
+func (h *Harvester) handleNew(ctx context.Context, now time.Time, fresh []string, out *discover.Harvest) (complete bool, err error) {
+	listings, err := h.api.EligibleListings(ctx, fresh)
+	if err != nil && (!errors.Is(err, sources.ErrDeferred) || len(listings) == 0 || ctx.Err() != nil) {
+		return false, err
+	}
+	complete = err == nil
 	seenCompanies := map[string]bool{}
 	var native []string
 	var ineligible []string
@@ -128,6 +193,10 @@ func (h *Harvester) handleNew(ctx context.Context, fresh []string, out *discover
 		}
 	}
 	for _, l := range listings {
+		if !l.Current(now) {
+			ineligible = append(ineligible, l.ID)
+			continue
+		}
 		if board, ok := atsBoard(l.ApplyURL); ok {
 			board.ListingURL, board.ApplyURL = listingBase+l.ID, l.ApplyURL
 			out.Checks = append(out.Checks, discover.Check{ID: l.ID, Board: board})
@@ -148,9 +217,9 @@ func (h *Harvester) handleNew(ctx context.Context, fresh []string, out *discover
 		}
 	}
 	if err := h.seen.RecordHarvestSeenIDs(ctx, source, outcomeIneligible, ineligible); err != nil {
-		return err
+		return false, err
 	}
-	return h.export(ctx, native)
+	return complete, h.export(ctx, native)
 }
 
 func (h *Harvester) RecordChecks(ctx context.Context, ids []string) error {
