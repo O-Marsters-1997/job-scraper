@@ -43,6 +43,7 @@ export const Route = createFileRoute("/_auth/settings/scoring")({
 type StanceMap = Record<string, Stance | undefined>;
 
 const PICKER_STANCES: (Stance | undefined)[] = ["nice", "ok", "avoid"];
+const CYCLE_STANCES: Stance[] = ["nice", "ok", "avoid", "never"];
 type Dim = ScoringOption["dimension"];
 
 function ScoringPage() {
@@ -99,9 +100,11 @@ function ScoringForm(props: {
 		return stance && { label: STANCE_LABEL[stance], tone: STANCE_TONE[stance] };
 	};
 	const cycleStance = (dim: Dim) => (id: string) => {
+		const allowed =
+			props.options().dimensions.find((d) => d.key === dim)?.stances ?? [];
 		const order = [
 			undefined,
-			...(props.options().dimensions.find((d) => d.key === dim)?.stances ?? []),
+			...CYCLE_STANCES.filter((s) => allowed.includes(s)),
 		];
 		setStances(id, order[(order.indexOf(stances[id]) + 1) % order.length]);
 	};

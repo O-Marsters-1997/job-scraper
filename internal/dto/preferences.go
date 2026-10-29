@@ -7,7 +7,7 @@ import "time"
 // option also has a "manual" pick, which always wins.
 type Pick struct {
 	OptionID   string `json:"optionId"`
-	Stance     string `json:"stance"`
+	Stance     Stance `json:"stance"`
 	Weight     int    `json:"weight,omitempty"`
 	Source     string `json:"source"`
 	Overridden bool   `json:"overridden"`

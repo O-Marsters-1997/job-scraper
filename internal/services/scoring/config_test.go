@@ -88,6 +88,7 @@ func TestUpdateConfigRejects(t *testing.T) {
 	}{
 		{"an unknown option", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:cobol", Stance: "nice"}}}}},
 		{"a stance the dimension doesn't allow", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "block"}}}}},
+		{"a never on a ladder dimension", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "seniority:senior", Stance: "never", Weight: 50}}}}},
 		{"a ladder pick without a weight", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "seniority:senior", Stance: "nice"}}}}},
 		{"a ladder weight above 100", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "seniority:senior", Stance: "nice", Weight: 101}}}}},
 		{"a ladder pick with an ok stance", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "seniority:senior", Stance: "ok", Weight: 50}}}}},
@@ -119,7 +120,7 @@ func TestUpdateConfig(t *testing.T) {
 		Preferences: dto.Preferences{
 			Picks: []dto.Pick{
 				{OptionID: "tech:go", Stance: "nice", Source: "text"},
-				{OptionID: "domain:gambling", Stance: "block"},
+				{OptionID: "domain:gambling", Stance: "never"},
 				{OptionID: "tech:kubernetes", Stance: "ok"},
 				{OptionID: "seniority:senior", Stance: "nice", Weight: 70},
 			},
@@ -134,7 +135,7 @@ func TestUpdateConfig(t *testing.T) {
 	}
 	wantPicks := []dto.Pick{
 		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
-		{OptionID: "domain:gambling", Stance: "block", Source: "manual"},
+		{OptionID: "domain:gambling", Stance: "never", Source: "manual"},
 		{OptionID: "tech:kubernetes", Stance: "ok", Source: "manual"},
 		{OptionID: "seniority:senior", Stance: "nice", Weight: 70, Source: "manual"},
 	}

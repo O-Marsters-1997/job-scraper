@@ -44,14 +44,18 @@ let scoringConfig: ScoringConfig = {
 };
 
 const scoringDimensions: DimensionSpec[] = [
-	{ key: "tech", kind: "pair", stances: ["nice", "ok", "avoid"] },
-	{ key: "role", kind: "pair", stances: ["nice", "ok", "avoid"] },
-	{ key: "domain", kind: "pair", stances: ["nice", "ok", "avoid", "block"] },
+	{ key: "tech", kind: "pair", stances: ["never", "avoid", "ok", "nice"] },
+	{ key: "role", kind: "pair", stances: ["never", "avoid", "ok", "nice"] },
+	{ key: "domain", kind: "pair", stances: ["never", "avoid", "ok", "nice"] },
 	{ key: "seniority", kind: "ladder", stances: ["nice"] },
-	{ key: "work", kind: "multi", stances: ["nice", "ok", "avoid"] },
-	{ key: "stage", kind: "multi", stances: ["nice", "ok"] },
-	{ key: "size", kind: "multi", stances: ["nice", "ok"] },
-	{ key: "employment", kind: "multi", stances: ["nice", "ok"] },
+	{ key: "work", kind: "multi", stances: ["never", "avoid", "ok", "nice"] },
+	{ key: "stage", kind: "multi", stances: ["never", "avoid", "ok", "nice"] },
+	{ key: "size", kind: "multi", stances: ["never", "avoid", "ok", "nice"] },
+	{
+		key: "employment",
+		kind: "multi",
+		stances: ["never", "avoid", "ok", "nice"],
+	},
 ];
 
 const scoringOptions: ScoringOption[] = [

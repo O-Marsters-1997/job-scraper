@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const stanceSchema = z.enum(["nice", "ok", "avoid", "block"]);
+export const stanceSchema = z.enum(["never", "avoid", "ok", "nice"]);
 
 export type Stance = z.infer<typeof stanceSchema>;
 

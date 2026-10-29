@@ -582,7 +582,7 @@ func prepareJob(cfg dto.SearchConfig, job dto.Job, byID map[string]dto.ScoringOp
 	picks := dedupeBySource(cfg.Preferences.Picks)
 	return preparedJob{
 		picks:     evaluatedPicksFor(picks, byID, answers, corrections),
-		unpicked:  unpickedGateOptions(picks, byID, answers, corrections),
+		unpicked:  unpickedLadderOptions(picks, byID, answers, corrections),
 		salaryRaw: job.SalaryRaw,
 		floor:     cfg.Preferences.SalaryFloor,
 		favourite: favourite,
@@ -607,26 +607,26 @@ func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answ
 	return out
 }
 
-func unpickedGateOptions(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) []evaluatedPick {
+func unpickedLadderOptions(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) []evaluatedPick {
 	wantedIDs := make(map[string]bool, len(picks))
-	gateDims := make(map[dto.Dimension]bool)
+	ladderDims := make(map[dto.Dimension]bool)
 	for _, p := range picks {
 		_, wantedIDs[p.OptionID] = pickStrength[p.Stance]
-		if opt, ok := byID[p.OptionID]; ok && dimensionSpecs[opt.Dimension].Gate {
-			gateDims[opt.Dimension] = true
+		if opt, ok := byID[p.OptionID]; ok && dimensionSpecs[opt.Dimension].Kind == ladderKind {
+			ladderDims[opt.Dimension] = true
 		}
 	}
 	var out []evaluatedPick
 	for id, opt := range byID {
-		if wantedIDs[id] || opt.RetiredAt != nil || !gateDims[opt.Dimension] {
+		if wantedIDs[id] || opt.RetiredAt != nil || !ladderDims[opt.Dimension] {
 			continue
 		}
-		out = append(out, evaluate(opt, "nice", answers, corrections))
+		out = append(out, evaluate(opt, dto.StanceNice, answers, corrections))
 	}
 	return out
 }
 
-func evaluate(opt dto.ScoringOption, stance string, answers map[string]dto.Answer, corrections map[string]string) evaluatedPick {
+func evaluate(opt dto.ScoringOption, stance dto.Stance, answers map[string]dto.Answer, corrections map[string]string) evaluatedPick {
 	answer, known := answers[QuestionHash(opt.Question)]
 	value, corrected := corrections[opt.ID]
 	if corrected {

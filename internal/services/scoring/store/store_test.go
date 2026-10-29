@@ -193,6 +193,35 @@ func TestSeniorityLadderMigration(t *testing.T) {
 	}
 }
 
+func TestBlockStanceMigration(t *testing.T) {
+	t.Parallel()
+	st, pool := newStore(t)
+	ctx := t.Context()
+	userID := pgtest.InsertUser(t, pool)
+	if _, err := st.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: userID, Preferences: dto.Preferences{Picks: []dto.Pick{
+		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+		{OptionID: "domain:gambling", Stance: "block", Source: "manual"},
+		{OptionID: "domain:crypto", Stance: "block", Source: "text"},
+	}}}); err != nil {
+		t.Fatalf("UpsertSearchConfig() err = %v", err)
+	}
+
+	exec(t, pool, migrationSection(t, "scripts/migrations/20261028090000_block_stance_to_never.sql", "Up"))
+
+	cfg, err := st.GetSearchConfig(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetSearchConfig() err = %v", err)
+	}
+	want := []dto.Pick{
+		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+		{OptionID: "domain:gambling", Stance: "never", Source: "manual"},
+		{OptionID: "domain:crypto", Stance: "never", Source: "text"},
+	}
+	if diff := cmp.Diff(want, cfg.Preferences.Picks); diff != "" {
+		t.Errorf("picks after Up (-want +got):\n%s", diff)
+	}
+}
+
 func TestAddScoringOption_QueuesBackfillForScoredOpenJobsOnly(t *testing.T) {
 	t.Parallel()
 	st, pool := newStore(t)
