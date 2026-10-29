@@ -42,6 +42,7 @@ struct JobDetailView: View {
         state = .loading
         do {
             state = .loaded(try await client.job(id))
+            Task { try? await client.recordEvent(EventInput(type: .jobOpened, subjectID: id, reason: "", undone: false)) }
             application = try? await client.due().first { $0.id == id && $0.draft?.state == .ready && !$0.isAtDesk }
         } catch is CancellationError {
             return

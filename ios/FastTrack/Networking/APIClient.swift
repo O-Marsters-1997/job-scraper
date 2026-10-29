@@ -13,6 +13,7 @@ struct APIClient {
     var clearGrade: (_ jobID: String) async throws -> Void
     var setSeen: (_ jobIDs: [String], _ seen: Bool) async throws -> Void
     var recordEvent: (_ event: EventInput) async throws -> Void
+    var recordImpressions: (_ batch: ImpressionBatchInput) async throws -> Void
     var excludeCompany: (_ companyID: String) async throws -> CompanyExclusion
     var unexcludeCompany: (_ companyID: String, _ removeName: Bool) async throws -> Void
     var setCompanyKind: (_ companyID: String, _ kind: CompanyKind) async throws -> Void
@@ -81,6 +82,9 @@ extension APIClient {
             },
             recordEvent: { event in
                 try await http.post("events", body: event)
+            },
+            recordImpressions: { batch in
+                try await http.post("events/impressions", body: batch)
             },
             excludeCompany: { companyID in
                 try await http.put("companies/\(companyID)/exclusion", body: EmptyBody())
@@ -198,6 +202,7 @@ extension APIClient {
             clearGrade: { _ in try respond(()) },
             setSeen: { _, _ in try respond(()) },
             recordEvent: { _ in try respond(()) },
+            recordImpressions: { _ in try respond(()) },
             excludeCompany: { _ in try respond(CompanyExclusion(name: "Monzo", added: true)) },
             unexcludeCompany: { _, _ in try respond(()) },
             setCompanyKind: { _, _ in try respond(()) },

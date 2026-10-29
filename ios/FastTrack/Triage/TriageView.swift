@@ -55,6 +55,7 @@ struct TriageView: View {
             }
             .onChange(of: refresh) { sync() }
             .onChange(of: scenePhase) {
+                if scenePhase != .active { model.flushImpressions() }
                 if scenePhase == .active, model.isOffline || !model.queued.isEmpty { sync() }
             }
             .onChange(of: model.sessionExpired) {
@@ -82,6 +83,7 @@ struct TriageView: View {
             }
             .sensoryFeedback(trigger: model.undoStack.map(\.id), feedback)
             .task { if model.loadState.isIdle { await model.load() } }
+            .task(id: model.current?.id) { model.cardShown() }
     }
 
     @ViewBuilder
