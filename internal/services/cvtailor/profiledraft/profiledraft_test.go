@@ -74,6 +74,29 @@ func TestWriterRedraft(t *testing.T) {
 		}
 	})
 
+	t.Run("a term from the base profile is grounded, one from nowhere is not", func(t *testing.T) {
+		t.Parallel()
+		in := input()
+		in.Profile = "Backend engineer building HealthTech Go services for payments teams."
+		m := &scriptedModel{replies: []string{"Backend engineer owning HealthTech Go services."}}
+		res, err := profiledraft.New(m).Redraft(t.Context(), "key", in)
+		if err != nil {
+			t.Fatalf("Redraft error = %v", err)
+		}
+		if res.Text == "" || len(res.Attempts) != 1 {
+			t.Errorf("Redraft = %q with %d attempts, want accepted in 1", res.Text, len(res.Attempts))
+		}
+
+		m = &scriptedModel{replies: []string{"Backend engineer owning FinTech Go services."}}
+		res, err = profiledraft.New(m).Redraft(t.Context(), "key", in)
+		if err != nil {
+			t.Fatalf("Redraft error = %v", err)
+		}
+		if res.Text != "" || len(res.Attempts) == 0 || !strings.Contains(res.Attempts[0].Rejection, `"FinTech"`) {
+			t.Errorf("Redraft = %q, rejection %q, want empty and FinTech rejected", res.Text, res.Attempts[0].Rejection)
+		}
+	})
+
 	t.Run("two bad outputs leave the text empty", func(t *testing.T) {
 		t.Parallel()
 		m := &scriptedModel{replies: []string{"First paragraph.\n\nSecond paragraph.", "Passionate Go engineer."}}
