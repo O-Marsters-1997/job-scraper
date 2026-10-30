@@ -111,6 +111,110 @@ func (q *Queries) InsertContactEvent(ctx context.Context, arg InsertContactEvent
 	return err
 }
 
+const listContactCompanies = `-- name: ListContactCompanies :many
+SELECT co.id, co.name, co.kind, (tc.company_id IS NOT NULL)::bool AS tracked,
+       COALESCE(ARRAY(
+           SELECT a.id FROM applications a JOIN jobs aj ON aj.id = a.job_id
+           WHERE a.user_id = $1 AND aj.company_id = co.id
+           ORDER BY a.created_at DESC, a.id), '{}')::uuid[] AS application_ids
+FROM companies co
+LEFT JOIN tracked_companies tc
+       ON tc.user_id = $1 AND tc.company_id = co.id
+      AND tc.enabled AND tc.review_state <> 'dismissed'
+WHERE tc.company_id IS NOT NULL
+   OR EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = $1 AND c.company_id = co.id)
+ORDER BY co.name, co.id
+LIMIT 500
+`
+
+type ListContactCompaniesRow struct {
+	ID             pgtype.UUID
+	Name           string
+	Kind           string
+	Tracked        bool
+	ApplicationIds []pgtype.UUID
+}
+
+func (q *Queries) ListContactCompanies(ctx context.Context, userID pgtype.UUID) ([]ListContactCompaniesRow, error) {
+	rows, err := q.db.Query(ctx, listContactCompanies, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListContactCompaniesRow
+	for rows.Next() {
+		var i ListContactCompaniesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Kind,
+			&i.Tracked,
+			&i.ApplicationIds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listContactCompanyJobs = `-- name: ListContactCompanyJobs :many
+WITH open_jobs AS (
+    SELECT j.company_id, j.id AS job_id, j.title, j.scraped_at,
+           (EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = $1 AND c.job_id = j.id)
+            OR EXISTS (SELECT 1 FROM contact_events e JOIN contacts c ON c.id = e.contact_id
+                       WHERE c.user_id = $1 AND e.job_id = j.id)) AS has_contact
+    FROM jobs j
+    WHERE j.closed_at IS NULL AND j.company_id = ANY($2::uuid[])
+), ranked AS (
+    SELECT company_id, job_id, title, scraped_at, has_contact, ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY has_contact, scraped_at DESC, job_id) AS rn
+    FROM open_jobs
+)
+SELECT company_id, job_id, title, has_contact::bool AS has_contact
+FROM ranked WHERE rn <= 50
+ORDER BY company_id, rn
+`
+
+type ListContactCompanyJobsParams struct {
+	UserID     pgtype.UUID
+	CompanyIds []pgtype.UUID
+}
+
+type ListContactCompanyJobsRow struct {
+	CompanyID  pgtype.UUID
+	JobID      pgtype.UUID
+	Title      string
+	HasContact bool
+}
+
+func (q *Queries) ListContactCompanyJobs(ctx context.Context, arg ListContactCompanyJobsParams) ([]ListContactCompanyJobsRow, error) {
+	rows, err := q.db.Query(ctx, listContactCompanyJobs, arg.UserID, arg.CompanyIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListContactCompanyJobsRow
+	for rows.Next() {
+		var i ListContactCompanyJobsRow
+		if err := rows.Scan(
+			&i.CompanyID,
+			&i.JobID,
+			&i.Title,
+			&i.HasContact,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listContactEvents = `-- name: ListContactEvents :many
 SELECT e.id, e.contact_id, e.kind, e.occurred_on, e.channel, e.template_kind, e.template_name,
        e.outcome, e.note, e.job_id, COALESCE(j.title, '')::text AS job_title

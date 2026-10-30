@@ -1,7 +1,9 @@
 import {
 	type Contact,
+	type ContactCompany,
 	type ContactInput,
 	type ContactSent,
+	contactCompanySchema,
 	contactSchema,
 	contactSentSchema,
 	type MarkSentInput,
@@ -14,6 +16,13 @@ export async function fetchContacts(): Promise<Contact[]> {
 	return mocked(
 		(db) => db.getContacts(),
 		() => apiFetch("/contacts", contactSchema.array()),
+	);
+}
+
+export async function fetchContactCompanies(): Promise<ContactCompany[]> {
+	return mocked(
+		(db) => db.getContactCompanies(),
+		() => apiFetch("/contacts/companies", contactCompanySchema.array()),
 	);
 }
 

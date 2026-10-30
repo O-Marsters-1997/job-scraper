@@ -225,3 +225,41 @@ func readContacts(ctx context.Context, q *sqlc.Queries, userID, id pgtype.UUID) 
 	}
 	return toContactDTOs(rows, events), nil
 }
+
+func (s *Store) ListContactCompanies(ctx context.Context, userID string) ([]dto.ContactCompany, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListContactCompanies(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListContactCompanies: %w", err)
+	}
+	ids := make([]pgtype.UUID, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	jobRows, err := s.queries.ListContactCompanyJobs(ctx, sqlc.ListContactCompanyJobsParams{UserID: uid, CompanyIds: ids})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListContactCompanies jobs: %w", err)
+	}
+	jobs := make(map[pgtype.UUID][]dto.ContactCompanyJob, len(rows))
+	for _, j := range jobRows {
+		jobs[j.CompanyID] = append(jobs[j.CompanyID], dto.ContactCompanyJob{JobID: j.JobID.String(), Title: j.Title, HasContact: j.HasContact})
+	}
+	out := make([]dto.ContactCompany, len(rows))
+	for i, r := range rows {
+		c := dto.ContactCompany{
+			ID: r.ID.String(), Name: r.Name, Kind: r.Kind, Tracked: r.Tracked,
+			OpenJobs: jobs[r.ID], ApplicationIDs: make([]string, len(r.ApplicationIds)),
+		}
+		if c.OpenJobs == nil {
+			c.OpenJobs = []dto.ContactCompanyJob{}
+		}
+		for k, id := range r.ApplicationIds {
+			c.ApplicationIDs[k] = id.String()
+		}
+		out[i] = c
+	}
+	return out, nil
+}

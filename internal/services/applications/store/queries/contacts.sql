@@ -75,3 +75,34 @@ ORDER BY e.occurred_on, e.created_at, (e.kind = 'closed');
 
 -- name: DeleteContact :execrows
 DELETE FROM contacts WHERE id = $1 AND user_id = $2;
+
+-- name: ListContactCompanies :many
+SELECT co.id, co.name, co.kind, (tc.company_id IS NOT NULL)::bool AS tracked,
+       COALESCE(ARRAY(
+           SELECT a.id FROM applications a JOIN jobs aj ON aj.id = a.job_id
+           WHERE a.user_id = sqlc.arg('user_id') AND aj.company_id = co.id
+           ORDER BY a.created_at DESC, a.id), '{}')::uuid[] AS application_ids
+FROM companies co
+LEFT JOIN tracked_companies tc
+       ON tc.user_id = sqlc.arg('user_id') AND tc.company_id = co.id
+      AND tc.enabled AND tc.review_state <> 'dismissed'
+WHERE tc.company_id IS NOT NULL
+   OR EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = sqlc.arg('user_id') AND c.company_id = co.id)
+ORDER BY co.name, co.id
+LIMIT 500;
+
+-- name: ListContactCompanyJobs :many
+WITH open_jobs AS (
+    SELECT j.company_id, j.id AS job_id, j.title, j.scraped_at,
+           (EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = sqlc.arg('user_id') AND c.job_id = j.id)
+            OR EXISTS (SELECT 1 FROM contact_events e JOIN contacts c ON c.id = e.contact_id
+                       WHERE c.user_id = sqlc.arg('user_id') AND e.job_id = j.id)) AS has_contact
+    FROM jobs j
+    WHERE j.closed_at IS NULL AND j.company_id = ANY(sqlc.arg('company_ids')::uuid[])
+), ranked AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY has_contact, scraped_at DESC, job_id) AS rn
+    FROM open_jobs
+)
+SELECT company_id, job_id, title, has_contact::bool AS has_contact
+FROM ranked WHERE rn <= 50
+ORDER BY company_id, rn;

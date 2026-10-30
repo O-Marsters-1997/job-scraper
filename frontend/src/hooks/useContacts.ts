@@ -2,6 +2,7 @@ import { createQuery, queryOptions } from "@tanstack/solid-query";
 import {
 	createContact,
 	deleteContact,
+	fetchContactCompanies,
 	fetchContacts,
 	markContactSent,
 	recordContactReply,
@@ -17,6 +18,15 @@ export const contactsQueryOptions = queryOptions({
 
 export function useContacts() {
 	return createQuery(() => contactsQueryOptions);
+}
+
+export const contactCompaniesQueryOptions = queryOptions({
+	queryKey: keys.contactCompanies,
+	queryFn: fetchContactCompanies,
+});
+
+export function useContactCompanies() {
+	return createQuery(() => contactCompaniesQueryOptions);
 }
 
 export function useCreateContact() {

@@ -120,3 +120,62 @@ export const replyOutcomes: {
 	},
 	{ key: "no_thanks", label: "No thanks", effect: "Closes the contact." },
 ];
+
+export const contactCompanySchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	kind: z.string(),
+	tracked: z.boolean(),
+	open_jobs: z.array(
+		z.object({
+			job_id: z.string(),
+			title: z.string(),
+			has_contact: z.boolean(),
+		}),
+	),
+	application_ids: z.array(z.string()),
+});
+
+export type ContactCompany = z.infer<typeof contactCompanySchema>;
+
+export type RelationshipStatus =
+	| "in_conversation"
+	| "chase_due"
+	| "waiting"
+	| "parked"
+	| "not_started"
+	| "gone_cold"
+	| "no_one_yet";
+
+export const relationshipLabels: Record<RelationshipStatus, string> = {
+	in_conversation: "In conversation",
+	chase_due: "Chase due",
+	waiting: "Waiting",
+	parked: "Parked",
+	not_started: "Not started",
+	gone_cold: "Gone cold",
+	no_one_yet: "No one yet",
+};
+
+export function relationshipStatus(
+	contacts: Contact[],
+	today: string,
+): RelationshipStatus {
+	if (contacts.length === 0) return "no_one_yet";
+	const has = (test: (c: Contact) => boolean) => contacts.some(test);
+	if (has((c) => c.outcome === "interested" || c.outcome === "referred")) {
+		return "in_conversation";
+	}
+	if (
+		has(
+			(c) =>
+				c.stage !== "closed" && !!c.follow_up_by && c.follow_up_by <= today,
+		)
+	) {
+		return "chase_due";
+	}
+	if (has((c) => c.stage === "messaged")) return "waiting";
+	if (has((c) => c.outcome === "not_now")) return "parked";
+	if (has((c) => c.stage === "to_contact")) return "not_started";
+	return "gone_cold";
+}
