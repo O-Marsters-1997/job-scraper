@@ -125,7 +125,8 @@ func (m *Module) keep(ctx context.Context, claim dto.DraftClaim) error {
 		}
 	}
 	_, terminal := apperr.StatusFor(cause)
-	failure := dto.DraftFailure{Reason: cause.Error(), Terminal: terminal || errors.Is(cause, store.ErrKeptDraftExists)}
+	_, rejected := errors.AsType[*google.RejectedError](cause)
+	failure := dto.DraftFailure{Reason: cause.Error(), Terminal: terminal || rejected || errors.Is(cause, store.ErrKeptDraftExists)}
 	if err := m.store.FailKeep(ctx, claim, failure); err != nil {
 		return errors.Join(cause, err)
 	}
