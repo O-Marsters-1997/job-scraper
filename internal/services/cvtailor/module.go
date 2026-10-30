@@ -77,6 +77,10 @@ func New(pool *pgxpool.Pool, docs Docs, asker Asker, cached CachedAsker, creds C
 	return Build(Deps{Store: store.New(pool), Docs: docs, Drive: docs, Asker: asker, Cached: cached, Editor: cvedit.NewClient(), Lines: lineedit.New(lineedit.NewOpenRouter()), Profile: profiledraft.New(lineedit.NewOpenRouter()), Creds: creds, Log: log, Scaffolder: letterwrite.NewClient()})
 }
 
+func NewFacade(pool *pgxpool.Pool) *Module {
+	return Build(Deps{Store: store.New(pool)})
+}
+
 // Run generates pending Drafts until ctx is cancelled.
 func (m *Module) Run(ctx context.Context) error {
 	ticker := time.NewTicker(tickInterval)

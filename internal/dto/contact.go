@@ -112,3 +112,18 @@ type RecordReplyInput struct {
 	Outcome ContactOutcome `json:"outcome"` // never no_reply
 	Reply   string         `json:"reply"`
 }
+
+type ContactCompanyJob struct {
+	JobID      string `json:"job_id"`
+	Title      string `json:"title"`
+	HasContact bool   `json:"has_contact"` // a Contact or Contact event references this Job
+}
+
+type ContactCompany struct {
+	ID             string              `json:"id"`
+	Name           string              `json:"name"`
+	Kind           string              `json:"kind"` // companies.kind
+	Tracked        bool                `json:"tracked"`
+	OpenJobs       []ContactCompanyJob `json:"open_jobs"`
+	ApplicationIDs []string            `json:"application_ids"`
+}

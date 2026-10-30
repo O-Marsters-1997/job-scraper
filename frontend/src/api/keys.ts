@@ -34,6 +34,8 @@ export const keys = {
 	jobNote: (jobId: string) => ["job-note", jobId] as const,
 	jobComments: (jobId: string) => ["job-comments", jobId] as const,
 	contacts: ["contacts"] as const,
+	contactCompanies: ["contacts", "companies"] as const,
+	outreachTemplates: ["outreach-templates"] as const,
 	companies: {
 		all: companiesAll,
 		list: (params: object) => [...companiesAll, "list", params] as const,

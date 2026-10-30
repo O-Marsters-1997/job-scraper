@@ -41,6 +41,7 @@ type FakeStore struct {
 	mappings       map[headingKey]*string
 	skills         map[string]*bankSkill
 	drafts         map[string]*draft
+	templates      []*outreachTemplate
 	jobs           map[string]dto.Job
 	annotations    map[string]dto.JobAnnotations
 	skeletons      map[string]dto.LetterSkeleton

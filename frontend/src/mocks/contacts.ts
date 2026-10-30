@@ -1,5 +1,6 @@
 import type {
 	Contact,
+	ContactCompany,
 	ContactEvent,
 	ContactInput,
 	ContactSent,
@@ -42,6 +43,32 @@ function replace(id: string, change: (c: Contact) => Contact): Contact {
 
 export function getContacts(): Contact[] {
 	return [...contacts].sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export function getContactCompanies(): ContactCompany[] {
+	const tracked: ContactCompany = {
+		id: "mock-company-northwind",
+		name: "Northwind",
+		kind: "direct",
+		tracked: true,
+		open_jobs: [
+			{ job_id: "mock-job-1", title: "Platform Engineer", has_contact: false },
+		],
+		application_ids: [],
+	};
+	const linked = new Map<string, ContactCompany>();
+	for (const c of contacts) {
+		if (!c.company_id) continue;
+		linked.set(c.company_id, {
+			id: c.company_id,
+			name: c.company_name,
+			kind: "direct",
+			tracked: false,
+			open_jobs: [],
+			application_ids: [],
+		});
+	}
+	return [tracked, ...linked.values()];
 }
 
 export function createContact(input: ContactInput): Contact {

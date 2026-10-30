@@ -33,6 +33,7 @@ type Store interface {
 
 	CreateContact(ctx context.Context, userID string, in dto.ContactInput, today time.Time) (dto.Contact, error)
 	ListContacts(ctx context.Context, userID string) ([]dto.Contact, error)
+	ListContactCompanies(ctx context.Context, userID string) ([]dto.ContactCompany, error)
 	DeleteContact(ctx context.Context, userID, id string) error
 	MarkContactSent(ctx context.Context, userID string, in dto.MarkSentInput, today time.Time) (dto.ContactSent, error)
 	RecordContactReply(ctx context.Context, userID string, in dto.RecordReplyInput, today time.Time) (dto.Contact, error)

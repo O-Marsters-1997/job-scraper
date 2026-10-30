@@ -72,6 +72,10 @@ func (f *FakeStore) ListContacts(_ context.Context, userID string) ([]dto.Contac
 	return out, nil
 }
 
+func (f *FakeStore) ListContactCompanies(context.Context, string) ([]dto.ContactCompany, error) {
+	return []dto.ContactCompany{}, nil
+}
+
 func (f *FakeStore) DeleteContact(_ context.Context, userID, id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
