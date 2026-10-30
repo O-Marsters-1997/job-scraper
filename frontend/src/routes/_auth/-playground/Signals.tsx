@@ -1,4 +1,5 @@
 import { createSignal, For, Show } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { Input } from "@/components/ui/input";
 import { rowLabel } from "@/lib/scoreRows";
 import type { ScoreRow } from "@/types/job";
@@ -59,7 +60,7 @@ function Row(props: {
 					aria-pressed={open() || !!props.notes[props.row.key]}
 					onClick={() => setOpen(!open())}
 				>
-					✎
+					<Icon name="pen" size={14} />
 				</button>
 			</div>
 			<Show when={open()}>

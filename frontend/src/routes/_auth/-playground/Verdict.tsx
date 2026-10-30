@@ -1,4 +1,4 @@
-import { createSignal, For, onCleanup, onMount } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, onMount } from "solid-js";
 import { Kbd } from "@/components/Kbd";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,15 +20,22 @@ function isTyping(el: EventTarget | null) {
 }
 
 export function Verdict(props: {
-	pending: boolean;
+	failed: boolean;
 	onVerdict: (direction: FeedbackDirection, overall: string) => void;
 }) {
 	const [overall, setOverall] = createSignal("");
+	const [sent, setSent] = createSignal<FeedbackDirection>();
+	createEffect(() => {
+		if (props.failed) setSent(undefined);
+	});
 	const submit = (direction: FeedbackDirection) => {
-		if (!props.pending) props.onVerdict(direction, overall());
+		if (sent()) return;
+		setSent(direction);
+		props.onVerdict(direction, overall());
 	};
 	const onKey = (e: KeyboardEvent) => {
-		if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
+		if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target))
+			return;
 		const v = VERDICTS.find((x) => x.key === e.key);
 		if (v) submit(v.direction);
 	};
@@ -49,7 +56,8 @@ export function Verdict(props: {
 						<Button
 							variant="outline"
 							class="flex-1"
-							disabled={props.pending}
+							disabled={!!sent()}
+							loading={sent() === v.direction}
 							onClick={() => submit(v.direction)}
 						>
 							<Kbd>{v.key}</Kbd>

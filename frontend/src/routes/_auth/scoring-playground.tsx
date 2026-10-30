@@ -115,7 +115,7 @@ function Review(props: { jobId: string }) {
 							onNote={(key, note) => setNotes(key, note)}
 						/>
 						<Verdict
-							pending={verdict.isPending}
+							failed={verdict.isError}
 							onVerdict={(direction, overall) =>
 								verdict.mutate({
 									jobId: props.jobId,
