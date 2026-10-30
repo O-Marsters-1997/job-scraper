@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/http"
 	"slices"
 	"time"
 
@@ -227,12 +226,8 @@ func (s *Service) replaceLowLean(ctx context.Context, claim dto.DraftClaim, pl p
 }
 
 func suggestError(err error) error {
-	var se *openrouter.StatusError
-	if errors.As(err, &se) {
-		switch se.Code {
-		case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden:
-			return apperr.Unprocessable("OpenRouter refused the request; check your key and credit in Settings, AI")
-		}
+	if refusal := openrouter.Refusal(err); refusal != nil {
+		return refusal
 	}
 	return apperr.Upstream("the suggestion model failed")
 }
