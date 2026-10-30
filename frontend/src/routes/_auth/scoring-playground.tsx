@@ -3,22 +3,26 @@ import { For, Show } from "solid-js";
 import { BandChip } from "@/components/jobs/BandChip";
 import JobDescription from "@/components/jobs/JobDescription";
 import { QueryBoundary } from "@/components/QueryBoundary";
-import { rowLabel } from "@/lib/scoreRows";
 import type { Band, Job, ScoreRow } from "@/types/job";
 import { useJob } from "../../hooks/useJobs";
 import { usePlaygroundQueue } from "../../hooks/useScoringPlayground";
 import type { PlaygroundQueue } from "../../types/scoringPlayground";
+import { SignalRow } from "./-playground/SignalRow";
 
 export const Route = createFileRoute("/_auth/scoring-playground")({
 	component: ScoringPlayground,
 });
 
-const GROUPS: { label: string; effects: ScoreRow["effect"][] }[] = [
-	{ label: "Gates", effects: ["gated"] },
-	{ label: "Boosts", effects: ["favourite"] },
-	{ label: "Met", effects: ["meets", "level"] },
-	{ label: "Missed", effects: ["misses"] },
-	{ label: "Unknown", effects: ["unknown"] },
+const GROUPS: { label: string; keep: (r: ScoreRow) => boolean }[] = [
+	{ label: "Corrected", keep: (r) => r.corrected === true },
+	{ label: "Gates", keep: (r) => !r.corrected && r.effect === "gated" },
+	{ label: "Boosts", keep: (r) => !r.corrected && r.effect === "favourite" },
+	{
+		label: "Met",
+		keep: (r) => !r.corrected && (r.effect === "meets" || r.effect === "level"),
+	},
+	{ label: "Missed", keep: (r) => !r.corrected && r.effect === "misses" },
+	{ label: "Unknown", keep: (r) => !r.corrected && r.effect === "unknown" },
 ];
 
 function ScoringPlayground() {
@@ -108,7 +112,7 @@ function Review(props: { jobId: string }) {
 								{(band) => <BandChip band={band() as Band} />}
 							</Show>
 						</div>
-						<Signals rows={data().Breakdown ?? []} />
+						<Signals jobId={data().ID} rows={data().Breakdown ?? []} />
 					</aside>
 				</div>
 			)}
@@ -134,11 +138,11 @@ function JobHeader(props: { job: Job }) {
 	);
 }
 
-function Signals(props: { rows: ScoreRow[] }) {
+function Signals(props: { jobId: string; rows: ScoreRow[] }) {
 	const groups = () =>
 		GROUPS.map((g) => ({
 			...g,
-			rows: props.rows.filter((r) => g.effects.includes(r.effect)),
+			rows: props.rows.filter(g.keep),
 		})).filter((g) => g.rows.length > 0);
 	return (
 		<div class="flex flex-col gap-3">
@@ -149,14 +153,7 @@ function Signals(props: { rows: ScoreRow[] }) {
 							{g.label}
 						</span>
 						<For each={g.rows}>
-							{(r) => (
-								<span
-									class="truncate px-2 py-1 text-sm text-foreground"
-									title={rowLabel(r)}
-								>
-									{rowLabel(r)}
-								</span>
-							)}
+							{(r) => <SignalRow jobId={props.jobId} row={r} />}
 						</For>
 					</div>
 				)}
