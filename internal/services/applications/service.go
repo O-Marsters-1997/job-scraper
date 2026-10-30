@@ -31,7 +31,6 @@ type Store interface {
 	SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID string) error
 	MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error
 
-
 	GetJobNote(ctx context.Context, userID, jobID string) (dto.JobNote, error)
 	PutJobNote(ctx context.Context, userID string, in dto.PutJobNoteInput) (dto.JobNote, error)
 

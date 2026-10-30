@@ -375,4 +375,3 @@ func (f *FakeStore) DeleteJobComment(_ context.Context, userID, id string) error
 	}
 	return nil
 }
-

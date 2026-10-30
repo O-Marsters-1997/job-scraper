@@ -11,7 +11,6 @@ import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { isAgencyKind } from "@/lib/agencyRollup";
 import type { Job } from "@/types/job";
 import { applicationStatusesQueryOptions } from "../../hooks/useApplicationStatuses";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
@@ -192,10 +191,6 @@ function JobDetailPage() {
 											onAdd={() => setTaskOpen(true)}
 										/>
 									</div>
-
-									<Show when={isAgencyKind(j().CompanyKind)}>
-										<div class="max-md:order-4"></div>
-									</Show>
 								</div>
 							</div>
 						</TabsContent>

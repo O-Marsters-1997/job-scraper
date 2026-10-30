@@ -131,4 +131,3 @@ func toJobCommentDTO(c sqlc.JobComment) dto.JobComment {
 		UpdatedAt: c.UpdatedAt.Time,
 	}
 }
-

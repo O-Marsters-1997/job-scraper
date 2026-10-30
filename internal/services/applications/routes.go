@@ -16,7 +16,6 @@ func (m *Module) Routes(r chi.Router) {
 
 	r.Get("/due", handlers.GetAll(m.store.ListDue))
 
-
 	r.Get("/jobs/{id}/note", handlers.GetByID(m.store.GetJobNote))
 	r.Put("/jobs/{id}/note", handlers.Update(m.service.PutJobNote))
 
