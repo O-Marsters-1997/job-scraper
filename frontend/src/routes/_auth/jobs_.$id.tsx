@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { recordEvent } from "@/api/events";
+import { AddContactDialog } from "@/components/contacts/AddContactDialog";
 import { Icon } from "@/components/Icon";
 import { CvSheet } from "@/components/jobs/CvSheet";
 import { JobActionBar } from "@/components/jobs/JobActionBar";
@@ -50,6 +51,7 @@ function JobDetailPage() {
 	const params = Route.useParams();
 	const [cvOpen, setCvOpen] = createSignal(false);
 	const [taskOpen, setTaskOpen] = createSignal(false);
+	const [contactOpen, setContactOpen] = createSignal(false);
 	const [tab, setTab] = createSignal("description");
 	const jobsQuery = useJob(() => params().id);
 	const navigate = useNavigate();
@@ -191,6 +193,16 @@ function JobDetailPage() {
 											onAdd={() => setTaskOpen(true)}
 										/>
 									</div>
+
+									<div class="max-md:order-4">
+										<Button
+											variant="outline"
+											class="w-full"
+											onClick={() => setContactOpen(true)}
+										>
+											Add contact
+										</Button>
+									</div>
 								</div>
 							</div>
 						</TabsContent>
@@ -211,6 +223,11 @@ function JobDetailPage() {
 					<CreateTaskDialog
 						open={taskOpen()}
 						onOpenChange={setTaskOpen}
+						job={j()}
+					/>
+					<AddContactDialog
+						open={contactOpen()}
+						onOpenChange={setContactOpen}
 						job={j()}
 					/>
 					<TrackApplicationDialog

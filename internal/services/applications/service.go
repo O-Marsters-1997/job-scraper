@@ -31,6 +31,12 @@ type Store interface {
 	SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID string) error
 	MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error
 
+	CreateContact(ctx context.Context, userID string, in dto.ContactInput, today time.Time) (dto.Contact, error)
+	ListContacts(ctx context.Context, userID string) ([]dto.Contact, error)
+	DeleteContact(ctx context.Context, userID, id string) error
+	MarkContactSent(ctx context.Context, userID string, in dto.MarkSentInput, today time.Time) (dto.ContactSent, error)
+	RecordContactReply(ctx context.Context, userID string, in dto.RecordReplyInput, today time.Time) (dto.Contact, error)
+
 	GetJobNote(ctx context.Context, userID, jobID string) (dto.JobNote, error)
 	PutJobNote(ctx context.Context, userID string, in dto.PutJobNoteInput) (dto.JobNote, error)
 

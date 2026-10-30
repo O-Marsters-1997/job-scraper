@@ -92,6 +92,12 @@ const NAV: NavGroup[] = [
 				badge: "applications",
 			},
 			{
+				to: "/contacts",
+				label: "Contacts",
+				icon: "users",
+				exact: true,
+			},
+			{
 				to: "/tasks",
 				label: "Tasks",
 				icon: "checkSquare",

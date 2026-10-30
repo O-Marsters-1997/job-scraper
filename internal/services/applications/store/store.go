@@ -20,6 +20,11 @@ import (
 
 var ErrApplicationExists = apperr.Conflict("application already exists for this job")
 
+var (
+	ErrContactJobNotFound     = apperr.Invalid("job not found")
+	ErrContactCompanyNotFound = apperr.Invalid("company not found")
+)
+
 // EventRecorder logs application events inside the caller's transaction; the
 // events module implements it (ADR 0011).
 type EventRecorder interface {

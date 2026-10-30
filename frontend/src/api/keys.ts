@@ -33,6 +33,7 @@ export const keys = {
 	statuses: ["application-statuses"] as const,
 	jobNote: (jobId: string) => ["job-note", jobId] as const,
 	jobComments: (jobId: string) => ["job-comments", jobId] as const,
+	contacts: ["contacts"] as const,
 	companies: {
 		all: companiesAll,
 		list: (params: object) => [...companiesAll, "list", params] as const,

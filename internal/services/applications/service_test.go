@@ -451,3 +451,41 @@ func TestUpdateJobComment(t *testing.T) {
 		t.Errorf("UpdateJobComment(...) = %+v, %v, want body after", got, err)
 	}
 }
+
+func TestContactValidation(t *testing.T) {
+	t.Parallel()
+	svc, _ := newService(t)
+	tooLong := strings.Repeat("x", 201)
+
+	for _, tt := range []struct {
+		name string
+		in   dto.ContactInput
+	}{
+		{"blank name", dto.ContactInput{Name: "  "}},
+		{"name too long", dto.ContactInput{Name: tooLong}},
+		{"linkedin url without a scheme", dto.ContactInput{Name: "Sam", LinkedInURL: "linkedin.com/in/sam"}},
+	} {
+		t.Run("create rejects "+tt.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := svc.CreateContact(t.Context(), userID, tt.in); !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("CreateContact(%+v) err = %v, want invalid", tt.in, err)
+			}
+		})
+	}
+
+	t.Run("sent rejects an unknown channel", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.MarkContactSent(t.Context(), userID, dto.MarkSentInput{ID: "c", Channel: "carrier_pigeon"})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("MarkContactSent(bad channel) err = %v, want invalid", err)
+		}
+	})
+
+	t.Run("reply rejects no_reply", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.RecordContactReply(t.Context(), userID, dto.RecordReplyInput{ID: "c", Outcome: dto.ContactOutcomeNoReply})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("RecordContactReply(no_reply) err = %v, want invalid", err)
+		}
+	})
+}
