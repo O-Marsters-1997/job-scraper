@@ -6,9 +6,14 @@ import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import { chaseNowRows } from "@/lib/chaseNow";
 import { contactGroups, groupContacts } from "@/lib/contactGroups";
+import { loadedData } from "@/lib/queryData";
 import type { ApplicationWithDetails } from "@/types/application";
 import type { Contact } from "@/types/contact";
-import { chasesQueryOptions, useChases } from "../../hooks/useApplications";
+import {
+	chasesQueryOptions,
+	useApplications,
+	useChases,
+} from "../../hooks/useApplications";
 import {
 	contactsQueryOptions,
 	useContacts,
@@ -32,6 +37,7 @@ export const Route = createFileRoute("/_auth/contacts")({
 function ContactsPage() {
 	const contacts = useContacts();
 	const chases = useChases();
+	const apps = useApplications();
 	const remove = useDeleteContact();
 	const [adding, setAdding] = createSignal(false);
 	const [sending, setSending] = createSignal<Contact | undefined>();
@@ -72,7 +78,13 @@ function ContactsPage() {
 
 			<QueryBoundary query={contacts}>
 				{(all) => {
-					const rows = () => chaseNowRows(all(), chases.data ?? [], new Date());
+					const rows = () =>
+						chaseNowRows(
+							all(),
+							loadedData(chases) ?? [],
+							new Date(),
+							loadedData(apps) ?? [],
+						);
 					const chaseIds = () =>
 						new Set(
 							rows().flatMap((r) =>

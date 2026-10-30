@@ -182,7 +182,11 @@ export default function Sidebar(props: SidebarProps) {
 	const contacts = useContacts();
 	const chases = useChases();
 	const chaseCount = () =>
-		chaseNowRows(contacts.data ?? [], chases.data ?? [], new Date()).length;
+		chaseNowRows(
+			loadedData(contacts) ?? [],
+			loadedData(chases) ?? [],
+			new Date(),
+		).length;
 	const googleStatus = useGoogleStatus();
 
 	const handleLogout = async () => {

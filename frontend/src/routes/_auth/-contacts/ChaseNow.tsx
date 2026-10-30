@@ -58,7 +58,10 @@ export function ChaseNow(props: {
 									<div class="flex flex-wrap gap-2">
 										<Button
 											size="sm"
-											disabled={clearChase.isPending}
+											loading={
+												clearChase.isPending &&
+												clearChase.variables === row.app.ID
+											}
 											onClick={() =>
 												clearChase.mutate(row.app.ID, {
 													onSuccess: () => props.onChased(row.app),

@@ -22,6 +22,7 @@ export function chaseNowRows(
 	contacts: Contact[],
 	dueApps: ApplicationWithDetails[],
 	now: Date,
+	allApps: ApplicationWithDetails[] = dueApps,
 ): ChaseRow[] {
 	const today = format(now, "yyyy-MM-dd");
 	const dueContacts = contacts.filter(
@@ -30,7 +31,7 @@ export function chaseNowRows(
 	const linked = new Set(
 		dueContacts.flatMap((c) => (c.application_id ? [c.application_id] : [])),
 	);
-	const appById = new Map(dueApps.map((a) => [a.ID, a]));
+	const appById = new Map(allApps.map((a) => [a.ID, a]));
 	return [
 		...dueContacts.map(
 			(contact): ChaseRow => ({
