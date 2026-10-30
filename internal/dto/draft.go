@@ -72,14 +72,14 @@ type Draft struct {
 	InsightLines json.RawMessage  `json:"-"`
 	InsightsFor  string           `json:"-"`
 	Insights     *InsightsSummary `json:"insights"`
-
-	RedraftWarning string `json:"redraftWarning,omitempty"`
 	// SkillsEditable is false for a Draft made before Skill Lines.
 	SkillsEditable bool `json:"skillsEditable"`
 
 	BaseDocID      string   `json:"baseDocId"`
 	BaseTabID      string   `json:"baseTabId"`
 	AchievementIDs []string `json:"-"`
+
+	RedraftWarning string `json:"redraftWarning,omitempty"`
 }
 
 // DraftContent is the editable part of a Draft: the Profile, Skills (flat,
