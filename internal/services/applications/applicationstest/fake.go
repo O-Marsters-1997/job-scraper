@@ -1,11 +1,9 @@
 package applicationstest
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -29,11 +27,9 @@ type FakeStore struct {
 	mu       sync.Mutex
 	apps     map[string]dto.Application
 	statuses map[string]dto.ApplicationStatus
-	contacts map[string][]dto.RecruiterContact
 	notes    map[noteKey]string
 	comments map[string][]dto.JobComment
 
-	nextContact int
 	nextComment int
 }
 
@@ -43,7 +39,6 @@ func NewFakeStore() *FakeStore {
 	return &FakeStore{
 		apps:     make(map[string]dto.Application),
 		statuses: make(map[string]dto.ApplicationStatus),
-		contacts: make(map[string][]dto.RecruiterContact),
 		notes:    make(map[noteKey]string),
 		comments: make(map[string][]dto.JobComment),
 	}
@@ -321,33 +316,6 @@ func (f *FakeStore) SeedDefaultStatuses(_ context.Context, _ pgx.Tx, userID stri
 
 var _ applications.Store = (*FakeStore)(nil)
 
-func (f *FakeStore) CreateRecruiterContact(_ context.Context, userID string, in dto.LogRecruiterContactInput) (dto.RecruiterContact, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.nextContact++
-	c := dto.RecruiterContact{
-		ID: fmt.Sprintf("contact-%d", f.nextContact), JobID: in.JobID, ContactedOn: in.ContactedOn,
-		Channel: in.Channel, Outcome: in.Outcome, CreatedAt: time.Now(),
-	}
-	f.contacts[userID] = append(f.contacts[userID], c)
-	return c, nil
-}
-
-func (f *FakeStore) ListRecruiterContacts(_ context.Context, userID, jobID string) ([]dto.RecruiterContact, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	out := []dto.RecruiterContact{}
-	for _, c := range f.contacts[userID] {
-		if c.JobID == jobID {
-			out = append(out, c)
-		}
-	}
-	slices.SortStableFunc(out, func(a, b dto.RecruiterContact) int {
-		return cmp.Or(strings.Compare(b.ContactedOn, a.ContactedOn), b.CreatedAt.Compare(a.CreatedAt))
-	})
-	return out, nil
-}
-
 func (f *FakeStore) GetJobNote(_ context.Context, userID, jobID string) (dto.JobNote, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -406,27 +374,4 @@ func (f *FakeStore) DeleteJobComment(_ context.Context, userID, id string) error
 		return data.ErrNotFound
 	}
 	return nil
-}
-
-var outcomeRank = map[dto.ContactOutcome]int{
-	dto.OutcomeNoReply: 1, dto.OutcomeRejected: 2, dto.OutcomeSpoke: 3, dto.OutcomeSubmitted: 4,
-}
-
-func (f *FakeStore) GetRecruiterContactSummaries(_ context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	out := map[string]dto.RecruiterContactSummary{}
-	for _, c := range f.contacts[userID] {
-		if !slices.Contains(jobIDs, c.JobID) {
-			continue
-		}
-		sum := out[c.JobID]
-		sum.Count++
-		sum.LastContactedOn = max(sum.LastContactedOn, c.ContactedOn)
-		if outcomeRank[c.Outcome] > outcomeRank[sum.BestOutcome] {
-			sum.BestOutcome = c.Outcome
-		}
-		out[c.JobID] = sum
-	}
-	return out, nil
 }

@@ -40,10 +40,6 @@ func TestIOSFixtures(t *testing.T) {
 			{ID: "type-1", Name: "Finish application", Colour: "#0f766e", SystemKey: dto.TaskTypeFinish, CreatedAt: at},
 			{ID: "type-2", Name: "Reach out", Colour: "#15803d", CreatedAt: at},
 		},
-		"recruiter_contact": dto.RecruiterContact{
-			ID: "contact-1", JobID: "job-1", ContactedOn: "2026-10-01",
-			Channel: dto.ChannelEmail, Outcome: dto.OutcomeNoReply, CreatedAt: at,
-		},
 		"job_page": dto.JobPage{
 			Total: new(1),
 			Items: []dto.Job{{

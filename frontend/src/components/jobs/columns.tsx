@@ -5,22 +5,16 @@ import { FavouriteStar } from "@/components/FavouriteStar";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/datetime";
 import { postedLabel } from "@/lib/postedLabel";
 import { cn, titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import { GRADE_LABEL } from "@/types/grade";
 import type { Job } from "@/types/job";
-import {
-	outcomeLabels,
-	type RecruiterContactSummary,
-} from "@/types/recruiterContact";
 import { JobActionsMenu } from "./JobActionsMenu";
 import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
-	contactSummaries?: () => Record<string, RecruiterContactSummary> | undefined;
 	onTrack: (jobId: string) => void;
 	onDismiss: (job: Job) => void;
 	onGrade: (job: Job) => void;
@@ -268,34 +262,6 @@ export function createJobColumns(
 				</Show>
 			),
 		},
-		...(ctx.contactSummaries
-			? [
-					{
-						id: "contact",
-						header: "Contact",
-						enableSorting: false,
-						enableGlobalFilter: false,
-						cell: (info) => (
-							<Show
-								when={ctx.contactSummaries?.()?.[info.row.original.ID]}
-								fallback={
-									<span class="text-faint">
-										{ctx.contactSummaries?.() ? "No contact" : "—"}
-									</span>
-								}
-							>
-								{(summary) => (
-									<span class="text-xs text-muted">
-										{summary().count}x ·{" "}
-										{formatDate(`${summary().last_contacted_on}T00:00:00`)} ·{" "}
-										{outcomeLabels[summary().best_outcome]}
-									</span>
-								)}
-							</Show>
-						),
-					} satisfies ColumnDef<Job, unknown>,
-				]
-			: []),
 		{
 			id: "actions",
 			enableSorting: false,

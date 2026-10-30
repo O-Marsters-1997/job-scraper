@@ -160,19 +160,6 @@ final class DueModel {
         }
     }
 
-    func logContact(_ job: DueJob, channel: ContactChannel, outcome: ContactOutcome) async -> Bool {
-        do {
-            _ = try await client.logContact(job.id, channel, outcome)
-            if let current = jobs.first(where: { $0.id == job.id }), hasChaseDue(current) {
-                await completeChase(current, title: "Contact logged").value
-            }
-            return true
-        } catch {
-            fail(error)
-            return false
-        }
-    }
-
     @discardableResult
     func undo() -> Task<Void, Never> {
         guard let entry = undoStack.popLast() else { return Task {} }

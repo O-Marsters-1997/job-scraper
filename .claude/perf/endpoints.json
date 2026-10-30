@@ -225,8 +225,6 @@
   { "name": "companies-ats-counts [heavy]", "method": "GET", "path": "/companies/ats-counts", "record": "heavy" },
   { "name": "companies-new [typical]", "method": "GET", "path": "/companies/new", "record": "typical" },
   { "name": "companies-new [heavy]", "method": "GET", "path": "/companies/new", "record": "heavy" },
-  { "name": "recruiter-summaries [typical]", "method": "GET", "path": "/recruiter-contacts/summaries", "record": "typical" },
-  { "name": "recruiter-summaries [heavy]", "method": "GET", "path": "/recruiter-contacts/summaries", "record": "heavy" },
   { "name": "sources [typical]", "method": "GET", "path": "/sources", "record": "typical" },
   { "name": "sources [heavy]", "method": "GET", "path": "/sources", "record": "heavy" },
   { "name": "scoring-feedback [typical]", "method": "GET", "path": "/scoring-feedback", "record": "typical" },

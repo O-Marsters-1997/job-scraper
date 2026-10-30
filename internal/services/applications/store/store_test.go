@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest"
@@ -302,18 +301,6 @@ func TestApplicationEventsShareTheApplicationsTransaction(t *testing.T) {
 	want := []string{events.ApplicationCreated, events.ApplicationStatusChanged}
 	if diff := cmp.Diff(want, types); diff != "" {
 		t.Errorf("event types (-want +got):\n%s", diff)
-	}
-}
-
-func TestCreateRecruiterContactMissingJobIsNotFound(t *testing.T) {
-	t.Parallel()
-	st, _, userID := newStore(t)
-	in := dto.LogRecruiterContactInput{
-		JobID: "00000000-0000-0000-0000-000000000000", ContactedOn: "2026-10-01",
-		Channel: dto.ChannelEmail, Outcome: dto.OutcomeSpoke,
-	}
-	if _, err := st.CreateRecruiterContact(t.Context(), userID, in); !errors.Is(err, data.ErrNotFound) {
-		t.Errorf("CreateRecruiterContact(missing job) err = %v, want ErrNotFound", err)
 	}
 }
 
