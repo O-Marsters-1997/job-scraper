@@ -23,7 +23,6 @@ struct JobDetailView: View {
                     }
                     JobDetailBody(job: job)
                     JobNoteSection(jobID: job.id)
-                    RecruiterContactsSection(jobID: job.id)
                 }
                 .padding(16)
             }

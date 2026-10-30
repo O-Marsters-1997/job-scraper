@@ -16,9 +16,6 @@ func (m *Module) Routes(r chi.Router) {
 
 	r.Get("/due", handlers.GetAll(m.store.ListDue))
 
-	r.Get("/recruiter-contacts/summaries", handlers.Query(m.service.RecruiterContactSummaries))
-	r.Get("/jobs/{id}/recruiter-contacts", handlers.GetByID(m.store.ListRecruiterContacts))
-	r.Post("/jobs/{id}/recruiter-contacts", handlers.Create(m.service.LogRecruiterContact))
 
 	r.Get("/jobs/{id}/note", handlers.GetByID(m.store.GetJobNote))
 	r.Put("/jobs/{id}/note", handlers.Update(m.service.PutJobNote))

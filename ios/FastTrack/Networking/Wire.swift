@@ -102,42 +102,12 @@ struct DueList: Decodable {
     let jobs: [DueJob]
 }
 
-enum ContactChannel: String, Codable, CaseIterable {
-    case linkedinMessage = "linkedin_message", email, call, inbound
-}
-
-enum ContactOutcome: String, Codable, CaseIterable {
-    case noReply = "no_reply", rejected, spoke, submitted
-}
-
-struct RecruiterContact: Decodable, Identifiable, Hashable {
-    let id: String
-    let contactedOn: Date
-    let channel: ContactChannel
-    let outcome: ContactOutcome
-
-    enum CodingKeys: String, CodingKey {
-        case id, channel, outcome
-        case contactedOn = "contacted_on"
-    }
-}
-
 struct ChaseInput: Encodable {
     let chaseBy: String
 
     enum CodingKeys: String, CodingKey { case chaseBy = "chase_by" }
 }
 
-struct ContactInput: Encodable {
-    let contactedOn: String
-    let channel: ContactChannel
-    let outcome: ContactOutcome
-
-    enum CodingKeys: String, CodingKey {
-        case channel, outcome
-        case contactedOn = "contacted_on"
-    }
-}
 
 struct TaskType: Decodable {
     let id: String

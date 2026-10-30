@@ -30,7 +30,6 @@ import { JobFactsCard } from "./-jobs-detail/JobFactsCard";
 import { JobHeader } from "./-jobs-detail/JobHeader";
 import { JobNotesCard } from "./-jobs-detail/JobNotesCard";
 import { JobTasksCard } from "./-jobs-detail/JobTasksCard";
-import { RecruiterContactsCard } from "./-jobs-detail/RecruiterContactsCard";
 
 export const Route = createFileRoute("/_auth/jobs_/$id")({
 	loader: ({ params }) => {
@@ -195,9 +194,7 @@ function JobDetailPage() {
 									</div>
 
 									<Show when={isAgencyKind(j().CompanyKind)}>
-										<div class="max-md:order-4">
-											<RecruiterContactsCard jobId={params().id} />
-										</div>
+										<div class="max-md:order-4"></div>
 									</Show>
 								</div>
 							</div>

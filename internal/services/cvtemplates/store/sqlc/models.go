@@ -571,16 +571,6 @@ type PushSubscription struct {
 	CreatedAt pgtype.Timestamptz
 }
 
-type RecruiterContact struct {
-	ID          pgtype.UUID
-	UserID      pgtype.UUID
-	JobID       pgtype.UUID
-	ContactedOn pgtype.Date
-	Channel     string
-	Outcome     string
-	CreatedAt   pgtype.Timestamptz
-}
-
 type ScoreFeedback struct {
 	ID        pgtype.UUID
 	UserID    pgtype.UUID

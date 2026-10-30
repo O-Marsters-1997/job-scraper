@@ -451,36 +451,3 @@ func TestUpdateJobComment(t *testing.T) {
 		t.Errorf("UpdateJobComment(...) = %+v, %v, want body after", got, err)
 	}
 }
-
-func TestLogRecruiterContact(t *testing.T) {
-	valid := dto.LogRecruiterContactInput{JobID: "job-1", ContactedOn: "2026-10-01", Channel: dto.ChannelEmail, Outcome: dto.OutcomeSpoke}
-
-	t.Run("records the contact", func(t *testing.T) {
-		svc, _ := newService(t)
-		got, err := svc.LogRecruiterContact(t.Context(), userID, valid)
-		if err != nil {
-			t.Fatalf("LogRecruiterContact(...) err = %v", err)
-		}
-		want := dto.RecruiterContact{JobID: "job-1", ContactedOn: "2026-10-01", Channel: dto.ChannelEmail, Outcome: dto.OutcomeSpoke}
-		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.RecruiterContact{}, "ID", "CreatedAt")); diff != "" {
-			t.Errorf("LogRecruiterContact(...) mismatch (-want +got):\n%s", diff)
-		}
-	})
-
-	invalid := map[string]func(*dto.LogRecruiterContactInput){
-		"bad date":    func(in *dto.LogRecruiterContactInput) { in.ContactedOn = "yesterday" },
-		"bad channel": func(in *dto.LogRecruiterContactInput) { in.Channel = "carrier_pigeon" },
-		"bad outcome": func(in *dto.LogRecruiterContactInput) { in.Outcome = "ghosted" },
-	}
-	for name, mutate := range invalid {
-		t.Run(name+" is rejected", func(t *testing.T) {
-			svc, _ := newService(t)
-			in := valid
-			mutate(&in)
-			_, err := svc.LogRecruiterContact(t.Context(), userID, in)
-			if !apperr.IsKind(err, apperr.KindInvalid) {
-				t.Errorf("LogRecruiterContact(%s) err = %v, want invalid", name, err)
-			}
-		})
-	}
-}
