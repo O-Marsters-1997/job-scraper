@@ -27,7 +27,7 @@ func Grounding(d Draft) []Finding {
 		}
 	}
 	if d.Profile != nil {
-		out = append(out, groundSlot(*d.Profile, d.Bank, slices.Concat(d.Bank, d.BankSkills))...)
+		out = append(out, groundSlot(*d.Profile, d.Bank, slices.Concat(d.Bank, d.BankSkills, []string{d.Profile.BaseText}))...)
 	}
 	return append(out, groundSkills(d)...)
 }
