@@ -352,6 +352,7 @@ func TestBatchUpdate(t *testing.T) {
 }
 
 func TestBatchUpdate_RejectedRequest(t *testing.T) {
+	t.Parallel()
 	ctx, client, _ := recordingClient(t, http.StatusBadRequest, `{"error":{"message":"Invalid requests[3]"}}`)
 
 	err := client.BatchUpdate(ctx, "u1", "doc", []json.RawMessage{json.RawMessage(`{}`)})
@@ -363,6 +364,7 @@ func TestBatchUpdate_RejectedRequest(t *testing.T) {
 }
 
 func TestBatchUpdate_RateLimitedIsNotRejected(t *testing.T) {
+	t.Parallel()
 	ctx, client, _ := recordingClient(t, http.StatusTooManyRequests, `{"error":{"message":"slow down"}}`)
 
 	err := client.BatchUpdate(ctx, "u1", "doc", nil)
