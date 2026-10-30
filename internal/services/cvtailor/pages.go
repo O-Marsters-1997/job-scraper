@@ -45,11 +45,11 @@ func (s *Service) measure(ctx context.Context, userID, docID, tabID string) ([]b
 	return pdf, n, err
 }
 
-func (s *Service) pageCounts(ctx context.Context, claim dto.DraftClaim, docID string) (base, draft int, draftPDF []byte, err error) {
+func (s *Service) pageCounts(ctx context.Context, claim dto.DraftClaim, docID, tabID string) (base, draft int, draftPDF []byte, err error) {
 	if _, base, err = s.measure(ctx, claim.UserID, claim.DocID, claim.TabID); err != nil {
 		return 0, 0, nil, fmt.Errorf("count base pages: %w", err)
 	}
-	if draftPDF, draft, err = s.measure(ctx, claim.UserID, docID, claim.TabID); err != nil {
+	if draftPDF, draft, err = s.measure(ctx, claim.UserID, docID, tabID); err != nil {
 		return 0, 0, nil, fmt.Errorf("count draft pages: %w", err)
 	}
 	return base, draft, draftPDF, nil

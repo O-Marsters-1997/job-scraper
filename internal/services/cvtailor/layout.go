@@ -34,7 +34,7 @@ func (s *Service) DraftLayout(ctx context.Context, userID string, q dto.DraftQue
 	if err := json.Unmarshal(draft.EditSet, &edits); err != nil {
 		return dto.DraftLayout{}, fmt.Errorf("decode edit set: %w", err)
 	}
-	raw, err := s.docs.GetDocument(ctx, userID, draft.DraftDocID, draft.BaseTabID)
+	raw, err := s.docs.GetDocument(ctx, userID, draft.DraftDocID, draft.DraftTabID)
 	if err != nil {
 		return dto.DraftLayout{}, fmt.Errorf("load draft doc: %w", err)
 	}

@@ -13,7 +13,7 @@ export async function sharePdf(bytes: ArrayBuffer, filename: string) {
 	}
 }
 
-function download(file: File) {
+export function download(file: File) {
 	const url = URL.createObjectURL(file);
 	const a = document.createElement("a");
 	a.href = url;

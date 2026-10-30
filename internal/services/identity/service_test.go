@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -380,10 +382,53 @@ func TestUpdateProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := dto.Profile{Username: "alice", Email: "new@example.com"}
+	want := dto.Profile{Username: "alice", Email: "new@example.com", CVFilenamePattern: dto.DefaultCVFilenamePattern}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("GetProfile mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func TestUpdateCVFilenamePattern(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		pattern string
+		want    string
+	}{
+		{"stores the pattern trimmed", "  {name}-{role} ", "{name}-{role}"},
+		{"blank resets to the default", "   ", dto.DefaultCVFilenamePattern},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := t.Context()
+			st := identitytest.NewFakeStore()
+			user, err := st.CreateUser(ctx, "alice", "hash", "a@example.com")
+			if err != nil {
+				t.Fatal(err)
+			}
+			svc := identity.NewService(testDeps(t, identity.Deps{Store: st}))
+			if _, err := svc.UpdateCVFilenamePattern(ctx, user.ID, dto.UpdateCVFilenamePatternInput{Pattern: tt.pattern}); err != nil {
+				t.Fatal(err)
+			}
+			got, err := st.GetProfile(ctx, user.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.CVFilenamePattern != tt.want {
+				t.Errorf("pattern = %q, want %q", got.CVFilenamePattern, tt.want)
+			}
+		})
+	}
+
+	t.Run("rejects an over-long pattern", func(t *testing.T) {
+		t.Parallel()
+		svc := identity.NewService(testDeps(t, identity.Deps{}))
+		_, err := svc.UpdateCVFilenamePattern(t.Context(), "u", dto.UpdateCVFilenamePatternInput{Pattern: strings.Repeat("a", 121)})
+		if status, _ := apperr.StatusFor(err); status != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400 (err %v)", status, err)
+		}
+	})
 }
 
 type stubKeyUsage struct {

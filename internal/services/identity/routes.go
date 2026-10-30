@@ -26,6 +26,7 @@ func (m *Module) Routes(r chi.Router) {
 
 	r.Get("/profile", handlers.GetAll(m.store.GetProfile))
 	r.Put("/profile", handlers.Update(m.service.UpdateProfile))
+	r.Put("/profile/cv-filename", handlers.Update(m.service.UpdateCVFilenamePattern))
 
 	r.Get("/ai-prefs", handlers.GetAll(m.service.GetAIPrefs))
 	r.Get("/ai-usage", handlers.GetAll(m.service.AIUsage))

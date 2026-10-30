@@ -14,7 +14,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 )
 
-const docURLPrefix = "https://docs.google.com/document/d/"
+const (
+	docURLPrefix = "https://docs.google.com/document/d/"
+	keptAsTab    = "tab"
+)
 
 // GetDraft returns the Draft with, once it is ready, the provenance of its
 // bullets.
@@ -130,7 +133,13 @@ func (s *Service) DiscardDraft(ctx context.Context, userID string, q dto.DraftQu
 		return draft, nil
 	}
 	if draft.DraftDocID != "" {
-		if err := s.drive.DeleteFile(ctx, userID, draft.DraftDocID); err != nil {
+		var err error
+		if draft.KeptAs == keptAsTab {
+			err = deleteTab(ctx, s.drive, userID, draft.DraftDocID, draft.DraftTabID)
+		} else {
+			err = s.drive.DeleteFile(ctx, userID, draft.DraftDocID)
+		}
+		if err != nil {
 			slog.ErrorContext(ctx, "delete discarded draft failed", slog.String("draft_id", draft.ID), slog.Any(logger.KeyErr, err))
 			return dto.Draft{}, apperr.Upstream("failed to delete the draft from Google Drive")
 		}
@@ -149,7 +158,7 @@ func (s *Service) DraftPDF(ctx context.Context, userID string, q dto.DraftQuery)
 	if (draft.Status != statusReady && draft.Status != statusKeeping) || draft.DraftDocID == "" {
 		return nil, apperr.NotFound("draft has no document")
 	}
-	body, err := s.drive.ExportPDF(ctx, userID, draft.DraftDocID, draft.BaseTabID)
+	body, err := s.drive.ExportPDF(ctx, userID, draft.DraftDocID, draft.DraftTabID)
 	if err != nil {
 		slog.ErrorContext(ctx, "export draft pdf failed", slog.String("draft_id", draft.ID), slog.Any(logger.KeyErr, err))
 		return nil, apperr.Upstream("failed to export PDF")
@@ -167,6 +176,9 @@ func outcome(d dto.Draft) string {
 func withDocURL(d dto.Draft) dto.Draft {
 	if d.DraftDocID != "" && d.Status == statusReady {
 		url := docURLPrefix + strings.TrimSpace(d.DraftDocID) + "/edit"
+		if d.KeptAs == keptAsTab {
+			url += "?tab=" + d.DraftTabID
+		}
 		d.DraftDocURL = &url
 	}
 	return d

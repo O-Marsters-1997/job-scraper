@@ -46,6 +46,7 @@ import {
 	type PageMetrics,
 	PX_PER_PT,
 } from "./DocPage";
+import { DownloadPdfButton } from "./DownloadPdfButton";
 import { PageMeter, SaveIndicator } from "./DraftMeters";
 import { Insights } from "./Insights";
 import type { JobTextBlock } from "./JobText";
@@ -194,6 +195,14 @@ export function DraftEditor(props: {
 	};
 	const leanBySlot = createMemo(
 		() => new Map(loadedData(leanQuery)?.map((b) => [b.slotId, b])),
+	);
+	const leanByAchievement = createMemo(
+		() =>
+			new Map(
+				loadedData(leanQuery)?.flatMap((b) =>
+					b.achievementId ? [[b.achievementId, b] as const] : [],
+				),
+			),
 	);
 
 	const pagePx = () => (props.layout?.page.width ?? 0) * PX_PER_PT;
@@ -416,7 +425,10 @@ export function DraftEditor(props: {
 		onHover: hover,
 		text: ed.text,
 		label: ed.label,
-		lean: (slotId) => leanBySlot().get(slotId),
+		lean: (slotId) => {
+			const id = rolePicks.achievementOf(slotId);
+			return id ? leanByAchievement().get(id) : leanBySlot().get(slotId);
+		},
 		insightFor: (slotId) =>
 			loadedData(insightsQuery)?.lines.find((l) => l.slotId === slotId),
 		get explaining() {
@@ -629,6 +641,11 @@ export function DraftEditor(props: {
 						<Icon name="fileText" size={14} />
 						<span class="hidden 2xl:inline">Print preview</span>
 					</Button>
+					<DownloadPdfButton
+						draftId={props.draft.id}
+						jobId={props.draft.jobId}
+						flush={ed.flush}
+					/>
 					<Show when={props.draft.draftDocUrl}>
 						{(url) => (
 							<Button
@@ -840,6 +857,7 @@ export function DraftEditor(props: {
 			<Show when={preview()}>
 				<PrintPreview
 					draftId={props.draft.id}
+					jobId={props.draft.jobId}
 					onClose={() => setPreview(false)}
 				/>
 			</Show>

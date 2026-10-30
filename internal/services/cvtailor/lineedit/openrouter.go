@@ -2,7 +2,6 @@ package lineedit
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -33,7 +32,8 @@ func (o *OpenRouter) Complete(ctx context.Context, apiKey string, p Prompt, onDe
 			{Role: "system", Content: p.System},
 			{Role: "user", Content: p.User},
 		},
-		Usage: &openrouter.UsageOptions{Include: true},
+		Usage:     &openrouter.UsageOptions{Include: true},
+		MaxTokens: p.MaxTokens,
 	}
 	reply, err := openrouter.ChatStream(ctx, o.http, o.url, apiKey, req, onDelta)
 	if err != nil {
@@ -43,11 +43,8 @@ func (o *OpenRouter) Complete(ctx context.Context, apiKey string, p Prompt, onDe
 }
 
 func modelError(err error) error {
-	if se, ok := errors.AsType[*openrouter.StatusError](err); ok {
-		switch se.Code {
-		case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden:
-			return apperr.Unprocessable("OpenRouter refused the request; check your key and credit in Settings, AI")
-		}
+	if refusal := openrouter.Refusal(err); refusal != nil {
+		return refusal
 	}
 	return apperr.Upstream("the suggestion model failed")
 }

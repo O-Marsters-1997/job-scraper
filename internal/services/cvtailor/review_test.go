@@ -9,7 +9,9 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
+	"github.com/ollymarsters/job-scraper/internal/services/google"
 )
 
 func (e draftEnv) readyDrafts(t *testing.T, n int) []string {
@@ -83,7 +85,8 @@ func TestGetDraftSkillGroups(t *testing.T) {
 }
 
 func TestKeepDraft(t *testing.T) {
-	t.Run("queues at once and the next tick renames the Doc and marks it kept", func(t *testing.T) {
+	t.Run("queues at once and the next tick rebuilds the Draft as a child Tab of the base Doc", func(t *testing.T) {
+		t.Parallel()
 		e := newDraftEnv(t)
 		ctx := t.Context()
 		id := e.readyDrafts(t, 1)[0]
@@ -95,15 +98,113 @@ func TestKeepDraft(t *testing.T) {
 		e.run(t, tick{})
 
 		got := e.draft(t, id)
-		if got.Status != "ready" || got.Outcome == nil || *got.Outcome != dto.OutcomeKept || got.KeptAs != "doc" {
-			t.Errorf("GetDraft() = %+v, want ready, kept as a doc", got)
+		if got.Status != "ready" || got.Outcome == nil || *got.Outcome != dto.OutcomeKept || got.KeptAs != "tab" || got.KeepNote != "" {
+			t.Errorf("GetDraft() = %+v, want ready, kept as a tab", got)
+		}
+		wantURL := "https://docs.google.com/document/d/" + docID + "/edit?tab=t.added1"
+		if got.DraftDocID != docID || got.DraftDocURL == nil || *got.DraftDocURL != wantURL {
+			t.Errorf("GetDraft() doc = %q, url = %v, want %q, %q", got.DraftDocID, got.DraftDocURL, docID, wantURL)
+		}
+		if diff := cmp.Diff([]string{"Acme \u2014 Platform Engineer"}, e.drive.AddedTabs); diff != "" {
+			t.Errorf("added tabs (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([]string{tabID}, e.drive.ChildOf); diff != "" {
+			t.Errorf("tab parents (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([]string{"copy-1"}, e.drive.Deleted); diff != "" {
+			t.Errorf("deleted files (-want +got):\n%s", diff)
+		}
+		if len(e.drive.Renamed) != 0 {
+			t.Errorf("renamed Docs = %v, want none", e.drive.Renamed)
+		}
+		if _, err := e.svc.KeepDraft(ctx, userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Errorf("KeepDraft() again err = %v, want it idempotent", err)
+		}
+	})
+
+	t.Run("editing a draft kept as a Tab writes to that Tab", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		e.run(t, tick{})
+		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+
+		svc := cvtailor.NewService(e.store, cvtailortest.Docs{TabJSON: baseTab(t)}, e.asker, e.drive)
+		e.saved(t, svc, id, dto.SlotEdit{SlotID: slot, Text: "Cut latency"})
+
+		last := e.drive.Updates[len(e.drive.Updates)-1]
+		if len(last) == 0 {
+			t.Fatal("no Docs write after the edit")
+		}
+		for _, raw := range last {
+			if !strings.Contains(string(raw), `"tabId":"t.added1"`) {
+				t.Errorf("edit request %s does not target the kept tab", raw)
+			}
+		}
+	})
+
+	t.Run("without Docs write access the Doc is renamed and the reason shown", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		e.drive.AddTabErr = google.ErrNoWriteAccess
+
+		e.run(t, tick{})
+
+		got := e.draft(t, id)
+		if got.KeptAs != "doc" || got.KeepNote == "" || got.DraftDocID != "copy-1" {
+			t.Errorf("GetDraft() = %+v, want kept as the renamed Doc with a note", got)
 		}
 		want := map[string]string{"copy-1": "Acme \u2014 Platform Engineer"}
 		if diff := cmp.Diff(want, e.drive.Renamed); diff != "" {
 			t.Errorf("renamed Docs (-want +got):\n%s", diff)
 		}
-		if _, err := e.svc.KeepDraft(ctx, userID, dto.DraftQuery{ID: id}); err != nil {
-			t.Errorf("KeepDraft() again err = %v, want it idempotent", err)
+	})
+
+	t.Run("a Tab that renders differently is deleted and the Doc kept instead", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		e.drive.TabPages = map[string]int{"t.added1": 2}
+
+		e.run(t, tick{})
+
+		got := e.draft(t, id)
+		if got.KeptAs != "doc" || got.KeepNote == "" || got.DraftDocID != "copy-1" {
+			t.Errorf("GetDraft() = %+v, want kept as the Doc with a note", got)
+		}
+		last := e.drive.Updates[len(e.drive.Updates)-1]
+		if len(last) != 1 || !strings.Contains(string(last[0]), `"deleteTab":{"tabId":"t.added1"}`) {
+			t.Errorf("last Docs write = %s, want the kept tab deleted", last)
+		}
+	})
+
+	t.Run("a Tab left half-built by a crashed attempt is deleted on retry", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		e.store.LeaveHalfBuiltTab(id, "t.half")
+
+		e.run(t, tick{})
+
+		deleted := false
+		for _, batch := range e.drive.Updates {
+			deleted = deleted || (len(batch) == 1 && strings.Contains(string(batch[0]), `"tabId":"t.half"`))
+		}
+		if !deleted {
+			t.Errorf("Docs writes = %v, want the half-built tab deleted", e.drive.Updates)
 		}
 	})
 
@@ -221,7 +322,7 @@ func TestKeepDraft(t *testing.T) {
 		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
-		drive := &cvtailortest.Drive{RenameErr: errors.New("drive down")}
+		drive := &cvtailortest.Drive{AddTabErr: google.ErrNoWriteAccess, RenameErr: errors.New("drive down")}
 
 		for range dto.MaxDraftAttempts {
 			e.store.MakeDraftDue(id)
@@ -236,6 +337,26 @@ func TestKeepDraft(t *testing.T) {
 }
 
 func TestDiscardDraft(t *testing.T) {
+	t.Run("a draft kept as a Tab deletes only its Tab, never the base Doc", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		e.run(t, tick{})
+		e.drive.Deleted = nil
+
+		if _, err := e.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+
+		last := e.drive.Updates[len(e.drive.Updates)-1]
+		if len(e.drive.Deleted) != 0 || len(last) != 1 || !strings.Contains(string(last[0]), `"deleteTab":{"tabId":"t.added1"}`) {
+			t.Errorf("deleted files = %v, last Docs write = %s, want only the kept tab deleted", e.drive.Deleted, last)
+		}
+	})
+
 	t.Run("deletes the Drive file and keeps the row", func(t *testing.T) {
 		e := newDraftEnv(t)
 		ctx := t.Context()

@@ -9,6 +9,11 @@ import type { DraftEditorState } from "./useDraftEditor";
 type AddedRole = { positionId: string; head: LayoutBlock };
 
 const CARRIED = "carried:";
+const blockText = (b: LayoutBlock) =>
+	b.runs
+		.map((r) => r.text)
+		.join("")
+		.trim();
 const carriedId = (positionId: string, at: number) =>
 	`${CARRIED}${positionId}:${at}`;
 
@@ -61,12 +66,19 @@ export function createRolePicks(opts: {
 	const headings = createMemo(() => {
 		const list = opts.editor.blocks();
 		const found = new Map<LayoutBlock, string>();
+		const headingTexts = new Map(
+			(opts.draft().content?.positions ?? []).map((c) => [
+				c.positionId,
+				c.headingText.trim(),
+			]),
+		);
 		for (const p of roles()) {
 			const at = list.findIndex((b) => b.slotId === p.bullets[0]?.slotId);
-			const head = list
-				.slice(0, Math.max(at, 0))
-				.reverse()
-				.find((b) => !b.bullet && !b.slotId);
+			const above = list.slice(0, Math.max(at, 0)).reverse();
+			const title = headingTexts.get(p.positionId);
+			const head =
+				(title && above.find((b) => !b.bullet && blockText(b) === title)) ||
+				above.find((b) => !b.bullet && !b.slotId);
 			if (at >= 0 && head) found.set(head, p.positionId);
 		}
 		for (const a of added())
@@ -80,6 +92,8 @@ export function createRolePicks(opts: {
 		if (!head) return [];
 		const slots: string[] = [];
 		for (const b of list.slice(list.indexOf(head) + 1)) {
+			const stackLine = slots.length === 0 && !b.bullet && !b.slotId;
+			if (stackLine && !headings().has(b)) continue;
 			if (!b.bullet || !b.slotId) break;
 			slots.push(b.slotId);
 		}
@@ -157,6 +171,8 @@ export function createRolePicks(opts: {
 		);
 	};
 
+	const positionOf = (slotId: string) =>
+		[...headings().values()].find((id) => roleSlots(id).includes(slotId));
 	const picksFor = (positionId: string) =>
 		resolve(positionId, picks()[positionId] ?? []);
 	const order = () => onPage().map((r) => r.id);
@@ -237,10 +253,14 @@ export function createRolePicks(opts: {
 			rest.splice(Math.min(place - 1, rest.length), 0, id);
 			setPicksFor(positionId, rest);
 		},
+		achievementOf(slotId: string) {
+			const positionId = positionOf(slotId);
+			if (!positionId) return undefined;
+			const id = picksFor(positionId)[roleSlots(positionId).indexOf(slotId)];
+			return id?.startsWith(CARRIED) ? undefined : id;
+		},
 		shift(slotId: string, delta: -1 | 1) {
-			const positionId = [...headings().values()].find((id) =>
-				roleSlots(id).includes(slotId),
-			);
+			const positionId = positionOf(slotId);
 			if (!positionId) return undefined;
 			const ids = picksFor(positionId);
 			const slots = roleSlots(positionId);

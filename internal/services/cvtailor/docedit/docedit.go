@@ -19,12 +19,14 @@ var (
 )
 
 type Range struct {
-	StartIndex int `json:"startIndex"`
-	EndIndex   int `json:"endIndex"`
+	StartIndex int    `json:"startIndex"`
+	EndIndex   int    `json:"endIndex"`
+	TabID      string `json:"tabId,omitempty"`
 }
 
 type Location struct {
-	Index int `json:"index"`
+	Index int    `json:"index"`
+	TabID string `json:"tabId,omitempty"`
 }
 
 type DeleteContentRange struct {
@@ -52,7 +54,7 @@ type edit struct {
 
 // Requests orders batchUpdate requests by descending document index so
 // earlier indices stay valid as the Docs API applies them.
-func Requests(ds docparse.DocStructure, positions PositionSlots, edits cvedit.EditSet) ([]Request, error) {
+func Requests(ds docparse.DocStructure, tabID string, positions PositionSlots, edits cvedit.EditSet) ([]Request, error) {
 	slots := make(map[string]docparse.Slot, len(ds.Slots))
 	for _, s := range ds.Slots {
 		slots[s.ID] = s
@@ -106,6 +108,14 @@ func Requests(ds docparse.DocStructure, positions PositionSlots, edits cvedit.Ed
 	var reqs []Request
 	for _, e := range all {
 		reqs = append(reqs, e.reqs...)
+	}
+	for _, r := range reqs {
+		if r.DeleteContentRange != nil {
+			r.DeleteContentRange.Range.TabID = tabID
+		}
+		if r.InsertText != nil {
+			r.InsertText.Location.TabID = tabID
+		}
 	}
 	return reqs, nil
 }

@@ -181,7 +181,11 @@ export function useKeepDraft() {
 export function useSaveDraftSlots(id: Accessor<string>) {
 	return useInvalidatingMutation(
 		(slots: SlotEdit[]) => saveDraftSlots(id(), slots),
-		() => [keys.tailoring.draft(id()), keys.tailoring.draftInsights(id())],
+		() => [
+			keys.tailoring.draft(id()),
+			keys.tailoring.draftInsights(id()),
+			keys.tailoring.draftLean(id()),
+		],
 	);
 }
 

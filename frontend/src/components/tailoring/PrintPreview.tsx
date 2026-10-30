@@ -4,8 +4,13 @@ import { PdfPreview } from "@/components/PdfPreview";
 import { Button } from "@/components/ui/button";
 import { fetchDraftPdf } from "../../api/tailoring";
 import { usePdfUrl } from "../../hooks/usePdfUrl";
+import { DownloadPdfButton } from "./DownloadPdfButton";
 
-export function PrintPreview(props: { draftId: string; onClose: () => void }) {
+export function PrintPreview(props: {
+	draftId: string;
+	jobId: string;
+	onClose: () => void;
+}) {
 	const url = usePdfUrl(
 		() => ({ id: props.draftId }),
 		(s) => fetchDraftPdf(s.id),
@@ -43,15 +48,22 @@ export function PrintPreview(props: { draftId: string; onClose: () => void }) {
 							Google's own export of the Draft, the final word on page breaks.
 						</p>
 					</div>
-					<Button
-						ref={closeBtn}
-						variant="ghost"
-						size="icon"
-						aria-label="Close preview"
-						onClick={() => props.onClose()}
-					>
-						<Icon name="x" size={16} />
-					</Button>
+					<div class="flex items-center gap-2">
+						<DownloadPdfButton
+							draftId={props.draftId}
+							jobId={props.jobId}
+							variant="outline"
+						/>
+						<Button
+							ref={closeBtn}
+							variant="ghost"
+							size="icon"
+							aria-label="Close preview"
+							onClick={() => props.onClose()}
+						>
+							<Icon name="x" size={16} />
+						</Button>
+					</div>
 				</div>
 				<div class="p-6">
 					<PdfPreview url={url} title="Draft CV PDF" />

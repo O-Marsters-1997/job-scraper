@@ -12,24 +12,47 @@ import (
 )
 
 const getUserProfile = `-- name: GetUserProfile :one
-SELECT id, username, email FROM users WHERE id = $1
+SELECT id, username, email, cv_filename_pattern FROM users WHERE id = $1
 `
 
 type GetUserProfileRow struct {
-	ID       pgtype.UUID
-	Username string
-	Email    pgtype.Text
+	ID                pgtype.UUID
+	Username          string
+	Email             pgtype.Text
+	CvFilenamePattern string
 }
 
 func (q *Queries) GetUserProfile(ctx context.Context, id pgtype.UUID) (GetUserProfileRow, error) {
 	row := q.db.QueryRow(ctx, getUserProfile, id)
 	var i GetUserProfileRow
-	err := row.Scan(&i.ID, &i.Username, &i.Email)
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.CvFilenamePattern,
+	)
 	return i, err
 }
 
+const setUserCVFilenamePattern = `-- name: SetUserCVFilenamePattern :execrows
+UPDATE users SET cv_filename_pattern = $2 WHERE id = $1
+`
+
+type SetUserCVFilenamePatternParams struct {
+	ID                pgtype.UUID
+	CvFilenamePattern string
+}
+
+func (q *Queries) SetUserCVFilenamePattern(ctx context.Context, arg SetUserCVFilenamePatternParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserCVFilenamePattern, arg.ID, arg.CvFilenamePattern)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateUserEmail = `-- name: UpdateUserEmail :one
-UPDATE users SET email = $2 WHERE id = $1 RETURNING id, username, email
+UPDATE users SET email = $2 WHERE id = $1 RETURNING id, username, email, cv_filename_pattern
 `
 
 type UpdateUserEmailParams struct {
@@ -38,14 +61,20 @@ type UpdateUserEmailParams struct {
 }
 
 type UpdateUserEmailRow struct {
-	ID       pgtype.UUID
-	Username string
-	Email    pgtype.Text
+	ID                pgtype.UUID
+	Username          string
+	Email             pgtype.Text
+	CvFilenamePattern string
 }
 
 func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error) {
 	row := q.db.QueryRow(ctx, updateUserEmail, arg.ID, arg.Email)
 	var i UpdateUserEmailRow
-	err := row.Scan(&i.ID, &i.Username, &i.Email)
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.CvFilenamePattern,
+	)
 	return i, err
 }

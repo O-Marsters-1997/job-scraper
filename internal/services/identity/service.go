@@ -34,6 +34,7 @@ type Store interface {
 	DeleteUserSessionsTx(ctx context.Context, tx pgx.Tx, userID string) error
 	GetProfile(ctx context.Context, userID string) (dto.Profile, error)
 	UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error)
+	SetCVFilenamePattern(ctx context.Context, userID, pattern string) error
 	UpsertUserAICredential(ctx context.Context, userID string, provider dto.Provider, encKey string) error
 	GetUserAICredential(ctx context.Context, userID string, provider dto.Provider) (string, error)
 	DeleteUserAICredential(ctx context.Context, userID string, provider dto.Provider) error

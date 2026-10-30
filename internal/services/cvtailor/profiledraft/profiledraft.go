@@ -16,6 +16,7 @@ import (
 
 const (
 	redraftModel       = "anthropic/claude-sonnet-4.5"
+	redraftMaxTokens   = 1000
 	maxJobRunes        = 6000
 	profileSlotID      = "profile"
 	msgNotOneParagraph = "the profile must be exactly one paragraph"
@@ -60,7 +61,7 @@ func (w *Writer) Redraft(ctx context.Context, apiKey string, in Input) (Result, 
 	user := base
 	var res Result
 	for range 2 {
-		p := lineedit.Prompt{Model: redraftModel, System: systemPrompt, User: user}
+		p := lineedit.Prompt{Model: redraftModel, System: systemPrompt, User: user, MaxTokens: redraftMaxTokens}
 		c, err := w.model.Complete(ctx, apiKey, p, func(string) {})
 		if err != nil {
 			return res, fmt.Errorf("redraft profile: %w", err)

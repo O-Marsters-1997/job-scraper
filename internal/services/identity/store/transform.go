@@ -34,8 +34,8 @@ func toSessionRowDTO(r sqlc.GetSessionByTokenHashRow) dto.Session {
 	}
 }
 
-func toProfileDTO(username string, email pgtype.Text) dto.Profile {
-	return dto.Profile{Username: username, Email: email.String}
+func toProfileDTO(username string, email pgtype.Text, cvFilenamePattern string) dto.Profile {
+	return dto.Profile{Username: username, Email: email.String, CVFilenamePattern: cvFilenamePattern}
 }
 
 func toGoogleTokenDTO(r sqlc.GetGoogleOAuthTokenRow) dto.GoogleToken {
