@@ -235,6 +235,18 @@ func TestRequests(t *testing.T) {
 		}
 	})
 
+	t.Run("bullets beyond the slots become paragraphs after the last slot", func(t *testing.T) {
+		t.Parallel()
+		edits := cvedit.EditSet{Positions: []cvedit.PositionEdit{{PositionID: "p1", Bullets: bullets("a", "b", "c")}}}
+
+		got := apply(t, doc.text, requests(t, doc, docedit.PositionSlots{"p1": {"s0", "s1"}}, edits))
+
+		want := string(doc.text[:145]) + "a\nb\nc\n" + string(doc.text[267:])
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Requests() applied doc mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("missing profile and skills sections produce no requests", func(t *testing.T) {
 		doc := loadFixture(t, "no_profile_skills.json")
 		profile := "New profile."
@@ -298,12 +310,6 @@ func TestRequestsErrors(t *testing.T) {
 		edit      cvedit.PositionEdit
 		wantErr   error
 	}{
-		{
-			name:      "more bullets than slots",
-			positions: docedit.PositionSlots{"p2": {"s2"}},
-			edit:      cvedit.PositionEdit{PositionID: "p2", Bullets: bullets("a", "b")},
-			wantErr:   docedit.ErrTooManyBullets,
-		},
 		{
 			name:      "position without slots",
 			positions: docedit.PositionSlots{},

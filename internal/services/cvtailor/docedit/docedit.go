@@ -14,7 +14,6 @@ const defaultSkillSeparator = ", "
 
 var (
 	ErrUnknownPosition = errors.New("docedit: edit names a position with no slots")
-	ErrTooManyBullets  = errors.New("docedit: more bullets than slots")
 	ErrSkillLines      = errors.New("docedit: skills do not match the document's skill lines")
 )
 
@@ -65,9 +64,6 @@ func Requests(ds docparse.DocStructure, tabID string, positions PositionSlots, e
 		ids, ok := positions[pe.PositionID]
 		if !ok {
 			return nil, fmt.Errorf("%w: %q", ErrUnknownPosition, pe.PositionID)
-		}
-		if len(pe.Bullets) > len(ids) {
-			return nil, fmt.Errorf("%w: position %q has %d bullets for %d slots", ErrTooManyBullets, pe.PositionID, len(pe.Bullets), len(ids))
 		}
 		lines := pe.Lines()
 		for i, id := range ids {
