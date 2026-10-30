@@ -72,6 +72,7 @@ func chaseSet(t *testing.T, f Fixture, id string) time.Time {
 // a tx-scoped port, covered in store/store_test.go.
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
+	runContactContract(t, newStore)
 
 	t.Run("create returns the application", func(t *testing.T) {
 		t.Parallel()

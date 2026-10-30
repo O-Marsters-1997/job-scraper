@@ -524,3 +524,50 @@ func TestMoveApplicationAppliedStatus(t *testing.T) {
 		t.Errorf("status change events = %d, want 3 (the repeat move to the current status records none)", changed)
 	}
 }
+
+func TestCreateContactFillsCompanyFromJob(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "Engineer")
+	var companyID string
+	if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug, name, kind) VALUES ('acme', 'Acme Ltd', 'agency') RETURNING id`).Scan(&companyID); err != nil {
+		t.Fatalf("insert company err = %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), `UPDATE jobs SET company_id = $1 WHERE id = $2`, companyID, jobID); err != nil {
+		t.Fatalf("link job to company err = %v", err)
+	}
+
+	got, err := st.CreateContact(t.Context(), userID, dto.ContactInput{Name: "Sam", JobID: &jobID}, time.Now())
+	if err != nil {
+		t.Fatalf("CreateContact err = %v", err)
+	}
+	if got.CompanyID == nil || *got.CompanyID != companyID || got.CompanyName != "Acme Ltd" || got.CompanyKind != "agency" || got.JobTitle != "Engineer" {
+		t.Errorf("CreateContact = company %v %q %q job %q, want Acme Ltd (agency) from the job", got.CompanyID, got.CompanyName, got.CompanyKind, got.JobTitle)
+	}
+}
+
+func TestCreateContactRejectsUnknownJob(t *testing.T) {
+	t.Parallel()
+	st, _, userID := newStore(t)
+	missing := "00000000-0000-0000-0000-000000000000"
+	_, err := st.CreateContact(t.Context(), userID, dto.ContactInput{Name: "Sam", JobID: &missing}, time.Now())
+	if !errors.Is(err, store.ErrContactJobNotFound) {
+		t.Errorf("CreateContact(unknown job) err = %v, want an invalid apperr", err)
+	}
+}
+
+func TestDeleteContactRemovesEvents(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+	c, err := st.CreateContact(t.Context(), userID, dto.ContactInput{Name: "Sam"}, time.Now())
+	if err != nil {
+		t.Fatalf("CreateContact err = %v", err)
+	}
+	if err := st.DeleteContact(t.Context(), userID, c.ID); err != nil {
+		t.Fatalf("DeleteContact err = %v", err)
+	}
+	var n int
+	if err := pool.QueryRow(t.Context(), `SELECT COUNT(*) FROM contact_events`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("contact_events after delete = %d, %v, want 0", n, err)
+	}
+}

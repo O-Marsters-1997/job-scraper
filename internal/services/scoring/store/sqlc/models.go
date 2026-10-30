@@ -300,6 +300,38 @@ type CompanyProfile struct {
 	FetchedAt pgtype.Timestamptz
 }
 
+type Contact struct {
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+	Name        string
+	Role        string
+	CompanyID   pgtype.UUID
+	CompanyName string
+	JobID       pgtype.UUID
+	LinkedinUrl pgtype.Text
+	Email       pgtype.Text
+	Stage       string
+	Outcome     pgtype.Text
+	FollowUpBy  pgtype.Date
+	Reply       pgtype.Text
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type ContactEvent struct {
+	ID           pgtype.UUID
+	ContactID    pgtype.UUID
+	Kind         string
+	OccurredOn   pgtype.Date
+	Channel      pgtype.Text
+	TemplateKind pgtype.Text
+	TemplateName string
+	Outcome      pgtype.Text
+	Note         string
+	JobID        pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+}
+
 type CoverLetter struct {
 	ID             pgtype.UUID
 	UserID         pgtype.UUID

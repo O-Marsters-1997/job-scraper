@@ -1,5 +1,6 @@
 export * from "./applications";
 export * from "./companies";
+export * from "./contacts";
 export * from "./coverLetters";
 export * from "./cvs";
 export * from "./experience";

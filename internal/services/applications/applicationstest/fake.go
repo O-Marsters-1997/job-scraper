@@ -27,10 +27,12 @@ type FakeStore struct {
 	mu       sync.Mutex
 	apps     map[string]dto.Application
 	statuses map[string]dto.ApplicationStatus
+	outreach map[string]fakeContact
 	notes    map[noteKey]string
 	comments map[string][]dto.JobComment
 
-	nextComment int
+	nextOutreach int
+	nextComment  int
 }
 
 type noteKey struct{ userID, jobID string }
@@ -39,6 +41,7 @@ func NewFakeStore() *FakeStore {
 	return &FakeStore{
 		apps:     make(map[string]dto.Application),
 		statuses: make(map[string]dto.ApplicationStatus),
+		outreach: make(map[string]fakeContact),
 		notes:    make(map[noteKey]string),
 		comments: make(map[string][]dto.JobComment),
 	}
