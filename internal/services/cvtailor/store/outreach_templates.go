@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -154,8 +155,13 @@ func templateWriteErr(op string, err error) error {
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return ErrTemplateNotFound
-	case data.IsUniqueViolation(err):
+	case isNameViolation(err):
 		return ErrTemplateNameTaken
 	}
 	return fmt.Errorf("store.%s: %w", op, err)
+}
+
+func isNameViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "outreach_templates_user_id_kind_name_key"
 }
