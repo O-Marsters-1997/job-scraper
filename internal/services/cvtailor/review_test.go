@@ -2,6 +2,7 @@ package cvtailor_test
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -181,6 +182,28 @@ func TestKeepDraft(t *testing.T) {
 		got := e.draft(t, id)
 		if got.KeptAs != "doc" || got.KeepNote == "" || got.DraftDocID != "copy-1" {
 			t.Errorf("GetDraft() = %+v, want kept as the Doc with a note", got)
+		}
+		last := e.drive.Updates[len(e.drive.Updates)-1]
+		if len(last) != 1 || !strings.Contains(string(last[0]), `"deleteTab":{"tabId":"t.added1"}`) {
+			t.Errorf("last Docs write = %s, want the kept tab deleted", last)
+		}
+	})
+
+	t.Run("a Tab Google rejects falls back to the Doc on the same attempt", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		rejected := &google.RejectedError{Status: http.StatusBadRequest, Message: "Invalid requests[3]"}
+
+		e.run(t, tick{drive: cvtailortest.FailsFirstBatchUpdate(e.drive, rejected)})
+
+		got := e.draft(t, id)
+		if got.KeptAs != "doc" || got.Outcome == nil || *got.Outcome != dto.OutcomeKept ||
+			!strings.Contains(got.KeepNote, "Invalid requests[3]") || got.DraftDocID != "copy-1" {
+			t.Errorf("GetDraft() = %+v, want kept as the Doc with Google's reason", got)
 		}
 		last := e.drive.Updates[len(e.drive.Updates)-1]
 		if len(last) != 1 || !strings.Contains(string(last[0]), `"deleteTab":{"tabId":"t.added1"}`) {

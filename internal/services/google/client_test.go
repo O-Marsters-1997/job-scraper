@@ -351,6 +351,27 @@ func TestBatchUpdate(t *testing.T) {
 	}
 }
 
+func TestBatchUpdate_RejectedRequest(t *testing.T) {
+	ctx, client, _ := recordingClient(t, http.StatusBadRequest, `{"error":{"message":"Invalid requests[3]"}}`)
+
+	err := client.BatchUpdate(ctx, "u1", "doc", []json.RawMessage{json.RawMessage(`{}`)})
+
+	rejected, ok := errors.AsType[*google.RejectedError](err)
+	if !ok || rejected.Status != http.StatusBadRequest || rejected.Message != "Invalid requests[3]" {
+		t.Errorf("BatchUpdate err = %v, want a RejectedError carrying Google's message", err)
+	}
+}
+
+func TestBatchUpdate_RateLimitedIsNotRejected(t *testing.T) {
+	ctx, client, _ := recordingClient(t, http.StatusTooManyRequests, `{"error":{"message":"slow down"}}`)
+
+	err := client.BatchUpdate(ctx, "u1", "doc", nil)
+
+	if _, ok := errors.AsType[*google.RejectedError](err); ok || err == nil || !strings.Contains(err.Error(), "slow down") {
+		t.Errorf("BatchUpdate err = %v, want a retryable error carrying the message", err)
+	}
+}
+
 func TestRenameFile(t *testing.T) {
 	ctx, client, got := recordingClient(t, http.StatusOK, `{}`)
 
