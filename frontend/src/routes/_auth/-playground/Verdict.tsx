@@ -3,6 +3,7 @@ import { Kbd } from "@/components/Kbd";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { FeedbackDirection } from "../../../types/scoreFeedback";
+import { isTyping } from "./isTyping";
 
 const VERDICTS: { key: string; label: string; direction: FeedbackDirection }[] =
 	[
@@ -11,19 +12,13 @@ const VERDICTS: { key: string; label: string; direction: FeedbackDirection }[] =
 		{ key: "3", label: "Too low", direction: "higher" },
 	];
 
-function isTyping(el: EventTarget | null) {
-	return (
-		el instanceof HTMLElement &&
-		(el.isContentEditable ||
-			["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))
-	);
-}
-
 export function Verdict(props: {
 	failed: boolean;
+	current?: FeedbackDirection | undefined;
+	initialOverall?: string | undefined;
 	onVerdict: (direction: FeedbackDirection, overall: string) => void;
 }) {
-	const [overall, setOverall] = createSignal("");
+	const [overall, setOverall] = createSignal(props.initialOverall ?? "");
 	const [sent, setSent] = createSignal<FeedbackDirection>();
 	createEffect(() => {
 		if (props.failed) setSent(undefined);
@@ -54,7 +49,8 @@ export function Verdict(props: {
 				<For each={VERDICTS}>
 					{(v) => (
 						<Button
-							variant="outline"
+							variant={props.current === v.direction ? "secondary" : "outline"}
+							aria-pressed={props.current === v.direction}
 							class="flex-1"
 							disabled={!!sent()}
 							loading={sent() === v.direction}

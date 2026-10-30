@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { For, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
 import { createStore } from "solid-js/store";
 import { BandChip } from "@/components/jobs/BandChip";
 import JobDescription from "@/components/jobs/JobDescription";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { Button } from "@/components/ui/button";
 import { rowLabel } from "@/lib/scoreRows";
 import type { Band, Job } from "@/types/job";
 import { useJob } from "../../hooks/useJobs";
@@ -11,10 +12,13 @@ import {
 	usePlaygroundQueue,
 	usePlaygroundVerdict,
 } from "../../hooks/useScoringPlayground";
+import type { JobFeedbackInput } from "../../types/scoreFeedback";
 import type { PlaygroundQueue } from "../../types/scoringPlayground";
 
+import { isTyping } from "./-playground/isTyping";
 import { buildReason } from "./-playground/reason";
 import { Signals } from "./-playground/Signals";
+import { type HistoryEntry, pendingIds } from "./-playground/session";
 import { Verdict } from "./-playground/Verdict";
 
 export const Route = createFileRoute("/_auth/scoring-playground")({
@@ -26,30 +30,125 @@ function ScoringPlayground() {
 	return (
 		<div class="flex min-h-dvh flex-col gap-4 px-7 py-6 pb-20">
 			<QueryBoundary query={queue} fallbackRows={4}>
-				{(data) => (
-					<>
-						<header class="flex items-center justify-between gap-4">
-							<div class="flex items-center gap-3">
-								<Link
-									to="/settings/scoring/$section"
-									params={{ section: "role" }}
-									class="text-sm text-muted hover:text-foreground"
-								>
-									← Scoring
-								</Link>
-								<h1 class="text-lg font-bold tracking-tight text-foreground">
-									Scoring playground
-								</h1>
-							</div>
-							<Progress bands={data().bands} />
-						</header>
-						<Show when={data().jobIds[0]} fallback={<CaughtUp />} keyed>
-							{(jobId) => <Review jobId={jobId} />}
-						</Show>
-					</>
-				)}
+				{(data) => <Session queue={data()} />}
 			</QueryBoundary>
 		</div>
+	);
+}
+
+function Session(props: { queue: PlaygroundQueue }) {
+	const verdict = usePlaygroundVerdict();
+	const [history, setHistory] = createSignal<HistoryEntry[]>([]);
+	const [skipped, setSkipped] = createSignal<string[]>([]);
+	const [pos, setPos] = createSignal<number>();
+	const pending = () => pendingIds(props.queue.jobIds, skipped());
+	const entry = () => {
+		const p = pos();
+		return p === undefined ? undefined : history()[p];
+	};
+	const jobId = () => entry()?.jobId ?? pending()[0];
+	const total = () => history().length + pending().length;
+	const canBack = () => !verdict.isPending && (pos() ?? history().length) > 0;
+	const canForward = () =>
+		!verdict.isPending &&
+		(pos() !== undefined || (pending().length > 1 && !!jobId()));
+	const back = () => {
+		if (canBack()) setPos((pos() ?? history().length) - 1);
+	};
+	const forward = () => {
+		if (!canForward()) return;
+		const p = pos();
+		if (p === undefined) {
+			const id = jobId();
+			if (id) setSkipped([...skipped().filter((s) => s !== id), id]);
+		} else setPos(p + 1 < history().length ? p + 1 : undefined);
+	};
+	const onKey = (e: KeyboardEvent) => {
+		if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
+		if (e.key === "ArrowLeft") back();
+		else if (e.key === "ArrowRight") forward();
+	};
+	onMount(() => window.addEventListener("keydown", onKey));
+	onCleanup(() => window.removeEventListener("keydown", onKey));
+	const save = (
+		id: string,
+		input: JobFeedbackInput,
+		draft: HistoryEntry["draft"],
+	) => {
+		const p = pos();
+		verdict.mutate(
+			{ ...input, replaces: entry()?.feedbackId },
+			{
+				onSuccess: (saved) => {
+					const next = {
+						jobId: id,
+						feedbackId: saved.id,
+						verdict: input.direction,
+						draft,
+					};
+					if (p === undefined) setHistory([...history(), next]);
+					else {
+						setHistory(history().map((h, i) => (i === p ? next : h)));
+						setPos(p + 1 < history().length ? p + 1 : undefined);
+					}
+				},
+			},
+		);
+	};
+	return (
+		<>
+			<header class="flex items-center justify-between gap-4">
+				<div class="flex items-center gap-3">
+					<Link
+						to="/settings/scoring/$section"
+						params={{ section: "role" }}
+						class="text-sm text-muted hover:text-foreground"
+					>
+						← Scoring
+					</Link>
+					<h1 class="text-lg font-bold tracking-tight text-foreground">
+						Scoring playground
+					</h1>
+				</div>
+				<nav
+					class="flex items-center gap-2 text-sm text-muted"
+					aria-label="Job history"
+				>
+					<Button
+						variant="ghost"
+						size="sm"
+						aria-label="Previous job"
+						disabled={!canBack()}
+						onClick={back}
+					>
+						‹
+					</Button>
+					<span class="font-mono tabular-nums">
+						Job {(pos() ?? history().length) + 1} of {Math.max(total(), 1)}
+					</span>
+					<Button
+						variant="ghost"
+						size="sm"
+						aria-label="Next job"
+						disabled={!canForward()}
+						onClick={forward}
+					>
+						›
+					</Button>
+				</nav>
+				<Progress bands={props.queue.bands} />
+			</header>
+			<Show when={jobId()} fallback={<CaughtUp />} keyed>
+				{(id) => (
+					<Review
+						jobId={id}
+						entry={entry()}
+						failed={verdict.isError && verdict.variables?.jobId === id}
+						onSave={(input, draft) => save(id, input, draft)}
+					/>
+				)}
+			</Show>
+		</>
 	);
 }
 
@@ -81,10 +180,16 @@ function CaughtUp() {
 	);
 }
 
-function Review(props: { jobId: string }) {
+function Review(props: {
+	jobId: string;
+	entry: HistoryEntry | undefined;
+	failed: boolean;
+	onSave: (input: JobFeedbackInput, draft: HistoryEntry["draft"]) => void;
+}) {
 	const job = useJob(() => props.jobId);
-	const verdict = usePlaygroundVerdict();
-	const [notes, setNotes] = createStore<Record<string, string>>({});
+	const [notes, setNotes] = createStore<Record<string, string>>({
+		...untrack(() => props.entry?.draft.notes),
+	});
 	return (
 		<Show
 			when={job.data}
@@ -117,19 +222,24 @@ function Review(props: { jobId: string }) {
 							onNote={(key, note) => setNotes(key, note)}
 						/>
 						<Verdict
-							failed={verdict.isError}
+							failed={props.failed}
+							current={props.entry?.verdict}
+							initialOverall={props.entry?.draft.overall}
 							onVerdict={(direction, overall) =>
-								verdict.mutate({
-									jobId: props.jobId,
-									direction,
-									reason: buildReason(
-										overall,
-										(data().Breakdown ?? []).map((r) => ({
-											label: rowLabel(r),
-											note: notes[r.key] ?? "",
-										})),
-									),
-								})
+								props.onSave(
+									{
+										jobId: props.jobId,
+										direction,
+										reason: buildReason(
+											overall,
+											(data().Breakdown ?? []).map((r) => ({
+												label: rowLabel(r),
+												note: notes[r.key] ?? "",
+											})),
+										),
+									},
+									{ overall, notes: { ...notes } },
+								)
 							}
 						/>
 					</aside>
