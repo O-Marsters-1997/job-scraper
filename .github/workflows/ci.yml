@@ -78,6 +78,17 @@ jobs:
       - name: Check for uncommitted changes
         run: git diff --exit-code
 
+  migration-order:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check new migrations sort after the base branch
+        run: ./scripts/check-migration-order.sh ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+
   test:
     needs: changes
     if: needs.changes.outputs.go == 'true'
