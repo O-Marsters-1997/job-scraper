@@ -1,29 +1,25 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { For, Show } from "solid-js";
+import { createStore } from "solid-js/store";
 import { BandChip } from "@/components/jobs/BandChip";
 import JobDescription from "@/components/jobs/JobDescription";
 import { QueryBoundary } from "@/components/QueryBoundary";
-import type { Band, Job, ScoreRow } from "@/types/job";
+import { rowLabel } from "@/lib/scoreRows";
+import type { Band, Job } from "@/types/job";
 import { useJob } from "../../hooks/useJobs";
-import { usePlaygroundQueue } from "../../hooks/useScoringPlayground";
+import {
+	usePlaygroundQueue,
+	usePlaygroundVerdict,
+} from "../../hooks/useScoringPlayground";
 import type { PlaygroundQueue } from "../../types/scoringPlayground";
-import { SignalRow } from "./-playground/SignalRow";
+
+import { buildReason } from "./-playground/reason";
+import { Signals } from "./-playground/Signals";
+import { Verdict } from "./-playground/Verdict";
 
 export const Route = createFileRoute("/_auth/scoring-playground")({
 	component: ScoringPlayground,
 });
-
-const GROUPS: { label: string; keep: (r: ScoreRow) => boolean }[] = [
-	{ label: "Corrected", keep: (r) => r.corrected === true },
-	{ label: "Gates", keep: (r) => !r.corrected && r.effect === "gated" },
-	{ label: "Boosts", keep: (r) => !r.corrected && r.effect === "favourite" },
-	{
-		label: "Met",
-		keep: (r) => !r.corrected && (r.effect === "meets" || r.effect === "level"),
-	},
-	{ label: "Missed", keep: (r) => !r.corrected && r.effect === "misses" },
-	{ label: "Unknown", keep: (r) => !r.corrected && r.effect === "unknown" },
-];
 
 function ScoringPlayground() {
 	const queue = usePlaygroundQueue();
@@ -47,8 +43,8 @@ function ScoringPlayground() {
 							</div>
 							<Progress bands={data().bands} />
 						</header>
-						<Show when={data().jobIds[0]} fallback={<CaughtUp />}>
-							{(jobId) => <Review jobId={jobId()} />}
+						<Show when={data().jobIds[0]} fallback={<CaughtUp />} keyed>
+							{(jobId) => <Review jobId={jobId} />}
 						</Show>
 					</>
 				)}
@@ -87,6 +83,8 @@ function CaughtUp() {
 
 function Review(props: { jobId: string }) {
 	const job = useJob(() => props.jobId);
+	const verdict = usePlaygroundVerdict();
+	const [notes, setNotes] = createStore<Record<string, string>>({});
 	return (
 		<Show
 			when={job.data}
@@ -112,7 +110,28 @@ function Review(props: { jobId: string }) {
 								{(band) => <BandChip band={band() as Band} />}
 							</Show>
 						</div>
-						<Signals jobId={data().ID} rows={data().Breakdown ?? []} />
+						<Signals
+							jobId={data().ID}
+							rows={data().Breakdown ?? []}
+							notes={notes}
+							onNote={(key, note) => setNotes(key, note)}
+						/>
+						<Verdict
+							failed={verdict.isError}
+							onVerdict={(direction, overall) =>
+								verdict.mutate({
+									jobId: props.jobId,
+									direction,
+									reason: buildReason(
+										overall,
+										(data().Breakdown ?? []).map((r) => ({
+											label: rowLabel(r),
+											note: notes[r.key] ?? "",
+										})),
+									),
+								})
+							}
+						/>
 					</aside>
 				</div>
 			)}
@@ -134,30 +153,6 @@ function JobHeader(props: { job: Job }) {
 					.filter(Boolean)
 					.join(" · ")}
 			</p>
-		</div>
-	);
-}
-
-function Signals(props: { jobId: string; rows: ScoreRow[] }) {
-	const groups = () =>
-		GROUPS.map((g) => ({
-			...g,
-			rows: props.rows.filter(g.keep),
-		})).filter((g) => g.rows.length > 0);
-	return (
-		<div class="flex flex-col gap-3">
-			<For each={groups()}>
-				{(g) => (
-					<div class="flex flex-col gap-0.5">
-						<span class="text-2xs font-medium uppercase tracking-wide text-faint">
-							{g.label}
-						</span>
-						<For each={g.rows}>
-							{(r) => <SignalRow jobId={props.jobId} row={r} />}
-						</For>
-					</div>
-				)}
-			</For>
 		</div>
 	);
 }
