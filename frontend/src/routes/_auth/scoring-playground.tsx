@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
 import { createStore } from "solid-js/store";
 import { BandChip } from "@/components/jobs/BandChip";
 import JobDescription from "@/components/jobs/JobDescription";
@@ -188,7 +188,7 @@ function Review(props: {
 }) {
 	const job = useJob(() => props.jobId);
 	const [notes, setNotes] = createStore<Record<string, string>>({
-		...props.entry?.draft.notes,
+		...untrack(() => props.entry?.draft.notes),
 	});
 	return (
 		<Show
