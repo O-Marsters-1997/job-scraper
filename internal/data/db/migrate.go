@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -93,7 +92,6 @@ func CheckSchemaNotBehind(ctx context.Context, pool *pgxpool.Pool, bundled fs.FS
 		}
 	}
 	if len(pending) > 0 {
-		slices.Sort(pending)
 		return fmt.Errorf("schema is behind: unapplied migrations %s: run the worker or admin migrate first", strings.Join(pending, ", "))
 	}
 
