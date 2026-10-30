@@ -73,8 +73,11 @@ function SkillsForm(props: {
 		return score === undefined ? undefined : fitPercent(score);
 	};
 	const valid = () => groups().every((g) => g.items.length > 0);
+	const [unsaved, setUnsaved] = createSignal(false);
 	const submit = async () => {
-		if (!(await props.flush())) return;
+		const flushed = await props.flush();
+		setUnsaved(!flushed);
+		if (!flushed) return;
 		save.mutate(groups(), { onSuccess: props.onSaved });
 	};
 	return (
@@ -122,6 +125,12 @@ function SkillsForm(props: {
 					</section>
 				)}
 			</Index>
+			<Show when={unsaved()}>
+				<p role="alert" class="text-sm text-destructive-strong">
+					Your other edits to this draft failed to save. Retry them, then save
+					the skills.
+				</p>
+			</Show>
 			<Show when={save.isError}>
 				<p role="alert" class="text-sm text-destructive-strong">
 					{save.error?.message ?? "Saving the skills failed."}
