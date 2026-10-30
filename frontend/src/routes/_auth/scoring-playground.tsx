@@ -12,6 +12,7 @@ import {
 	usePlaygroundVerdict,
 } from "../../hooks/useScoringPlayground";
 import type { PlaygroundQueue } from "../../types/scoringPlayground";
+
 import { buildReason } from "./-playground/reason";
 import { Signals } from "./-playground/Signals";
 import { Verdict } from "./-playground/Verdict";
@@ -110,6 +111,7 @@ function Review(props: { jobId: string }) {
 							</Show>
 						</div>
 						<Signals
+							jobId={data().ID}
 							rows={data().Breakdown ?? []}
 							notes={notes}
 							onNote={(key, note) => setNotes(key, note)}
