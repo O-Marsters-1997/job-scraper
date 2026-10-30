@@ -23,7 +23,10 @@ type ExplainInput struct {
 	PNotStated     float64
 }
 
-const ExplainModel = "anthropic/claude-haiku-4.5"
+const (
+	ExplainModel     = "anthropic/claude-haiku-4.5"
+	explainMaxTokens = 300
+)
 
 type ExplainResult struct {
 	Text string
@@ -40,7 +43,8 @@ func (c *Client) Explain(ctx context.Context, apiKey string, in ExplainInput) (E
 			{Role: "system", Content: explainRules},
 			{Role: "user", Content: task},
 		},
-		Usage: &openrouter.UsageOptions{Include: true},
+		Usage:     &openrouter.UsageOptions{Include: true},
+		MaxTokens: explainMaxTokens,
 	})
 	if err != nil {
 		return ExplainResult{Cost: reply.Cost}, fmt.Errorf("explain: %w", err)

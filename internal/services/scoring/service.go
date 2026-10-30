@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
-	"net/http"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -449,11 +448,8 @@ func (s *Service) Ask(ctx context.Context, userID, jobID string, questions []str
 		return nil, fmt.Errorf("scoring.Ask: load credential: %w", err)
 	}
 	answers, usage, err := s.answerer.Answer(ctx, key, job, missing)
-	if se, ok := errors.AsType[*openrouter.StatusError](err); ok {
-		switch se.Code {
-		case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden:
-			return nil, apperr.Unprocessable("OpenRouter refused the request; check your key and credit in Settings, AI")
-		}
+	if refusal := openrouter.Refusal(err); refusal != nil {
+		return nil, refusal
 	}
 	if err != nil {
 		return nil, fmt.Errorf("scoring.Ask: answer questions: %w", err)

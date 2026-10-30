@@ -13,9 +13,15 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 )
 
-const maxChars = 2000
+const (
+	maxChars      = 2000
+	editMaxTokens = 1000
+)
 
-type Prompt struct{ Model, System, User string }
+type Prompt struct {
+	Model, System, User string
+	MaxTokens           int
+}
 
 func (p Prompt) Key() string {
 	h := sha256.New()
@@ -87,7 +93,7 @@ func (e *Editor) Rewrite(ctx context.Context, apiKey string, req Request, ev Evi
 		return Result{}, err
 	}
 	a := actions[req.Action]
-	p := Prompt{Model: editModel, System: systemPrompt, User: a.render(req) + lineBlock(req.Text, ev.Cited)}
+	p := Prompt{Model: editModel, System: systemPrompt, User: a.render(req) + lineBlock(req.Text, ev.Cited), MaxTokens: editMaxTokens}
 	res := Result{Model: p.Model, PromptKey: p.Key()}
 
 	c, err := e.model.Complete(ctx, apiKey, p, onDelta)
