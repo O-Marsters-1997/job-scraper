@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
 import { AddContactDialog } from "@/components/contacts/AddContactDialog";
+import { TemplatesPanel } from "@/components/contacts/TemplatesPanel";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ function ContactsPage() {
 	const apps = useApplications();
 	const remove = useDeleteContact();
 	const companies = useContactCompanies();
+	const [tab, setTab] = createSignal("people");
 	const [adding, setAdding] = createSignal(false);
 	const [addingAt, setAddingAt] = createSignal<
 		{ id: string | null; name: string } | undefined
@@ -96,11 +98,15 @@ function ContactsPage() {
 				)}
 			</For>
 
-			<Tabs defaultValue="people">
+			<Tabs value={tab()} onChange={setTab}>
 				<TabsList variant="line" class="mb-3">
 					<TabsTrigger value="people">People</TabsTrigger>
 					<TabsTrigger value="companies">Companies</TabsTrigger>
+					<TabsTrigger value="templates">Templates</TabsTrigger>
 				</TabsList>
+				<TabsContent value="templates">
+					<TemplatesPanel />
+				</TabsContent>
 				<TabsContent value="companies">
 					<QueryBoundary query={companies}>
 						{(list) => (

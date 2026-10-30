@@ -570,6 +570,16 @@ type OptionAnswer struct {
 	AnsweredAt   pgtype.Timestamptz
 }
 
+type OutreachTemplate struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Kind      string
+	Name      string
+	Body      string
+	IsDefault bool
+	CreatedAt pgtype.Timestamptz
+}
+
 type Position struct {
 	ID        pgtype.UUID
 	UserID    pgtype.UUID

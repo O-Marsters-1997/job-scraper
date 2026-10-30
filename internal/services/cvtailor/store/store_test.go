@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -128,6 +129,26 @@ func TestListProfileCaptures(t *testing.T) {
 	}
 	if got[0].JobTitle != "Backend Engineer" || got[0].Company != "acme" || got[0].JobDescription != "Build things" {
 		t.Errorf("capture job = %q at %q: %q, want the Job's title, company and stripped description", got[0].JobTitle, got[0].Company, got[0].JobDescription)
+	}
+}
+
+func TestSeedOutreachTemplates(t *testing.T) {
+	t.Parallel()
+	st, pool, uid := newStore(t)
+	pgtest.InTx(t, pool, true, func(tx pgx.Tx) error {
+		return st.SeedOutreachTemplates(t.Context(), tx, uid)
+	})
+
+	got, err := st.ListOutreachTemplates(t.Context(), uid)
+
+	defaults := map[dto.OutreachKind]bool{}
+	for _, tpl := range got {
+		if tpl.IsDefault {
+			defaults[tpl.Kind] = true
+		}
+	}
+	if err != nil || len(got) != 4 || len(defaults) != 4 {
+		t.Errorf("ListOutreachTemplates() = %d templates, defaults %v, %v, want 4 with one default per kind", len(got), defaults, err)
 	}
 }
 
