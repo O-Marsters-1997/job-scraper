@@ -1223,6 +1223,37 @@ func TestFillMissingAnswers(t *testing.T) {
 
 func ptr[T any](v T) *T { return &v }
 
+func TestCachedAnswers(t *testing.T) {
+	t.Parallel()
+	job := dto.Job{ID: "job-1", ContentFingerprint: "fp-1"}
+	cachedQ, missingQ := "Is it remote?", "Is it senior?"
+	want := dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}
+	newSvc := func() *scoring.Service {
+		st := newFakeStore()
+		st.SeedJob(job, nil)
+		st.SeedAnswers(job.ID, job.ContentFingerprint, jev.Model, map[string]dto.Answer{scoring.QuestionHash(cachedQ): want})
+		return newService(t, st, withAnswerer(&failingAnswerer{}))
+	}
+
+	t.Run("returns cached answers by question text and omits the rest without a key", func(t *testing.T) {
+		t.Parallel()
+		got, err := newSvc().CachedAnswers(t.Context(), job.ID, []string{cachedQ, missingQ})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(map[string]dto.Answer{cachedQ: want}, got); diff != "" {
+			t.Errorf("CachedAnswers() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("unknown job is not found", func(t *testing.T) {
+		t.Parallel()
+		if _, err := newSvc().CachedAnswers(t.Context(), "nope", []string{cachedQ}); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("CachedAnswers() err = %v, want not found", err)
+		}
+	})
+}
+
 func TestAsk(t *testing.T) {
 	ctx := t.Context()
 	job := dto.Job{ID: "job-1", ContentFingerprint: "fp-1"}
