@@ -86,15 +86,54 @@ func TestWriterRedraft(t *testing.T) {
 		}
 	})
 
-	t.Run("longer than the base is rejected", func(t *testing.T) {
+	t.Run("more characters on the same lines passes", func(t *testing.T) {
 		t.Parallel()
-		m := &scriptedModel{replies: []string{strings.Repeat("Go engineer. ", 10), strings.Repeat("Go engineer. ", 10)}}
-		res, err := profiledraft.New(m).Redraft(t.Context(), "key", input())
+		in := input()
+		in.Lines = func(string) int { return 2 }
+		longer := clean + " Also Go and PostgreSQL."
+		m := &scriptedModel{replies: []string{longer}}
+		res, err := profiledraft.New(m).Redraft(t.Context(), "key", in)
 		if err != nil {
 			t.Fatalf("Redraft error = %v", err)
 		}
-		if res.Text != "" {
-			t.Errorf("Redraft text = %q, want empty", res.Text)
+		if res.Text != longer || res.Overlong || len(res.Attempts) != 1 {
+			t.Errorf("Redraft = %q overlong=%v with %d attempts, want accepted in 1", res.Text, res.Overlong, len(res.Attempts))
+		}
+	})
+
+	t.Run("over the line budget is shortened then returned flagged", func(t *testing.T) {
+		t.Parallel()
+		in := input()
+		in.Lines = func(s string) int { return len(strings.Fields(s)) }
+		first := strings.Repeat("Go ", 12)
+		last := strings.Repeat("Go ", 11)
+		m := &scriptedModel{replies: []string{first, last}}
+		res, err := profiledraft.New(m).Redraft(t.Context(), "key", in)
+		if err != nil {
+			t.Fatalf("Redraft error = %v", err)
+		}
+		if res.Text != strings.TrimSpace(last) || !res.Overlong || len(res.Attempts) != 2 {
+			t.Errorf("Redraft = %q overlong=%v with %d attempts, want the last text flagged after 2", res.Text, res.Overlong, len(res.Attempts))
+		}
+		if p := m.prompts[0].User; !strings.Contains(p, "at most 8 words") {
+			t.Errorf("first prompt = %q, want a word budget", p)
+		}
+		if retry := m.prompts[1].User; !strings.Contains(retry, "Shorten that exact text") || !strings.Contains(retry, strings.TrimSpace(first)) {
+			t.Errorf("retry prompt = %q, want it to shorten attempt 1", retry)
+		}
+	})
+
+	t.Run("a grounding break on the last attempt still blocks", func(t *testing.T) {
+		t.Parallel()
+		in := input()
+		in.Lines = func(s string) int { return len(strings.Fields(s)) }
+		m := &scriptedModel{replies: []string{strings.Repeat("Go ", 12), "Backend engineer who cut latency 40% with Go."}}
+		res, err := profiledraft.New(m).Redraft(t.Context(), "key", in)
+		if err != nil {
+			t.Fatalf("Redraft error = %v", err)
+		}
+		if res.Text != "" || res.Overlong {
+			t.Errorf("Redraft = %q overlong=%v, want empty", res.Text, res.Overlong)
 		}
 	})
 
