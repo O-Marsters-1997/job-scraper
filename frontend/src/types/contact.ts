@@ -14,7 +14,7 @@ const contactOutcomeSchema = z.enum([
 	"no_reply",
 ]);
 const contactChannelSchema = z.enum(["linkedin", "email", "call", "inbound"]);
-const outreachKindSchema = z.enum([
+export const outreachKindSchema = z.enum([
 	"recruiter",
 	"hiring_manager",
 	"referral",

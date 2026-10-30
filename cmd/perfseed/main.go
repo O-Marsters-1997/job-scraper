@@ -24,6 +24,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/tasks"
@@ -157,7 +158,7 @@ func (s *seeder) seedAll(ctx context.Context, pool *pgxpool.Pool) ([]seededUser,
 	for _, p := range userPlans {
 		for k := range p.n {
 			u := seededUser{Tier: p.tier, Username: fmt.Sprintf("perf-%s-%d", p.tier, k+1), idx: len(users)}
-			if err := s.createUser(ctx, tx, &u, apps, taskModule); err != nil {
+			if err := s.createUser(ctx, tx, &u, apps, taskModule, cvtailor.NewFacade(pool)); err != nil {
 				return nil, err
 			}
 			if err := s.seedUserRows(ctx, tx, &u, p); err != nil {

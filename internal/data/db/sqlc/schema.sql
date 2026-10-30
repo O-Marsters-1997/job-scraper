@@ -796,3 +796,18 @@ CREATE TABLE notifications (
 
 CREATE INDEX notifications_user_created ON notifications (user_id, created_at DESC);
 CREATE INDEX notifications_job_idx ON notifications (job_id);
+
+CREATE TABLE outreach_templates (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind       TEXT        NOT NULL
+        CONSTRAINT outreach_templates_kind_check
+        CHECK (kind IN ('recruiter', 'hiring_manager', 'referral', 'follow_up')),
+    name       TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
+    body       TEXT        NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
+    is_default BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, kind, name)
+);
+CREATE UNIQUE INDEX outreach_templates_default_idx
+    ON outreach_templates (user_id, kind) WHERE is_default;

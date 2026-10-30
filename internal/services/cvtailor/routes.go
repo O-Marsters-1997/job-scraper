@@ -30,5 +30,12 @@ func (m *Module) Routes(r chi.Router) {
 		r.Patch("/achievements/{id}", handlers.Update(m.svc.UpdateAchievement))
 		r.Delete("/achievements/{id}", handlers.Delete(m.store.DeleteAchievement))
 	})
+	r.Route("/outreach-templates", func(r chi.Router) {
+		r.Get("/", handlers.GetAll(m.store.ListOutreachTemplates))
+		r.Post("/", handlers.Create(m.svc.CreateOutreachTemplate))
+		r.Patch("/{id}", handlers.Update(m.svc.UpdateOutreachTemplate))
+		r.Post("/{id}/default", handlers.Query(m.svc.MakeOutreachTemplateDefault))
+		r.Delete("/{id}", handlers.Delete(m.svc.DeleteOutreachTemplate))
+	})
 	m.tailorRoutes(r)
 }

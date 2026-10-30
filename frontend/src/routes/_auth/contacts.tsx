@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
 import { AddContactDialog } from "@/components/contacts/AddContactDialog";
+import { TemplatesPanel } from "@/components/contacts/TemplatesPanel";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { contactGroups, groupContacts } from "@/lib/contactGroups";
 import type { Contact } from "@/types/contact";
 import {
@@ -23,6 +25,7 @@ export const Route = createFileRoute("/_auth/contacts")({
 function ContactsPage() {
 	const contacts = useContacts();
 	const remove = useDeleteContact();
+	const [tab, setTab] = createSignal("people");
 	const [adding, setAdding] = createSignal(false);
 	const [sending, setSending] = createSignal<Contact | undefined>();
 	const [replying, setReplying] = createSignal<Contact | undefined>();
@@ -42,56 +45,67 @@ function ContactsPage() {
 				onClose={() => setReplying(undefined)}
 			/>
 
-			<QueryBoundary query={contacts}>
-				{(all) => (
-					<Show
-						when={all().length > 0}
-						fallback={
-							<p class="text-sm text-faint">
-								No contacts yet. Add a recruiter or hiring manager to start.
-							</p>
-						}
-					>
-						<div class="flex flex-col gap-6">
-							<For each={contactGroups}>
-								{(group) => (
-									<Show when={groupContacts(all())[group.key]}>
-										{(items) => (
-											<Show when={items().length > 0}>
-												<section>
-													<h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
-														{group.label} ({items().length})
-													</h2>
-													<div class="grid gap-3 md:grid-cols-2">
-														<For each={items()}>
-															{(c) => (
-																<ContactCard
-																	contact={c}
-																	onSent={() => setSending(c)}
-																	onReply={() => setReplying(c)}
-																	onDelete={() => {
-																		if (
-																			confirm(
-																				`Delete ${c.name} and their history?`,
-																			)
-																		) {
-																			remove.mutate(c.id);
-																		}
-																	}}
-																/>
-															)}
-														</For>
-													</div>
-												</section>
+			<Tabs value={tab()} onChange={setTab}>
+				<TabsList variant="line" class="mb-3">
+					<TabsTrigger value="people">People</TabsTrigger>
+					<TabsTrigger value="templates">Templates</TabsTrigger>
+				</TabsList>
+				<TabsContent value="templates">
+					<TemplatesPanel />
+				</TabsContent>
+				<TabsContent value="people">
+					<QueryBoundary query={contacts}>
+						{(all) => (
+							<Show
+								when={all().length > 0}
+								fallback={
+									<p class="text-sm text-faint">
+										No contacts yet. Add a recruiter or hiring manager to start.
+									</p>
+								}
+							>
+								<div class="flex flex-col gap-6">
+									<For each={contactGroups}>
+										{(group) => (
+											<Show when={groupContacts(all())[group.key]}>
+												{(items) => (
+													<Show when={items().length > 0}>
+														<section>
+															<h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
+																{group.label} ({items().length})
+															</h2>
+															<div class="grid gap-3 md:grid-cols-2">
+																<For each={items()}>
+																	{(c) => (
+																		<ContactCard
+																			contact={c}
+																			onSent={() => setSending(c)}
+																			onReply={() => setReplying(c)}
+																			onDelete={() => {
+																				if (
+																					confirm(
+																						`Delete ${c.name} and their history?`,
+																					)
+																				) {
+																					remove.mutate(c.id);
+																				}
+																			}}
+																		/>
+																	)}
+																</For>
+															</div>
+														</section>
+													</Show>
+												)}
 											</Show>
 										)}
-									</Show>
-								)}
-							</For>
-						</div>
-					</Show>
-				)}
-			</QueryBoundary>
+									</For>
+								</div>
+							</Show>
+						)}
+					</QueryBoundary>
+				</TabsContent>
+			</Tabs>
 		</div>
 	);
 }

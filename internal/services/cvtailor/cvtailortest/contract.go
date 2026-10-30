@@ -39,6 +39,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		{"drafts", runDraftContract},
 		{"letter skeletons", runLetterSkeletonContract},
 		{"cover letters", runCoverLetterContract},
+		{"outreach templates", runOutreachTemplateContract},
 	} {
 		t.Run(group.name, func(t *testing.T) {
 			t.Parallel()
