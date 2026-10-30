@@ -1,25 +1,20 @@
 import { z } from "zod";
 
-export const contactStageSchema = z.enum([
+const contactStageSchema = z.enum([
 	"to_contact",
 	"messaged",
 	"replied",
 	"closed",
 ]);
-export const contactOutcomeSchema = z.enum([
+const contactOutcomeSchema = z.enum([
 	"interested",
 	"referred",
 	"not_now",
 	"no_thanks",
 	"no_reply",
 ]);
-export const contactChannelSchema = z.enum([
-	"linkedin",
-	"email",
-	"call",
-	"inbound",
-]);
-export const outreachKindSchema = z.enum([
+const contactChannelSchema = z.enum(["linkedin", "email", "call", "inbound"]);
+const outreachKindSchema = z.enum([
 	"recruiter",
 	"hiring_manager",
 	"referral",
@@ -27,7 +22,7 @@ export const outreachKindSchema = z.enum([
 ]);
 const contactEventKindSchema = z.enum(["added", "sent", "reply", "closed"]);
 
-export const contactEventSchema = z.object({
+const contactEventSchema = z.object({
 	id: z.string(),
 	kind: contactEventKindSchema,
 	occurred_on: z.string(),
@@ -66,10 +61,9 @@ export const contactSentSchema = z.object({
 	moved_application_chase: z.boolean(),
 });
 
-export type ContactStage = z.infer<typeof contactStageSchema>;
-export type ContactOutcome = z.infer<typeof contactOutcomeSchema>;
+type ContactOutcome = z.infer<typeof contactOutcomeSchema>;
+type OutreachKind = z.infer<typeof outreachKindSchema>;
 export type ContactChannel = z.infer<typeof contactChannelSchema>;
-export type OutreachKind = z.infer<typeof outreachKindSchema>;
 export type ContactEvent = z.infer<typeof contactEventSchema>;
 export type Contact = z.infer<typeof contactSchema>;
 export type ContactSent = z.infer<typeof contactSentSchema>;
