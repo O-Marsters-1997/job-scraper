@@ -9,7 +9,7 @@ import {
 	replyOutcomes,
 } from "@/types/contact";
 
-function eventLabel(e: ContactEvent): string {
+export function eventLabel(e: ContactEvent): string {
 	const outcome = replyOutcomes.find((o) => o.key === e.outcome)?.label;
 	switch (e.kind) {
 		case "added":

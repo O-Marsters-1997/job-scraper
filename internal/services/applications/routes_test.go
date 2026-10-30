@@ -128,6 +128,7 @@ func TestRoutesHappyPaths(t *testing.T) {
 	if got := handlerstest.Do[[]dto.Contact](t, r, http.StatusOK, "GET /contacts/", ""); len(got) != 1 {
 		t.Fatalf("got %d contacts, want 1", len(got))
 	}
+	handlerstest.Do[[]dto.ContactCompany](t, r, http.StatusOK, "GET /contacts/companies", "")
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /contacts/"+contact.ID, "")
 
 	if got := handlerstest.Do[dto.JobNote](t, r, http.StatusOK, "GET /jobs/job-1/note", ""); got.Body != "" {

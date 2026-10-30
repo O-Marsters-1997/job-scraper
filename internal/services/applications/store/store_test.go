@@ -571,3 +571,57 @@ func TestDeleteContactRemovesEvents(t *testing.T) {
 		t.Errorf("contact_events after delete = %d, %v, want 0", n, err)
 	}
 }
+
+func TestListContactCompanies(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+	ctx := t.Context()
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, sql, args...); err != nil {
+			t.Fatalf("exec %q err = %v", sql, err)
+		}
+	}
+	company := func(slug, kind string) string {
+		t.Helper()
+		var id string
+		if err := pool.QueryRow(ctx, `INSERT INTO companies (slug, name, kind) VALUES ($1, $1, $2) RETURNING id`, slug, kind).Scan(&id); err != nil {
+			t.Fatalf("insert company err = %v", err)
+		}
+		return id
+	}
+	acme, tracked, dismissed, stranger := company("acme", "direct"), company("bolt", "agency"), company("cast", "direct"), company("dune", "direct")
+
+	exec(`INSERT INTO tracked_companies (user_id, company_id) VALUES ($1, $2)`, userID, tracked)
+	exec(`INSERT INTO tracked_companies (user_id, company_id, review_state) VALUES ($1, $2, 'dismissed')`, userID, dismissed)
+	exec(`INSERT INTO contacts (user_id, name, company_id) VALUES ($1, 'Sam', $2)`, userID, acme)
+
+	covered := pgtest.InsertJob(t, pool, "Covered", "covered")
+	uncovered := pgtest.InsertJob(t, pool, "Uncovered", "uncovered")
+	closed := pgtest.InsertJob(t, pool, "Closed", "closed")
+	exec(`UPDATE jobs SET company_id = $1 WHERE id = ANY($2)`, acme, []string{covered, uncovered, closed})
+	exec(`UPDATE jobs SET closed_at = NOW() WHERE id = $1`, closed)
+	exec(`INSERT INTO contacts (user_id, name, company_id, job_id) VALUES ($1, 'Pat', $2, $3)`, userID, acme, covered)
+	exec(`INSERT INTO contacts (user_id, name, company_id) VALUES ($1, 'Eve', $2)`, pgtest.InsertUser(t, pool), stranger)
+	if _, err := st.CreateApplication(ctx, userID, dto.CreateApplicationInput{JobID: uncovered}); err != nil {
+		t.Fatalf("CreateApplication err = %v", err)
+	}
+
+	got, err := st.ListContactCompanies(ctx, userID)
+	if err != nil {
+		t.Fatalf("ListContactCompanies err = %v", err)
+	}
+	if len(got) != 2 || got[0].ID != acme || got[1].ID != tracked {
+		t.Fatalf("ListContactCompanies = %+v, want acme (contact) then tracked bolt only", got)
+	}
+	if got[0].Tracked || !got[1].Tracked || got[1].Kind != "agency" {
+		t.Errorf("tracked/kind = %v/%v %q, want false/true agency", got[0].Tracked, got[1].Tracked, got[1].Kind)
+	}
+	wantJobs := []dto.ContactCompanyJob{{JobID: uncovered, Title: "Uncovered"}, {JobID: covered, Title: "Covered", HasContact: true}}
+	if diff := cmp.Diff(wantJobs, got[0].OpenJobs); diff != "" {
+		t.Errorf("OpenJobs mismatch (-want +got):\n%s", diff)
+	}
+	if len(got[0].ApplicationIDs) != 1 || len(got[1].ApplicationIDs) != 0 || got[1].OpenJobs == nil {
+		t.Errorf("application ids/jobs = %v, %v, %v, want one, none, empty non-nil", got[0].ApplicationIDs, got[1].ApplicationIDs, got[1].OpenJobs)
+	}
+}

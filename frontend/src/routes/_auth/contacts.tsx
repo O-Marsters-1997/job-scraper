@@ -17,13 +17,16 @@ import {
 	useChases,
 } from "../../hooks/useApplications";
 import {
+	contactCompaniesQueryOptions,
 	contactsQueryOptions,
+	useContactCompanies,
 	useContacts,
 	useDeleteContact,
 } from "../../hooks/useContacts";
 import { queryClient } from "../../lib/queryClient";
 import { SetAnotherChase } from "./-applications/SetAnotherChase";
 import { ChaseNow } from "./-contacts/ChaseNow";
+import { CompaniesView } from "./-contacts/CompaniesView";
 import { ContactCard } from "./-contacts/ContactCard";
 import { MarkSentDialog, ReplyDialog } from "./-contacts/ContactDialogs";
 
@@ -32,6 +35,7 @@ export const Route = createFileRoute("/_auth/contacts")({
 		Promise.all([
 			queryClient.prefetchQuery(contactsQueryOptions),
 			queryClient.prefetchQuery(chasesQueryOptions),
+			queryClient.prefetchQuery(contactCompaniesQueryOptions),
 		]),
 	component: ContactsPage,
 });
@@ -41,8 +45,12 @@ function ContactsPage() {
 	const chases = useChases();
 	const apps = useApplications();
 	const remove = useDeleteContact();
+	const companies = useContactCompanies();
 	const [tab, setTab] = createSignal("people");
 	const [adding, setAdding] = createSignal(false);
+	const [addingAt, setAddingAt] = createSignal<
+		{ id: string | null; name: string } | undefined
+	>();
 	const [sending, setSending] = createSignal<Contact | undefined>();
 	const [replying, setReplying] = createSignal<Contact | undefined>();
 	const [chasedApps, setChasedApps] = createSignal<ApplicationWithDetails[]>(
@@ -55,9 +63,20 @@ function ContactsPage() {
 	return (
 		<div class="px-7 py-6">
 			<PageHeading title="Contacts" subtitle="People you're reaching out to">
-				<Button onClick={() => setAdding(true)}>Add contact</Button>
+				<Button
+					onClick={() => {
+						setAddingAt(undefined);
+						setAdding(true);
+					}}
+				>
+					Add contact
+				</Button>
 			</PageHeading>
-			<AddContactDialog open={adding()} onOpenChange={setAdding} />
+			<AddContactDialog
+				open={adding()}
+				onOpenChange={setAdding}
+				company={addingAt()}
+			/>
 			<MarkSentDialog
 				contact={sending()}
 				onClose={() => setSending(undefined)}
@@ -82,10 +101,26 @@ function ContactsPage() {
 			<Tabs value={tab()} onChange={setTab}>
 				<TabsList variant="line" class="mb-3">
 					<TabsTrigger value="people">People</TabsTrigger>
+					<TabsTrigger value="companies">Companies</TabsTrigger>
 					<TabsTrigger value="templates">Templates</TabsTrigger>
 				</TabsList>
 				<TabsContent value="templates">
 					<TemplatesPanel />
+				</TabsContent>
+				<TabsContent value="companies">
+					<QueryBoundary query={companies}>
+						{(list) => (
+							<CompaniesView
+								companies={list()}
+								contacts={loadedData(contacts) ?? []}
+								onOpenPerson={setSending}
+								onAdd={(c) => {
+									setAddingAt(c);
+									setAdding(true);
+								}}
+							/>
+						)}
+					</QueryBoundary>
 				</TabsContent>
 				<TabsContent value="people">
 					<QueryBoundary query={contacts}>

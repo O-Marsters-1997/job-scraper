@@ -19,6 +19,7 @@ interface AddContactDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	job?: Pick<Job, "ID" | "Title"> | undefined;
+	company?: { id: string | null; name: string } | undefined;
 }
 
 export function AddContactDialog(props: AddContactDialogProps) {
@@ -30,10 +31,14 @@ export function AddContactDialog(props: AddContactDialogProps) {
 					<Show when={props.job}>
 						{(job) => <p class="text-sm text-muted">{job().Title}</p>}
 					</Show>
+					<Show when={props.company}>
+						{(company) => <p class="text-sm text-muted">{company().name}</p>}
+					</Show>
 				</DialogHeader>
 				<Show when={props.open}>
 					<AddContactForm
 						job={props.job}
+						company={props.company}
 						onClose={() => props.onOpenChange(false)}
 					/>
 				</Show>
@@ -52,6 +57,7 @@ function errorMessage(err: unknown): string {
 
 function AddContactForm(props: {
 	job: Pick<Job, "ID" | "Title"> | undefined;
+	company: { id: string | null; name: string } | undefined;
 	onClose: () => void;
 }) {
 	const create = useCreateContact();
@@ -65,8 +71,8 @@ function AddContactForm(props: {
 		await create.mutateAsync({
 			name: name().trim(),
 			role: role().trim(),
-			company_id: null,
-			company_name: companyName().trim(),
+			company_id: props.company?.id ?? null,
+			company_name: props.company?.name ?? companyName().trim(),
 			job_id: props.job?.ID ?? null,
 			linkedin_url: linkedin().trim(),
 			email: email().trim(),
@@ -97,7 +103,7 @@ function AddContactForm(props: {
 					onInput={(e) => setRole(e.currentTarget.value)}
 				/>
 			</div>
-			<Show when={!props.job}>
+			<Show when={!props.job && !props.company}>
 				<div>
 					<Label for="contact-company">Company</Label>
 					<Input
