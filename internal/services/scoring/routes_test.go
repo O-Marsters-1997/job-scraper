@@ -191,7 +191,7 @@ func TestJobFeedbackRoute(t *testing.T) {
 	}{
 		"unknown job":   {`{"jobId":"nope","direction":"higher","reason":"r"}`, http.StatusNotFound},
 		"bad direction": {`{"jobId":"job-1","direction":"up","reason":"r"}`, http.StatusBadRequest},
-		"blank reason":  {`{"jobId":"job-1","direction":"higher","reason":" "}`, http.StatusBadRequest},
+		"looks right":   {`{"jobId":"job-1","direction":"accurate","reason":""}`, http.StatusCreated},
 	} {
 		if rec := handlerstest.Serve(t, r, "POST /scoring-feedback/job", tc.body); rec.Code != tc.want {
 			t.Errorf("POST /scoring-feedback/job %s status = %d, want %d", name, rec.Code, tc.want)
@@ -282,5 +282,16 @@ func TestCorrectionRoutes(t *testing.T) {
 	reverted := handlerstest.Do[dto.JobScore](t, r, http.StatusOK, "DELETE /jobs/job-1/corrections/tech:go", "")
 	if reverted.Score != 50 || reverted.Rows[0].Corrected {
 		t.Errorf("DELETE correction = %+v, want the uncorrected score 50", reverted)
+	}
+}
+
+func TestPlaygroundQueueRoute(t *testing.T) {
+	t.Parallel()
+	r := newTestRouter(t)
+	handlerstest.RequiresAuth(t, r, "GET /scoring-playground/queue")
+
+	got := handlerstest.Do[dto.PlaygroundQueue](t, r, http.StatusOK, "GET /scoring-playground/queue", "")
+	if len(got.JobIDs) != 0 || len(got.Bands) != 4 {
+		t.Errorf("GET /scoring-playground/queue = %+v, want no jobs and four bands", got)
 	}
 }
