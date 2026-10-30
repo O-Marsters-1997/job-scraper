@@ -472,6 +472,27 @@ func (s *Service) Ask(ctx context.Context, userID, jobID string, questions []str
 	return out, nil
 }
 
+func (s *Service) CachedAnswers(ctx context.Context, jobID string, questions []string) (map[string]dto.Answer, error) {
+	job, err := s.store.GetJobForScoring(ctx, jobID)
+	if errors.Is(err, data.ErrNotFound) {
+		return nil, apperr.NotFound("job not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("scoring.CachedAnswers: load job: %w", err)
+	}
+	cached, err := s.store.ListAnswers(ctx, jobID, job.ContentFingerprint, jev.Model)
+	if err != nil {
+		return nil, fmt.Errorf("scoring.CachedAnswers: load cached answers: %w", err)
+	}
+	out := make(map[string]dto.Answer, len(questions))
+	for _, q := range questions {
+		if a, ok := cached[QuestionHash(q)]; ok {
+			out[q] = a
+		}
+	}
+	return out, nil
+}
+
 // Recompute re-scores every job userID already has a score for, from their
 // current preferences and each job's cached answers. It never calls Answerer.
 func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeResult, error) {

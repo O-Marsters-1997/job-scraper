@@ -24,6 +24,7 @@ type Deps struct {
 	Docs    DocFetcher
 	Drive   Drive
 	Asker   Asker
+	Cached  CachedAsker
 	Editor  Editor
 	Lines   *lineedit.Editor
 	Profile ProfileWriter
@@ -46,6 +47,7 @@ type Module struct {
 	editor     Editor
 	lines      *lineedit.Editor
 	creds      Credentials
+	cached     CachedAsker
 	scaffolder Scaffolder
 	log        *slog.Logger
 }
@@ -65,13 +67,14 @@ func Build(deps Deps) *Module {
 		lines:   deps.Lines,
 		profile: deps.Profile,
 		creds:   deps.Creds,
+		cached:  deps.Cached,
 
 		scaffolder: deps.Scaffolder,
 	}
 }
 
-func New(pool *pgxpool.Pool, docs Docs, asker Asker, creds Credentials, log *slog.Logger) *Module {
-	return Build(Deps{Store: store.New(pool), Docs: docs, Drive: docs, Asker: asker, Editor: cvedit.NewClient(), Lines: lineedit.New(lineedit.NewOpenRouter()), Profile: profiledraft.New(lineedit.NewOpenRouter()), Creds: creds, Log: log, Scaffolder: letterwrite.NewClient()})
+func New(pool *pgxpool.Pool, docs Docs, asker Asker, cached CachedAsker, creds Credentials, log *slog.Logger) *Module {
+	return Build(Deps{Store: store.New(pool), Docs: docs, Drive: docs, Asker: asker, Cached: cached, Editor: cvedit.NewClient(), Lines: lineedit.New(lineedit.NewOpenRouter()), Profile: profiledraft.New(lineedit.NewOpenRouter()), Creds: creds, Log: log, Scaffolder: letterwrite.NewClient()})
 }
 
 // Run generates pending Drafts until ctx is cancelled.

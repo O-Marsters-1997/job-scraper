@@ -172,6 +172,10 @@ func (m *Module) Ask(ctx context.Context, userID, jobID string, questions []stri
 	return m.svc.Ask(ctx, userID, jobID, questions)
 }
 
+func (m *Module) CachedAnswers(ctx context.Context, jobID string, questions []string) (map[string]dto.Answer, error) {
+	return m.svc.CachedAnswers(ctx, jobID, questions)
+}
+
 func (m *Module) AddOption(ctx context.Context, id, dimension, label, question string) error {
 	return m.store.AddScoringOption(ctx, id, dimension, label, question)
 }
