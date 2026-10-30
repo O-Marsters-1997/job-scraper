@@ -78,6 +78,8 @@ type Draft struct {
 	BaseDocID      string   `json:"baseDocId"`
 	BaseTabID      string   `json:"baseTabId"`
 	AchievementIDs []string `json:"-"`
+
+	RedraftWarning string `json:"redraftWarning,omitempty"`
 }
 
 // DraftContent is the editable part of a Draft: the Profile, Skills (flat,

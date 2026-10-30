@@ -10,9 +10,11 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
+	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/profiledraft"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/tabcopy"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 )
 
@@ -63,6 +65,9 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 	for _, s := range skills {
 		input.BankSkills = append(input.BankSkills, s.Name)
 	}
+	if input.Lines, err = m.profileLines(ctx, userID, draft); err != nil {
+		return dto.Draft{}, err
+	}
 
 	res, redraftErr := m.profile.Redraft(ctx, key, input)
 	m.log.InfoContext(ctx, "profile redraft", slog.String("draft_id", draft.ID),
@@ -82,9 +87,38 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 		}
 		return dto.Draft{}, apperr.Unprocessable("the redraft broke the rules: " + reason)
 	}
-	return m.svc.SaveDraftSlots(ctx, userID, dto.DraftSlotsInput{
+	saved, err := m.svc.SaveDraftSlots(ctx, userID, dto.DraftSlotsInput{
 		ID: draft.ID, Slots: []dto.SlotEdit{{SlotID: profileSlotID, Text: res.Text}},
 	})
+	if err == nil && res.Overlong {
+		saved.RedraftWarning = "The redraft is longer than your current profile. Shorten it to keep the page layout."
+	}
+	return saved, err
+}
+
+func (m *Module) profileLines(ctx context.Context, userID string, draft dto.Draft) (func(string) int, error) {
+	raw, err := m.docs.GetDocument(ctx, userID, draft.DraftDocID, draft.DraftTabID)
+	if err != nil {
+		return nil, fmt.Errorf("load draft doc: %w", err)
+	}
+	doc, err := tabcopy.Layout(raw)
+	if err != nil {
+		return nil, fmt.Errorf("lay out draft doc: %w", err)
+	}
+	ds, err := docparse.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("parse draft doc: %w", err)
+	}
+	if ds.Profile == nil {
+		return nil, nil
+	}
+	for i := range doc.Blocks {
+		if doc.Blocks[i].StartIndex == ds.Profile.StartIndex {
+			geo, block := pageGeometry{page: doc.Page}, &doc.Blocks[i]
+			return func(text string) int { return geo.lines(text, block) }, nil
+		}
+	}
+	return nil, nil
 }
 
 func (m *Module) ProfileCaptures(ctx context.Context, userID string) ([]dto.ProfileCapture, error) {
