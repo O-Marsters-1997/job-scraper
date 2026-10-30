@@ -25,13 +25,16 @@ export function eventLabel(e: ContactEvent): string {
 
 export function ContactCard(props: {
 	contact: Contact;
+	applicationStatus?: string | undefined;
 	onSent: () => void;
 	onReply: () => void;
 	onDelete: () => void;
 }) {
 	const c = () => props.contact;
 	const subtitle = () =>
-		[c().role, c().company_name, c().job_title].filter(Boolean).join(" · ");
+		[c().role, c().company_name, c().job_title, props.applicationStatus]
+			.filter(Boolean)
+			.join(" · ");
 	return (
 		<Card class="flex flex-col gap-3 p-4">
 			<div class="flex items-start justify-between gap-3">
