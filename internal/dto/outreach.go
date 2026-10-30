@@ -33,8 +33,6 @@ type OutreachDraft struct {
 	HasHookSlot   bool         `json:"hasHookSlot"`
 }
 
-// OutreachSubject is what a draft's merge fields read from a Contact, its
-// Job and its Company; JobID and JobTitle are empty without a Job.
 type OutreachSubject struct {
 	Name           string
 	Role           string

@@ -85,7 +85,6 @@ func pickTemplate(templates []dto.OutreachTemplate, id string, kind dto.Outreach
 	return dto.OutreachTemplate{}, false
 }
 
-// matchedAchievement is the cached top-lean Achievement for the Job, else the newest.
 func (m *Module) matchedAchievement(ctx context.Context, jobID string, newestFirst []dto.Achievement) (*dto.Achievement, error) {
 	if len(newestFirst) == 0 {
 		return nil, nil

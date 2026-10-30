@@ -128,7 +128,6 @@ func (f *FakeStore) DeleteOutreachTemplate(_ context.Context, userID, id string)
 	return nil
 }
 
-// SeedOutreachSubject registers a Contact for userID and returns its ID.
 func (f *FakeStore) SeedOutreachSubject(userID string, s dto.OutreachSubject) string {
 	f.mu.Lock()
 	defer f.mu.Unlock()

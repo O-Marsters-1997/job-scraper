@@ -168,7 +168,6 @@ func isNameViolation(err error) bool {
 
 var ErrContactNotFound = errors.New("contact not found")
 
-// OutreachSubject reads the merge-field inputs of one of userID's Contacts.
 func (s *Store) OutreachSubject(ctx context.Context, userID, contactID string) (dto.OutreachSubject, error) {
 	uid, err := parseID(userID, ErrContactNotFound)
 	if err != nil {
@@ -188,7 +187,6 @@ func (s *Store) OutreachSubject(ctx context.Context, userID, contactID string) (
 	return dto.OutreachSubject{Name: r.Name, Role: r.Role, Company: r.Company, JobID: r.JobID, JobTitle: r.JobTitle, SentSinceReply: int(r.SentSinceReply)}, nil
 }
 
-// ListAchievementsNewestFirst returns every Achievement of userID, most recently added first.
 func (s *Store) ListAchievementsNewestFirst(ctx context.Context, userID string) ([]dto.Achievement, error) {
 	uid, err := parseID(userID, ErrAchievementNotFound)
 	if err != nil {
