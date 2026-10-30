@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, Show, untrack } from "solid-js";
 import { ApiError } from "@/api/client";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Badge } from "@/components/ui/badge";
@@ -107,8 +107,8 @@ function TemplateEditor(props: {
 	const update = useUpdateOutreachTemplate();
 	const makeDefault = useMakeOutreachTemplateDefault();
 	const remove = useDeleteOutreachTemplate();
-	const [name, setName] = createSignal(props.template.name);
-	const [body, setBody] = createSignal(props.template.body);
+	const [name, setName] = createSignal(untrack(() => props.template.name));
+	const [body, setBody] = createSignal(untrack(() => props.template.body));
 	const dirty = () =>
 		name().trim() !== props.template.name ||
 		body().trim() !== props.template.body;
