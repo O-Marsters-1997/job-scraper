@@ -10,7 +10,7 @@ import { chaseNowRows } from "@/lib/chaseNow";
 import { contactGroups, groupContacts } from "@/lib/contactGroups";
 import { loadedData } from "@/lib/queryData";
 import type { ApplicationWithDetails } from "@/types/application";
-import type { Contact } from "@/types/contact";
+import type { Contact, ContactSent } from "@/types/contact";
 import {
 	chasesQueryOptions,
 	useApplications,
@@ -29,6 +29,7 @@ import { ChaseNow } from "./-contacts/ChaseNow";
 import { CompaniesView } from "./-contacts/CompaniesView";
 import { ContactCard } from "./-contacts/ContactCard";
 import { MarkSentDialog, ReplyDialog } from "./-contacts/ContactDialogs";
+import { ReceiptToast } from "./-contacts/ReceiptToast";
 
 export const Route = createFileRoute("/_auth/contacts")({
 	loader: () =>
@@ -53,6 +54,7 @@ function ContactsPage() {
 	>();
 	const [sending, setSending] = createSignal<Contact | undefined>();
 	const [replying, setReplying] = createSignal<Contact | undefined>();
+	const [receipt, setReceipt] = createSignal<ContactSent | undefined>();
 	const [chasedApps, setChasedApps] = createSignal<ApplicationWithDetails[]>(
 		[],
 	);
@@ -85,6 +87,8 @@ function ContactsPage() {
 				contact={replying()}
 				onClose={() => setReplying(undefined)}
 			/>
+
+			<ReceiptToast sent={receipt()} onDismiss={() => setReceipt(undefined)} />
 
 			<For each={chasedApps()}>
 				{(app) => (
@@ -147,6 +151,7 @@ function ContactsPage() {
 										onSent={setSending}
 										onReply={setReplying}
 										onDelete={deleteContact}
+										onDraftSent={setReceipt}
 										onChased={(app) => setChasedApps((prev) => [...prev, app])}
 									/>
 									<Show
@@ -173,6 +178,7 @@ function ContactsPage() {
 																		onSent={() => setSending(c)}
 																		onReply={() => setReplying(c)}
 																		onDelete={() => deleteContact(c)}
+																		onDraftSent={setReceipt}
 																	/>
 																)}
 															</For>

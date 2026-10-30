@@ -114,7 +114,7 @@ func TestModule_ExplainDraft(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		draft, err := e.svc.GetDraft(t.Context(), userID, dto.DraftQuery{ID: id})
+		draft, err := e.svc.GetDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -137,7 +137,7 @@ func TestModule_ExplainDraft(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		fresh, err := e.svc.DraftInsights(t.Context(), userID, dto.DraftQuery{ID: id})
+		fresh, err := e.svc.DraftInsights(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil || len(fresh.Lines) != 1 || fresh.Stale || len(editor.InsightInputs) != 1 {
 			t.Fatalf("DraftInsights() = %+v, %v with %d model calls, want the stored line, fresh, no new call", fresh, err, len(editor.InsightInputs))
 		}
@@ -146,7 +146,7 @@ func TestModule_ExplainDraft(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		stale, err := e.svc.DraftInsights(t.Context(), userID, dto.DraftQuery{ID: id})
+		stale, err := e.svc.DraftInsights(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil || !stale.Stale || len(stale.Lines) != 1 {
 			t.Errorf("DraftInsights() after an edit = %+v, %v, want the old line, stale", stale, err)
 		}
@@ -156,7 +156,7 @@ func TestModule_ExplainDraft(t *testing.T) {
 		if err != nil || again.Stale {
 			t.Fatalf("ExplainDraft() refresh = %+v, %v, want fresh", again, err)
 		}
-		if got, _ := e.svc.DraftInsights(t.Context(), userID, dto.DraftQuery{ID: id}); got.Stale {
+		if got, _ := e.svc.DraftInsights(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); got.Stale {
 			t.Errorf("DraftInsights() after a refresh is stale, want fresh")
 		}
 	})
@@ -164,7 +164,7 @@ func TestModule_ExplainDraft(t *testing.T) {
 	t.Run("the draft summarises its stored insights, and has none before an Explain", func(t *testing.T) {
 		t.Parallel()
 		e, id, slot := setup(t)
-		before, err := e.svc.GetDraft(t.Context(), userID, dto.DraftQuery{ID: id})
+		before, err := e.svc.GetDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil || before.Insights != nil {
 			t.Fatalf("GetDraft() before Explain = %+v, %v, want no insights", before.Insights, err)
 		}
@@ -173,7 +173,7 @@ func TestModule_ExplainDraft(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := e.svc.GetDraft(t.Context(), userID, dto.DraftQuery{ID: id})
+		got, err := e.svc.GetDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		listed, listErr := e.svc.ListJobDrafts(t.Context(), userID, dto.DraftJobQuery{JobID: jobID})
 
 		want := &dto.InsightsSummary{Anchored: 1, Total: 1}
@@ -187,7 +187,7 @@ func TestModule_ExplainDraft(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
 
-		got, err := e.svc.DraftInsights(t.Context(), userID, dto.DraftQuery{ID: id})
+		got, err := e.svc.DraftInsights(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 
 		if err != nil || len(got.Lines) != 0 || got.Stale {
 			t.Errorf("DraftInsights() = %+v, %v, want no lines", got, err)

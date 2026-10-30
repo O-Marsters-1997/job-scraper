@@ -1,13 +1,15 @@
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatChaseDate } from "@/lib/chase";
 import {
 	type Contact,
 	type ContactEvent,
+	type ContactSent,
 	channelLabels,
 	replyOutcomes,
 } from "@/types/contact";
+import { Drafter } from "./Drafter";
 
 export function eventLabel(e: ContactEvent): string {
 	const outcome = replyOutcomes.find((o) => o.key === e.outcome)?.label;
@@ -29,8 +31,10 @@ export function ContactCard(props: {
 	onSent: () => void;
 	onReply: () => void;
 	onDelete: () => void;
+	onDraftSent: (sent: ContactSent) => void;
 }) {
 	const c = () => props.contact;
+	const [drafting, setDrafting] = createSignal(false);
 	const subtitle = () =>
 		[c().role, c().company_name, c().job_title, props.applicationStatus]
 			.filter(Boolean)
@@ -71,7 +75,14 @@ export function ContactCard(props: {
 			</ol>
 			<div class="flex flex-wrap gap-2">
 				<Show when={c().stage !== "closed"}>
-					<Button size="sm" onClick={props.onSent}>
+					<Button
+						size="sm"
+						aria-expanded={drafting()}
+						onClick={() => setDrafting((open) => !open)}
+					>
+						Draft message
+					</Button>
+					<Button size="sm" variant="outline" onClick={props.onSent}>
 						Mark sent
 					</Button>
 				</Show>
@@ -84,6 +95,9 @@ export function ContactCard(props: {
 					Delete
 				</Button>
 			</div>
+			<Show when={drafting()}>
+				<Drafter contact={c()} onSent={props.onDraftSent} />
+			</Show>
 		</Card>
 	);
 }

@@ -186,7 +186,7 @@ type DraftFailure struct {
 	ClearDoc bool
 }
 
-type DraftQuery struct {
+type TailoringDraftQuery struct {
 	ID string `json:"-" path:"id"`
 }
 

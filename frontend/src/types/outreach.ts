@@ -32,3 +32,24 @@ export const mergeFields = [
 	"{achievement}",
 	"{hook}",
 ];
+
+export const outreachDraftSchema = z.object({
+	templateId: z.string(),
+	kind: outreachKindSchema,
+	body: z.string(),
+	achievementId: z.string(),
+	hasHookSlot: z.boolean(),
+});
+
+export type OutreachDraft = z.infer<typeof outreachDraftSchema>;
+
+export interface OutreachDraftQuery {
+	templateId?: string | undefined;
+	achievementId?: string | undefined;
+}
+
+export const draftWordLimit = 50;
+
+export function wordCount(text: string): number {
+	return text.trim().split(/\s+/).filter(Boolean).length;
+}

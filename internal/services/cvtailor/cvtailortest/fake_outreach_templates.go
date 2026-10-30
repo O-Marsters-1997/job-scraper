@@ -2,12 +2,19 @@ package cvtailortest
 
 import (
 	"context"
+	"slices"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 )
+
+type ownedSubject struct {
+	dto.OutreachSubject
+	userID string
+}
 
 type outreachTemplate struct {
 	dto.OutreachTemplate
@@ -119,4 +126,40 @@ func (f *FakeStore) DeleteOutreachTemplate(_ context.Context, userID, id string)
 		}
 	}
 	return nil
+}
+
+// SeedOutreachSubject registers a Contact for userID and returns its ID.
+func (f *FakeStore) SeedOutreachSubject(userID string, s dto.OutreachSubject) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	id := f.nextID()
+	f.subjects[id] = ownedSubject{userID: userID, OutreachSubject: s}
+	return id
+}
+
+func (f *FakeStore) OutreachSubject(_ context.Context, userID, contactID string) (dto.OutreachSubject, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s, ok := f.subjects[contactID]
+	if !ok || s.userID != userID {
+		return dto.OutreachSubject{}, store.ErrContactNotFound
+	}
+	return s.OutreachSubject, nil
+}
+
+func (f *FakeStore) ListAchievementsNewestFirst(_ context.Context, userID string) ([]dto.Achievement, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var owned []*achievement
+	for _, a := range f.achievements {
+		if a.userID == userID {
+			owned = append(owned, a)
+		}
+	}
+	slices.SortFunc(owned, func(a, b *achievement) int { return strings.Compare(b.ID, a.ID) })
+	out := make([]dto.Achievement, len(owned))
+	for i, a := range owned {
+		out[i] = a.Achievement
+	}
+	return out, nil
 }

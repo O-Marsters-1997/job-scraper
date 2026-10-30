@@ -485,3 +485,54 @@ func TestJobAnnotations(t *testing.T) {
 		t.Errorf("JobAnnotations() = %+v, %v (-want +got):\n%s", got, err, diff)
 	}
 }
+
+func TestOutreachSubject(t *testing.T) {
+	t.Parallel()
+	st, pool, uid := newStore(t)
+	ctx := t.Context()
+	jobID := pgtest.InsertJob(t, pool, "Backend Engineer", "fp-1")
+	var contactID string
+	err := pool.QueryRow(ctx,
+		`INSERT INTO contacts (user_id, name, role, company_name, job_id) VALUES ($1, 'Sam Jones', 'Recruiter', 'Globex', $2) RETURNING id`,
+		uid, jobID).Scan(&contactID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"added", "sent", "reply", "sent", "sent"} {
+		if _, err := pool.Exec(ctx, `INSERT INTO contact_events (contact_id, kind, occurred_on) VALUES ($1, $2, CURRENT_DATE)`, contactID, kind); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := st.OutreachSubject(ctx, uid, contactID)
+
+	want := dto.OutreachSubject{Name: "Sam Jones", Role: "Recruiter", Company: "Globex", JobID: jobID, JobTitle: "Backend Engineer", SentSinceReply: 2}
+	if diff := cmp.Diff(want, got); err != nil || diff != "" {
+		t.Errorf("OutreachSubject() = %+v, %v (-want +got):\n%s", got, err, diff)
+	}
+	other := pgtest.InsertUser(t, pool)
+	if _, err := st.OutreachSubject(ctx, other, contactID); !errors.Is(err, store.ErrContactNotFound) {
+		t.Errorf("OutreachSubject() as another user error = %v, want ErrContactNotFound", err)
+	}
+}
+
+func TestListAchievementsNewestFirst(t *testing.T) {
+	t.Parallel()
+	st, _, uid := newStore(t)
+	ctx := t.Context()
+	pos, err := st.CreatePosition(ctx, uid, dto.PositionInput{Employer: "Acme", Title: "Engineer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"first", "second"} {
+		if _, err := st.CreateAchievement(ctx, uid, dto.AchievementInput{PositionID: pos.ID, Text: text}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := st.ListAchievementsNewestFirst(ctx, uid)
+
+	if err != nil || len(got) != 2 || got[0].Text != "second" || got[1].Text != "first" {
+		t.Errorf("ListAchievementsNewestFirst() = %+v, %v, want second then first", got, err)
+	}
+}

@@ -21,7 +21,7 @@ const (
 
 // GetDraft returns the Draft with, once it is ready, the provenance of its
 // bullets.
-func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery) (dto.Draft, error) {
+func (s *Service) GetDraft(ctx context.Context, userID string, q dto.TailoringDraftQuery) (dto.Draft, error) {
 	draft, err := s.store.GetDraft(ctx, userID, q.ID)
 	if err != nil {
 		return dto.Draft{}, err
@@ -85,7 +85,7 @@ func (s *Service) ListJobDrafts(ctx context.Context, userID string, q dto.DraftJ
 
 // KeepDraft queues a ready Draft to be kept as a named Doc on the next tick.
 // A Job holds one kept Draft, so keeping a second is a conflict.
-func (s *Service) KeepDraft(ctx context.Context, userID string, q dto.DraftQuery) (dto.Draft, error) {
+func (s *Service) KeepDraft(ctx context.Context, userID string, q dto.TailoringDraftQuery) (dto.Draft, error) {
 	draft, err := s.store.GetDraft(ctx, userID, q.ID)
 	if err != nil {
 		return dto.Draft{}, err
@@ -121,7 +121,7 @@ func holdsKeep(d dto.Draft) bool {
 
 // DiscardDraft deletes the Draft's Drive file and marks it discarded; the
 // row stays.
-func (s *Service) DiscardDraft(ctx context.Context, userID string, q dto.DraftQuery) (dto.Draft, error) {
+func (s *Service) DiscardDraft(ctx context.Context, userID string, q dto.TailoringDraftQuery) (dto.Draft, error) {
 	draft, err := s.store.GetDraft(ctx, userID, q.ID)
 	if err != nil {
 		return dto.Draft{}, err
@@ -150,7 +150,7 @@ func (s *Service) DiscardDraft(ctx context.Context, userID string, q dto.DraftQu
 // DraftPDF streams Google's PDF export of the Draft's Doc. The caller must
 // close the body.
 // By Tab: Google's whole-Doc export drops heading styles, https://github.com/O-Marsters-1997/job-scraper/pull/1434
-func (s *Service) DraftPDF(ctx context.Context, userID string, q dto.DraftQuery) (io.ReadCloser, error) {
+func (s *Service) DraftPDF(ctx context.Context, userID string, q dto.TailoringDraftQuery) (io.ReadCloser, error) {
 	draft, err := s.store.GetDraft(ctx, userID, q.ID)
 	if err != nil {
 		return nil, err

@@ -11,6 +11,7 @@ export * from "./jobNotes";
 export * from "./jobPage";
 export * from "./jobs";
 export * from "./letterSkeleton";
+export * from "./outreachDrafts";
 export * from "./outreachTemplates";
 export * from "./push";
 export * from "./scoreFeedback";
