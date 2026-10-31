@@ -92,7 +92,7 @@ func run(ctx context.Context) error {
 	eventsModule := events.New(pool, scoringFacade)
 	apps := applications.New(pool, eventsModule, tasks.NewFacade(pool))
 	taskModule := tasks.New(pool, apps)
-	idm, err := identity.New(pool, []identity.Seeder{apps, taskModule}, os.Getenv("SESSION_SECRET"),
+	idm, err := identity.New(pool, []identity.Seeder{apps, taskModule, cvtailor.NewFacade(pool)}, os.Getenv("SESSION_SECRET"),
 		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
 	if err != nil {
 		return fmt.Errorf("init identity: %w", err)
@@ -121,7 +121,7 @@ func run(ctx context.Context) error {
 	}
 
 	cvTemplates := cvtemplates.New(pool, idm.DocsClient())
-	cvtailorModule := cvtailor.New(pool, idm.DocsClient(), scoringModule, idm, slog.Default())
+	cvtailorModule := cvtailor.New(pool, idm.DocsClient(), scoringModule, scoringModule, idm, slog.Default())
 
 	router, err := api.NewRouter(idm, js, apps, taskModule, cvTemplates, scoringModule, cvtailorModule, eventsModule, notifyModule)
 	if err != nil {

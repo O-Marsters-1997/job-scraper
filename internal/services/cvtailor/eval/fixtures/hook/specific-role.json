@@ -1,0 +1,9 @@
+{
+ "Name": "specific-role",
+ "Scenario": "A clear job description: the line should pick one concrete thing from it and name the company.",
+ "JobTitle": "Platform Engineer",
+ "JobDescription": "Northwind Payments is moving its card-processing services onto Kubernetes and needs a platform engineer to own the deployment pipeline, cut release times and improve on-call for a team of six.",
+ "Company": "Northwind Payments",
+ "ContactRole": "Engineering Manager",
+ "Achievement": "Cut release time from two hours to fifteen minutes by rebuilding the CI pipeline"
+}

@@ -1,5 +1,6 @@
 export * from "./applications";
 export * from "./companies";
+export * from "./contacts";
 export * from "./coverLetters";
 export * from "./cvs";
 export * from "./experience";
@@ -10,8 +11,9 @@ export * from "./jobNotes";
 export * from "./jobPage";
 export * from "./jobs";
 export * from "./letterSkeleton";
+export * from "./outreachDrafts";
+export * from "./outreachTemplates";
 export * from "./push";
-export * from "./recruiterContacts";
 export * from "./scoreFeedback";
 export * from "./scoring";
 export * from "./scrapeRuns";

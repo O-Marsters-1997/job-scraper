@@ -4,7 +4,6 @@ struct DueView: View {
     let model: DueModel
     @Binding var focus: DueFocus?
     @State private var highlighted: String?
-    @State private var contactFor: DueJob?
     @State private var openJobID: String?
     @State private var openApplication: DueJob?
     @State private var query = ""
@@ -33,9 +32,6 @@ struct DueView: View {
                 .safeAreaInset(edge: .bottom, spacing: 8) {
                     DueUndoBanner(entry: model.banner, onUndo: undo, onExpire: model.dismissBanner)
                         .animation(.snappy, value: model.banner?.id)
-                }
-                .sheet(item: $contactFor) { job in
-                    ContactSheet { await model.logContact(job, channel: $0, outcome: $1) }
                 }
                 .alert("Couldn't save that", isPresented: Bindable(model).hasFailure) {
                     Button("OK") {}
@@ -99,7 +95,7 @@ struct DueView: View {
                 ContentUnavailableView.search(text: query)
             } else {
                 DueNotebook(model: model, jobs: jobs, showShortlisted: { showingShortlisted = true },
-                            logContact: { contactFor = $0 }, openJob: { openJobID = $0.id },
+                            openJob: { openJobID = $0.id },
                             openApplication: { openApplication = $0 }, highlighted: highlighted)
             }
         }

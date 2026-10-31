@@ -80,11 +80,6 @@
     "path": "/companies/new"
   },
   {
-    "name": "recruiter-summaries",
-    "method": "GET",
-    "path": "/recruiter-contacts/summaries"
-  },
-  {
     "name": "sources",
     "method": "GET",
     "path": "/sources"

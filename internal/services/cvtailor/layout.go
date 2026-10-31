@@ -19,7 +19,7 @@ const skillsSection = "skills"
 
 // DraftLayout resolves the Draft Doc's page for rendering at true size, with
 // each editable paragraph tagged by the slot ID the Draft's provenance uses.
-func (s *Service) DraftLayout(ctx context.Context, userID string, q dto.DraftQuery) (dto.DraftLayout, error) {
+func (s *Service) DraftLayout(ctx context.Context, userID string, q dto.TailoringDraftQuery) (dto.DraftLayout, error) {
 	draft, err := s.store.GetDraft(ctx, userID, q.ID)
 	if err != nil {
 		return dto.DraftLayout{}, err

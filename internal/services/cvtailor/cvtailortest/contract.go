@@ -1,6 +1,7 @@
 package cvtailortest
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -8,6 +9,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 )
 
 const missingID = "00000000-0000-0000-0000-00000000dead"
@@ -23,6 +25,7 @@ type Fixture struct {
 	JobID string
 
 	TrackLetterTab func(t *testing.T, userID, docID, tabID string)
+	SeedContact    func(t *testing.T, userID string) string
 }
 
 // RunStoreContract proves newStore's cvtailor.Store behaves the same
@@ -39,6 +42,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		{"drafts", runDraftContract},
 		{"letter skeletons", runLetterSkeletonContract},
 		{"cover letters", runCoverLetterContract},
+		{"outreach templates", runOutreachTemplateContract},
+		{"outreach hooks", runOutreachHookContract},
 	} {
 		t.Run(group.name, func(t *testing.T) {
 			t.Parallel()
@@ -147,6 +152,34 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 		if got.Employer != "Acme Ltd" || got.Title != "Lead" {
 			t.Fatalf("UpdatePosition() = %+v, want Acme Ltd / Lead", got)
+		}
+	})
+
+	t.Run("achievements list newest first", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		p := position(t, f, f.UserID, "Acme")
+		achievement(t, f, p.ID, "first")
+		achievement(t, f, p.ID, "second")
+		got, err := f.Store.ListAchievementsNewestFirst(ctx, f.UserID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		other, err := f.Store.ListAchievementsNewestFirst(ctx, f.Other)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 2 || got[0].Text != "second" || got[1].Text != "first" || len(other) != 0 {
+			t.Errorf("ListAchievementsNewestFirst() = %+v, other user's = %+v, want second then first and none", got, other)
+		}
+	})
+
+	t.Run("an unknown contact has no outreach subject", func(t *testing.T) {
+		t.Parallel()
+		f := newStore(t)
+		_, err := f.Store.OutreachSubject(ctx, f.UserID, missingID)
+		if !errors.Is(err, store.ErrContactNotFound) {
+			t.Errorf("OutreachSubject() error = %v, want ErrContactNotFound", err)
 		}
 	})
 

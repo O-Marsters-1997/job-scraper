@@ -39,7 +39,7 @@ func TestService_DraftRoles(t *testing.T) {
 		for _, text := range []string{"Cut p99 latency", strings.Repeat("Cut p99 latency by moving queries to Postgres. ", 12)} {
 			e := newDraftEnv(t)
 			id := e.readyWith(t, tick{}, e.citedEdit(text))
-			got, err := e.svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+			got, err := e.svc.DraftRoles(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 			if err != nil {
 				t.Fatalf("DraftRoles(%s) error = %v", id, err)
 			}
@@ -69,7 +69,7 @@ func TestService_DraftRoles(t *testing.T) {
 			questionPrefix + extra.Text:                 {PYes: 0.7, PNo: 0.1},
 		}
 
-		got, err := e.svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+		got, err := e.svc.DraftRoles(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil {
 			t.Fatalf("DraftRoles() error = %v", err)
 		}
@@ -95,7 +95,7 @@ func TestService_DraftRoles(t *testing.T) {
 		id := e.readyWith(t, tick{docs: docs}, e.citedEdit("Cut p99 latency"))
 		svc := cvtailor.NewService(e.store, docs, e.asker, e.drive)
 
-		got, err := svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+		got, err := svc.DraftRoles(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil {
 			t.Fatalf("DraftRoles() error = %v", err)
 		}
@@ -122,7 +122,7 @@ func TestService_DraftRoles(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := e.svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+		got, err := e.svc.DraftRoles(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil {
 			t.Fatalf("DraftRoles() error = %v", err)
 		}
@@ -138,7 +138,7 @@ func TestService_DraftRoles(t *testing.T) {
 		addAchievements(t, e.pos.ID, e.store, "Ran on-call")
 		id := e.readyDrafts(t, 1)[0]
 
-		got, err := e.svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+		got, err := e.svc.DraftRoles(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil {
 			t.Fatalf("DraftRoles() error = %v", err)
 		}
@@ -173,7 +173,7 @@ func TestService_DraftRoles(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				got, err := e.svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+				got, err := e.svc.DraftRoles(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 				if err != nil {
 					t.Fatalf("DraftRoles() error = %v", err)
 				}
@@ -193,7 +193,7 @@ func TestService_DraftRoles(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := e.svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+		got, err := e.svc.DraftRoles(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil {
 			t.Fatalf("DraftRoles() error = %v", err)
 		}
@@ -210,7 +210,7 @@ func TestService_DraftRoles(t *testing.T) {
 		docs := cvtailortest.Docs{TabJSON: baseTab(t, head("Side project"), bullet("Built a tool"))}
 		svc := cvtailor.NewService(e.store, docs, e.asker, e.drive)
 
-		got, err := svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+		got, err := svc.DraftRoles(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil {
 			t.Fatalf("DraftRoles() error = %v", err)
 		}
@@ -228,7 +228,7 @@ func TestService_DraftRoles(t *testing.T) {
 		t.Parallel()
 		e, id := newQueuedDraft(t)
 
-		_, err := e.svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+		_, err := e.svc.DraftRoles(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 
 		if !apperr.IsKind(err, apperr.KindConflict) {
 			t.Errorf("DraftRoles() error = %v, want kind %v", err, apperr.KindConflict)
@@ -245,7 +245,7 @@ func TestDraftRolesGolden(t *testing.T) {
 		questionPrefix + e.pos.Achievements[1].Text: {PYes: 0.3, PNo: 0.1},
 	}
 
-	got, err := e.svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+	got, err := e.svc.DraftRoles(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 	if err != nil {
 		t.Fatalf("DraftRoles() error = %v", err)
 	}

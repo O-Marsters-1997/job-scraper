@@ -452,35 +452,40 @@ func TestUpdateJobComment(t *testing.T) {
 	}
 }
 
-func TestLogRecruiterContact(t *testing.T) {
-	valid := dto.LogRecruiterContactInput{JobID: "job-1", ContactedOn: "2026-10-01", Channel: dto.ChannelEmail, Outcome: dto.OutcomeSpoke}
+func TestContactValidation(t *testing.T) {
+	t.Parallel()
+	svc, _ := newService(t)
+	tooLong := strings.Repeat("x", 201)
 
-	t.Run("records the contact", func(t *testing.T) {
-		svc, _ := newService(t)
-		got, err := svc.LogRecruiterContact(t.Context(), userID, valid)
-		if err != nil {
-			t.Fatalf("LogRecruiterContact(...) err = %v", err)
-		}
-		want := dto.RecruiterContact{JobID: "job-1", ContactedOn: "2026-10-01", Channel: dto.ChannelEmail, Outcome: dto.OutcomeSpoke}
-		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.RecruiterContact{}, "ID", "CreatedAt")); diff != "" {
-			t.Errorf("LogRecruiterContact(...) mismatch (-want +got):\n%s", diff)
-		}
-	})
-
-	invalid := map[string]func(*dto.LogRecruiterContactInput){
-		"bad date":    func(in *dto.LogRecruiterContactInput) { in.ContactedOn = "yesterday" },
-		"bad channel": func(in *dto.LogRecruiterContactInput) { in.Channel = "carrier_pigeon" },
-		"bad outcome": func(in *dto.LogRecruiterContactInput) { in.Outcome = "ghosted" },
-	}
-	for name, mutate := range invalid {
-		t.Run(name+" is rejected", func(t *testing.T) {
-			svc, _ := newService(t)
-			in := valid
-			mutate(&in)
-			_, err := svc.LogRecruiterContact(t.Context(), userID, in)
-			if !apperr.IsKind(err, apperr.KindInvalid) {
-				t.Errorf("LogRecruiterContact(%s) err = %v, want invalid", name, err)
+	for _, tt := range []struct {
+		name string
+		in   dto.ContactInput
+	}{
+		{"blank name", dto.ContactInput{Name: "  "}},
+		{"name too long", dto.ContactInput{Name: tooLong}},
+		{"linkedin url without a scheme", dto.ContactInput{Name: "Sam", LinkedInURL: "linkedin.com/in/sam"}},
+	} {
+		t.Run("create rejects "+tt.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := svc.CreateContact(t.Context(), userID, tt.in); !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("CreateContact(%+v) err = %v, want invalid", tt.in, err)
 			}
 		})
 	}
+
+	t.Run("sent rejects an unknown channel", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.MarkContactSent(t.Context(), userID, dto.MarkSentInput{ID: "c", Channel: "carrier_pigeon"})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("MarkContactSent(bad channel) err = %v, want invalid", err)
+		}
+	})
+
+	t.Run("reply rejects no_reply", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.RecordContactReply(t.Context(), userID, dto.RecordReplyInput{ID: "c", Outcome: dto.ContactOutcomeNoReply})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("RecordContactReply(no_reply) err = %v, want invalid", err)
+		}
+	})
 }

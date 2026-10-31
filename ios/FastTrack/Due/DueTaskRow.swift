@@ -5,7 +5,6 @@ struct DueTaskRow: View {
     let row: DueRow
     let job: DueJob
     let model: DueModel
-    let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
     let openApplication: (DueJob) -> Void
     @State private var struck = false
@@ -135,7 +134,6 @@ struct DueTaskRow: View {
                     Button(label) { _ = withAnimation(.snappy) { model.snooze(job, days: days) } }
                 }
             }
-            Button("Log contact", systemImage: "person.badge.plus") { logContact(job) }
         case .task:
             Button("Mark done", systemImage: "checkmark", action: complete)
         case .draft(let draft):

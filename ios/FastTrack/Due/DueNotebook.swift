@@ -4,7 +4,6 @@ struct DueNotebook: View {
     let model: DueModel
     let jobs: [DueJob]
     let showShortlisted: () -> Void
-    let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
     let openApplication: (DueJob) -> Void
     let highlighted: String?
@@ -29,7 +28,7 @@ struct DueNotebook: View {
                 VStack(spacing: 10) {
                     ForEach(jobs) { job in
                         DueJobCard(job: job, model: model, isOpen: opened?.contains(job.id) ?? false,
-                                   toggle: { toggle(job) }, logContact: logContact, openJob: openJob,
+                                   toggle: { toggle(job) }, openJob: openJob,
                                    openApplication: openApplication)
                             .overlay {
                                 if job.id == highlighted {

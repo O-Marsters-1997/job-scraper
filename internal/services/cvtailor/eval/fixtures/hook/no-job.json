@@ -1,0 +1,9 @@
+{
+ "Name": "no-job",
+ "Scenario": "The contact is not tied to a job: only the company and the contact's role are known.",
+ "JobTitle": "",
+ "JobDescription": "",
+ "Company": "Umbrella Health",
+ "ContactRole": "Senior Engineer",
+ "Achievement": "Built a Go service that processes 10 million events a day"
+}

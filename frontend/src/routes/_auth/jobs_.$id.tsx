@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { recordEvent } from "@/api/events";
+import { AddContactDialog } from "@/components/contacts/AddContactDialog";
 import { Icon } from "@/components/Icon";
 import { CvSheet } from "@/components/jobs/CvSheet";
 import { JobActionBar } from "@/components/jobs/JobActionBar";
@@ -11,7 +12,6 @@ import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { isAgencyKind } from "@/lib/agencyRollup";
 import type { Job } from "@/types/job";
 import { applicationStatusesQueryOptions } from "../../hooks/useApplicationStatuses";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
@@ -30,7 +30,6 @@ import { JobFactsCard } from "./-jobs-detail/JobFactsCard";
 import { JobHeader } from "./-jobs-detail/JobHeader";
 import { JobNotesCard } from "./-jobs-detail/JobNotesCard";
 import { JobTasksCard } from "./-jobs-detail/JobTasksCard";
-import { RecruiterContactsCard } from "./-jobs-detail/RecruiterContactsCard";
 
 export const Route = createFileRoute("/_auth/jobs_/$id")({
 	loader: ({ params }) => {
@@ -52,6 +51,7 @@ function JobDetailPage() {
 	const params = Route.useParams();
 	const [cvOpen, setCvOpen] = createSignal(false);
 	const [taskOpen, setTaskOpen] = createSignal(false);
+	const [contactOpen, setContactOpen] = createSignal(false);
 	const [tab, setTab] = createSignal("description");
 	const jobsQuery = useJob(() => params().id);
 	const navigate = useNavigate();
@@ -194,11 +194,15 @@ function JobDetailPage() {
 										/>
 									</div>
 
-									<Show when={isAgencyKind(j().CompanyKind)}>
-										<div class="max-md:order-4">
-											<RecruiterContactsCard jobId={params().id} />
-										</div>
-									</Show>
+									<div class="max-md:order-4">
+										<Button
+											variant="outline"
+											class="w-full"
+											onClick={() => setContactOpen(true)}
+										>
+											Add contact
+										</Button>
+									</div>
 								</div>
 							</div>
 						</TabsContent>
@@ -219,6 +223,11 @@ function JobDetailPage() {
 					<CreateTaskDialog
 						open={taskOpen()}
 						onOpenChange={setTaskOpen}
+						job={j()}
+					/>
+					<AddContactDialog
+						open={contactOpen()}
+						onOpenChange={setContactOpen}
 						job={j()}
 					/>
 					<TrackApplicationDialog

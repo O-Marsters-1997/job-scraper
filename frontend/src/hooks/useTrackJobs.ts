@@ -10,7 +10,6 @@ import {
 import { loadedData } from "@/lib/queryData";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
-import type { RecruiterContactSummary } from "@/types/recruiterContact";
 import { useApplications, useCreateApplication } from "./useApplications";
 import {
 	useSetCompaniesKind,
@@ -30,9 +29,6 @@ import { announceBulkSeen } from "./useSeenToast";
 
 export function useTrackJobs(
 	jobs: () => Job[],
-	contactSummaries: () =>
-		| Record<string, RecruiterContactSummary>
-		| undefined = () => undefined,
 	clearSelection: () => void = () => undefined,
 ) {
 	const applications = useApplications();
@@ -151,14 +147,9 @@ export function useTrackJobs(
 		},
 	};
 	const columns = createJobColumns(columnContext);
-	const contactColumns = createJobColumns({
-		...columnContext,
-		contactSummaries,
-	});
 
 	return {
 		columns,
-		contactColumns,
 		applications,
 		appsForJobs,
 		openTrack,

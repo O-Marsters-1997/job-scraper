@@ -51,11 +51,7 @@ function JobsPage() {
 		() => filters().sort,
 	);
 
-	const track = useTrackJobs(
-		table.items,
-		() => undefined,
-		table.clearSelection,
-	);
+	const track = useTrackJobs(table.items, table.clearSelection);
 
 	return (
 		<div class="px-7 py-6">

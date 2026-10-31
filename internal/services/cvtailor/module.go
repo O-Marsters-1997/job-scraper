@@ -11,6 +11,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/letterwrite"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/outreachhook"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/profiledraft"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 )
@@ -24,9 +25,11 @@ type Deps struct {
 	Docs    DocFetcher
 	Drive   Drive
 	Asker   Asker
+	Cached  CachedAsker
 	Editor  Editor
 	Lines   *lineedit.Editor
 	Profile ProfileWriter
+	Hooks   HookWriter
 	Creds   Credentials
 	Log     *slog.Logger
 
@@ -39,6 +42,7 @@ type ProfileWriter interface {
 
 type Module struct {
 	profile    ProfileWriter
+	hooks      HookWriter
 	store      Store
 	svc        *Service
 	docs       DocFetcher
@@ -46,6 +50,7 @@ type Module struct {
 	editor     Editor
 	lines      *lineedit.Editor
 	creds      Credentials
+	cached     CachedAsker
 	scaffolder Scaffolder
 	log        *slog.Logger
 }
@@ -64,14 +69,20 @@ func Build(deps Deps) *Module {
 		editor:  deps.Editor,
 		lines:   deps.Lines,
 		profile: deps.Profile,
+		hooks:   deps.Hooks,
 		creds:   deps.Creds,
+		cached:  deps.Cached,
 
 		scaffolder: deps.Scaffolder,
 	}
 }
 
-func New(pool *pgxpool.Pool, docs Docs, asker Asker, creds Credentials, log *slog.Logger) *Module {
-	return Build(Deps{Store: store.New(pool), Docs: docs, Drive: docs, Asker: asker, Editor: cvedit.NewClient(), Lines: lineedit.New(lineedit.NewOpenRouter()), Profile: profiledraft.New(lineedit.NewOpenRouter()), Creds: creds, Log: log, Scaffolder: letterwrite.NewClient()})
+func New(pool *pgxpool.Pool, docs Docs, asker Asker, cached CachedAsker, creds Credentials, log *slog.Logger) *Module {
+	return Build(Deps{Store: store.New(pool), Docs: docs, Drive: docs, Asker: asker, Cached: cached, Editor: cvedit.NewClient(), Lines: lineedit.New(lineedit.NewOpenRouter()), Profile: profiledraft.New(lineedit.NewOpenRouter()), Hooks: outreachhook.New(lineedit.NewOpenRouter()), Creds: creds, Log: log, Scaffolder: letterwrite.NewClient()})
+}
+
+func NewFacade(pool *pgxpool.Pool) *Module {
+	return Build(Deps{Store: store.New(pool)})
 }
 
 // Run generates pending Drafts until ctx is cancelled.

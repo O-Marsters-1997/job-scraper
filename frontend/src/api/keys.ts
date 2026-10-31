@@ -33,12 +33,9 @@ export const keys = {
 	statuses: ["application-statuses"] as const,
 	jobNote: (jobId: string) => ["job-note", jobId] as const,
 	jobComments: (jobId: string) => ["job-comments", jobId] as const,
-	recruiterContacts: (jobId: string) => ["recruiter-contacts", jobId] as const,
-	recruiterContactSummaries: {
-		all: ["recruiter-contacts", "summaries"] as const,
-		for: (jobIds: readonly string[]) =>
-			["recruiter-contacts", "summaries", jobIds] as const,
-	},
+	contacts: ["contacts"] as const,
+	contactCompanies: ["contacts", "companies"] as const,
+	outreachTemplates: ["outreach-templates"] as const,
 	companies: {
 		all: companiesAll,
 		list: (params: object) => [...companiesAll, "list", params] as const,

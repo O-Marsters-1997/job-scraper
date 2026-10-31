@@ -36,9 +36,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PUT /applications/{id}/status", "PUT /applications/{id}/chase",
 		"DELETE /applications/{id}/chase",
 		"GET /applications/for-jobs",
-		"GET /recruiter-contacts/summaries",
-		"GET /jobs/{id}/recruiter-contacts",
-		"POST /jobs/{id}/recruiter-contacts",
+		"GET /contacts/", "POST /contacts/", "DELETE /contacts/{id}", "POST /contacts/{id}/sent", "POST /contacts/{id}/reply",
 		"GET /jobs/{id}/note", "PUT /jobs/{id}/note",
 		"GET /jobs/{id}/comments",
 		"POST /jobs/{id}/comments", "PATCH /comments/{id}", "DELETE /comments/{id}",
@@ -46,7 +44,8 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	handlerstest.RejectsMalformedBody(t, r,
 		"POST /application-statuses/", "PATCH /application-statuses/{id}",
 		"POST /applications/", "PATCH /applications/{id}", "POST /applications/delete", "PUT /applications/{id}/chase", "PUT /applications/{id}/status",
-		"POST /jobs/{id}/recruiter-contacts", "PUT /jobs/{id}/note",
+		"POST /contacts/", "POST /contacts/{id}/sent", "POST /contacts/{id}/reply",
+		"PUT /jobs/{id}/note",
 		"POST /jobs/{id}/comments", "PATCH /comments/{id}",
 	)
 	handlerstest.RejectsBadPathID(t, r, "PATCH /applications/{id}")
@@ -116,20 +115,21 @@ func TestRoutesHappyPaths(t *testing.T) {
 		t.Fatalf("for-jobs = %+v, want job-1 present", summaries)
 	}
 
-	logged := handlerstest.Do[dto.RecruiterContact](t, r, http.StatusCreated, "POST /jobs/job-1/recruiter-contacts",
-		`{"contacted_on":"2026-10-01","channel":"email","outcome":"spoke"}`)
-	if logged.JobID != "job-1" {
-		t.Fatalf("logged job_id = %q, want job-1", logged.JobID)
+	contact := handlerstest.Do[dto.Contact](t, r, http.StatusCreated, "POST /contacts/", `{"name":"Sam","job_id":"job-1"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusBadRequest, "POST /contacts/", `{"name":""}`)
+	sent := handlerstest.Do[dto.ContactSent](t, r, http.StatusOK, "POST /contacts/"+contact.ID+"/sent", `{"channel":"email"}`)
+	if sent.Contact.Stage != dto.ContactStageMessaged {
+		t.Fatalf("sent stage = %q, want messaged", sent.Contact.Stage)
 	}
-	handlerstest.Do[struct{}](t, r, http.StatusBadRequest, "POST /jobs/job-1/recruiter-contacts",
-		`{"contacted_on":"2026-10-01","channel":"fax","outcome":"spoke"}`)
-	if got := handlerstest.Do[[]dto.RecruiterContact](t, r, http.StatusOK, "GET /jobs/job-1/recruiter-contacts", ""); len(got) != 1 {
-		t.Fatalf("got %d recruiter contacts, want 1", len(got))
+	replied := handlerstest.Do[dto.Contact](t, r, http.StatusOK, "POST /contacts/"+contact.ID+"/reply", `{"outcome":"interested","reply":"yes"}`)
+	if replied.Stage != dto.ContactStageReplied || replied.Reply != "yes" {
+		t.Fatalf("replied = %+v, want replied with the reply text", replied)
 	}
-	sums := handlerstest.Do[map[string]dto.RecruiterContactSummary](t, r, http.StatusOK, "GET /recruiter-contacts/summaries?job_ids=job-1,job-2", "")
-	if sums["job-1"].Count != 1 || sums["job-1"].BestOutcome != dto.OutcomeSpoke || len(sums) != 1 {
-		t.Fatalf("summaries = %+v, want only job-1 with 1 spoke contact", sums)
+	if got := handlerstest.Do[[]dto.Contact](t, r, http.StatusOK, "GET /contacts/", ""); len(got) != 1 {
+		t.Fatalf("got %d contacts, want 1", len(got))
 	}
+	handlerstest.Do[[]dto.ContactCompany](t, r, http.StatusOK, "GET /contacts/companies", "")
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /contacts/"+contact.ID, "")
 
 	if got := handlerstest.Do[dto.JobNote](t, r, http.StatusOK, "GET /jobs/job-1/note", ""); got.Body != "" {
 		t.Fatalf("note before put = %+v, want empty body", got)

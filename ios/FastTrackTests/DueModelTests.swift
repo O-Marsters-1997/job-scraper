@@ -278,16 +278,6 @@ struct DueModelTests {
         #expect(model.jobs[0].tasks.map(\.id) == ["t1", "t2", "t3"])
     }
 
-    @Test func loggingContactOnADueChaseClearsIt() async {
-        let model = await model([job("a", chase: -1)])
-
-        let logged = await model.logContact(model.jobs[0], channel: .email, outcome: .noReply)
-
-        #expect(logged)
-        #expect(model.badge == 0)
-        #expect(calls.log == ["clearChase app-a"])
-    }
-
     @Test func failedActionRestoresTheJob() async {
         let model = await model([job("a", chase: 0)])
         calls.failClear = true

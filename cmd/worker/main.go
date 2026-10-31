@@ -136,6 +136,7 @@ func run(ctx context.Context) error {
 		sluglist.New(&http.Client{Timeout: time.Minute}, sluglist.Lists),
 	}
 	harvest := discover.NewRunner(harvesters, q, js.Boards(), js.Boards())
+	harvest.RegisterMetrics(reg)
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
