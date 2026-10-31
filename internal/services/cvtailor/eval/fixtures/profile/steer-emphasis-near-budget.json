@@ -1,0 +1,10 @@
+{
+ "Scenario": "A profile near its line budget and a steer asking for extra emphasis tempt a longer paragraph.",
+ "Profile": "Backend engineer building Go services for payments and billing teams, with six years of production experience across APIs, data pipelines and on-call rotations. Comfortable owning a service from design through to operation.",
+ "BankSkills": ["Go", "PostgreSQL", "Google Cloud"],
+ "Bank": ["Built REST services in Go for the payments team", "Ran PostgreSQL databases on Google Cloud for the billing service"],
+ "JobTitle": "Backend Engineer",
+ "Company": "Contoso",
+ "JobDescription": "<p>Build Go backend services on Google Cloud with PostgreSQL.</p>",
+ "Steer": "lead with Go backend work and mention Postgres and Google Cloud"
+}

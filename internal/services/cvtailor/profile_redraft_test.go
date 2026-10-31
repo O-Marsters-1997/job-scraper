@@ -97,6 +97,18 @@ func TestRedraftProfileRoute(t *testing.T) {
 		}
 	})
 
+	t.Run("an over-length redraft is saved with a warning", func(t *testing.T) {
+		t.Parallel()
+		over := profiledraft.Attempt{Text: "Engineer who ships a great deal more.", PromptKey: "k", Model: "m", Rejection: "3 lines is over the 1-line budget", Overlong: true}
+		s := setup(t, profiledraft.Result{Text: over.Text, Overlong: true, Attempts: []profiledraft.Attempt{over}}, nil, apiKey)
+
+		got := handlerstest.Do[dto.Draft](t, s.router, http.StatusOK, route(s.id), `{}`)
+
+		if got.Content == nil || got.Content.Profile == nil || *got.Content.Profile != over.Text || got.RedraftWarning == "" {
+			t.Errorf("redraft = %+v warning %q, want the text saved with a warning", got.Content, got.RedraftWarning)
+		}
+	})
+
 	t.Run("a writer error is a 502", func(t *testing.T) {
 		t.Parallel()
 		s := setup(t, profiledraft.Result{}, errors.New("boom"), apiKey)

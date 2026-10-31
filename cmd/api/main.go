@@ -77,6 +77,9 @@ func run(ctx context.Context) error {
 	if err := db.CheckSchemaNotAhead(ctx, pool, migrations.FS); err != nil {
 		return err
 	}
+	if err := db.CheckSchemaNotBehind(ctx, pool, migrations.FS); err != nil {
+		return err
+	}
 
 	q, err := queue.NewBrokerFromEnv()
 	if err != nil {

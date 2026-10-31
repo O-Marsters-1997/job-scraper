@@ -74,6 +74,10 @@ func (m *Module) fillKeptTab(ctx context.Context, claim dto.DraftClaim, tabID st
 		return "", fmt.Errorf("build kept tab: %w", err)
 	}
 	if err := m.drive.BatchUpdate(ctx, claim.UserID, claim.DocID, reqs); err != nil {
+		if rejected, ok := errors.AsType[*google.RejectedError](err); ok {
+			m.log.WarnContext(ctx, "google rejected kept tab", slog.String("draft_id", claim.ID), slog.Any(logger.KeyErr, err))
+			return "Kept as a separate Doc: Google rejected copying this CV into a Tab (" + rejected.Message + ").", nil
+		}
 		return "", fmt.Errorf("fill kept tab: %w", err)
 	}
 	want, wantPages, err := m.svc.measure(ctx, claim.UserID, claim.DraftDocID, claim.TabID)
