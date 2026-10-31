@@ -362,7 +362,11 @@ func (q *Queries) MoveBoardObservations(ctx context.Context, arg MoveBoardObserv
 }
 
 const rehomeBoardJobs = `-- name: RehomeBoardJobs :exec
-UPDATE jobs SET primary_board_id = $1 WHERE primary_board_id = $2
+UPDATE jobs j SET primary_board_id = $1
+WHERE j.primary_board_id = $2
+  AND (j.provider_posting_id IS NULL OR NOT EXISTS (
+    SELECT 1 FROM jobs o
+    WHERE o.primary_board_id = $1 AND o.provider_posting_id = j.provider_posting_id))
 `
 
 type RehomeBoardJobsParams struct {
