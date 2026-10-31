@@ -78,10 +78,12 @@ export function filterRows(rows: CompanyRow[], filter: CompanyFilter) {
 	);
 }
 
+export function firstName(name: string): string {
+	return name.split(" ")[0] || name;
+}
+
 export function combinedHistory(people: Contact[]): HistoryEntry[] {
 	return people
-		.flatMap((c) =>
-			c.history.map((e) => ({ ...e, who: c.name.split(" ")[0] ?? c.name })),
-		)
+		.flatMap((c) => c.history.map((e) => ({ ...e, who: firstName(c.name) })))
 		.sort((a, b) => b.occurred_on.localeCompare(a.occurred_on));
 }

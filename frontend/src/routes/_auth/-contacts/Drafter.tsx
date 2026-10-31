@@ -153,12 +153,14 @@ export function Drafter(props: {
 								Achievement
 								<select
 									class="field"
-									value={d().achievementId}
 									onChange={(e) => setAchievementId(e.currentTarget.value)}
 								>
 									<For each={achievements()}>
 										{(a) => (
-											<option value={a.id}>
+											<option
+												value={a.id}
+												selected={a.id === d().achievementId}
+											>
 												{a.text.slice(0, 60)} ({a.employer})
 											</option>
 										)}

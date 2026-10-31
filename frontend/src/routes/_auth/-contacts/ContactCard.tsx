@@ -9,6 +9,7 @@ import {
 	channelLabels,
 	replyOutcomes,
 } from "@/types/contact";
+import { outreachKinds } from "@/types/outreach";
 import { Drafter } from "./Drafter";
 
 export function eventLabel(e: ContactEvent): string {
@@ -17,7 +18,15 @@ export function eventLabel(e: ContactEvent): string {
 		case "added":
 			return "Added";
 		case "sent":
-			return `Sent${e.channel ? ` by ${channelLabels[e.channel]}` : ""}`;
+			return e.template_kind && e.template_name
+				? [
+						e.channel ? channelLabels[e.channel] : "Sent",
+						outreachKinds.find((k) => k.key === e.template_kind)?.label,
+						e.template_name,
+					]
+						.filter(Boolean)
+						.join(" · ")
+				: `Sent${e.channel ? ` by ${channelLabels[e.channel]}` : ""}`;
 		case "reply":
 			return `Replied${outcome ? `: ${outcome}` : ""}`;
 		case "closed":

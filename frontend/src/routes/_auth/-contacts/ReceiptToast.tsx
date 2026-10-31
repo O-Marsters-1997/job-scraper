@@ -1,5 +1,6 @@
 import { createEffect, onCleanup, Show } from "solid-js";
 import { formatChaseDate } from "@/lib/chase";
+import { firstName } from "@/lib/contactCompanies";
 import type { ContactSent } from "@/types/contact";
 
 export function ReceiptToast(props: {
@@ -16,7 +17,7 @@ export function ReceiptToast(props: {
 			{(s) => (
 				<output class="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border border-border bg-surface p-4 text-sm shadow-lg">
 					<p class="font-medium text-foreground">
-						Sent to {s().contact.name}.
+						Sent to {firstName(s().contact.name)}.
 						<Show when={s().contact.follow_up_by}>
 							{(day) => <> Next chase {formatChaseDate(day())}</>}
 						</Show>
