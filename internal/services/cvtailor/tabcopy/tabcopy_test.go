@@ -114,7 +114,7 @@ func TestRequestsUnsupported(t *testing.T) {
 	}
 }
 
-func TestRequests_RangesStayInsideTheInsertedBody(t *testing.T) {
+func TestRequestsManyBullets(t *testing.T) {
 	const bullets = 12
 	var content []map[string]any
 	var all string
@@ -150,12 +150,20 @@ func TestRequests_RangesStayInsideTheInsertedBody(t *testing.T) {
 			t.Fatal(err)
 		}
 		for kind, body := range req {
-			if body["text"] == "" {
-				t.Errorf("%s inserts empty text", kind)
+			if kind == "insertText" {
+				if body["text"] == "" {
+					t.Errorf("insertText inserts empty text")
+				}
+				if loc := body["location"].(map[string]any); loc["index"] != 1.0 || loc["tabId"] != "t.1" {
+					t.Errorf("insertText location = %v, want index 1 in t.1", loc)
+				}
 			}
 			rng, ok := body["range"].(map[string]any)
 			if !ok {
 				continue
+			}
+			if rng["tabId"] != "t.1" {
+				t.Errorf("%s range tabId = %v, want t.1", kind, rng["tabId"])
 			}
 			start, end := rng["startIndex"].(float64), rng["endIndex"].(float64)
 			if start < 1 || end <= start || end > bodyEnd {
