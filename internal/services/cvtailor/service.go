@@ -69,6 +69,8 @@ type Store interface {
 	MakeOutreachTemplateDefault(ctx context.Context, userID, id string) (dto.OutreachTemplate, error)
 	DeleteOutreachTemplate(ctx context.Context, userID, id string) error
 	SeedOutreachTemplates(ctx context.Context, tx pgx.Tx, userID string) error
+	OutreachSubject(ctx context.Context, userID, contactID string) (dto.OutreachSubject, error)
+	ListAchievementsNewestFirst(ctx context.Context, userID string) ([]dto.Achievement, error)
 }
 
 type Service struct {

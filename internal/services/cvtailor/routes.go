@@ -37,5 +37,6 @@ func (m *Module) Routes(r chi.Router) {
 		r.Post("/{id}/default", handlers.Query(m.svc.MakeOutreachTemplateDefault))
 		r.Delete("/{id}", handlers.Delete(m.svc.DeleteOutreachTemplate))
 	})
+	r.Get("/outreach-drafts/{id}", handlers.Query(m.OutreachDraft))
 	m.tailorRoutes(r)
 }

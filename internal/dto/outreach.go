@@ -18,3 +18,26 @@ type OutreachTemplateInput struct {
 type OutreachTemplateQuery struct {
 	ID string `json:"-" path:"id"`
 }
+
+type DraftQuery struct {
+	ContactID     string `json:"-" path:"id"`
+	TemplateID    string `json:"templateId"`    // empty: the default of the Contact's suggested kind
+	AchievementID string `json:"achievementId"` // empty: the matched Achievement
+}
+
+type OutreachDraft struct {
+	TemplateID    string       `json:"templateId"`
+	Kind          OutreachKind `json:"kind"`
+	Body          string       `json:"body"`
+	AchievementID string       `json:"achievementId"`
+	HasHookSlot   bool         `json:"hasHookSlot"`
+}
+
+type OutreachSubject struct {
+	Name           string
+	Role           string
+	Company        string
+	JobID          string
+	JobTitle       string
+	SentSinceReply int
+}

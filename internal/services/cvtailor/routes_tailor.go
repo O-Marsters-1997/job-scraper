@@ -84,12 +84,12 @@ func (m *Module) createDraft() http.HandlerFunc {
 func (m *Module) draftPDF() http.HandlerFunc {
 	type req struct {
 		userID string
-		q      dto.DraftQuery
+		q      dto.TailoringDraftQuery
 	}
 	return handlers.Handle(
 		func(r *http.Request) (req, error) {
 			uid, err := handlers.UserID(r)
-			return req{userID: uid, q: dto.DraftQuery{ID: chi.URLParam(r, "id")}}, err
+			return req{userID: uid, q: dto.TailoringDraftQuery{ID: chi.URLParam(r, "id")}}, err
 		},
 		func(ctx context.Context, in req) (io.ReadCloser, error) {
 			return m.svc.DraftPDF(ctx, in.userID, in.q)

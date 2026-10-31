@@ -238,7 +238,7 @@ func TestGetDraft(t *testing.T) {
 	t.Run("another user's Draft is not found", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
 
-		_, err := e.svc.GetDraft(t.Context(), otherUserID, dto.DraftQuery{ID: id})
+		_, err := e.svc.GetDraft(t.Context(), otherUserID, dto.TailoringDraftQuery{ID: id})
 
 		if !apperr.IsKind(err, apperr.KindNotFound) {
 			t.Errorf("GetDraft(%s) as another user error = %v, want a not-found error", id, err)

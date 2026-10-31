@@ -165,3 +165,40 @@ func isNameViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "outreach_templates_user_id_kind_name_key"
 }
+
+var ErrContactNotFound = errors.New("contact not found")
+
+func (s *Store) OutreachSubject(ctx context.Context, userID, contactID string) (dto.OutreachSubject, error) {
+	uid, err := parseID(userID, ErrContactNotFound)
+	if err != nil {
+		return dto.OutreachSubject{}, err
+	}
+	cid, err := parseID(contactID, ErrContactNotFound)
+	if err != nil {
+		return dto.OutreachSubject{}, err
+	}
+	r, err := s.queries.OutreachSubject(ctx, sqlc.OutreachSubjectParams{ID: cid, UserID: uid})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.OutreachSubject{}, ErrContactNotFound
+	}
+	if err != nil {
+		return dto.OutreachSubject{}, fmt.Errorf("store.OutreachSubject: %w", err)
+	}
+	return dto.OutreachSubject{Name: r.Name, Role: r.Role, Company: r.Company, JobID: r.JobID, JobTitle: r.JobTitle, SentSinceReply: int(r.SentSinceReply)}, nil
+}
+
+func (s *Store) ListAchievementsNewestFirst(ctx context.Context, userID string) ([]dto.Achievement, error) {
+	uid, err := parseID(userID, ErrAchievementNotFound)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListAchievementsNewestFirst(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListAchievementsNewestFirst: %w", err)
+	}
+	out := make([]dto.Achievement, len(rows))
+	for i, r := range rows {
+		out[i] = dto.Achievement{ID: r.ID.String(), PositionID: r.PositionID.String(), Text: r.Text, Context: r.Context}
+	}
+	return out, nil
+}

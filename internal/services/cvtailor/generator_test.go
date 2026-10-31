@@ -54,7 +54,7 @@ func newQueuedDraft(t *testing.T) (draftEnv, string) {
 
 func (e draftEnv) draft(t *testing.T, id string) dto.Draft {
 	t.Helper()
-	d, err := e.svc.GetDraft(t.Context(), userID, dto.DraftQuery{ID: id})
+	d, err := e.svc.GetDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 	if err != nil {
 		t.Fatalf("GetDraft(%s) error = %v", id, err)
 	}

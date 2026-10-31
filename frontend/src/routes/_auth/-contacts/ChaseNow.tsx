@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { formatChaseDate } from "@/lib/chase";
 import type { ChaseRow } from "@/lib/chaseNow";
 import type { ApplicationWithDetails } from "@/types/application";
-import type { Contact } from "@/types/contact";
+import type { Contact, ContactSent } from "@/types/contact";
 import { useClearChase } from "../../../hooks/useApplications";
 import { ContactCard } from "./ContactCard";
 
@@ -13,6 +13,7 @@ export function ChaseNow(props: {
 	onSent: (c: Contact) => void;
 	onReply: (c: Contact) => void;
 	onDelete: (c: Contact) => void;
+	onDraftSent: (sent: ContactSent) => void;
 	onChased: (app: ApplicationWithDetails) => void;
 }) {
 	const clearChase = useClearChase();
@@ -35,6 +36,7 @@ export function ChaseNow(props: {
 									onSent={() => props.onSent(row.contact)}
 									onReply={() => props.onReply(row.contact)}
 									onDelete={() => props.onDelete(row.contact)}
+									onDraftSent={props.onDraftSent}
 								/>
 							) : (
 								<Card class="flex flex-col gap-3 p-4">
