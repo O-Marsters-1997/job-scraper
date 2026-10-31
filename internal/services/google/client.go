@@ -434,11 +434,38 @@ func (c *Client) do(ctx context.Context, userID, method, target string, body []b
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		_ = resp.Body.Close()
-		if resp.StatusCode == http.StatusForbidden {
-			return nil, errForbidden
+		msg := errorMessage(resp.Body)
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
+			return nil, &RejectedError{Status: resp.StatusCode, Message: msg}
 		}
-		return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, msg)
 	}
 	return resp, nil
+}
+
+type RejectedError struct {
+	Status  int
+	Message string
+}
+
+func (e *RejectedError) Error() string {
+	return fmt.Sprintf("unexpected status %d: %s", e.Status, e.Message)
+}
+
+func (e *RejectedError) Is(target error) bool {
+	return target == errForbidden && e.Status == http.StatusForbidden
+}
+
+func errorMessage(body io.ReadCloser) string {
+	defer func() { _ = body.Close() }()
+	raw, _ := io.ReadAll(io.LimitReader(body, 4096))
+	var parsed struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(raw, &parsed) == nil && parsed.Error.Message != "" {
+		return parsed.Error.Message
+	}
+	return strings.TrimSpace(string(raw))
 }

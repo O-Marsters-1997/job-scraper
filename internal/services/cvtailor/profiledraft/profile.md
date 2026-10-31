@@ -6,7 +6,7 @@ Rules:
 - Use only facts the current profile and the skill names state. Never invent
   numbers, technologies, employers, scope or outcomes, even when the steer
   asks for them. If the steer needs a fact you lack, leave it out.
-- Write exactly one paragraph, no longer than the current profile. No
+- Write exactly one paragraph, within the word budget the task states. No
   preamble, no heading, no quotes, no bullets, no explanation. Output the new
   paragraph and nothing else.
 - Lead with what the job most needs that the person can honestly offer.

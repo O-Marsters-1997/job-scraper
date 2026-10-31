@@ -1047,6 +1047,24 @@ func (s *Store) ListJobScoresForCollection(ctx context.Context, userID string, j
 	return out, nil
 }
 
+func (s *Store) ListPlaygroundCandidates(ctx context.Context, userID, model string, since time.Time) ([]dto.PlaygroundCandidate, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListPlaygroundCandidates(ctx, sqlc.ListPlaygroundCandidatesParams{
+		UserID: uid, Model: model, Since: pgtype.Timestamptz{Time: since, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListPlaygroundCandidates: %w", err)
+	}
+	out := make([]dto.PlaygroundCandidate, len(rows))
+	for i, row := range rows {
+		out[i] = dto.PlaygroundCandidate{JobID: row.JobID.String(), Band: row.Band, FirstDiscoveredAt: row.FirstDiscoveredAt.Time, Reviewed: row.Reviewed}
+	}
+	return out, nil
+}
+
 // UpsertGrade writes userID's Grade for g.JobID, replacing any earlier one.
 func (s *Store) UpsertGrade(ctx context.Context, userID string, g dto.Grade) (dto.Grade, error) {
 	uid, err := data.UUID(userID)

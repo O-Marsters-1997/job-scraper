@@ -1440,6 +1440,21 @@ func TestAppendJobFeedback(t *testing.T) {
 		}
 	})
 
+	for _, direction := range []string{"accurate", "higher", "lower"} {
+		t.Run(direction+" saves with a blank reason", func(t *testing.T) {
+			st := newFakeStore()
+			seedScoredJob(st, userID, "tech:go")
+
+			got, err := svc(st).AppendJobFeedback(t.Context(), userID, dto.JobFeedbackInput{JobID: testJob.ID, Direction: direction, Reason: " "})
+			if err != nil {
+				t.Fatalf("AppendJobFeedback() err = %v", err)
+			}
+			if got.Reason != "" || got.Direction == nil || *got.Direction != direction {
+				t.Errorf("AppendJobFeedback() = %+v, want direction %s and an empty reason", got, direction)
+			}
+		})
+	}
+
 	tests := []struct {
 		name string
 		in   dto.JobFeedbackInput
@@ -1452,7 +1467,6 @@ func TestAppendJobFeedback(t *testing.T) {
 			seed: func(st *scoringtest.FakeStore) { st.SeedJob(dto.Job{ID: "job-2"}, nil) }, kind: apperr.KindUnprocessable,
 		},
 		{name: "bad direction is invalid", in: dto.JobFeedbackInput{JobID: testJob.ID, Direction: "sideways", Reason: "r"}, kind: apperr.KindInvalid},
-		{name: "blank reason is invalid", in: dto.JobFeedbackInput{JobID: testJob.ID, Direction: "higher", Reason: " "}, kind: apperr.KindInvalid},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name+" and writes nothing", func(t *testing.T) {
@@ -1937,6 +1951,59 @@ func TestPreview(t *testing.T) {
 		in := dto.ScoringPreviewInput{Preferences: picking(userID, "tech:nope").Preferences}
 		if _, err := svc.Preview(t.Context(), userID, in); !apperr.IsKind(err, apperr.KindInvalid) {
 			t.Errorf("Preview() err = %v, want invalid", err)
+		}
+	})
+}
+
+func TestService_PlaygroundQueue(t *testing.T) {
+	t.Parallel()
+	const userID = "user-1"
+	now := time.Now()
+	cand := func(id, band string, age time.Duration, reviewed bool) dto.PlaygroundCandidate {
+		return dto.PlaygroundCandidate{JobID: id, Band: band, FirstDiscoveredAt: now.Add(-age), Reviewed: reviewed}
+	}
+
+	t.Run("round-robins bands great to poor, newest first, skipping reviewed and old jobs", func(t *testing.T) {
+		t.Parallel()
+		st := newFakeStore()
+		st.SeedPlaygroundCandidates(userID,
+			cand("p1", "poor", time.Hour, false),
+			cand("g2", "great", 3*time.Hour, false),
+			cand("g1", "great", 2*time.Hour, false),
+			cand("g3", "great", 4*time.Hour, false),
+			cand("f1", "fair", time.Hour, false),
+			cand("gd-done", "good", time.Hour, true),
+			cand("gd1", "good", 2*time.Hour, false),
+			cand("old", "great", 31*24*time.Hour, false),
+		)
+		svc := scoring.NewService(newDeps(t, st))
+
+		got, err := svc.PlaygroundQueue(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("PlaygroundQueue() err = %v", err)
+		}
+		want := dto.PlaygroundQueue{
+			JobIDs: []string{"g1", "gd1", "f1", "p1", "g2", "g3"},
+			Bands: []dto.PlaygroundBand{
+				{Band: "great", Remaining: 3}, {Band: "good", Reviewed: 1, Remaining: 1},
+				{Band: "fair", Remaining: 1}, {Band: "poor", Remaining: 1},
+			},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("PlaygroundQueue() (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("an empty window gives an empty queue with all four bands", func(t *testing.T) {
+		t.Parallel()
+		svc := scoring.NewService(newDeps(t, newFakeStore()))
+
+		got, err := svc.PlaygroundQueue(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("PlaygroundQueue() err = %v", err)
+		}
+		if len(got.JobIDs) != 0 || len(got.Bands) != 4 {
+			t.Errorf("PlaygroundQueue() = %+v, want no jobs and four bands", got)
 		}
 	})
 }

@@ -135,9 +135,12 @@ export function KeepNotices(props: {
 			>
 				<ErrorNotice>Could not keep the draft. Try again.</ErrorNotice>
 			</Show>
-			<Show when={props.editable && props.draft.lastError}>
+			<Show when={props.draft.outcome === null && props.draft.lastError}>
 				<ErrorNotice>
 					Keeping the draft failed: {props.draft.lastError}
+					<Show when={props.draft.status === "keeping"}>
+						<span class="block">Retrying the keep.</span>
+					</Show>
 				</ErrorNotice>
 			</Show>
 			<Show when={props.flow.discardMutation.isError}>

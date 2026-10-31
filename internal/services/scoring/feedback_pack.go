@@ -153,12 +153,18 @@ func writeJobEntry(sb *strings.Builder, e dto.ScoreFeedback) {
 	if e.Direction != nil {
 		direction = *e.Direction
 	}
-	heading := fmt.Sprintf("%s, %s: score %d, should be %s", state.Title, state.Company, score, direction)
+	verdict := "should be " + direction
+	if direction == feedbackAccurate {
+		verdict = "looks right"
+	}
+	heading := fmt.Sprintf("%s, %s: score %d, %s", state.Title, state.Company, score, verdict)
 	if tag := driftTag(e); tag != "" {
 		heading += " [" + tag + "]"
 	}
 	fmt.Fprintf(sb, "### %s\n\n", heading)
-	writeReason(sb, e.Reason)
+	if e.Reason != "" {
+		writeReason(sb, e.Reason)
+	}
 	fmt.Fprintf(sb, "- Model: %s\n- Score model: %s\n- Score fingerprint: %s\n- Content fingerprint: %s\n\n",
 		e.Model, snap.ScoreModel, snap.ScoreFingerprint, snap.ContentFingerprint)
 
