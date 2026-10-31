@@ -841,10 +841,10 @@ func insertEffectOutbox(t *testing.T, pool *pgxpool.Pool, jobID, status string, 
 		jobID, status, createdAt)
 }
 
-func insertBoard(t *testing.T, pool *pgxpool.Pool, status string, nextDueAt time.Time, leaseUntil *time.Time, failures int) {
+func insertBoard(t *testing.T, pool *pgxpool.Pool, status string, nextDueAt time.Time, leaseUntil *time.Time, failures int) (companyID string) {
 	t.Helper()
 	n := seedCounter.Add(1)
-	var companyID, boardID string
+	var boardID string
 	if err := pool.QueryRow(t.Context(),
 		`INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, fmt.Sprintf("co-%d", n)).Scan(&companyID); err != nil {
 		t.Fatalf("insert company: %v", err)
@@ -857,6 +857,7 @@ func insertBoard(t *testing.T, pool *pgxpool.Pool, status string, nextDueAt time
 	exec(t, pool,
 		`INSERT INTO board_poll_state (board_id, next_due_at, lease_until, consecutive_failures) VALUES ($1, $2, $3, $4)`,
 		boardID, nextDueAt, leaseUntil, failures)
+	return companyID
 }
 
 func TestOpsState(t *testing.T) {
@@ -883,19 +884,24 @@ func TestOpsState(t *testing.T) {
 		}
 	})
 
-	t.Run("counts verified unleased boards past due as overdue", func(t *testing.T) {
+	t.Run("counts tracked verified unleased boards past due as overdue", func(t *testing.T) {
 		t.Parallel()
 		st, pool := newStore(t)
 		now := time.Now()
 		overdue := now.Add(-2 * time.Hour)
 		liveLease := now.Add(time.Hour)
 		expiredLease := now.Add(-time.Hour)
+		track := func(companyID string, enabled bool) {
+			exec(t, pool, `INSERT INTO tracked_companies (user_id, company_id, enabled) VALUES ($1, $2, $3)`, pgtest.InsertUser(t, pool), companyID, enabled)
+		}
+		track(insertBoard(t, pool, "verified", overdue, nil, 0), true)
+		track(insertBoard(t, pool, "verified", overdue, &liveLease, 0), true)
+		track(insertBoard(t, pool, "verified", overdue, &expiredLease, 0), true)
+		track(insertBoard(t, pool, "retired", overdue, nil, 0), true)
+		track(insertBoard(t, pool, "candidate", overdue, nil, 0), true)
+		track(insertBoard(t, pool, "verified", now.Add(2*time.Hour), nil, 0), true)
+		track(insertBoard(t, pool, "verified", overdue, nil, 0), false)
 		insertBoard(t, pool, "verified", overdue, nil, 0)
-		insertBoard(t, pool, "verified", overdue, &liveLease, 0)
-		insertBoard(t, pool, "verified", overdue, &expiredLease, 0)
-		insertBoard(t, pool, "retired", overdue, nil, 0)
-		insertBoard(t, pool, "candidate", overdue, nil, 0)
-		insertBoard(t, pool, "verified", now.Add(2*time.Hour), nil, 0)
 
 		if got := opsState(t, st).BoardsOverdue; got != 2 {
 			t.Errorf("OpsState().BoardsOverdue = %d, want %d", got, 2)
