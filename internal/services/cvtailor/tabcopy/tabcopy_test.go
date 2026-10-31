@@ -3,6 +3,7 @@ package tabcopy_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 
@@ -110,5 +111,56 @@ func TestRequestsUnsupported(t *testing.T) {
 				t.Errorf("Requests(%s) error = %v, want ErrUnsupported", fixture, err)
 			}
 		})
+	}
+}
+
+func TestRequests_RangesStayInsideTheInsertedBody(t *testing.T) {
+	const bullets = 12
+	var content []map[string]any
+	var all string
+	idx := 1
+	for i := range bullets + 1 {
+		text := fmt.Sprintf("Bullet %d\n", i)
+		p := map[string]any{
+			"elements": []any{map[string]any{
+				"startIndex": idx, "endIndex": idx + len(text),
+				"textRun": map[string]any{"content": text, "textStyle": map[string]any{"bold": true}},
+			}},
+		}
+		if i < bullets {
+			p["bullet"] = map[string]any{"listId": "kix.l1"}
+		}
+		content = append(content, map[string]any{"startIndex": idx, "endIndex": idx + len(text), "paragraph": p})
+		all += text
+		idx += len(text)
+	}
+	src, err := json.Marshal(map[string]any{"documentTab": map[string]any{"body": map[string]any{"content": content}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := tabcopy.Requests(src, "t.1")
+	if err != nil {
+		t.Fatalf("Requests error = %v", err)
+	}
+	bodyEnd := float64(len(all)) + 1
+	for _, r := range raw {
+		var req map[string]map[string]any
+		if err := json.Unmarshal(r, &req); err != nil {
+			t.Fatal(err)
+		}
+		for kind, body := range req {
+			if body["text"] == "" {
+				t.Errorf("%s inserts empty text", kind)
+			}
+			rng, ok := body["range"].(map[string]any)
+			if !ok {
+				continue
+			}
+			start, end := rng["startIndex"].(float64), rng["endIndex"].(float64)
+			if start < 1 || end <= start || end > bodyEnd {
+				t.Errorf("%s range [%v,%v) outside the body [1,%v)", kind, start, end, bodyEnd)
+			}
+		}
 	}
 }
