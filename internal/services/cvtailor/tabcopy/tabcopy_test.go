@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -115,9 +116,10 @@ func TestRequestsUnsupported(t *testing.T) {
 }
 
 func TestRequestsManyBullets(t *testing.T) {
+	t.Parallel()
 	const bullets = 12
 	var content []map[string]any
-	var all string
+	var all strings.Builder
 	idx := 1
 	for i := range bullets + 1 {
 		text := fmt.Sprintf("Bullet %d\n", i)
@@ -131,7 +133,7 @@ func TestRequestsManyBullets(t *testing.T) {
 			p["bullet"] = map[string]any{"listId": "kix.l1"}
 		}
 		content = append(content, map[string]any{"startIndex": idx, "endIndex": idx + len(text), "paragraph": p})
-		all += text
+		all.WriteString(text)
 		idx += len(text)
 	}
 	src, err := json.Marshal(map[string]any{"documentTab": map[string]any{"body": map[string]any{"content": content}}})
@@ -143,7 +145,7 @@ func TestRequestsManyBullets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Requests error = %v", err)
 	}
-	bodyEnd := float64(len(all)) + 1
+	bodyEnd := float64(all.Len()) + 1
 	for _, r := range raw {
 		var req map[string]map[string]any
 		if err := json.Unmarshal(r, &req); err != nil {
@@ -154,7 +156,7 @@ func TestRequestsManyBullets(t *testing.T) {
 				if body["text"] == "" {
 					t.Errorf("insertText inserts empty text")
 				}
-				if loc := body["location"].(map[string]any); loc["index"] != 1.0 || loc["tabId"] != "t.1" {
+				if loc, _ := body["location"].(map[string]any); loc["index"] != 1.0 || loc["tabId"] != "t.1" {
 					t.Errorf("insertText location = %v, want index 1 in t.1", loc)
 				}
 			}
@@ -165,7 +167,8 @@ func TestRequestsManyBullets(t *testing.T) {
 			if rng["tabId"] != "t.1" {
 				t.Errorf("%s range tabId = %v, want t.1", kind, rng["tabId"])
 			}
-			start, end := rng["startIndex"].(float64), rng["endIndex"].(float64)
+			start, _ := rng["startIndex"].(float64)
+			end, _ := rng["endIndex"].(float64)
 			if start < 1 || end <= start || end > bodyEnd {
 				t.Errorf("%s range [%v,%v) outside the body [1,%v)", kind, start, end, bodyEnd)
 			}
