@@ -226,7 +226,7 @@ func boardStatus(t *testing.T, pool *pgxpool.Pool, id string) string {
 	return status
 }
 
-func saveJob(t *testing.T, st*store.Store, job dto.Job) (dto.Job, string) {
+func saveJob(t *testing.T, st *store.Store, job dto.Job) (dto.Job, string) {
 	t.Helper()
 	saved, status, err := st.SaveCanonical(t.Context(), job)
 	if err != nil {
