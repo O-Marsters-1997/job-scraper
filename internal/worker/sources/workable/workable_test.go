@@ -104,6 +104,7 @@ func TestPollBoard_RateLimitDefersLaterRequests(t *testing.T) {
 }
 
 func TestPollBoard_ProbeRateLimitLeavesChecksRunning(t *testing.T) {
+	t.Parallel()
 	gate, probeGate := noGap(), noGap()
 	probe := workable.New("candidate", gate, probeGate)
 	probe.Client().Transport = &refusingTransport{}

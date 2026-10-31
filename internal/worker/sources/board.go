@@ -121,12 +121,7 @@ func (b *BoardSource) fetchPage(ctx context.Context, postBody []byte) ([]byte, [
 	body, err := b.request(ctx, postBody)
 	var status *StatusError
 	if gate != nil && errors.As(err, &status) && status.Code == http.StatusTooManyRequests {
-		until := gate.Block(status.RetryAfter)
-		slog.WarnContext(ctx, "board host rate limited, gate blocked",
-			slog.String(logger.KeySource, b.spec.Name),
-			slog.Duration("retry_after", status.RetryAfter),
-			slog.Time("blocked_until", until),
-			slog.Bool("probe", isProbe(ctx)))
+		gate.Block(status.RetryAfter)
 	}
 	if err != nil {
 		return nil, nil, err
