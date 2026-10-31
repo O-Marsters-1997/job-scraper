@@ -59,18 +59,19 @@ func (q *Queries) GetBoardCompanyID(ctx context.Context, arg GetBoardCompanyIDPa
 }
 
 const getBoardIdentity = `-- name: GetBoardIdentity :one
-SELECT source, board_token FROM company_boards WHERE id = $1
+SELECT source, board_token, status FROM company_boards WHERE id = $1
 `
 
 type GetBoardIdentityRow struct {
 	Source     string
 	BoardToken string
+	Status     string
 }
 
 func (q *Queries) GetBoardIdentity(ctx context.Context, id pgtype.UUID) (GetBoardIdentityRow, error) {
 	row := q.db.QueryRow(ctx, getBoardIdentity, id)
 	var i GetBoardIdentityRow
-	err := row.Scan(&i.Source, &i.BoardToken)
+	err := row.Scan(&i.Source, &i.BoardToken, &i.Status)
 	return i, err
 }
 
