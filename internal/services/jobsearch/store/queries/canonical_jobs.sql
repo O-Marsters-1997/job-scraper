@@ -123,7 +123,11 @@ ORDER BY j.first_discovered_at
 LIMIT 1;
 
 -- name: RehomeBoardJobs :exec
-UPDATE jobs SET primary_board_id = sqlc.arg(owner_id) WHERE primary_board_id = sqlc.arg(duplicate_id);
+UPDATE jobs j SET primary_board_id = sqlc.arg(owner_id)
+WHERE j.primary_board_id = sqlc.arg(duplicate_id)
+  AND (j.provider_posting_id IS NULL OR NOT EXISTS (
+    SELECT 1 FROM jobs o
+    WHERE o.primary_board_id = sqlc.arg(owner_id) AND o.provider_posting_id = j.provider_posting_id));
 
 -- name: MoveBoardObservations :exec
 INSERT INTO board_job_observations (board_id, job_id, last_seen_at, last_snapshot_version)

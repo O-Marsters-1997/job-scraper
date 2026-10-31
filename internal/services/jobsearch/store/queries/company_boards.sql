@@ -64,7 +64,7 @@ WHERE cb.status = 'verified' AND cb.verification_method = 'discovered'
 ORDER BY cb.created_at, cb.id;
 
 -- name: GetBoardIdentity :one
-SELECT source, board_token FROM company_boards WHERE id = $1;
+SELECT source, board_token, status FROM company_boards WHERE id = $1;
 
 -- name: RetireDuplicateBoard :exec
 UPDATE company_boards SET status = 'retired', retired_at = NOW() WHERE id = $1 AND status <> 'retired';

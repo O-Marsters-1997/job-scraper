@@ -609,7 +609,7 @@ func (s *Store) retireAliasBoard(ctx context.Context, queries *sqlc.Queries, own
 	if err != nil {
 		return false, fmt.Errorf("get duplicate board: %w", err)
 	}
-	if owner.Source != duplicate.Source {
+	if owner.Source != duplicate.Source || owner.Status == string(dto.BoardRetired) {
 		return false, nil
 	}
 	if err := queries.RehomeBoardJobs(ctx, sqlc.RehomeBoardJobsParams{OwnerID: ownerID, DuplicateID: duplicateID}); err != nil {
