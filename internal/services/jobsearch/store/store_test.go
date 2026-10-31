@@ -193,6 +193,39 @@ func upsertCompany(t *testing.T, st *store.Store, in dto.CompanyUpsert) dto.Comp
 	return company
 }
 
+func aliasBoards(t *testing.T, st *store.Store, pool *pgxpool.Pool) (owner, alias string) {
+	t.Helper()
+	ctx := t.Context()
+	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "alias-co", Name: "Alias Co"})
+	if err != nil {
+		t.Fatalf("UpsertCompany() err = %v", err)
+	}
+	ids := make([]string, 0, 2)
+	for _, token := range []string{"owner-token", "alias-token"} {
+		if _, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", token); err != nil {
+			t.Fatalf("UpsertCandidateBoard(%s) err = %v", token, err)
+		}
+		if _, err := st.VerifyCompanyBoard(ctx, company.ID, "greenhouse", token, "test", "test"); err != nil {
+			t.Fatalf("VerifyCompanyBoard(%s) err = %v", token, err)
+		}
+		var id string
+		if err := pool.QueryRow(ctx, `SELECT id::text FROM company_boards WHERE board_token = $1`, token).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	return ids[0], ids[1]
+}
+
+func boardStatus(t *testing.T, pool *pgxpool.Pool, id string) string {
+	t.Helper()
+	var status string
+	if err := pool.QueryRow(t.Context(), `SELECT status FROM company_boards WHERE id = $1`, id).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	return status
+}
+
 func saveJob(t *testing.T, st *store.Store, job dto.Job) (dto.Job, string) {
 	t.Helper()
 	saved, status, err := st.SaveCanonical(t.Context(), job)
@@ -349,6 +382,58 @@ func TestSaveCanonical(t *testing.T) {
 		conflict.ProviderPostingID = "posting-2"
 		if _, _, err := st.SaveCanonical(t.Context(), conflict); !errors.Is(err, store.ErrCanonicalConflict) {
 			t.Fatalf("SaveCanonical(conflict) err = %v, want ErrCanonicalConflict", err)
+		}
+	})
+
+	t.Run("retiring an alias board keeps postings the owner already has", func(t *testing.T) {
+		t.Parallel()
+		st, pool := newStore(t)
+		owner, alias := aliasBoards(t, st, pool)
+		ownerJob := baseJob
+		ownerJob.BoardID, ownerJob.ProviderPostingID, ownerJob.URL = owner, "P", "https://example.com/jobs/owner-p"
+		saveJob(t, st, ownerJob)
+		overlap := baseJob
+		overlap.BoardID, overlap.ProviderPostingID, overlap.URL = alias, "P", "https://example.com/jobs/alias-p"
+		saveJob(t, st, overlap)
+		unique := baseJob
+		unique.BoardID, unique.ProviderPostingID, unique.URL = alias, "Q", "https://example.com/jobs/alias-q"
+		saveJob(t, st, unique)
+
+		replay := overlap
+		replay.ProviderPostingID = "Z"
+		replay.URL = ownerJob.URL
+		if _, status, err := st.SaveCanonical(t.Context(), replay); err != nil || status != "unchanged" {
+			t.Fatalf("SaveCanonical(alias board, owner URL) = %q, %v, want unchanged, nil", status, err)
+		}
+		if got := boardStatus(t, pool, alias); got != "retired" {
+			t.Errorf("alias board status = %q, want retired", got)
+		}
+		var onOwner int
+		if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM jobs WHERE primary_board_id = $1`, owner).Scan(&onOwner); err != nil {
+			t.Fatal(err)
+		}
+		if onOwner != 2 {
+			t.Errorf("jobs on owner board = %d, want 2 (its own plus the non-overlapping alias job)", onOwner)
+		}
+	})
+
+	t.Run("a retired board never owns a verified board's jobs", func(t *testing.T) {
+		t.Parallel()
+		st, pool := newStore(t)
+		owner, alias := aliasBoards(t, st, pool)
+		ownerJob := baseJob
+		ownerJob.BoardID, ownerJob.ProviderPostingID, ownerJob.URL = owner, "P", "https://example.com/jobs/owner-p"
+		saveJob(t, st, ownerJob)
+		if _, err := pool.Exec(t.Context(), `UPDATE company_boards SET status = 'retired', retired_at = NOW() WHERE id = $1`, owner); err != nil {
+			t.Fatal(err)
+		}
+		overlap := baseJob
+		overlap.BoardID, overlap.ProviderPostingID, overlap.URL = alias, "P", ownerJob.URL
+		if _, _, err := st.SaveCanonical(t.Context(), overlap); err != nil {
+			t.Fatalf("SaveCanonical(verified board, retired owner's URL) err = %v", err)
+		}
+		if got := boardStatus(t, pool, alias); got != "verified" {
+			t.Errorf("alias board status = %q, want verified", got)
 		}
 	})
 
