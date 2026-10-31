@@ -66,6 +66,7 @@ func TestFetchRejectsOversizedBody(t *testing.T) {
 }
 
 func TestNewFetchTransportMax(t *testing.T) {
+	t.Parallel()
 	const limit = 2 * maxBodyBytes
 	read := func(t *testing.T, size int) error {
 		t.Helper()
@@ -82,11 +83,13 @@ func TestNewFetchTransportMax(t *testing.T) {
 	}
 
 	t.Run("body past the default but within the raised cap is read", func(t *testing.T) {
+		t.Parallel()
 		if err := read(t, maxBodyBytes+1); err != nil {
 			t.Errorf("read body = %v, want nil", err)
 		}
 	})
 	t.Run("body past the raised cap is a MaxBytesError", func(t *testing.T) {
+		t.Parallel()
 		var tooLarge *http.MaxBytesError
 		if err := read(t, limit+1); !errors.As(err, &tooLarge) {
 			t.Errorf("read body = %v, want *http.MaxBytesError", err)
