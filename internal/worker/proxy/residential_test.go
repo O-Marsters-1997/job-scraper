@@ -84,7 +84,7 @@ func residentialFetcher(t *testing.T, residential *fakeProxy, cache proxy.Cache)
 	t.Setenv("DECODO_PROXY_URL", "http://res:pw@"+strings.TrimPrefix(residential.URL, "http://"))
 	proxy.SetCache(cache)
 	t.Cleanup(func() { proxy.SetCache(nil) })
-	tr, err := proxy.Fetcher(proxy.Residential, t.Name())
+	tr, err := proxy.Fetcher(proxy.Residential, t.Name(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,6 +194,25 @@ func TestResidentialFetcher(t *testing.T) {
 			t.Fatalf("residential=%d, want 1", residential.hits())
 		}
 	})
+}
+
+func TestResidentialFetcherKeepsDefaultBodyCap(t *testing.T) { //nolint:paralleltest // residentialFetcher calls t.Setenv, which forbids t.Parallel
+	residential := newFakeProxy(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, strings.Repeat("x", proxy.DefaultMaxBody+1))
+	})
+	t.Setenv("DECODO_PROXY_URL", "http://res:pw@"+strings.TrimPrefix(residential.URL, "http://"))
+	tr, err := proxy.Fetcher(proxy.Residential, t.Name(), 64<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := tr.RoundTrip(httpTarget(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if _, err := io.ReadAll(resp.Body); err == nil {
+		t.Error("residential body over the default cap was read, want error")
+	}
 }
 
 func TestResidentialFetcherBacksOffBetweenBlockedAttempts(t *testing.T) { //nolint:paralleltest // residentialFetcher calls t.Setenv, which forbids t.Parallel

@@ -34,6 +34,8 @@ type BoardSpec struct {
 	// 429 says.
 	Gate *Gate
 
+	MaxBodyBytes int64
+
 	RedirectRetires bool
 }
 
@@ -54,7 +56,7 @@ var (
 
 func NewBoardSource(spec BoardSpec) *BoardSource {
 	return &BoardSource{
-		PaginatedBase: NewBase(Config{Name: spec.Name, Route: spec.Route, Header: spec.Header, RedirectRetires: spec.RedirectRetires}),
+		PaginatedBase: NewBase(Config{Name: spec.Name, Route: spec.Route, Header: spec.Header, RedirectRetires: spec.RedirectRetires, MaxBodyBytes: spec.MaxBodyBytes}),
 		spec:          spec,
 	}
 }

@@ -167,7 +167,7 @@ func (t *residentialTransport) residentialAttempt(req *http.Request) (*http.Resp
 	if blocked(req, resp) {
 		t.rotate(req.Context(), session, "blocked", resp.StatusCode)
 	}
-	resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, maxBodyBytes), release: release}
+	resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, DefaultMaxBody), release: release}
 	return resp, nil
 }
 
