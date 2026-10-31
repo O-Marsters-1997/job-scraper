@@ -79,7 +79,7 @@ func TestModule_OutreachDraft(t *testing.T) {
 		}
 
 		want := dto.OutreachDraft{
-			TemplateID: e.templID[dto.OutreachHiringManager], Kind: dto.OutreachHiringManager, AchievementID: e.newest.ID, HasHookSlot: true,
+			TemplateID: e.templID[dto.OutreachHiringManager], Kind: dto.OutreachHiringManager, AchievementID: e.newest.ID, HasHookSlot: true, HookFindings: []dto.LetterFinding{},
 			Body: "Hi Sam, [hook] I shipped a billing service, and I'd love to bring that to Globex. Worth 15 minutes?",
 		}
 		if diff := cmp.Diff(want, got); diff != "" {

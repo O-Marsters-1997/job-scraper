@@ -43,6 +43,7 @@ type FakeStore struct {
 	drafts         map[string]*draft
 	templates      []*outreachTemplate
 	subjects       map[string]ownedSubject
+	hooks          map[string]outreachHook
 	jobs           map[string]dto.Job
 	annotations    map[string]dto.JobAnnotations
 	skeletons      map[string]dto.LetterSkeleton
@@ -54,7 +55,7 @@ type FakeStore struct {
 }
 
 func NewFakeStore() *FakeStore {
-	return &FakeStore{attempts: map[string][]dto.ProfileAttempt{}, positions: map[string]*position{}, achievements: map[string]*achievement{}, mappings: map[headingKey]*string{}, skills: map[string]*bankSkill{}, drafts: map[string]*draft{}, outcomes: map[string][]dto.AchievementOutcome{}, jobs: map[string]dto.Job{}, skeletons: map[string]dto.LetterSkeleton{}, letterTabs: map[letterTab]bool{}, subjects: map[string]ownedSubject{}}
+	return &FakeStore{attempts: map[string][]dto.ProfileAttempt{}, positions: map[string]*position{}, achievements: map[string]*achievement{}, mappings: map[headingKey]*string{}, skills: map[string]*bankSkill{}, drafts: map[string]*draft{}, outcomes: map[string][]dto.AchievementOutcome{}, jobs: map[string]dto.Job{}, skeletons: map[string]dto.LetterSkeleton{}, letterTabs: map[letterTab]bool{}, subjects: map[string]ownedSubject{}, hooks: map[string]outreachHook{}}
 }
 
 func (f *FakeStore) nextID() string {

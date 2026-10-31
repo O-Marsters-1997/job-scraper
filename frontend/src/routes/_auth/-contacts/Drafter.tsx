@@ -1,10 +1,14 @@
 import { createEffect, createSignal, For, on, Show, untrack } from "solid-js";
+import { ApiError } from "@/api/client";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useMarkContactSent } from "@/hooks/useContacts";
 import { useExperience } from "@/hooks/useExperience";
-import { useOutreachDraft } from "@/hooks/useOutreachDraft";
+import {
+	useOutreachDraft,
+	useWriteOutreachHook,
+} from "@/hooks/useOutreachDraft";
 import { useOutreachTemplates } from "@/hooks/useOutreachTemplates";
 import { cn } from "@/lib/utils";
 import {
@@ -13,9 +17,18 @@ import {
 	type ContactSent,
 	channelLabels,
 } from "@/types/contact";
+import { findingLabels } from "@/types/coverLetter";
 import { draftWordLimit, wordCount } from "@/types/outreach";
 
 const channels: ContactChannel[] = ["linkedin", "email", "call"];
+
+function hookErrorMessage(err: unknown): string {
+	if (err instanceof ApiError) {
+		const msg = (err.body as { error?: string } | undefined)?.error;
+		if (msg) return msg;
+	}
+	return "Could not write the hook. Please try again.";
+}
 
 export function Drafter(props: {
 	contact: Contact;
@@ -35,6 +48,7 @@ export function Drafter(props: {
 	const templates = useOutreachTemplates();
 	const experience = useExperience();
 	const mark = useMarkContactSent();
+	const writeHook = useWriteOutreachHook(() => props.contact.id);
 
 	createEffect(
 		on(
@@ -73,7 +87,13 @@ export function Drafter(props: {
 
 	return (
 		<div class="flex flex-col gap-3 border-t border-border pt-3">
-			<FormFeedback error={error() || (draft.error?.message ?? "")} />
+			<FormFeedback
+				error={
+					error() ||
+					(draft.error?.message ?? "") ||
+					(writeHook.error ? hookErrorMessage(writeHook.error) : "")
+				}
+			/>
 			<Show when={draft.data}>
 				{(d) => (
 					<>
@@ -97,9 +117,36 @@ export function Drafter(props: {
 							onInput={(e) => setText(e.currentTarget.value)}
 						/>
 						<Show when={d().hasHookSlot}>
-							<p class="text-xs text-faint">
-								Replace [hook] with a line about them before sending.
-							</p>
+							<div class="flex flex-wrap items-center gap-3">
+								<Button
+									size="sm"
+									variant="outline"
+									loading={writeHook.isPending}
+									onClick={() =>
+										writeHook.mutate({ achievementId: d().achievementId })
+									}
+								>
+									{d().hook ? "Rewrite hook" : "Write hook"}
+								</Button>
+								<Show when={!d().hook}>
+									<p class="text-xs text-faint">
+										Replace [hook] with a line about them before sending.
+									</p>
+								</Show>
+							</div>
+							<Show when={d().hookFindings.length > 0}>
+								<ul class="list-disc pl-5 text-xs text-muted">
+									<For each={d().hookFindings}>
+										{(f) => (
+											<li>
+												<span class="font-medium">{findingLabels[f.kind]}</span>
+												{": "}
+												{f.text}
+											</li>
+										)}
+									</For>
+								</ul>
+							</Show>
 						</Show>
 						<div class="flex flex-wrap items-center gap-3 text-xs">
 							<label class="flex items-center gap-1.5 text-muted">
@@ -145,6 +192,7 @@ export function Drafter(props: {
 									{" "}
 									(aim for {draftWordLimit} or fewer)
 								</Show>
+								<Show when={d().cost > 0}> · AI ${d().cost.toFixed(4)}</Show>
 							</span>
 						</div>
 						<div>

@@ -570,6 +570,14 @@ type OptionAnswer struct {
 	AnsweredAt   pgtype.Timestamptz
 }
 
+type OutreachHook struct {
+	ContactID pgtype.UUID
+	Text      string
+	Model     string
+	Cost      float32
+	CreatedAt pgtype.Timestamptz
+}
+
 type OutreachTemplate struct {
 	ID        pgtype.UUID
 	UserID    pgtype.UUID

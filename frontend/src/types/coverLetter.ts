@@ -22,7 +22,7 @@ export const coverLetterSchema = z.object({
 
 export type CoverLetter = z.infer<typeof coverLetterSchema>;
 
-const letterFindingSchema = z.object({
+export const letterFindingSchema = z.object({
 	kind: z.enum([
 		"leftover_bullet",
 		"leftover_gap",
@@ -42,6 +42,16 @@ export const letterCheckSchema = z.object({
 });
 
 export type LetterFinding = z.infer<typeof letterFindingSchema>;
+
+export const findingLabels: Record<LetterFinding["kind"], string> = {
+	leftover_bullet: "Leftover bullet",
+	leftover_gap: "Leftover gap",
+	length: "Length",
+	ai_tell: "AI phrase",
+	restates_achievement: "Restates an achievement",
+	missing_company: "Company not named",
+	missing_role: "Role not named",
+};
 export type LetterCheck = z.infer<typeof letterCheckSchema>;
 
 export type ScaffoldInput = {

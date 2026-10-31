@@ -1,0 +1,9 @@
+{
+ "Name": "boilerplate-description",
+ "Scenario": "A description padded with benefits and equal-opportunity text: the line should still anchor on the work.",
+ "JobTitle": "Data Engineer",
+ "JobDescription": "We are a fast-growing, mission-driven company with great benefits, free lunches, a generous pension and unlimited holiday. We are an equal opportunity employer. The role: build and maintain the Airflow and dbt pipelines that feed our analytics warehouse, and work with analysts to model order and delivery data. Perks include a gym allowance and a dog-friendly office.",
+ "Company": "Initech Logistics",
+ "ContactRole": "Head of Data",
+ "Achievement": "Migrated 40 batch jobs to Airflow and halved failed runs"
+}

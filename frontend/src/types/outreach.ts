@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { outreachKindSchema } from "./contact";
+import { letterFindingSchema } from "./coverLetter";
 
 export const outreachTemplateSchema = z.object({
 	id: z.string(),
@@ -39,12 +40,19 @@ export const outreachDraftSchema = z.object({
 	body: z.string(),
 	achievementId: z.string(),
 	hasHookSlot: z.boolean(),
+	hook: z.string(),
+	hookFindings: z.array(letterFindingSchema),
+	cost: z.number(),
 });
 
 export type OutreachDraft = z.infer<typeof outreachDraftSchema>;
 
 export interface OutreachDraftQuery {
 	templateId?: string | undefined;
+	achievementId?: string | undefined;
+}
+
+export interface OutreachHookInput {
 	achievementId?: string | undefined;
 }
 

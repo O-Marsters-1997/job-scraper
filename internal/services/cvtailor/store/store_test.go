@@ -34,6 +34,15 @@ func TestStoreContract(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
+			SeedContact: func(t *testing.T, userID string) string {
+				t.Helper()
+				var id string
+				err := pool.QueryRow(t.Context(), `INSERT INTO contacts (user_id, name) VALUES ($1, 'Sam') RETURNING id::text`, userID).Scan(&id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return id
+			},
 		}
 	})
 }
