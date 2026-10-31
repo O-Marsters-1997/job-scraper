@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import type { BulletLean, DraftInsights } from "@/types/tailoring";
 
 const TONE = {
-	fit: "text-status-offer",
+	fit: "text-[color-mix(in_oklch,var(--color-status-offer),black_25%)]",
 	unclear: "text-status-interview",
 	low: "text-destructive-strong",
 } as const;

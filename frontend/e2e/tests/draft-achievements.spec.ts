@@ -55,7 +55,9 @@ test.describe("Achievements drawer", () => {
 			BANK_THIRD,
 			{ timeout: SAVED_TIMEOUT_MS },
 		);
-		await draftPage.drawer.getByRole("button", { name: "Close" }).click();
+		await draftPage.drawer
+			.getByRole("button", { name: "Close", exact: true })
+			.click();
 		await expect(page.getByText("Your edit")).toHaveCount(0);
 
 		await draftPage.type("Senior Backend Engineer bullet 3", " again");
