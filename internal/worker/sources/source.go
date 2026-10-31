@@ -37,6 +37,8 @@ type Config struct {
 	Cookies     bool
 	NewestFirst bool
 
+	MaxBodyBytes int64
+
 	RedirectRetires bool
 }
 
@@ -104,7 +106,7 @@ type PaginatedBase struct {
 }
 
 func NewBase(cfg Config) PaginatedBase {
-	transport, err := proxy.Fetcher(cfg.Route, cfg.Name)
+	transport, err := proxy.Fetcher(cfg.Route, cfg.Name, cfg.MaxBodyBytes)
 	var jar http.CookieJar
 	if cfg.Cookies {
 		jar, _ = cookiejar.New(nil)
@@ -169,7 +171,7 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte,
 
 	resp, err := b.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, b.bodyTooLarge(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -186,9 +188,17 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte,
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read body: %w", err)
+		return nil, b.bodyTooLarge(fmt.Errorf("read body: %w", err))
 	}
 	return respBody, nil
+}
+
+func (b *PaginatedBase) bodyTooLarge(err error) error {
+	var tooLarge *http.MaxBytesError
+	if !errors.As(err, &tooLarge) {
+		return err
+	}
+	return fmt.Errorf("%w: %s response body over %d bytes: %w", ErrUnparseable, b.cfg.Name, tooLarge.Limit, err)
 }
 
 // RFC 9110 §10.2.3: Retry-After is delta-seconds or an HTTP-date.
