@@ -30,6 +30,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/commoncrawl"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/sluglist"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/untracked"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover/vcportfolio"
 	wellfoundharvest "github.com/ollymarsters/job-scraper/internal/worker/discover/wellfound"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/workablesearch"
 	wttjharvest "github.com/ollymarsters/job-scraper/internal/worker/discover/wttj"
@@ -130,6 +131,7 @@ func run(ctx context.Context) error {
 		untracked.New(js.Boards(), untracked.Abroad),
 		workablesearch.New(&http.Client{Timeout: time.Minute}, workablesearch.SearchURL),
 		yc.New(&http.Client{Timeout: time.Minute}, yc.CompaniesURL, domainBase.Get),
+		vcportfolio.New(&http.Client{Timeout: time.Minute}, vcportfolio.PortfolioURLs(), domainBase.Get, slog.Default()),
 		wellfoundharvest.New(wellfound.NewPages(wellfoundGate), domainBase.Get, js.Boards(), wellfoundharvest.LocationPages),
 		sluglist.New(&http.Client{Timeout: time.Minute}, sluglist.Lists),
 	}
