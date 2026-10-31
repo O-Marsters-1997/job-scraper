@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -120,6 +121,18 @@ type Runner struct {
 
 func NewRunner(hs []Harvester, publisher Publisher, gate ScrapeGate, catalog Catalog) *Runner {
 	return &Runner{harvesters: hs, publisher: publisher, gate: gate, catalog: catalog}
+}
+
+// RegisterMetrics exports each harvester's interval, labelled to match jobscraper_harvest_age_seconds.
+func (r *Runner) RegisterMetrics(reg prometheus.Registerer) {
+	interval := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "jobscraper_harvest_interval_seconds",
+		Help: "How often each catalog harvester is due to run.",
+	}, []string{"harvester"})
+	for _, h := range r.harvesters {
+		interval.WithLabelValues(gateKeyPrefix + h.Name()).Set(h.Interval().Seconds())
+	}
+	reg.MustRegister(interval)
 }
 
 // RunOnce harvests every due harvester and joins their failures.

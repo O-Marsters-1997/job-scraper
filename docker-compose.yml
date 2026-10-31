@@ -52,7 +52,8 @@ services:
     image: postgres:17-alpine
     command: ["postgres", "-c", "jit=off",
               "-c", "shared_preload_libraries=pg_stat_statements",
-              "-c", "log_min_duration_statement=250"]
+              "-c", "log_min_duration_statement=250",
+              "-c", "log_parameter_max_length=1024"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}

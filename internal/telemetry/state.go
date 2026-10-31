@@ -26,7 +26,7 @@ var (
 	outboxFailedDesc = prometheus.NewDesc(
 		"jobscraper_outbox_failed", "Scoring effects with status failed.", nil, nil)
 	boardsOverdueDesc = prometheus.NewDesc(
-		"jobscraper_boards_overdue", "Verified, unleased Boards whose next_due_at has passed.", nil, nil)
+		"jobscraper_boards_overdue", "Tracked, verified, unleased Boards whose next_due_at has passed.", nil, nil)
 	boardsFailingDesc = prometheus.NewDesc(
 		"jobscraper_boards_failing", "Verified Boards with at least 3 consecutive failed polls.", nil, nil)
 	boardsEmptiedDesc = prometheus.NewDesc(

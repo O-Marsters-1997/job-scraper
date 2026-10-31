@@ -197,17 +197,17 @@ rules:
     labels:
       severity: critical
     annotations:
-      summary: "{{ $values.A }} messages ready in source.dead"
+      summary: "{{ $values.A }} messages added to source.dead in the last hour"
     data:
       - refId: A
         queryType: ""
         relativeTimeRange:
-          from: 300
+          from: 3600
           to: 0
         datasourceUid: __PROM_DATASOURCE_UID__
         model:
           refId: A
-          expr: rabbitmq_detailed_queue_messages_ready{env="prod", queue="source.dead"}
+          expr: delta(rabbitmq_detailed_queue_messages_ready{env="prod", queue="source.dead"}[1h])
           instant: true
       - refId: C
         queryType: ""
@@ -507,7 +507,7 @@ rules:
         datasourceUid: __PROM_DATASOURCE_UID__
         model:
           refId: A
-          expr: jobscraper_boards_emptied{env="prod"}
+          expr: jobscraper_boards_emptied{env="prod", source!="wttj"}
           instant: true
       - refId: C
         queryType: ""
@@ -569,7 +569,7 @@ rules:
     labels:
       severity: warning
     annotations:
-      summary: "{{ $labels.harvester }} last succeeded {{ $values.A }}s ago"
+      summary: "{{ $labels.harvester }} is {{ $values.A }}s past its interval since it last succeeded"
     data:
       - refId: A
         queryType: ""
@@ -579,7 +579,7 @@ rules:
         datasourceUid: __PROM_DATASOURCE_UID__
         model:
           refId: A
-          expr: jobscraper_harvest_age_seconds{env="prod"}
+          expr: jobscraper_harvest_age_seconds{env="prod"} - on(harvester) jobscraper_harvest_interval_seconds{env="prod"}
           instant: true
       - refId: C
         queryType: ""
