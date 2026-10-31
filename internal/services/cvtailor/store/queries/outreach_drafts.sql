@@ -20,3 +20,19 @@ SELECT id, position_id, text, context FROM achievements
 WHERE user_id = $1
 ORDER BY created_at DESC, id DESC
 LIMIT 1000;
+
+-- name: UpsertOutreachHook :one
+INSERT INTO outreach_hooks (contact_id, text, model, cost)
+SELECT c.id, sqlc.arg(text)::text, sqlc.arg(model)::text, sqlc.arg(cost)::real
+FROM contacts c
+WHERE c.id = sqlc.arg(contact_id)::uuid AND c.user_id = sqlc.arg(user_id)::uuid
+ON CONFLICT (contact_id) DO UPDATE
+SET text = EXCLUDED.text, model = EXCLUDED.model,
+    cost = outreach_hooks.cost + EXCLUDED.cost, created_at = NOW()
+RETURNING contact_id;
+
+-- name: GetOutreachHook :one
+SELECT h.text, h.cost
+FROM outreach_hooks h
+JOIN contacts c ON c.id = h.contact_id
+WHERE h.contact_id = $1 AND c.user_id = $2;

@@ -11,6 +11,30 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getOutreachHook = `-- name: GetOutreachHook :one
+SELECT h.text, h.cost
+FROM outreach_hooks h
+JOIN contacts c ON c.id = h.contact_id
+WHERE h.contact_id = $1 AND c.user_id = $2
+`
+
+type GetOutreachHookParams struct {
+	ContactID pgtype.UUID
+	UserID    pgtype.UUID
+}
+
+type GetOutreachHookRow struct {
+	Text string
+	Cost float32
+}
+
+func (q *Queries) GetOutreachHook(ctx context.Context, arg GetOutreachHookParams) (GetOutreachHookRow, error) {
+	row := q.db.QueryRow(ctx, getOutreachHook, arg.ContactID, arg.UserID)
+	var i GetOutreachHookRow
+	err := row.Scan(&i.Text, &i.Cost)
+	return i, err
+}
+
 const listAchievementsNewestFirst = `-- name: ListAchievementsNewestFirst :many
 SELECT id, position_id, text, context FROM achievements
 WHERE user_id = $1
@@ -94,4 +118,36 @@ func (q *Queries) OutreachSubject(ctx context.Context, arg OutreachSubjectParams
 		&i.SentSinceReply,
 	)
 	return i, err
+}
+
+const upsertOutreachHook = `-- name: UpsertOutreachHook :one
+INSERT INTO outreach_hooks (contact_id, text, model, cost)
+SELECT c.id, $1::text, $2::text, $3::real
+FROM contacts c
+WHERE c.id = $4::uuid AND c.user_id = $5::uuid
+ON CONFLICT (contact_id) DO UPDATE
+SET text = EXCLUDED.text, model = EXCLUDED.model,
+    cost = outreach_hooks.cost + EXCLUDED.cost, created_at = NOW()
+RETURNING contact_id
+`
+
+type UpsertOutreachHookParams struct {
+	Text      string
+	Model     string
+	Cost      float32
+	ContactID pgtype.UUID
+	UserID    pgtype.UUID
+}
+
+func (q *Queries) UpsertOutreachHook(ctx context.Context, arg UpsertOutreachHookParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, upsertOutreachHook,
+		arg.Text,
+		arg.Model,
+		arg.Cost,
+		arg.ContactID,
+		arg.UserID,
+	)
+	var contact_id pgtype.UUID
+	err := row.Scan(&contact_id)
+	return contact_id, err
 }

@@ -26,11 +26,19 @@ type DraftQuery struct {
 }
 
 type OutreachDraft struct {
-	TemplateID    string       `json:"templateId"`
-	Kind          OutreachKind `json:"kind"`
-	Body          string       `json:"body"`
-	AchievementID string       `json:"achievementId"`
-	HasHookSlot   bool         `json:"hasHookSlot"`
+	TemplateID    string          `json:"templateId"`
+	Kind          OutreachKind    `json:"kind"`
+	Body          string          `json:"body"`
+	AchievementID string          `json:"achievementId"`
+	HasHookSlot   bool            `json:"hasHookSlot"`
+	Hook          string          `json:"hook"`
+	HookFindings  []LetterFinding `json:"hookFindings"`
+	Cost          float64         `json:"cost"` // total hook cost for this Contact
+}
+
+type HookInput struct {
+	ContactID     string `json:"-" path:"id"`
+	AchievementID string `json:"achievementId"`
 }
 
 type OutreachSubject struct {

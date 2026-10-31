@@ -71,6 +71,8 @@ type Store interface {
 	SeedOutreachTemplates(ctx context.Context, tx pgx.Tx, userID string) error
 	OutreachSubject(ctx context.Context, userID, contactID string) (dto.OutreachSubject, error)
 	ListAchievementsNewestFirst(ctx context.Context, userID string) ([]dto.Achievement, error)
+	SaveOutreachHook(ctx context.Context, userID, contactID, text, model string, cost float64) error
+	OutreachHook(ctx context.Context, userID, contactID string) (text string, totalCost float64, err error)
 }
 
 type Service struct {

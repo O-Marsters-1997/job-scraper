@@ -25,6 +25,7 @@ type Fixture struct {
 	JobID string
 
 	TrackLetterTab func(t *testing.T, userID, docID, tabID string)
+	SeedContact    func(t *testing.T, userID string) string
 }
 
 // RunStoreContract proves newStore's cvtailor.Store behaves the same
@@ -42,6 +43,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		{"letter skeletons", runLetterSkeletonContract},
 		{"cover letters", runCoverLetterContract},
 		{"outreach templates", runOutreachTemplateContract},
+		{"outreach hooks", runOutreachHookContract},
 	} {
 		t.Run(group.name, func(t *testing.T) {
 			t.Parallel()

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//go:embed fixtures/suggest/*.json fixtures/profile/*.json
+//go:embed fixtures/suggest/*.json fixtures/profile/*.json fixtures/hook/*.json
 var fixtureFS embed.FS
 
 func loadFixtures[T any](dir string, name func(*T) *string) ([]T, error) {

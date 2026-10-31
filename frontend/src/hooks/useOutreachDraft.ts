@@ -1,6 +1,7 @@
 import { createQuery } from "@tanstack/solid-query";
-import { fetchOutreachDraft } from "../api/outreachDrafts";
-import type { OutreachDraftQuery } from "../types/outreach";
+import { fetchOutreachDraft, writeOutreachHook } from "../api/outreachDrafts";
+import type { OutreachDraftQuery, OutreachHookInput } from "../types/outreach";
+import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export function useOutreachDraft(
 	contactId: () => string,
@@ -10,4 +11,11 @@ export function useOutreachDraft(
 		queryKey: ["outreach-drafts", contactId(), query()] as const,
 		queryFn: () => fetchOutreachDraft(contactId(), query()),
 	}));
+}
+
+export function useWriteOutreachHook(contactId: () => string) {
+	return useInvalidatingMutation(
+		(input: OutreachHookInput) => writeOutreachHook(contactId(), input),
+		() => [["outreach-drafts", contactId()]],
+	);
 }

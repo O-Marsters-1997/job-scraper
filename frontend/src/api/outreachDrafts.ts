@@ -1,9 +1,10 @@
 import {
 	type OutreachDraft,
 	type OutreachDraftQuery,
+	type OutreachHookInput,
 	outreachDraftSchema,
 } from "../types/outreach";
-import { apiFetch } from "./client";
+import { apiFetch, jsonInit } from "./client";
 import { mocked } from "./config";
 
 export async function fetchOutreachDraft(
@@ -22,5 +23,20 @@ export async function fetchOutreachDraft(
 				outreachDraftSchema,
 			);
 		},
+	);
+}
+
+export async function writeOutreachHook(
+	contactId: string,
+	input: OutreachHookInput,
+): Promise<OutreachDraft> {
+	return mocked(
+		(db) => db.writeOutreachHook(contactId, input),
+		() =>
+			apiFetch(
+				`/outreach-drafts/${encodeURIComponent(contactId)}/hook`,
+				outreachDraftSchema,
+				jsonInit("POST", { achievementId: input.achievementId ?? "" }),
+			),
 	);
 }
