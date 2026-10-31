@@ -41,6 +41,12 @@ func BlockedUntil(err error, now time.Time) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+type probeKey struct{}
+
+func WithProbe(ctx context.Context) context.Context { return context.WithValue(ctx, probeKey{}, true) }
+
+func isProbe(ctx context.Context) bool { return ctx.Value(probeKey{}) == true }
+
 // Gate spaces requests to one host by a random gap in [0.5*gap, 1.5*gap] and refuses them
 // outright for a while after the host blocks us.
 type Gate struct {

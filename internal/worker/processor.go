@@ -208,7 +208,7 @@ func (p *Processor) nameCompany(ctx context.Context, companyID, name string) err
 }
 
 func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
-	found, err := p.discover(ctx, task.Source, task.BoardToken)
+	found, err := p.discover(sources.WithProbe(ctx), task.Source, task.BoardToken)
 	if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
 		return &queue.DeferError{Until: until, Err: err}
 	}

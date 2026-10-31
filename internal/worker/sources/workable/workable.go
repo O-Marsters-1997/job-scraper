@@ -12,8 +12,10 @@ import (
 // Cloudflare 429s apply.workable.com's v3 API after about 150 requests in 90s, for a Retry-After of 24h.
 func NewGate() *sources.Gate { return sources.NewGate(3*time.Second, time.Hour) }
 
+func NewProbeGate() *sources.Gate { return sources.NewGate(20*time.Second, time.Hour) }
+
 // New builds a Workable source for one company slug (e.g. "acmecorp").
-func New(token string, gate *sources.Gate) *sources.BoardSource {
+func New(token string, gate, probeGate *sources.Gate) *sources.BoardSource {
 	return sources.NewBoardSource(sources.BoardSpec{
 		Name:        "workable",
 		Post:        true, // Workable's list API 404s on GET; only POST responds.
@@ -23,6 +25,7 @@ func New(token string, gate *sources.Gate) *sources.BoardSource {
 		Count:       count,
 		NextPage:    nextPage,
 		Gate:        gate,
+		ProbeGate:   probeGate,
 	})
 }
 
