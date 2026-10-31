@@ -52,7 +52,7 @@ func TestStateCollector(t *testing.T) {
 				# HELP jobscraper_boards_failing Verified Boards with at least 3 consecutive failed polls.
 				# TYPE jobscraper_boards_failing gauge
 				jobscraper_boards_failing 2
-				# HELP jobscraper_boards_overdue Verified, unleased Boards whose next_due_at has passed.
+				# HELP jobscraper_boards_overdue Tracked, verified, unleased Boards whose next_due_at has passed.
 				# TYPE jobscraper_boards_overdue gauge
 				jobscraper_boards_overdue 4
 				# HELP jobscraper_discovery_boards Boards verified in the last 14 days, per discovery route.
