@@ -12,11 +12,12 @@ import (
 // New builds a Greenhouse source for one board token (e.g. "acmecorp").
 func New(token string) *sources.BoardSource {
 	return sources.NewBoardSource(sources.BoardSpec{
-		Name:        "greenhouse",
-		URL:         fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true&pay_transparency=true", token),
-		CompanySlug: token,
-		Parse:       parse,
-		Count:       count,
+		Name:         "greenhouse",
+		URL:          fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true&pay_transparency=true", token),
+		CompanySlug:  token,
+		Parse:        parse,
+		Count:        count,
+		MaxBodyBytes: 64 << 20,
 	})
 }
 

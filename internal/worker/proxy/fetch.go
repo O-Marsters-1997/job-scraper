@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -18,7 +19,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
-const maxBodyBytes = 8 << 20
+const DefaultMaxBody = 8 << 20
 
 var allSlots = make(chan struct{}, 16)
 var hostSlots sync.Map
@@ -54,6 +55,7 @@ type fetchTransport struct {
 	base          http.RoundTripper
 	cache         Cache
 	route, source string
+	maxBody       int64
 }
 
 func cachedResponse(req *http.Request, c dto.CachedResponse) *http.Response {
@@ -149,7 +151,7 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, maxBodyBytes), release: release}
+	resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, f.maxBody), release: release}
 	held = false
 	if collector != nil && storable(resp) {
 		return storeResponse(f.cache, req, resp, collector)
@@ -242,7 +244,7 @@ const (
 	Residential
 )
 
-func Fetcher(route Route, source string) (http.RoundTripper, error) {
+func Fetcher(route Route, source string, maxBody int64) (http.RoundTripper, error) {
 	switch route {
 	case Residential:
 		return newResidential(sharedCache, source)
@@ -261,9 +263,13 @@ func Fetcher(route Route, source string) (http.RoundTripper, error) {
 		}
 		return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
 	}
-	return &fetchTransport{base: tr, route: routeDirect, source: source}, nil
+	return &fetchTransport{base: tr, route: routeDirect, source: source, maxBody: cmp.Or(maxBody, DefaultMaxBody)}, nil
 }
 
 func NewFetchTransport(base http.RoundTripper, cache Cache) http.RoundTripper {
-	return &fetchTransport{base: base, cache: cache}
+	return NewFetchTransportMax(base, cache, DefaultMaxBody)
+}
+
+func NewFetchTransportMax(base http.RoundTripper, cache Cache, maxBody int64) http.RoundTripper {
+	return &fetchTransport{base: base, cache: cache, maxBody: maxBody}
 }

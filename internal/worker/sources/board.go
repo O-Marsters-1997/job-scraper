@@ -32,7 +32,10 @@ type BoardSpec struct {
 	NextPage func(body []byte) []byte
 	// Gate, when set, spaces this spec's requests and stops them for as long as the host's
 	// 429 says.
-	Gate *Gate
+	Gate      *Gate
+	ProbeGate *Gate
+
+	MaxBodyBytes int64
 
 	RedirectRetires bool
 }
@@ -54,7 +57,7 @@ var (
 
 func NewBoardSource(spec BoardSpec) *BoardSource {
 	return &BoardSource{
-		PaginatedBase: NewBase(Config{Name: spec.Name, Route: spec.Route, Header: spec.Header, RedirectRetires: spec.RedirectRetires}),
+		PaginatedBase: NewBase(Config{Name: spec.Name, Route: spec.Route, Header: spec.Header, RedirectRetires: spec.RedirectRetires, MaxBodyBytes: spec.MaxBodyBytes}),
 		spec:          spec,
 	}
 }
@@ -108,15 +111,19 @@ func (b *BoardSource) PollBoard(ctx context.Context) (BoardResult, error) {
 }
 
 func (b *BoardSource) fetchPage(ctx context.Context, postBody []byte) ([]byte, []dto.Job, error) {
-	if gate := b.spec.Gate; gate != nil {
+	gate := b.spec.Gate
+	if b.spec.ProbeGate != nil && isProbe(ctx) {
+		gate = b.spec.ProbeGate
+	}
+	if gate != nil {
 		if err := gate.Wait(ctx); err != nil {
 			return nil, nil, err
 		}
 	}
 	body, err := b.request(ctx, postBody)
 	var status *StatusError
-	if b.spec.Gate != nil && errors.As(err, &status) && status.Code == http.StatusTooManyRequests {
-		b.spec.Gate.Block(status.RetryAfter)
+	if gate != nil && errors.As(err, &status) && status.Code == http.StatusTooManyRequests {
+		gate.Block(status.RetryAfter)
 	}
 	if err != nil {
 		return nil, nil, err

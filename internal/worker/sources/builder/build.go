@@ -50,7 +50,7 @@ func New(wellfoundGate *sources.Gate, decodoScrapeToken string) *Builder {
 func newRegistry(wellfoundGate *sources.Gate, decodoScrapeToken string) map[string]entry {
 	linkedinGate := linkedin.NewGate()
 	hiringcafeTab := hiringcafe.NewAPI(hiringcafe.DecodoScrapeURL, decodoScrapeToken, hiringcafe.NewGate())
-	workableGate := workable.NewGate()
+	workableGate, workableProbeGate := workable.NewGate(), workable.NewProbeGate()
 	recruiteeGate := recruitee.NewGate()
 	wisGate := wis.NewGate()
 	wttjClient := wttj.NewClient(2 * time.Second)
@@ -59,7 +59,7 @@ func newRegistry(wellfoundGate *sources.Gate, decodoScrapeToken string) map[stri
 		"greenhouse":      boardEntry(func(v string) sources.Source { return greenhouse.New(v) }),
 		"lever":           boardEntry(func(v string) sources.Source { return lever.New(v) }),
 		"ashby":           boardEntry(func(v string) sources.Source { return ashby.New(v) }),
-		"workable":        boardEntry(func(v string) sources.Source { return workable.New(v, workableGate) }),
+		"workable":        boardEntry(func(v string) sources.Source { return workable.New(v, workableGate, workableProbeGate) }),
 		"recruitee":       boardEntry(func(v string) sources.Source { return recruitee.New(v, recruiteeGate) }),
 		"personio":        boardEntry(func(v string) sources.Source { return personio.New(v) }),
 		"pinpoint":        boardEntry(func(v string) sources.Source { return pinpoint.New(v) }),

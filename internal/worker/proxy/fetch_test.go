@@ -1,6 +1,7 @@
 package proxy_test
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,7 +18,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 )
 
-const maxBodyBytes = 8 << 20
+const maxBodyBytes = proxy.DefaultMaxBody
 
 var hostCounter atomic.Uint32
 
@@ -62,6 +63,38 @@ func TestFetchRejectsOversizedBody(t *testing.T) {
 	if _, err := io.ReadAll(resp.Body); err == nil {
 		t.Fatal("oversized body should fail")
 	}
+}
+
+func TestNewFetchTransportMax(t *testing.T) {
+	t.Parallel()
+	const limit = 2 * maxBodyBytes
+	read := func(t *testing.T, size int) error {
+		t.Helper()
+		tr := proxy.NewFetchTransportMax(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(strings.Repeat("x", size)))}, nil
+		}), nil, limit)
+		resp, err := tr.RoundTrip(newRequest(t, "https://8.8.8.8/"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		_, err = io.ReadAll(resp.Body)
+		return err
+	}
+
+	t.Run("body past the default but within the raised cap is read", func(t *testing.T) {
+		t.Parallel()
+		if err := read(t, maxBodyBytes+1); err != nil {
+			t.Errorf("read body = %v, want nil", err)
+		}
+	})
+	t.Run("body past the raised cap is a MaxBytesError", func(t *testing.T) {
+		t.Parallel()
+		var tooLarge *http.MaxBytesError
+		if err := read(t, limit+1); !errors.As(err, &tooLarge) {
+			t.Errorf("read body = %v, want *http.MaxBytesError", err)
+		}
+	})
 }
 
 func TestRateLimitIsNotRetried(t *testing.T) {
