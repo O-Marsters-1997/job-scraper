@@ -193,7 +193,7 @@ func TestKeepDraft(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 		rejected := &google.RejectedError{Status: http.StatusBadRequest, Message: "Invalid requests[3]"}
