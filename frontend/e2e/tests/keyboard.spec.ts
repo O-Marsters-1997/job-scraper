@@ -11,9 +11,12 @@ test.describe("Keyboard operability", () => {
 		const role = page.getByRole("button", {
 			name: "Choose Achievements for this role",
 		});
+		const lean = page.getByRole("button", { name: /^Lean:/ });
 		const order = [
 			role.nth(0),
+			lean.nth(0),
 			draftPage.line("Senior Backend Engineer bullet 1"),
+			lean.nth(1),
 			draftPage.line("Senior Backend Engineer bullet 2"),
 			role.nth(1),
 			draftPage.line("Software Engineer bullet 1"),

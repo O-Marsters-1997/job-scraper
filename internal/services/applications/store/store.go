@@ -20,6 +20,11 @@ import (
 
 var ErrApplicationExists = apperr.Conflict("application already exists for this job")
 
+var (
+	ErrContactJobNotFound     = apperr.Invalid("job not found")
+	ErrContactCompanyNotFound = apperr.Invalid("company not found")
+)
+
 // EventRecorder logs application events inside the caller's transaction; the
 // events module implements it (ADR 0011).
 type EventRecorder interface {
@@ -483,79 +488,6 @@ func (s *Store) CountApplicationsUsingStatus(ctx context.Context, statusID, user
 		return 0, fmt.Errorf("store.CountApplicationsUsingStatus: %w", err)
 	}
 	return count, nil
-}
-
-func (s *Store) CreateRecruiterContact(ctx context.Context, userID string, in dto.LogRecruiterContactInput) (dto.RecruiterContact, error) {
-	uid, err := data.UUID(userID)
-	if err != nil {
-		return dto.RecruiterContact{}, err
-	}
-	jid, err := data.UUID(in.JobID)
-	if err != nil {
-		return dto.RecruiterContact{}, err
-	}
-	var on pgtype.Date
-	if err := on.Scan(in.ContactedOn); err != nil {
-		return dto.RecruiterContact{}, fmt.Errorf("invalid contacted_on: %w", err)
-	}
-	row, err := s.queries.CreateRecruiterContact(ctx, sqlc.CreateRecruiterContactParams{
-		UserID: uid, JobID: jid, ContactedOn: on, Channel: string(in.Channel), Outcome: string(in.Outcome),
-	})
-	if err != nil {
-		if data.IsForeignKeyViolation(err, "recruiter_contacts_job_id_fkey") {
-			return dto.RecruiterContact{}, data.ErrNotFound
-		}
-		return dto.RecruiterContact{}, fmt.Errorf("store.CreateRecruiterContact: %w", err)
-	}
-	return toRecruiterContactDTO(row), nil
-}
-
-func (s *Store) ListRecruiterContacts(ctx context.Context, userID, jobID string) ([]dto.RecruiterContact, error) {
-	uid, err := data.UUID(userID)
-	if err != nil {
-		return nil, err
-	}
-	jid, err := data.UUID(jobID)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := s.queries.ListRecruiterContactsForJob(ctx, sqlc.ListRecruiterContactsForJobParams{UserID: uid, JobID: jid})
-	if err != nil {
-		return nil, fmt.Errorf("store.ListRecruiterContacts: %w", err)
-	}
-	out := make([]dto.RecruiterContact, len(rows))
-	for i, row := range rows {
-		out[i] = toRecruiterContactDTO(row)
-	}
-	return out, nil
-}
-
-func (s *Store) GetRecruiterContactSummaries(ctx context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error) {
-	uid, err := data.UUID(userID)
-	if err != nil {
-		return nil, err
-	}
-	pgIDs := make([]pgtype.UUID, 0, len(jobIDs))
-	for _, id := range jobIDs {
-		jid, err := data.UUID(id)
-		if err != nil {
-			return nil, apperr.Invalid("invalid job id")
-		}
-		pgIDs = append(pgIDs, jid)
-	}
-	rows, err := s.queries.GetRecruiterContactSummaries(ctx, sqlc.GetRecruiterContactSummariesParams{UserID: uid, Column2: pgIDs})
-	if err != nil {
-		return nil, fmt.Errorf("store.GetRecruiterContactSummaries: %w", err)
-	}
-	out := make(map[string]dto.RecruiterContactSummary, len(rows))
-	for _, row := range rows {
-		out[row.JobID.String()] = dto.RecruiterContactSummary{
-			Count:           int(row.ContactCount),
-			LastContactedOn: row.LastContactedOn.Time.Format(time.DateOnly),
-			BestOutcome:     dto.ContactOutcome(row.BestOutcome),
-		}
-	}
-	return out, nil
 }
 
 func (s *Store) GetJobNote(ctx context.Context, userID, jobID string) (dto.JobNote, error) {

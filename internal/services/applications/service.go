@@ -31,9 +31,12 @@ type Store interface {
 	SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID string) error
 	MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error
 
-	CreateRecruiterContact(ctx context.Context, userID string, in dto.LogRecruiterContactInput) (dto.RecruiterContact, error)
-	ListRecruiterContacts(ctx context.Context, userID, jobID string) ([]dto.RecruiterContact, error)
-	GetRecruiterContactSummaries(ctx context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error)
+	CreateContact(ctx context.Context, userID string, in dto.ContactInput, today time.Time) (dto.Contact, error)
+	ListContacts(ctx context.Context, userID string) ([]dto.Contact, error)
+	ListContactCompanies(ctx context.Context, userID string) ([]dto.ContactCompany, error)
+	DeleteContact(ctx context.Context, userID, id string) error
+	MarkContactSent(ctx context.Context, userID string, in dto.MarkSentInput, today time.Time) (dto.ContactSent, error)
+	RecordContactReply(ctx context.Context, userID string, in dto.RecordReplyInput, today time.Time) (dto.Contact, error)
 
 	GetJobNote(ctx context.Context, userID, jobID string) (dto.JobNote, error)
 	PutJobNote(ctx context.Context, userID string, in dto.PutJobNoteInput) (dto.JobNote, error)

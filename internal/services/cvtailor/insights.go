@@ -18,7 +18,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 )
 
-func (s *Service) DraftInsights(ctx context.Context, userID string, q dto.DraftQuery) (dto.DraftInsights, error) {
+func (s *Service) DraftInsights(ctx context.Context, userID string, q dto.TailoringDraftQuery) (dto.DraftInsights, error) {
 	draft, err := s.store.GetDraft(ctx, userID, q.ID)
 	if err != nil {
 		return dto.DraftInsights{}, err

@@ -19,7 +19,6 @@ struct DueJobCard: View {
     let model: DueModel
     let isOpen: Bool
     let toggle: () -> Void
-    let logContact: (DueJob) -> Void
     let openJob: (DueJob) -> Void
     let openApplication: (DueJob) -> Void
     @State private var confirmingDelete = false
@@ -39,7 +38,7 @@ struct DueJobCard: View {
                 VStack(spacing: 0) {
                     ForEach(rows) { row in
                         Divider()
-                        DueTaskRow(row: row, job: job, model: model, logContact: logContact, openJob: openJob, openApplication: openApplication)
+                        DueTaskRow(row: row, job: job, model: model, openJob: openJob, openApplication: openApplication)
                     }
                 }
                 .padding(.bottom, 4)

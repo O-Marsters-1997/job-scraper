@@ -67,7 +67,7 @@ func TestDraftLayout(t *testing.T) {
 		counted := &countingDocs{DocFetcher: docs}
 		svc := cvtailor.NewService(e.store, counted, nil, e.drive)
 
-		got, err := svc.DraftLayout(t.Context(), userID, dto.DraftQuery{ID: id})
+		got, err := svc.DraftLayout(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 
 		if err != nil {
 			t.Fatalf("DraftLayout(%s) error = %v", id, err)
@@ -107,7 +107,7 @@ func TestDraftLayout(t *testing.T) {
 		}}
 		id := e.readyWith(t, tick{docs: docs}, edits)
 
-		got, err := cvtailor.NewService(e.store, docs, nil, e.drive).DraftLayout(t.Context(), userID, dto.DraftQuery{ID: id})
+		got, err := cvtailor.NewService(e.store, docs, nil, e.drive).DraftLayout(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 
 		if err != nil {
 			t.Fatalf("DraftLayout(%s) error = %v", id, err)
@@ -123,7 +123,7 @@ func TestDraftLayoutRefusals(t *testing.T) {
 	e, id, docs := renumberedDraft(t)
 	pending := e.queueOnOtherJob(t)
 	e2, discarded, _ := renumberedDraft(t)
-	if _, err := e2.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: discarded}); err != nil {
+	if _, err := e2.svc.DiscardDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: discarded}); err != nil {
 		t.Fatal(err)
 	}
 	svc := cvtailor.NewService(e.store, docs, nil, e.drive)
@@ -133,7 +133,7 @@ func TestDraftLayoutRefusals(t *testing.T) {
 			svc *cvtailor.Service
 			id  string
 		}{"pending": {svc, pending}, "discarded": {cvtailor.NewService(e2.store, docs, nil, e2.drive), discarded}} {
-			_, err := c.svc.DraftLayout(t.Context(), userID, dto.DraftQuery{ID: c.id})
+			_, err := c.svc.DraftLayout(t.Context(), userID, dto.TailoringDraftQuery{ID: c.id})
 
 			if !apperr.IsKind(err, apperr.KindConflict) {
 				t.Errorf("DraftLayout(%s draft) error = %v, want a conflict", name, err)
@@ -142,7 +142,7 @@ func TestDraftLayoutRefusals(t *testing.T) {
 	})
 
 	t.Run("another user's draft is not found", func(t *testing.T) {
-		_, err := svc.DraftLayout(t.Context(), otherUserID, dto.DraftQuery{ID: id})
+		_, err := svc.DraftLayout(t.Context(), otherUserID, dto.TailoringDraftQuery{ID: id})
 
 		if !apperr.IsKind(err, apperr.KindNotFound) {
 			t.Errorf("DraftLayout(%s) as another user error = %v, want a not-found error", id, err)
@@ -152,7 +152,7 @@ func TestDraftLayoutRefusals(t *testing.T) {
 	t.Run("a Doc with a table is unprocessable and says why", func(t *testing.T) {
 		table := cvtailortest.Docs{TabJSON: json.RawMessage(`{"documentTab":{"body":{"content":[{"startIndex":1,"endIndex":2,"table":{}}]}}}`)}
 
-		_, err := cvtailor.NewService(e.store, table, nil, e.drive).DraftLayout(t.Context(), userID, dto.DraftQuery{ID: id})
+		_, err := cvtailor.NewService(e.store, table, nil, e.drive).DraftLayout(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 
 		if !apperr.IsKind(err, apperr.KindUnprocessable) || !strings.Contains(err.Error(), "non-paragraph") {
 			t.Errorf("DraftLayout() error = %v, want an unprocessable error naming the reason", err)

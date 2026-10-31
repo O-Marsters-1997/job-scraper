@@ -91,15 +91,6 @@ struct DTODecodingTests {
         #expect(types.last?.systemKey == "")
     }
 
-    @Test func recruiterContactDecodes() throws {
-        let contact = try JSONDecoder.api.decode(RecruiterContact.self, from: fixture("recruiter_contact"))
-
-        #expect(contact.id == "contact-1")
-        #expect(contact.channel == .email)
-        #expect(contact.outcome == .noReply)
-        #expect(contact.contactedOn.dayString == "2026-10-01")
-    }
-
     @Test func cvTemplatesDecode() throws {
         let cvs = try JSONDecoder.api.decode([CVTemplate].self, from: fixture("cv_templates"))
 

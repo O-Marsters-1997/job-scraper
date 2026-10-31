@@ -132,13 +132,49 @@ func toJobCommentDTO(c sqlc.JobComment) dto.JobComment {
 	}
 }
 
-func toRecruiterContactDTO(c sqlc.RecruiterContact) dto.RecruiterContact {
-	return dto.RecruiterContact{
-		ID:          c.ID.String(),
-		JobID:       c.JobID.String(),
-		ContactedOn: c.ContactedOn.Time.Format(time.DateOnly),
-		Channel:     dto.ContactChannel(c.Channel),
-		Outcome:     dto.ContactOutcome(c.Outcome),
-		CreatedAt:   c.CreatedAt.Time,
+func optIDString(id pgtype.UUID) *string {
+	if !id.Valid {
+		return nil
 	}
+	s := id.String()
+	return &s
+}
+
+func toContactDTOs(rows []sqlc.ListContactsRow, events []sqlc.ListContactEventsRow) []dto.Contact {
+	history := make(map[pgtype.UUID][]dto.ContactEvent, len(rows))
+	for _, e := range events {
+		history[e.ContactID] = append(history[e.ContactID], dto.ContactEvent{
+			ID:           e.ID.String(),
+			Kind:         dto.ContactEventKind(e.Kind),
+			OccurredOn:   e.OccurredOn.Time.Format(time.DateOnly),
+			Channel:      dto.ContactChannel(e.Channel.String),
+			TemplateKind: dto.OutreachKind(e.TemplateKind.String),
+			TemplateName: e.TemplateName,
+			Outcome:      dto.ContactOutcome(e.Outcome.String),
+			Note:         e.Note,
+			JobID:        optIDString(e.JobID),
+			JobTitle:     e.JobTitle,
+		})
+	}
+	out := make([]dto.Contact, len(rows))
+	for i, r := range rows {
+		c := dto.Contact{
+			ID: r.ID.String(), Name: r.Name, Role: r.Role,
+			CompanyID: optIDString(r.CompanyID), CompanyName: r.CompanyName, CompanyKind: r.CompanyKind,
+			JobID: optIDString(r.JobID), JobTitle: r.JobTitle, ApplicationID: optIDString(r.ApplicationID),
+			LinkedInURL: r.LinkedinUrl, Email: r.Email,
+			Stage: dto.ContactStage(r.Stage), Outcome: dto.ContactOutcome(r.Outcome.String),
+			Reply: r.Reply, SentSinceReply: int(r.SentSinceReply),
+			History: history[r.ID], CreatedAt: r.CreatedAt.Time,
+		}
+		if c.History == nil {
+			c.History = []dto.ContactEvent{}
+		}
+		if t := fromOptionalDate(r.FollowUpBy); t != nil {
+			day := t.Format(time.DateOnly)
+			c.FollowUpBy = &day
+		}
+		out[i] = c
+	}
+	return out
 }

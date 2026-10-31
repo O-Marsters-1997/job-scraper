@@ -28,7 +28,7 @@ func runProfileAttempts(args []string) {
 	if err != nil {
 		fatal("find user", err)
 	}
-	captures, err := cvtailor.New(pool, nil, nil, nil, nil).ProfileCaptures(ctx, userID)
+	captures, err := cvtailor.New(pool, nil, nil, nil, nil, nil).ProfileCaptures(ctx, userID)
 	if err != nil {
 		fatal("list profile captures", err)
 	}

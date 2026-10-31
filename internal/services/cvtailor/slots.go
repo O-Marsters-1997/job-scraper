@@ -143,7 +143,7 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 			return dto.Draft{}, err
 		}
 	}
-	return s.GetDraft(ctx, userID, dto.DraftQuery{ID: draft.ID})
+	return s.GetDraft(ctx, userID, dto.TailoringDraftQuery{ID: draft.ID})
 }
 
 func citedByReplacements(bank []dto.Position, edits cvedit.EditSet, reps []dto.DraftPosition, roles []string) ([]string, error) {

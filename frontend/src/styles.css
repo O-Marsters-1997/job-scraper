@@ -204,6 +204,7 @@
 	--color-status-phone: oklch(0.5413 0.2466 293.01);
 	--color-status-interview: oklch(0.6658 0.1574 58.32);
 	--color-status-offer: oklch(0.596 0.1274 163.23);
+	--color-status-offer-strong: oklch(0.508 0.1 163.23);
 	--color-status-rejected: oklch(0.5771 0.2152 27.33);
 
 	/* Radius scale — mirrors Tailwind v4 defaults so nothing shifts at "default"

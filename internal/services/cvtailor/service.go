@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -61,6 +63,16 @@ type Store interface {
 	ListJobCoverLetters(ctx context.Context, userID, jobID string) ([]dto.CoverLetter, error)
 	GetCoverLetter(ctx context.Context, userID, id string) (dto.CoverLetterTab, error)
 	MarkCoverLetterDone(ctx context.Context, userID, id string) (dto.CoverLetter, error)
+	ListOutreachTemplates(ctx context.Context, userID string) ([]dto.OutreachTemplate, error)
+	CreateOutreachTemplate(ctx context.Context, userID string, in dto.OutreachTemplateInput) (dto.OutreachTemplate, error)
+	UpdateOutreachTemplate(ctx context.Context, userID string, in dto.OutreachTemplateInput) (dto.OutreachTemplate, error)
+	MakeOutreachTemplateDefault(ctx context.Context, userID, id string) (dto.OutreachTemplate, error)
+	DeleteOutreachTemplate(ctx context.Context, userID, id string) error
+	SeedOutreachTemplates(ctx context.Context, tx pgx.Tx, userID string) error
+	OutreachSubject(ctx context.Context, userID, contactID string) (dto.OutreachSubject, error)
+	ListAchievementsNewestFirst(ctx context.Context, userID string) ([]dto.Achievement, error)
+	SaveOutreachHook(ctx context.Context, userID, contactID, text, model string, cost float64) error
+	OutreachHook(ctx context.Context, userID, contactID string) (text string, totalCost float64, err error)
 }
 
 type Service struct {

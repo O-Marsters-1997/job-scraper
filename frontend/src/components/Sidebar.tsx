@@ -10,11 +10,13 @@ import { cva } from "class-variance-authority";
 import { type Accessor, createEffect, createSignal, For, Show } from "solid-js";
 import { FastTrackMark } from "@/components/brand-mark";
 import { Icon, type IconName } from "@/components/Icon";
+import { chaseNowRows } from "@/lib/chaseNow";
 import { queryClient } from "@/lib/queryClient";
 import { loadedData } from "@/lib/queryData";
 import { cn } from "@/lib/utils";
 import { logout } from "../api/auth";
-import { useApplications } from "../hooks/useApplications";
+import { useApplications, useChases } from "../hooks/useApplications";
+import { useContacts } from "../hooks/useContacts";
 import { useGoogleStatus } from "../hooks/useGoogle";
 import { useOpenTaskCount } from "../hooks/useTasks";
 import { useUsageWarning } from "../hooks/useUsageWarning";
@@ -54,7 +56,7 @@ interface NavItem {
 	exact?: boolean;
 	includeSearch?: boolean;
 	search?: Record<string, unknown>;
-	badge?: "applications" | "tasks";
+	badge?: "applications" | "tasks" | "chases";
 	desktopOnly?: boolean;
 	when?: (ctx: { googleConnected: boolean }) => boolean;
 }
@@ -90,6 +92,13 @@ const NAV: NavGroup[] = [
 				includeSearch: false,
 				search: { status: undefined },
 				badge: "applications",
+			},
+			{
+				to: "/contacts",
+				label: "Contacts",
+				icon: "users",
+				exact: true,
+				badge: "chases",
 			},
 			{
 				to: "/tasks",
@@ -170,6 +179,14 @@ export default function Sidebar(props: SidebarProps) {
 
 	const appsQuery = useApplications();
 	const taskCount = useOpenTaskCount();
+	const contacts = useContacts();
+	const chases = useChases();
+	const chaseCount = () =>
+		chaseNowRows(
+			loadedData(contacts) ?? [],
+			loadedData(chases) ?? [],
+			new Date(),
+		).length;
 	const googleStatus = useGoogleStatus();
 
 	const handleLogout = async () => {
@@ -186,7 +203,13 @@ export default function Sidebar(props: SidebarProps) {
 		props.onMobileClose?.();
 	});
 
-	const links = { appsQuery, taskCount, googleStatus, handleLogout };
+	const links = {
+		appsQuery,
+		taskCount,
+		chaseCount,
+		googleStatus,
+		handleLogout,
+	};
 
 	return (
 		<>
@@ -233,6 +256,7 @@ interface SidebarBodyProps {
 	onCollapseToggle?: () => void;
 	appsQuery: ReturnType<typeof useApplications>;
 	taskCount: ReturnType<typeof useOpenTaskCount>;
+	chaseCount: Accessor<number>;
 	googleStatus: ReturnType<typeof useGoogleStatus>;
 	handleLogout: () => void;
 }
@@ -245,6 +269,8 @@ function SidebarBody(props: SidebarBodyProps) {
 				return props.appsQuery.data?.length ?? 0;
 			case "tasks":
 				return props.taskCount.data ?? 0;
+			case "chases":
+				return props.chaseCount();
 			default:
 				return 0;
 		}

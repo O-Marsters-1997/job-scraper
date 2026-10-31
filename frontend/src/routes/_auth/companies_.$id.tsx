@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { createEffect, createMemo, createSignal, on, Show } from "solid-js";
+import { createEffect, createSignal, on, Show } from "solid-js";
 import { FavouriteStar } from "@/components/FavouriteStar";
 import { GradeDialog } from "@/components/jobs/GradeDialog";
 import { JobsDataTable } from "@/components/jobs/JobsDataTable";
@@ -15,15 +15,13 @@ import {
 	SwitchThumb,
 } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { agencyRollup, isAgencyKind } from "@/lib/agencyRollup";
-import { formatDate } from "@/lib/datetime";
+import { isAgencyKind } from "@/lib/agencyRollup";
 import {
 	activeFilterCount,
 	DEFAULT_FILTERS,
 	type JobFilters,
 } from "@/lib/jobFilters";
 import { parseHistorySearch } from "@/lib/scrapeRuns";
-import { outcomeLabels } from "@/types/recruiterContact";
 import {
 	companyQueryOptions,
 	useCompany,
@@ -33,7 +31,6 @@ import {
 } from "../../hooks/useCompanies";
 import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
 import { useJobPages } from "../../hooks/useJobs";
-import { useRecruiterContactSummaries } from "../../hooks/useRecruiterContacts";
 import { useSourceOptions } from "../../hooks/useSources";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
@@ -83,17 +80,8 @@ function CompanyDetailPage() {
 		activeFilterCount(localFilters()) > 0 || localFilters().q !== "";
 
 	const isAgency = () => isAgencyKind(company()?.Kind);
-	const jobIds = createMemo(() => table.items().map((j) => j.ID));
-	const summaries = useRecruiterContactSummaries(() =>
-		isAgency() ? jobIds() : [],
-	);
-	const rollup = createMemo(() => agencyRollup(jobIds(), summaries.data ?? {}));
 
-	const track = useTrackJobs(
-		table.items,
-		() => summaries.data,
-		table.clearSelection,
-	);
+	const track = useTrackJobs(table.items, table.clearSelection);
 
 	return (
 		<QueryBoundary
@@ -176,29 +164,7 @@ function CompanyDetailPage() {
 									<div>
 										<dt class="text-xs text-faint">Roles</dt>
 										<dd class="font-semibold text-foreground">
-											{rollup().roles}
-										</dd>
-									</div>
-									<div>
-										<dt class="text-xs text-faint">With a contact</dt>
-										<dd class="font-semibold text-foreground">
-											{rollup().contacted}
-										</dd>
-									</div>
-									<div>
-										<dt class="text-xs text-faint">Last contact</dt>
-										<dd class="font-semibold text-foreground">
-											<Show when={rollup().lastContactedOn} fallback="—">
-												{(on) => formatDate(`${on()}T00:00:00`)}
-											</Show>
-										</dd>
-									</div>
-									<div>
-										<dt class="text-xs text-faint">Best outcome</dt>
-										<dd class="font-semibold text-foreground">
-											<Show when={rollup().bestOutcome} fallback="—">
-												{(outcome) => outcomeLabels[outcome()]}
-											</Show>
+											{table.items().length}
 										</dd>
 									</div>
 								</dl>
@@ -270,9 +236,7 @@ function CompanyDetailPage() {
 													}
 												>
 													<JobsDataTable
-														columns={
-															isAgency() ? track.contactColumns : track.columns
-														}
+														columns={track.columns}
 														data={table.items()}
 														total={table.total()}
 														page={table.page()}

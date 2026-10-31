@@ -16,9 +16,14 @@ func (m *Module) Routes(r chi.Router) {
 
 	r.Get("/due", handlers.GetAll(m.store.ListDue))
 
-	r.Get("/recruiter-contacts/summaries", handlers.Query(m.service.RecruiterContactSummaries))
-	r.Get("/jobs/{id}/recruiter-contacts", handlers.GetByID(m.store.ListRecruiterContacts))
-	r.Post("/jobs/{id}/recruiter-contacts", handlers.Create(m.service.LogRecruiterContact))
+	r.Route("/contacts", func(r chi.Router) {
+		r.Get("/", handlers.GetAll(m.store.ListContacts))
+		r.Get("/companies", handlers.GetAll(m.store.ListContactCompanies))
+		r.Post("/", handlers.Create(m.service.CreateContact))
+		r.Delete("/{id}", handlers.Delete(m.store.DeleteContact))
+		r.Post("/{id}/sent", handlers.Update(m.service.MarkContactSent))
+		r.Post("/{id}/reply", handlers.Update(m.service.RecordContactReply))
+	})
 
 	r.Get("/jobs/{id}/note", handlers.GetByID(m.store.GetJobNote))
 	r.Put("/jobs/{id}/note", handlers.Update(m.service.PutJobNote))

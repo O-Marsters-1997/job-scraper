@@ -1,0 +1,9 @@
+{
+ "Name": "thin-description",
+ "Scenario": "Almost no job description: the model must not invent facts about the company or the team.",
+ "JobTitle": "Backend Engineer",
+ "JobDescription": "Join our backend team.",
+ "Company": "Globex",
+ "ContactRole": "CTO",
+ "Achievement": "Shipped a billing service used by 200 customers"
+}

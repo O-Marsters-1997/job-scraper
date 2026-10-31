@@ -251,7 +251,7 @@ func TestSaveDraftSlots(t *testing.T) {
 		if diff := cmp.Diff(bullets, got.Content.Positions[0].Bullets); diff != "" {
 			t.Errorf("SaveDraftSlots().Content bullets mismatch (-want +got):\n%s", diff)
 		}
-		roles, err := e.svc.DraftRoles(t.Context(), userID, dto.DraftQuery{ID: id})
+		roles, err := e.svc.DraftRoles(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil {
 			t.Fatalf("DraftRoles() error = %v", err)
 		}
@@ -377,7 +377,7 @@ func TestSaveDraftSlots(t *testing.T) {
 		e := newDraftEnv(t)
 		discarded := e.readyDrafts(t, 1)[0]
 		pending := e.queueOnOtherJob(t)
-		if _, err := e.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: discarded}); err != nil {
+		if _, err := e.svc.DiscardDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: discarded}); err != nil {
 			t.Fatal(err)
 		}
 		for name, id := range map[string]string{"pending": pending, "discarded": discarded} {
@@ -393,7 +393,7 @@ func TestSaveDraftSlots(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 		e.run(t, tick{})
@@ -550,7 +550,7 @@ func TestSaveDraftSlotsReorder(t *testing.T) {
 			e := newDraftEnv(t)
 			id := e.readyDrafts(t, 1)[0]
 			if tt.kept {
-				if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+				if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 					t.Fatal(err)
 				}
 				e.run(t, tick{})

@@ -15,7 +15,7 @@ import (
 func main() {
 	runs := flag.Int("runs", 1, "runs per fixture")
 	only := flag.String("fixture", "", "run only fixtures whose name contains this")
-	suite := flag.String("suite", "suggest", "suggest or profile")
+	suite := flag.String("suite", "suggest", "suggest, profile or hook")
 	local := flag.String("local", "internal/services/cvtailor/eval/local/profile", "directory of local profile fixtures")
 	flag.Parse()
 
@@ -31,6 +31,8 @@ func main() {
 		report, err = runSuggest(apiKey, lineedit.New(model), *only, *runs)
 	case "profile":
 		report, err = runProfile(apiKey, profiledraft.New(model), *local, *only, *runs)
+	case "hook":
+		report, err = runHook(apiKey, model, *only, *runs)
 	default:
 		fail("unknown suite " + *suite)
 	}
@@ -86,6 +88,30 @@ func runProfile(apiKey string, w *profiledraft.Writer, local, only string, runs 
 		return "", fmt.Errorf("no fixture matched")
 	}
 	return eval.ProfileReport(outcomes), nil
+}
+
+func runHook(apiKey string, model lineedit.Model, only string, runs int) (string, error) {
+	fixtures, err := eval.HookFixtures()
+	if err != nil {
+		return "", err
+	}
+	var outcomes []eval.HookOutcome
+	for _, f := range fixtures {
+		if !strings.Contains(f.Name, only) {
+			continue
+		}
+		for range runs {
+			o, err := eval.RunHook(context.Background(), model, apiKey, f)
+			if err != nil {
+				return "", err
+			}
+			outcomes = append(outcomes, o)
+		}
+	}
+	if len(outcomes) == 0 {
+		return "", fmt.Errorf("no fixture matched")
+	}
+	return eval.HookReport(outcomes), nil
 }
 
 func fail(msg string) {

@@ -40,7 +40,7 @@ func (g pageGeometry) lines(text string, b *tabcopy.Block) int {
 	return linefit.Lines(text, style, linefit.Width(g.page, b.LayoutBlock))
 }
 
-func (s *Service) DraftRoles(ctx context.Context, userID string, q dto.DraftQuery) (dto.DraftRoles, error) {
+func (s *Service) DraftRoles(ctx context.Context, userID string, q dto.TailoringDraftQuery) (dto.DraftRoles, error) {
 	draft, err := s.store.GetDraft(ctx, userID, q.ID)
 	if err != nil {
 		return dto.DraftRoles{}, err

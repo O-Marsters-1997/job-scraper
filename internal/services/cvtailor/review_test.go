@@ -92,7 +92,7 @@ func TestKeepDraft(t *testing.T) {
 		ctx := t.Context()
 		id := e.readyDrafts(t, 1)[0]
 
-		queued, err := e.svc.KeepDraft(ctx, userID, dto.DraftQuery{ID: id})
+		queued, err := e.svc.KeepDraft(ctx, userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil || queued.Status != "keeping" || queued.Outcome != nil {
 			t.Fatalf("KeepDraft() = %+v, %v, want keeping and undecided", queued, err)
 		}
@@ -118,7 +118,7 @@ func TestKeepDraft(t *testing.T) {
 		if len(e.drive.Renamed) != 0 {
 			t.Errorf("renamed Docs = %v, want none", e.drive.Renamed)
 		}
-		if _, err := e.svc.KeepDraft(ctx, userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(ctx, userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Errorf("KeepDraft() again err = %v, want it idempotent", err)
 		}
 	})
@@ -127,7 +127,7 @@ func TestKeepDraft(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 		e.run(t, tick{})
@@ -151,7 +151,7 @@ func TestKeepDraft(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 		e.drive.AddTabErr = google.ErrNoWriteAccess
@@ -172,7 +172,7 @@ func TestKeepDraft(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 		e.drive.TabPages = map[string]int{"t.added1": 2}
@@ -193,7 +193,7 @@ func TestKeepDraft(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 		rejected := &google.RejectedError{Status: http.StatusBadRequest, Message: "Invalid requests[3]"}
@@ -215,7 +215,7 @@ func TestKeepDraft(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 		e.store.LeaveHalfBuiltTab(id, "t.half")
@@ -240,7 +240,7 @@ func TestKeepDraft(t *testing.T) {
 			questionPrefix + e.pos.Achievements[1].Text: {PYes: 0.7, PNo: 0.1},
 		}
 		id := e.readyDrafts(t, 1)[0]
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -262,7 +262,7 @@ func TestKeepDraft(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
 		e.asker.err = errors.New("jev down")
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -282,7 +282,7 @@ func TestKeepDraft(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
 
-		if _, err := e.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.DiscardDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 		e.run(t, tick{})
@@ -295,12 +295,12 @@ func TestKeepDraft(t *testing.T) {
 	t.Run("a second Draft of a Job conflicts until the first is discarded", func(t *testing.T) {
 		e := newDraftEnv(t)
 		ctx := t.Context()
-		first := dto.DraftQuery{ID: e.readyDrafts(t, 1)[0]}
+		first := dto.TailoringDraftQuery{ID: e.readyDrafts(t, 1)[0]}
 		if _, err := e.svc.KeepDraft(ctx, userID, first); err != nil {
 			t.Fatal(err)
 		}
 		e.run(t, tick{})
-		second := dto.DraftQuery{ID: e.readyDrafts(t, 1)[0]}
+		second := dto.TailoringDraftQuery{ID: e.readyDrafts(t, 1)[0]}
 
 		_, err := e.svc.KeepDraft(ctx, userID, second)
 		if !apperr.IsKind(err, apperr.KindConflict) {
@@ -318,7 +318,7 @@ func TestKeepDraft(t *testing.T) {
 	t.Run("a Draft that is not ready conflicts", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
 
-		_, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id})
+		_, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 
 		if !apperr.IsKind(err, apperr.KindConflict) {
 			t.Fatalf("%s err = %v, want kind %v", "KeepDraft(pending)", err, apperr.KindConflict)
@@ -328,11 +328,11 @@ func TestKeepDraft(t *testing.T) {
 	t.Run("a Draft being kept cannot be discarded", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 
-		_, err := e.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: id})
+		_, err := e.svc.DiscardDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 
 		if !apperr.IsKind(err, apperr.KindConflict) {
 			t.Fatalf("%s err = %v, want kind %v", "DiscardDraft(keeping)", err, apperr.KindConflict)
@@ -342,7 +342,7 @@ func TestKeepDraft(t *testing.T) {
 	t.Run("repeated Drive failures leave the Draft ready, unkept, with the error", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 		drive := &cvtailortest.Drive{AddTabErr: google.ErrNoWriteAccess, RenameErr: errors.New("drive down")}
@@ -364,13 +364,13 @@ func TestDiscardDraft(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
-		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 		e.run(t, tick{})
 		e.drive.Deleted = nil
 
-		if _, err := e.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+		if _, err := e.svc.DiscardDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -385,7 +385,7 @@ func TestDiscardDraft(t *testing.T) {
 		ctx := t.Context()
 		id := e.readyDrafts(t, 1)[0]
 
-		d, err := e.svc.DiscardDraft(ctx, userID, dto.DraftQuery{ID: id})
+		d, err := e.svc.DiscardDraft(ctx, userID, dto.TailoringDraftQuery{ID: id})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -399,7 +399,7 @@ func TestDiscardDraft(t *testing.T) {
 		if got := e.draft(t, id); got.ID != id {
 			t.Errorf("GetDraft() = %+v, want the row to remain", got)
 		}
-		_, err = e.svc.KeepDraft(ctx, userID, dto.DraftQuery{ID: id})
+		_, err = e.svc.KeepDraft(ctx, userID, dto.TailoringDraftQuery{ID: id})
 		if !apperr.IsKind(err, apperr.KindConflict) {
 			t.Fatalf("%s err = %v, want kind %v", "KeepDraft(discarded)", err, apperr.KindConflict)
 		}
@@ -408,7 +408,7 @@ func TestDiscardDraft(t *testing.T) {
 	t.Run("a Draft that is not ready conflicts", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
 
-		_, err := e.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: id})
+		_, err := e.svc.DiscardDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 
 		if !apperr.IsKind(err, apperr.KindConflict) {
 			t.Fatalf("%s err = %v, want kind %v", "DiscardDraft(pending)", err, apperr.KindConflict)
@@ -420,7 +420,7 @@ func TestDraftPDF(t *testing.T) {
 	t.Run("a Draft that is not ready is not found", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
 
-		_, err := e.svc.DraftPDF(t.Context(), userID, dto.DraftQuery{ID: id})
+		_, err := e.svc.DraftPDF(t.Context(), userID, dto.TailoringDraftQuery{ID: id})
 
 		if !apperr.IsKind(err, apperr.KindNotFound) {
 			t.Fatalf("%s err = %v, want kind %v", "DraftPDF(pending)", err, apperr.KindNotFound)

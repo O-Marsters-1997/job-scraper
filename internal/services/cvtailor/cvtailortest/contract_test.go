@@ -15,6 +15,9 @@ func TestFakeStoreSatisfiesContract(t *testing.T) {
 		return cvtailortest.Fixture{
 			Store: store, UserID: "user-1", Other: "user-2", JobID: "job-1",
 			TrackLetterTab: func(_ *testing.T, userID, docID, tabID string) { store.TrackLetterTab(userID, docID, tabID) },
+			SeedContact: func(_ *testing.T, userID string) string {
+				return store.SeedOutreachSubject(userID, dto.OutreachSubject{Name: "Sam"})
+			},
 		}
 	})
 }

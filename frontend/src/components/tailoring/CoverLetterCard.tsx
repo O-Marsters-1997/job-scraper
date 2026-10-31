@@ -15,20 +15,10 @@ import { useCVTemplates } from "@/hooks/useCVTemplates";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { formatDate } from "@/lib/datetime";
 import { loadedData } from "@/lib/queryData";
-import type { CoverLetter, LetterFinding } from "@/types/coverLetter";
+import { type CoverLetter, findingLabels } from "@/types/coverLetter";
 
 const TOP_ACHIEVEMENTS = 8;
 const checkbox = "size-4 cursor-pointer align-middle accent-primary";
-
-const findingLabels: Record<LetterFinding["kind"], string> = {
-	leftover_bullet: "Leftover bullet",
-	leftover_gap: "Leftover gap",
-	length: "Length",
-	ai_tell: "AI phrase",
-	restates_achievement: "Restates an achievement",
-	missing_company: "Company not named",
-	missing_role: "Role not named",
-};
 
 function errorMessage(err: unknown): string {
 	if (err instanceof ApiError) {

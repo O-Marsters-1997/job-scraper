@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest"
@@ -305,18 +304,6 @@ func TestApplicationEventsShareTheApplicationsTransaction(t *testing.T) {
 	}
 }
 
-func TestCreateRecruiterContactMissingJobIsNotFound(t *testing.T) {
-	t.Parallel()
-	st, _, userID := newStore(t)
-	in := dto.LogRecruiterContactInput{
-		JobID: "00000000-0000-0000-0000-000000000000", ContactedOn: "2026-10-01",
-		Channel: dto.ChannelEmail, Outcome: dto.OutcomeSpoke,
-	}
-	if _, err := st.CreateRecruiterContact(t.Context(), userID, in); !errors.Is(err, data.ErrNotFound) {
-		t.Errorf("CreateRecruiterContact(missing job) err = %v, want ErrNotFound", err)
-	}
-}
-
 func TestApplyTaskSync(t *testing.T) {
 	t.Parallel()
 
@@ -535,5 +522,106 @@ func TestMoveApplicationAppliedStatus(t *testing.T) {
 	}
 	if changed != 3 {
 		t.Errorf("status change events = %d, want 3 (the repeat move to the current status records none)", changed)
+	}
+}
+
+func TestCreateContactFillsCompanyFromJob(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "Engineer")
+	var companyID string
+	if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug, name, kind) VALUES ('acme', 'Acme Ltd', 'agency') RETURNING id`).Scan(&companyID); err != nil {
+		t.Fatalf("insert company err = %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), `UPDATE jobs SET company_id = $1 WHERE id = $2`, companyID, jobID); err != nil {
+		t.Fatalf("link job to company err = %v", err)
+	}
+
+	got, err := st.CreateContact(t.Context(), userID, dto.ContactInput{Name: "Sam", JobID: &jobID}, time.Now())
+	if err != nil {
+		t.Fatalf("CreateContact err = %v", err)
+	}
+	if got.CompanyID == nil || *got.CompanyID != companyID || got.CompanyName != "Acme Ltd" || got.CompanyKind != "agency" || got.JobTitle != "Engineer" {
+		t.Errorf("CreateContact = company %v %q %q job %q, want Acme Ltd (agency) from the job", got.CompanyID, got.CompanyName, got.CompanyKind, got.JobTitle)
+	}
+}
+
+func TestCreateContactRejectsUnknownJob(t *testing.T) {
+	t.Parallel()
+	st, _, userID := newStore(t)
+	missing := "00000000-0000-0000-0000-000000000000"
+	_, err := st.CreateContact(t.Context(), userID, dto.ContactInput{Name: "Sam", JobID: &missing}, time.Now())
+	if !errors.Is(err, store.ErrContactJobNotFound) {
+		t.Errorf("CreateContact(unknown job) err = %v, want an invalid apperr", err)
+	}
+}
+
+func TestDeleteContactRemovesEvents(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+	c, err := st.CreateContact(t.Context(), userID, dto.ContactInput{Name: "Sam"}, time.Now())
+	if err != nil {
+		t.Fatalf("CreateContact err = %v", err)
+	}
+	if err := st.DeleteContact(t.Context(), userID, c.ID); err != nil {
+		t.Fatalf("DeleteContact err = %v", err)
+	}
+	var n int
+	if err := pool.QueryRow(t.Context(), `SELECT COUNT(*) FROM contact_events`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("contact_events after delete = %d, %v, want 0", n, err)
+	}
+}
+
+func TestListContactCompanies(t *testing.T) {
+	t.Parallel()
+	st, pool, userID := newStore(t)
+	ctx := t.Context()
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, sql, args...); err != nil {
+			t.Fatalf("exec %q err = %v", sql, err)
+		}
+	}
+	company := func(slug, kind string) string {
+		t.Helper()
+		var id string
+		if err := pool.QueryRow(ctx, `INSERT INTO companies (slug, name, kind) VALUES ($1, $1, $2) RETURNING id`, slug, kind).Scan(&id); err != nil {
+			t.Fatalf("insert company err = %v", err)
+		}
+		return id
+	}
+	acme, tracked, dismissed, stranger := company("acme", "direct"), company("bolt", "agency"), company("cast", "direct"), company("dune", "direct")
+
+	exec(`INSERT INTO tracked_companies (user_id, company_id) VALUES ($1, $2)`, userID, tracked)
+	exec(`INSERT INTO tracked_companies (user_id, company_id, review_state) VALUES ($1, $2, 'dismissed')`, userID, dismissed)
+	exec(`INSERT INTO contacts (user_id, name, company_id) VALUES ($1, 'Sam', $2)`, userID, acme)
+
+	covered := pgtest.InsertJob(t, pool, "Covered", "covered")
+	uncovered := pgtest.InsertJob(t, pool, "Uncovered", "uncovered")
+	closed := pgtest.InsertJob(t, pool, "Closed", "closed")
+	exec(`UPDATE jobs SET company_id = $1 WHERE id = ANY($2)`, acme, []string{covered, uncovered, closed})
+	exec(`UPDATE jobs SET closed_at = NOW() WHERE id = $1`, closed)
+	exec(`INSERT INTO contacts (user_id, name, company_id, job_id) VALUES ($1, 'Pat', $2, $3)`, userID, acme, covered)
+	exec(`INSERT INTO contacts (user_id, name, company_id) VALUES ($1, 'Eve', $2)`, pgtest.InsertUser(t, pool), stranger)
+	if _, err := st.CreateApplication(ctx, userID, dto.CreateApplicationInput{JobID: uncovered}); err != nil {
+		t.Fatalf("CreateApplication err = %v", err)
+	}
+
+	got, err := st.ListContactCompanies(ctx, userID)
+	if err != nil {
+		t.Fatalf("ListContactCompanies err = %v", err)
+	}
+	if len(got) != 2 || got[0].ID != acme || got[1].ID != tracked {
+		t.Fatalf("ListContactCompanies = %+v, want acme (contact) then tracked bolt only", got)
+	}
+	if got[0].Tracked || !got[1].Tracked || got[1].Kind != "agency" {
+		t.Errorf("tracked/kind = %v/%v %q, want false/true agency", got[0].Tracked, got[1].Tracked, got[1].Kind)
+	}
+	wantJobs := []dto.ContactCompanyJob{{JobID: uncovered, Title: "Uncovered"}, {JobID: covered, Title: "Covered", HasContact: true}}
+	if diff := cmp.Diff(wantJobs, got[0].OpenJobs); diff != "" {
+		t.Errorf("OpenJobs mismatch (-want +got):\n%s", diff)
+	}
+	if len(got[0].ApplicationIDs) != 1 || len(got[1].ApplicationIDs) != 0 || got[1].OpenJobs == nil {
+		t.Errorf("application ids/jobs = %v, %v, %v, want one, none, empty non-nil", got[0].ApplicationIDs, got[1].ApplicationIDs, got[1].OpenJobs)
 	}
 }
