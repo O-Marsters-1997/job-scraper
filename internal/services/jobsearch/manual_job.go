@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/google/uuid"
@@ -64,36 +63,6 @@ func (s *Service) AddManualJob(ctx context.Context, userID string, in dto.AddMan
 		}
 	}
 	return s.manualResult(ctx, userID, res.JobID, !saved)
-}
-
-func (s *Service) SubmitJobURL(ctx context.Context, userID string, in dto.SubmitJobURLInput) (dto.SubmitJobURLResult, error) {
-	raw := strings.TrimSpace(in.URL)
-	parsed, err := url.Parse(raw)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return dto.SubmitJobURLResult{}, apperr.Invalid("enter a valid job URL")
-	}
-
-	postSource, postToken, postingID, _ := detect.ResolvePosting(raw)
-	held, err := s.store.FindJobByPosting(ctx, raw, postSource, postToken, postingID)
-	switch {
-	case err == nil:
-		return dto.SubmitJobURLResult{Status: dto.SubmissionHeld, JobID: held.ID}, nil
-	case !errors.Is(err, data.ErrNotFound):
-		return dto.SubmitJobURLResult{}, err
-	}
-
-	source, token, isATS := detect.ResolveBoard(raw)
-	if !isATS {
-		return dto.SubmitJobURLResult{}, apperr.Unprocessable(fmt.Sprintf("%s isn't a supported job board. Use Add application instead", parsed.Hostname()))
-	}
-	var job dto.Job
-	if err := s.trackATSCompany(ctx, userID, &job, source, token, postingID, raw, ""); err != nil {
-		return dto.SubmitJobURLResult{}, err
-	}
-	if err := s.syncBoard(ctx, source, token, job.CompanyID); err != nil {
-		return dto.SubmitJobURLResult{}, err
-	}
-	return dto.SubmitJobURLResult{Status: dto.SubmissionQueued}, nil
 }
 
 func (s *Service) syncBoard(ctx context.Context, source, token, companyID string) error {
