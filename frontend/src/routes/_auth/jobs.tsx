@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { Show } from "solid-js";
+import { createSignal, onCleanup, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
+import { AddJobDialog } from "@/components/jobs/AddJobDialog";
 import { GradeDialog } from "@/components/jobs/GradeDialog";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { PageHeading } from "@/components/PageHeading";
@@ -52,13 +53,22 @@ function JobsPage() {
 	);
 
 	const track = useTrackJobs(table.items, table.clearSelection);
+	const [addOpen, setAddOpen] = createSignal(false);
+	const [queuedToast, setQueuedToast] = createSignal(false);
+	let queuedTimer: ReturnType<typeof setTimeout> | undefined;
+	onCleanup(() => clearTimeout(queuedTimer));
 
 	return (
 		<div class="px-7 py-6">
 			<PageHeading
 				title="Jobs"
 				subtitle="Open roles scraped from your configured sources"
-			/>
+			>
+				<Button onClick={() => setAddOpen(true)}>
+					<Icon name="plus" size={14} />
+					Add job
+				</Button>
+			</PageHeading>
 
 			<Show when={aiPrefs.data && !aiPrefs.data.scoringEnabled}>
 				<div class="mb-4 rounded-xl border border-accent-border bg-accent-subtle px-4 py-3 text-sm text-accent-text">
@@ -145,6 +155,26 @@ function JobsPage() {
 
 			<DismissToast />
 			<SeenToast />
+
+			<AddJobDialog
+				open={addOpen()}
+				onOpenChange={setAddOpen}
+				onSubmitted={(result) => {
+					setAddOpen(false);
+					if (result.status === "held" && result.jobId) {
+						void navigate({ to: "/jobs/$id", params: { id: result.jobId } });
+						return;
+					}
+					clearTimeout(queuedTimer);
+					setQueuedToast(true);
+					queuedTimer = setTimeout(() => setQueuedToast(false), 6000);
+				}}
+			/>
+			<Show when={queuedToast()}>
+				<output class="fixed inset-x-4 bottom-20 z-50 rounded-lg border border-border-strong bg-surface px-4 py-3 text-sm text-foreground shadow-md md:bottom-4 md:left-auto md:max-w-sm">
+					Queued — it'll appear in your list shortly
+				</output>
+			</Show>
 
 			<GradeDialog
 				open={track.gradeOpen()}

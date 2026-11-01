@@ -20,6 +20,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/jobs/insights", handlers.Query(m.jobs.Insights))
 	r.Post("/jobs/seen", handlers.Create(m.jobs.MarkSeen))
 	r.Post("/jobs/manual", handlers.Create(m.jobs.AddManualJob))
+	r.Post("/jobs/submit", handlers.Create(m.jobs.SubmitJobURL))
 	r.Get("/jobs/{id}", handlers.GetByID(m.jobs.Get))
 
 	r.Get("/scrape-runs", handlers.Query(m.jobs.ListScrapeRuns))

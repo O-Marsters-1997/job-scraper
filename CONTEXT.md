@@ -14,6 +14,10 @@ _Avoid_: Listing, posting, vacancy
 A source-specific link to a Job, also called a listing; several Job URLs may refer to the same Job when a trusted ATS posting ID establishes the match, and aggregator listings attach by match key.
 _Avoid_: Job identity, unique Job
 
+**Submitted Job URL**:
+A Job URL the User hands to the pipeline instead of discovery finding it. It is processed like any discovered one, and the resulting Job carries no trace of how it arrived.
+_Avoid_: Manual job, manual ingest
+
 **Job Candidate**:
 A discovered job URL with cheap listing details, retained before its full Job details are fetched.
 _Avoid_: Fully described Job, rejected Job
