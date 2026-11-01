@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
 
@@ -22,6 +23,7 @@ const (
 	profileSlotID      = "profile"
 	msgNotOneParagraph = "the profile must be exactly one paragraph"
 	fallbackWidthPt    = 468
+	maxNewWords        = 12
 )
 
 //go:embed profile.md
@@ -31,7 +33,6 @@ var systemPrompt = cvedit.Voice + "\n" + profileRules
 
 type Input struct {
 	Profile        string
-	BankSkills     []string
 	Bank           []string
 	JobTitle       string
 	Company        string
@@ -80,7 +81,7 @@ func (w *Writer) Redraft(ctx context.Context, apiKey string, in Input) (Result, 
 		found := guard(in, text)
 		a := Attempt{
 			Text: text, Steer: in.Steer, Findings: found, Cost: c.Cost,
-			Model: p.Model, PromptKey: p.Key(), Rejection: rejection(text, found),
+			Model: p.Model, PromptKey: p.Key(), Rejection: rejection(in.Profile, text, found),
 		}
 		if n := lines(text); a.Rejection == "" && n > budget {
 			a.Overlong = true
@@ -109,12 +110,9 @@ func defaultLines(text string) int {
 
 func userPrompt(in Input) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Job: %s at %s\n\nJob description:\n%s\n\nCurrent profile:\n%s\n\nSkills the person has:\n",
+	fmt.Fprintf(&b, "Job: %s at %s\n\nJob description:\n%s\n\nCurrent profile:\n%s\n",
 		in.JobTitle, in.Company, JobText(in.JobDescription), in.Profile)
-	for _, s := range in.BankSkills {
-		fmt.Fprintf(&b, "- %s\n", s)
-	}
-	fmt.Fprintf(&b, "\nBudget: at most %d words, the length of the current profile.\n", len(strings.Fields(in.Profile)))
+	fmt.Fprintf(&b, "\nBudget: at most %d words, the length of the current profile. Introduce at most %d words that are not already in it.\n", len(strings.Fields(in.Profile)), maxNewWords)
 	if steer := strings.TrimSpace(in.Steer); steer != "" {
 		fmt.Fprintf(&b, "The person asks: %s\nThe steer reorders and re-emphasises content within the budget; it does not add length.\n", steer)
 	}
@@ -123,22 +121,44 @@ func userPrompt(in Input) string {
 
 func guard(in Input, text string) []checks.Finding {
 	d := checks.Draft{
-		Profile:    &checks.Slot{ID: profileSlotID, Text: text, BaseText: in.Profile},
-		Bank:       in.Bank,
-		BankSkills: in.BankSkills,
+		Profile: &checks.Slot{ID: profileSlotID, Text: text, BaseText: in.Profile},
+		Bank:    in.Bank,
 	}
 	return checks.Blocking(slices.Concat(checks.Grounding(d), checks.BannedWords(d)))
 }
 
-func rejection(text string, found []checks.Finding) string {
+func rejection(base, text string, found []checks.Finding) string {
 	var msgs []string
 	if text == "" || strings.Contains(text, "\n") {
 		msgs = append(msgs, msgNotOneParagraph)
+	}
+	if n := newWords(base, text); n > maxNewWords {
+		msgs = append(msgs, fmt.Sprintf("%d words are new against the current profile, at most %d allowed; keep its wording and swap only a few phrases", n, maxNewWords))
 	}
 	for _, f := range found {
 		msgs = append(msgs, f.Message)
 	}
 	return strings.Join(msgs, "; ")
+}
+
+func newWords(base, text string) int {
+	have := map[string]bool{}
+	for _, w := range words(base) {
+		have[w] = true
+	}
+	n := 0
+	for _, w := range words(text) {
+		if !have[w] {
+			n++
+		}
+	}
+	return n
+}
+
+func words(s string) []string {
+	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
 }
 
 func JobText(html string) string {

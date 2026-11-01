@@ -28,7 +28,6 @@ func (m *scriptedModel) Complete(_ context.Context, _ string, p lineedit.Prompt,
 func input() profiledraft.Input {
 	return profiledraft.Input{
 		Profile:        "Backend engineer building Go services for payments teams.",
-		BankSkills:     []string{"Go", "PostgreSQL"},
 		Bank:           []string{"Built Go billing services", "Secret achievement text about Kubernetes migration"},
 		JobTitle:       "Platform Engineer",
 		Company:        "Acme",
@@ -97,6 +96,22 @@ func TestWriterRedraft(t *testing.T) {
 		}
 	})
 
+	t.Run("a rewrite that swaps too many words is retried and the prompt omits skills", func(t *testing.T) {
+		t.Parallel()
+		heavy := "Cross-functional product engineer shipping reliable, localised, AI-assisted features with designers, analysts and managers."
+		m := &scriptedModel{replies: []string{heavy, clean}}
+		res, err := profiledraft.New(m).Redraft(t.Context(), "key", input())
+		if err != nil {
+			t.Fatalf("Redraft error = %v", err)
+		}
+		if res.Text != clean || len(res.Attempts) != 2 || !strings.Contains(res.Attempts[0].Rejection, "new") {
+			t.Errorf("Redraft = %q with attempts %+v, want first rejected for new words then %q", res.Text, res.Attempts, clean)
+		}
+		if strings.Contains(m.prompts[0].User, "Skills the person has") {
+			t.Errorf("prompt = %q, want no skill list", m.prompts[0].User)
+		}
+	})
+
 	t.Run("two bad outputs leave the text empty", func(t *testing.T) {
 		t.Parallel()
 		m := &scriptedModel{replies: []string{"First paragraph.\n\nSecond paragraph.", "Passionate Go engineer."}}
@@ -113,7 +128,7 @@ func TestWriterRedraft(t *testing.T) {
 		t.Parallel()
 		in := input()
 		in.Lines = func(string) int { return 2 }
-		longer := clean + " Also Go and PostgreSQL."
+		longer := clean + " Also Go and billing."
 		m := &scriptedModel{replies: []string{longer}}
 		res, err := profiledraft.New(m).Redraft(t.Context(), "key", in)
 		if err != nil {
@@ -169,7 +184,7 @@ func TestWriterRedraft(t *testing.T) {
 			t.Fatalf("Redraft error = %v", err)
 		}
 		p := m.prompts[0]
-		for _, want := range []string{in.Profile, "- PostgreSQL", "Platform Engineer", "Acme", strings.Repeat("x", 6000)} {
+		for _, want := range []string{in.Profile, "Platform Engineer", "Acme", strings.Repeat("x", 6000)} {
 			if !strings.Contains(p.User, want) {
 				t.Errorf("prompt lacks %.40q", want)
 			}

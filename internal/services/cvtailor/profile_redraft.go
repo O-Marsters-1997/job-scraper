@@ -50,10 +50,6 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	skills, err := m.store.ListBankSkills(ctx, userID)
-	if err != nil {
-		return dto.Draft{}, err
-	}
 	positions, err := m.store.ListPositions(ctx, userID)
 	if err != nil {
 		return dto.Draft{}, err
@@ -61,9 +57,6 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 	input := profiledraft.Input{
 		Profile: *base.Profile, Bank: indexBank(positions, nil).all, Steer: steer,
 		JobTitle: job.Title, Company: job.Company, JobDescription: job.Description,
-	}
-	for _, s := range skills {
-		input.BankSkills = append(input.BankSkills, s.Name)
 	}
 	if input.Lines, err = m.profileLines(ctx, userID, draft); err != nil {
 		return dto.Draft{}, err

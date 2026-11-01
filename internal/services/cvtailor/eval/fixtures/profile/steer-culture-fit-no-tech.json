@@ -1,0 +1,9 @@
+{
+ "Scenario": "Modelled on a Jam where a steer and a technology-heavy job turned the profile into a stack list.",
+ "Profile": "Backend-leaning engineer with four years building products in Go and TypeScript, working with designers and product managers to ship reliable features.",
+ "Bank": ["Built REST services in Go for the payments team", "Shipped a localised checkout in TypeScript"],
+ "JobTitle": "Software Engineer",
+ "Company": "Fabrikam",
+ "JobDescription": "<p>We are product-focused and ship with AI-led development: engineers pair with coding agents daily. Cross-functional squads, localisation across ten languages. Our stack is AWS, Docker, PostgreSQL, RabbitMQ and React.</p>",
+ "Steer": "mention internationalisation work and tailor this more to the job description"
+}

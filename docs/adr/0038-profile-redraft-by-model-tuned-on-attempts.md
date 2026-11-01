@@ -14,13 +14,14 @@ whether it is getting better.
   built without a model writing its text. The editor's Redraft action works from the base Profile with an
   optional one-line steer, saves the accepted text into the edit set (undo restores the previous text) and
   returns the complete text, without streaming. It works the same on `generate` and `as_is` Drafts.
-- **The input is minimal.** Base Profile, Bank Skill names, Job title and company, and the Job description
-  stripped of HTML and capped. No Achievements. The prompt is ordered static rules, then the Job, then the
+- **The input is minimal.** Base Profile, Job title and company, and the Job description stripped of
+  HTML and capped. No Achievements and no Bank Skill names: the edit is a minimal culture-and-fit swap of a few
+  phrases, and technologies belong in the bullets. The prompt is ordered static rules, then the Job, then the
   Profile, so prompt caching can be added later without changing it.
-- **Guardrails, then fallback.** The output must pass Profile grounding (Achievements and Bank Skills),
-  banned words, and length no longer than the base. On a violation it gets one retry with the findings fed
+- **Guardrails, then fallback.** The output must pass Profile grounding (Achievements and the base Profile),
+  banned words, at most 12 words not already in the base Profile, and length no longer than the base. On a violation it gets one retry with the findings fed
   back. If that also fails, or the call errors, the Profile is left as it was and the user sees why. There
-  is no cap on changed words; voice is judged in the evals.
+  is otherwise judged in the evals.
 - **Every Attempt is captured.** `profile_attempts` holds each generated Profile with its steer, prompt key,
   model, cost and any rejection. The target is the kept Draft's final Profile, read from its edit set.
 - **Evals score edit burden.** One package (`cvtailor/profiledraft`) owns the prompt, model and checks, and
