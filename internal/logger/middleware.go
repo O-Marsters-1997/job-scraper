@@ -18,8 +18,10 @@ const HeaderRunID = "X-Run-ID"
 // middleware.RequestID.
 func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := middleware.GetReqID(r.Context())
+		w.Header().Set(middleware.RequestIDHeader, requestID)
 		ctx := With(r.Context(),
-			slog.String(KeyRequestID, middleware.GetReqID(r.Context())),
+			slog.String(KeyRequestID, requestID),
 			slog.String(KeyTraceID, uuid.NewString()),
 		)
 		if header := r.Header.Get(HeaderRunID); header != "" {

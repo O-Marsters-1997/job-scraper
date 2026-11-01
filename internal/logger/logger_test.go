@@ -163,6 +163,18 @@ func TestMiddleware(t *testing.T) {
 		}
 	})
 
+	t.Run("response carries the logged request ID", func(t *testing.T) {
+		t.Parallel()
+		h, buf := newMiddleware(t)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
+
+		logged := logLines(t, buf)[0][logger.KeyRequestID]
+		if got := rec.Header().Get(middleware.RequestIDHeader); got == "" || got != logged {
+			t.Errorf("%s header = %q, want the logged %s %v", middleware.RequestIDHeader, got, logger.KeyRequestID, logged)
+		}
+	})
+
 	t.Run("no run ID header omits the key", func(t *testing.T) {
 		h, buf := newMiddleware(t)
 		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
