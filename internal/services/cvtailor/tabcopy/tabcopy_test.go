@@ -103,6 +103,21 @@ func TestRequests(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("never sends tab stops, which the Docs API rejects", func(t *testing.T) {
+		for _, r := range requests(t, "layout.json") {
+			body, ok := r["updateParagraphStyle"]
+			if !ok {
+				continue
+			}
+			if ps := body["paragraphStyle"].(map[string]any); ps["tabStops"] != nil {
+				t.Errorf("paragraphStyle carries tabStops: %v", ps)
+			}
+			if strings.Contains(body["fields"].(string), "tabStops") {
+				t.Errorf("fields = %v, want no tabStops", body["fields"])
+			}
+		}
+	})
 }
 
 func TestRequestsUnsupported(t *testing.T) {
