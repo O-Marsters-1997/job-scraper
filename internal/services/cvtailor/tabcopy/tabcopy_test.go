@@ -105,11 +105,18 @@ func TestRequests(t *testing.T) {
 	})
 
 	t.Run("never sends tab stops, which the Docs API rejects", func(t *testing.T) {
+		seen := 0
+		defer func() {
+			if seen == 0 {
+				t.Error("fixture produced no updateParagraphStyle request")
+			}
+		}()
 		for _, r := range requests(t, "layout.json") {
 			body, ok := r["updateParagraphStyle"]
 			if !ok {
 				continue
 			}
+			seen++
 			if ps := body["paragraphStyle"].(map[string]any); ps["tabStops"] != nil {
 				t.Errorf("paragraphStyle carries tabStops: %v", ps)
 			}
