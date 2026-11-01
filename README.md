@@ -55,7 +55,7 @@ On the server, once:
 1. Clone the repo and run `sudo scripts/provision.sh` to install Docker, Caddy, `just` and `bun`, and enable the firewall. Log out and back in to pick up the `docker` group.
 2. Write production values into `.env` (start from `.env.example`; `API_BASE_URL` must be `http://api:8080`), then `ln -s .env .env.docker-compose` so Compose interpolation and container env read the same file.
 
-On the server, each release: `just deploy`. It pulls, builds the frontend against `/api`, installs the Caddyfile and runs `docker compose up -d --build`; the `migrate` service applies migrations and seeds before the API and worker start. `just logs` tails them.
+On the server, each release: `just deploy`. It pulls, builds the frontend against `/api`, installs the Caddyfile, runs `docker compose up -d --build` and recreates Alloy, which otherwise stops shipping logs from the recreated containers; the `migrate` service applies migrations and seeds before the API and worker start. `just logs` tails them.
 
 From a laptop: `just tunnel USER@HOST`, then open `http://localhost:8000`. RabbitMQ management is forwarded to `http://localhost:15673`, so it does not clash with the local stack's RabbitMQ on 15672.
 

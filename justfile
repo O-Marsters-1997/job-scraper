@@ -74,7 +74,8 @@ deploy:
     sudo install -m 644 ops/caddy/Caddyfile /etc/caddy/Caddyfile
     sudo systemctl reload caddy
     docker compose up -d --build --remove-orphans
-    docker compose ps
+    docker compose --profile observability up -d --force-recreate alloy
+    docker compose --profile observability ps
 
 [doc('from the laptop: forward the app (target=app, localhost:8000) or RabbitMQ management (target=rabbit, localhost:15674) from the server')]
 tunnel target:
