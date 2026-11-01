@@ -126,6 +126,7 @@ func Requests(src json.RawMessage, tabID string) ([]json.RawMessage, error) {
 		pstyle := paragraphStyleOf(p, named, dt.Lists)
 		delete(pstyle, "namedStyleType")
 		delete(pstyle, "headingId")
+		delete(pstyle, "tabStops")
 		if r := updateStyle("updateParagraphStyle", "paragraphStyle", pstyle, el.StartIndex, el.EndIndex, tabID); r != nil {
 			paragraphs = append(paragraphs, r)
 		}
