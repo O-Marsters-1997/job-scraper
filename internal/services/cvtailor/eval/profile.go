@@ -19,7 +19,6 @@ type ProfileFixture struct {
 	Name           string
 	Scenario       string
 	Profile        string
-	BankSkills     []string
 	Bank           []string
 	JobTitle       string
 	Company        string
@@ -75,7 +74,7 @@ func (o ProfileOutcome) Passed() bool {
 
 func RunProfile(ctx context.Context, w *profiledraft.Writer, apiKey string, f ProfileFixture) (ProfileOutcome, error) {
 	res, err := w.Redraft(ctx, apiKey, profiledraft.Input{
-		Profile: f.Profile, BankSkills: f.BankSkills, Bank: f.Bank, JobTitle: f.JobTitle,
+		Profile: f.Profile, Bank: f.Bank, JobTitle: f.JobTitle,
 		Company: f.Company, JobDescription: f.JobDescription, Steer: f.Steer,
 	})
 	out := ProfileOutcome{Fixture: f.Name, Output: res.Text, Attempts: len(res.Attempts)}

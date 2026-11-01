@@ -49,7 +49,7 @@ func writeProfileFixtures(dir string, captures []dto.ProfileCapture) (int, error
 	for i, c := range captures {
 		f := eval.ProfileFixture{
 			Name: c.DraftID, Profile: c.BaseProfile, Final: c.FinalProfile,
-			BankSkills: c.BankSkills, Bank: c.Bank,
+			Bank:     c.Bank,
 			JobTitle: c.JobTitle, Company: c.Company, JobDescription: c.JobDescription,
 		}
 		if len(c.Attempts) > 0 {
