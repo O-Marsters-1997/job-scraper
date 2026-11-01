@@ -1,5 +1,9 @@
 # ADR 0038 — The Profile is redrafted by a model, tuned against the user's own edits
 
+Amended 2026-11-01 (cv-editor feedback session): a Redraft is a minimal edit aimed at culture and fit, not
+technologies. Bank Skill names leave the input and changed words are bounded. "The Redraft is a minimal
+edit" below replaces the earlier "input is minimal" and "no cap on changed words" points.
+
 ## Context
 
 A Draft was built without a model: bullets are Achievements picked by Jev lean, Skills come from the CV and
@@ -14,13 +18,19 @@ whether it is getting better.
   built without a model writing its text. The editor's Redraft action works from the base Profile with an
   optional one-line steer, saves the accepted text into the edit set (undo restores the previous text) and
   returns the complete text, without streaming. It works the same on `generate` and `as_is` Drafts.
-- **The input is minimal.** Base Profile, Bank Skill names, Job title and company, and the Job description
-  stripped of HTML and capped. No Achievements. The prompt is ordered static rules, then the Job, then the
+- **The Redraft is a minimal edit.** It keeps the base Profile's structure and sentence order and swaps
+  phrases so the paragraph speaks to how the Job says engineering works there and to the person's fit:
+  backend- or frontend-leaning, cross-functional collaboration, product focus, AI-led development, a brief
+  nod to something like localisation when the Job or steer raises it. It does not list technologies;
+  matching the Job's requirement bullets to specific tools is the job of the bullets, picked from the Bank
+  by Jev lean.
+- **The input is small.** Base Profile, Job title and company, and the Job description stripped of HTML and
+  capped. No Bank Skill names and no Achievements. The prompt is ordered static rules, then the Job, then the
   Profile, so prompt caching can be added later without changing it.
 - **Guardrails, then fallback.** The output must pass Profile grounding (Achievements and Bank Skills),
-  banned words, and length no longer than the base. On a violation it gets one retry with the findings fed
-  back. If that also fails, or the call errors, the Profile is left as it was and the user sees why. There
-  is no cap on changed words; voice is judged in the evals.
+  banned words, and length no longer than the base. A bound on changed words against the base is
+  also checked. On a violation it gets one retry with the findings fed back. If that also fails, or the call
+  errors, the Profile is left as it was and the user sees why.
 - **Every Attempt is captured.** `profile_attempts` holds each generated Profile with its steer, prompt key,
   model, cost and any rejection. The target is the kept Draft's final Profile, read from its edit set.
 - **Evals score edit burden.** One package (`cvtailor/profiledraft`) owns the prompt, model and checks, and
