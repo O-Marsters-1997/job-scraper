@@ -38,7 +38,7 @@ func (s *Service) AddManualJob(ctx context.Context, userID string, in dto.AddMan
 	job := dto.Job{URL: in.URL, Title: in.Title, Description: in.Description}
 	source, token, isATS := detect.ResolveBoard(in.URL)
 	if isATS {
-		if err := s.trackATSCompany(ctx, userID, &job, source, token, postingID, in); err != nil {
+		if err := s.trackATSCompany(ctx, userID, &job, source, token, postingID, in.URL, in.Company); err != nil {
 			return dto.ManualJobResult{}, err
 		}
 	} else {
@@ -82,19 +82,19 @@ func (s *Service) syncBoard(ctx context.Context, source, token, companyID string
 	return nil
 }
 
-func (s *Service) trackATSCompany(ctx context.Context, userID string, job *dto.Job, source, token, postingID string, in dto.AddManualJobInput) error {
+func (s *Service) trackATSCompany(ctx context.Context, userID string, job *dto.Job, source, token, postingID, jobURL, name string) error {
 	_, err := s.store.GetBoardCompanyID(ctx, source, token)
 	newCompany := errors.Is(err, data.ErrNotFound)
 	if err != nil && !newCompany {
 		return err
 	}
 	track := true
-	company, err := s.CreateCompany(ctx, userID, dto.CreateCompanyInput{URL: in.URL, Track: &track})
+	company, err := s.CreateCompany(ctx, userID, dto.CreateCompanyInput{URL: jobURL, Track: &track})
 	if err != nil {
 		return err
 	}
-	if newCompany && in.Company != "" {
-		if err := s.store.RenameCompany(ctx, company.ID, in.Company); err != nil {
+	if newCompany && name != "" {
+		if err := s.store.RenameCompany(ctx, company.ID, name); err != nil {
 			return err
 		}
 	}
