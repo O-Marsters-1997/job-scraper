@@ -25,18 +25,17 @@ LEFT JOIN jobs j ON j.id = t.job_id
 WHERE t.contact_id = ANY(sqlc.arg('contact_ids')::uuid[]) AND t.job_id IS NOT NULL
 ORDER BY t.created_at DESC, t.id;
 
--- name: CountSentSinceReply :one
-SELECT COUNT(*)::int FROM contact_events s
-WHERE s.contact_id = $1 AND s.kind = 'sent'
-  AND NOT EXISTS (
-      SELECT 1 FROM contact_events r
-      WHERE r.contact_id = s.contact_id AND r.kind = 'reply'
-        AND (r.occurred_on, r.created_at) > (s.occurred_on, s.created_at));
+-- name: OpenReachOutJob :one
+SELECT t.job_id FROM tasks t
+JOIN task_types tt ON tt.id = t.type_id AND tt.system_key = 'reach_out'
+WHERE t.contact_id = $1 AND t.user_id = $2 AND t.completed_at IS NULL AND t.job_id IS NOT NULL
+ORDER BY t.created_at DESC, t.id
+LIMIT 1;
 
 -- name: InsertContactEvent :exec
 INSERT INTO contact_events (contact_id, kind, occurred_on, channel, template_kind, template_name, outcome, job_id)
 SELECT c.id, sqlc.arg('kind'), sqlc.arg('occurred_on')::date, sqlc.narg('channel'), sqlc.narg('template_kind'),
-       sqlc.arg('template_name'), sqlc.narg('outcome'), c.job_id
+       sqlc.arg('template_name'), sqlc.narg('outcome'), COALESCE(sqlc.narg('job_id')::uuid, c.job_id)
 FROM contacts c WHERE c.id = sqlc.arg('contact_id');
 
 -- name: SetContactState :exec
@@ -45,12 +44,9 @@ SET stage = sqlc.arg('stage'), outcome = sqlc.narg('outcome'), follow_up_by = sq
     reply = COALESCE(sqlc.narg('reply'), reply), updated_at = NOW()
 WHERE id = sqlc.arg('id') AND user_id = sqlc.arg('user_id');
 
--- name: SetLinkedApplicationChase :execrows
-UPDATE applications a
-SET chase_by = sqlc.narg('chase_by')::date
-FROM contacts c
-WHERE c.id = sqlc.arg('contact_id') AND c.user_id = sqlc.arg('user_id')
-  AND a.user_id = c.user_id AND a.job_id = c.job_id;
+-- name: SetContactMessaged :exec
+UPDATE contacts SET stage = 'messaged', outcome = NULL, updated_at = NOW()
+WHERE id = $1 AND user_id = $2;
 
 -- name: ListContacts :many
 SELECT

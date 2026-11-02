@@ -654,6 +654,29 @@ func TestReachOut(t *testing.T) {
 		}
 	})
 
+	t.Run("mark sent completes the open reach out and records its job", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID, jobID, otherJobID := setup(t)
+		c, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID, Contact: &dto.ContactInput{Name: "Sam"}}, time.Now())
+		if err != nil {
+			t.Fatalf("ReachOut err = %v", err)
+		}
+		if _, err := pool.Exec(t.Context(), `UPDATE contacts SET job_id = $1 WHERE id = $2`, otherJobID, c.ID); err != nil {
+			t.Fatalf("repoint contact err = %v", err)
+		}
+		sent, err := st.MarkContactSent(t.Context(), userID, dto.MarkSentInput{ID: c.ID, Channel: dto.ContactChannelEmail}, time.Now())
+		if err != nil {
+			t.Fatalf("MarkContactSent err = %v", err)
+		}
+		if len(sent.Contact.ReachOuts) != 1 || sent.Contact.ReachOuts[0].DoneAt == nil || sent.Contact.Stage != dto.ContactStageMessaged {
+			t.Errorf("MarkContactSent = stage %q reach_outs %+v, want messaged with the task done", sent.Contact.Stage, sent.Contact.ReachOuts)
+		}
+		last := sent.Contact.History[len(sent.Contact.History)-1]
+		if last.Kind != dto.ContactEventSent || last.JobID == nil || *last.JobID != jobID {
+			t.Errorf("last event = %+v, want a sent event for the reach out's job %s", last, jobID)
+		}
+	})
+
 	t.Run("contact at another company is rejected", func(t *testing.T) {
 		t.Parallel()
 		st, _, userID, jobID, otherJobID := setup(t)

@@ -67,7 +67,6 @@ export const contactSchema = z.object({
 
 export const contactSentSchema = z.object({
 	contact: contactSchema,
-	moved_application_chase: z.boolean(),
 });
 
 type ContactOutcome = z.infer<typeof contactOutcomeSchema>;
