@@ -2,6 +2,7 @@ package cvtailor_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -118,6 +119,21 @@ func TestModule_OutreachDraft(t *testing.T) {
 
 		if got.Kind != dto.OutreachFollowUp || got.HasHookSlot {
 			t.Errorf("OutreachDraft() = %+v, want follow_up without a hook slot", got)
+		}
+	})
+
+	t.Run("an open Reach out suggests just applied with that job's title", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t, cachedAnswers{})
+		id := e.store.SeedOutreachSubject(userID, dto.OutreachSubject{Name: "Sam", Role: "Recruiter", Company: "Globex", SentSinceReply: 1, JobID: "job-1", JobTitle: "Platform Engineer", ReachingOut: true})
+
+		got, err := e.mod.OutreachDraft(ctx, userID, dto.DraftQuery{ContactID: id})
+		if err != nil {
+			t.Fatalf("OutreachDraft() error = %v", err)
+		}
+
+		if got.Kind != dto.OutreachJustApplied || !strings.Contains(got.Body, "Platform Engineer") {
+			t.Errorf("OutreachDraft() = %+v, want just_applied naming Platform Engineer", got)
 		}
 	})
 

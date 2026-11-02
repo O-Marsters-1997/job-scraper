@@ -19,6 +19,8 @@ var recruiterRole = regexp.MustCompile(`(?i)recruit|talent|consultant`)
 
 func suggestedKind(s dto.OutreachSubject) dto.OutreachKind {
 	switch {
+	case s.ReachingOut:
+		return dto.OutreachJustApplied
 	case s.SentSinceReply > 0:
 		return dto.OutreachFollowUp
 	case recruiterRole.MatchString(s.Role):
