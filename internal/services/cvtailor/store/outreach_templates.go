@@ -185,7 +185,7 @@ func (s *Store) OutreachSubject(ctx context.Context, userID, contactID string) (
 	if err != nil {
 		return dto.OutreachSubject{}, fmt.Errorf("store.OutreachSubject: %w", err)
 	}
-	return dto.OutreachSubject{Name: r.Name, Role: r.Role, Company: r.Company, JobID: r.JobID, JobTitle: r.JobTitle, SentSinceReply: int(r.SentSinceReply)}, nil
+	return dto.OutreachSubject{Name: r.Name, Role: r.Role, Company: r.Company, JobID: r.JobID, JobTitle: r.JobTitle, SentSinceReply: int(r.SentSinceReply), ReachingOut: r.ReachingOut}, nil
 }
 
 func (s *Store) ListAchievementsNewestFirst(ctx context.Context, userID string) ([]dto.Achievement, error) {

@@ -523,6 +523,42 @@ func TestOutreachSubject(t *testing.T) {
 	if _, err := st.OutreachSubject(ctx, other, contactID); !errors.Is(err, store.ErrContactNotFound) {
 		t.Errorf("OutreachSubject() as another user error = %v, want ErrContactNotFound", err)
 	}
+
+	t.Run("Reach outs on two jobs", func(t *testing.T) {
+		olderJob := pgtest.InsertJob(t, pool, "Older Role", "fp-older")
+		newerJob := pgtest.InsertJob(t, pool, "Newer Role", "fp-newer")
+		var typeID string
+		if err := pool.QueryRow(ctx, `INSERT INTO task_types (user_id, name, colour, system_key) VALUES ($1, 'Reach out', '#15803d', 'reach_out') RETURNING id`, uid).Scan(&typeID); err != nil {
+			t.Fatal(err)
+		}
+		reachOut := func(job *string, open bool, ageHours int) {
+			t.Helper()
+			_, err := pool.Exec(ctx,
+				`INSERT INTO tasks (user_id, type_id, job_id, contact_id, completed_at, created_at)
+				 VALUES ($1, $2, $3, $4, CASE WHEN $5 THEN NULL ELSE NOW() END, NOW() - make_interval(hours => $6))`,
+				uid, typeID, job, contactID, open, ageHours)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		check := func(name string, want dto.OutreachSubject) {
+			t.Helper()
+			got, err := st.OutreachSubject(ctx, uid, contactID)
+			want.Name, want.Role, want.Company = "Sam Jones", "Recruiter", "Globex"
+			if diff := cmp.Diff(want, got); err != nil || diff != "" {
+				t.Errorf("OutreachSubject() %s = %+v, %v (-want +got):\n%s", name, got, err, diff)
+			}
+		}
+		reachOut(&newerJob, false, 1)
+		reachOut(&olderJob, false, 2)
+		check("with none open", dto.OutreachSubject{JobID: newerJob, JobTitle: "Newer Role", SentSinceReply: 2})
+
+		reachOut(&olderJob, true, 3)
+		check("with one open", dto.OutreachSubject{JobID: olderJob, JobTitle: "Older Role", SentSinceReply: 2, ReachingOut: true})
+
+		reachOut(nil, true, 0)
+		check("with an open Reach out without a Job", dto.OutreachSubject{JobID: jobID, JobTitle: "Backend Engineer", SentSinceReply: 2, ReachingOut: true})
+	})
 }
 
 func TestListAchievementsNewestFirst(t *testing.T) {
