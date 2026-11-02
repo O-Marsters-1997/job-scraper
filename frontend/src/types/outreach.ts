@@ -20,6 +20,7 @@ export interface OutreachTemplateInput {
 }
 
 export const outreachKinds: { key: OutreachKind; label: string }[] = [
+	{ key: "just_applied", label: "Just applied" },
 	{ key: "recruiter", label: "Recruiter" },
 	{ key: "hiring_manager", label: "Hiring manager" },
 	{ key: "referral", label: "Referral" },

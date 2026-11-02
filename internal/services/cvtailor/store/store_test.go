@@ -156,8 +156,8 @@ func TestSeedOutreachTemplates(t *testing.T) {
 			defaults[tpl.Kind] = true
 		}
 	}
-	if err != nil || len(got) != 4 || len(defaults) != 4 {
-		t.Errorf("ListOutreachTemplates() = %d templates, defaults %v, %v, want 4 with one default per kind", len(got), defaults, err)
+	if err != nil || len(got) != 5 || len(defaults) != 5 || !defaults[dto.OutreachJustApplied] {
+		t.Errorf("ListOutreachTemplates() = %d templates, defaults %v, %v, want 5 with one default per kind", len(got), defaults, err)
 	}
 }
 

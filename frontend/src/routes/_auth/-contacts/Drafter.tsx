@@ -18,7 +18,12 @@ import {
 	channelLabels,
 } from "@/types/contact";
 import { findingLabels } from "@/types/coverLetter";
-import { draftWordLimit, wordCount } from "@/types/outreach";
+import {
+	draftWordLimit,
+	type OutreachKind,
+	outreachKinds,
+	wordCount,
+} from "@/types/outreach";
 
 const channels: ContactChannel[] = ["linkedin", "email", "call"];
 
@@ -59,6 +64,12 @@ export function Drafter(props: {
 
 	const sameKind = () =>
 		(templates.data ?? []).filter((t) => t.kind === draft.data?.kind);
+	const pickKind = (kind: OutreachKind) => {
+		const def = (templates.data ?? []).find(
+			(t) => t.kind === kind && t.isDefault,
+		);
+		if (def) setTemplateId(def.id);
+	};
 	const chosen = () => sameKind().find((t) => t.id === draft.data?.templateId);
 	const achievements = () =>
 		(experience.data ?? []).flatMap((p) =>
@@ -97,6 +108,19 @@ export function Drafter(props: {
 			<Show when={draft.data}>
 				{(d) => (
 					<>
+						<div class="flex flex-wrap gap-1.5">
+							<For each={outreachKinds}>
+								{(k) => (
+									<Button
+										size="sm"
+										variant={k.key === d().kind ? "default" : "outline"}
+										onClick={() => pickKind(k.key)}
+									>
+										{k.label}
+									</Button>
+								)}
+							</For>
+						</div>
 						<div class="flex flex-wrap gap-1.5">
 							<For each={sameKind()}>
 								{(t) => (

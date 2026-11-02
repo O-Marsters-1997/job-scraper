@@ -30,7 +30,14 @@ let templates: OutreachTemplate[] = [
 		isDefault: true,
 	},
 ];
-let nextId = 5;
+templates.unshift({
+	id: "template-5",
+	kind: "just_applied",
+	name: "Applied, CV attached",
+	body: "Hi {first_name}, I've just applied for the {role} role at {company} and attached my CV. [hook] Happy to chat whenever suits.",
+	isDefault: true,
+});
+let nextId = 6;
 
 function find(id: string): OutreachTemplate {
 	const found = templates.find((t) => t.id === id);
