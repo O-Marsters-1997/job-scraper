@@ -74,12 +74,13 @@ func (s *Store) ReachOut(ctx context.Context, userID string, in dto.ReachOutInpu
 		case in.Contact != nil:
 			contact := *in.Contact
 			contact.JobID = &in.JobID
+			contact.CompanyID = nil
 			if id, err = insertContact(ctx, q, uid, contact, today); err != nil {
 				return err
 			}
 		default:
-			cid, err := optUUID(in.ContactID)
-			if err != nil {
+			var cid pgtype.UUID
+			if cid, err = optUUID(in.ContactID); err != nil {
 				return ErrReachOutContact
 			}
 			id, err = q.LockContactAtJobCompany(ctx, sqlc.LockContactAtJobCompanyParams{ID: cid, UserID: uid, JobID: jid})
