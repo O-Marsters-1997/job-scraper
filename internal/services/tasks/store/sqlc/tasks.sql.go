@@ -31,6 +31,26 @@ func (q *Queries) CompleteApplyTasks(ctx context.Context, arg CompleteApplyTasks
 	return err
 }
 
+const completeReachOutTasksForContact = `-- name: CompleteReachOutTasksForContact :exec
+UPDATE tasks t
+SET completed_at = $1::timestamptz, updated_at = $1::timestamptz
+FROM task_types tt
+WHERE tt.id = t.type_id AND tt.system_key = 'reach_out'
+  AND t.user_id = $2::uuid AND t.contact_id = $3::uuid
+  AND t.completed_at IS NULL
+`
+
+type CompleteReachOutTasksForContactParams struct {
+	Now       pgtype.Timestamptz
+	UserID    pgtype.UUID
+	ContactID pgtype.UUID
+}
+
+func (q *Queries) CompleteReachOutTasksForContact(ctx context.Context, arg CompleteReachOutTasksForContactParams) error {
+	_, err := q.db.Exec(ctx, completeReachOutTasksForContact, arg.Now, arg.UserID, arg.ContactID)
+	return err
+}
+
 const countTasks = `-- name: CountTasks :one
 SELECT count(*)
 FROM tasks t
@@ -86,10 +106,10 @@ WITH created AS (
     SELECT $1::uuid, tt.id, $2::uuid, $3::text, $4::text
     FROM task_types tt
     WHERE tt.id = $5::uuid AND tt.user_id = $1::uuid
-    RETURNING id, user_id, type_id, job_id, link, notes, completed_at, created_at, updated_at
+    RETURNING id, user_id, type_id, job_id, contact_id, link, notes, completed_at, created_at, updated_at
 )
 SELECT
-    t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
+    t.id, t.type_id, t.job_id, t.contact_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
     tt.system_key AS type_system_key,
@@ -116,6 +136,7 @@ type CreateTaskRow struct {
 	ID             pgtype.UUID
 	TypeID         pgtype.UUID
 	JobID          pgtype.UUID
+	ContactID      pgtype.UUID
 	Link           pgtype.Text
 	Notes          pgtype.Text
 	CompletedAt    pgtype.Timestamptz
@@ -144,6 +165,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 		&i.ID,
 		&i.TypeID,
 		&i.JobID,
+		&i.ContactID,
 		&i.Link,
 		&i.Notes,
 		&i.CompletedAt,
@@ -335,9 +357,44 @@ func (q *Queries) LockTask(ctx context.Context, arg LockTaskParams) (LockTaskRow
 	return i, err
 }
 
+const openReachOutTask = `-- name: OpenReachOutTask :one
+WITH existing AS (
+    SELECT t.id
+    FROM tasks t
+    JOIN task_types tt ON tt.id = t.type_id
+    WHERE tt.system_key = 'reach_out' AND t.user_id = $1::uuid
+      AND t.job_id = $2::uuid AND t.contact_id = $3::uuid
+      AND t.completed_at IS NULL
+    LIMIT 1
+), inserted AS (
+    INSERT INTO tasks (user_id, type_id, job_id, contact_id)
+    SELECT $1::uuid, tt.id, $2::uuid, $3::uuid
+    FROM task_types tt
+    WHERE tt.user_id = $1::uuid AND tt.system_key = 'reach_out'
+      AND NOT EXISTS (SELECT 1 FROM existing)
+    RETURNING id
+)
+SELECT id FROM existing
+UNION ALL
+SELECT id FROM inserted
+`
+
+type OpenReachOutTaskParams struct {
+	UserID    pgtype.UUID
+	JobID     pgtype.UUID
+	ContactID pgtype.UUID
+}
+
+func (q *Queries) OpenReachOutTask(ctx context.Context, arg OpenReachOutTaskParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, openReachOutTask, arg.UserID, arg.JobID, arg.ContactID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const pageTasks = `-- name: PageTasks :many
 SELECT
-    t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
+    t.id, t.type_id, t.job_id, t.contact_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
     tt.system_key AS type_system_key,
@@ -375,6 +432,7 @@ type PageTasksRow struct {
 	ID             pgtype.UUID
 	TypeID         pgtype.UUID
 	JobID          pgtype.UUID
+	ContactID      pgtype.UUID
 	Link           pgtype.Text
 	Notes          pgtype.Text
 	CompletedAt    pgtype.Timestamptz
@@ -411,6 +469,7 @@ func (q *Queries) PageTasks(ctx context.Context, arg PageTasksParams) ([]PageTas
 			&i.ID,
 			&i.TypeID,
 			&i.JobID,
+			&i.ContactID,
 			&i.Link,
 			&i.Notes,
 			&i.CompletedAt,
@@ -441,7 +500,7 @@ VALUES
     ($1, 'Apply',     '#6366f1', 'apply'),
     ($1, 'Finish application', '#0f766e', 'finish'),
     ($1, 'Follow up', '#c2410c', NULL),
-    ($1, 'Reach out', '#15803d', NULL),
+    ($1, 'Reach out', '#15803d', 'reach_out'),
     ($1, 'Prep',      '#64748b', NULL)
 `
 
@@ -456,10 +515,10 @@ WITH updated AS (
     SET completed_at = CASE WHEN $1::bool THEN COALESCE(completed_at, $2::timestamptz) END,
         updated_at = $2::timestamptz
     WHERE id = $3::uuid AND user_id = $4::uuid
-    RETURNING id, user_id, type_id, job_id, link, notes, completed_at, created_at, updated_at
+    RETURNING id, user_id, type_id, job_id, contact_id, link, notes, completed_at, created_at, updated_at
 )
 SELECT
-    t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
+    t.id, t.type_id, t.job_id, t.contact_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
     tt.system_key AS type_system_key,
@@ -485,6 +544,7 @@ type SetTaskDoneRow struct {
 	ID             pgtype.UUID
 	TypeID         pgtype.UUID
 	JobID          pgtype.UUID
+	ContactID      pgtype.UUID
 	Link           pgtype.Text
 	Notes          pgtype.Text
 	CompletedAt    pgtype.Timestamptz
@@ -512,6 +572,7 @@ func (q *Queries) SetTaskDone(ctx context.Context, arg SetTaskDoneParams) (SetTa
 		&i.ID,
 		&i.TypeID,
 		&i.JobID,
+		&i.ContactID,
 		&i.Link,
 		&i.Notes,
 		&i.CompletedAt,
@@ -539,10 +600,10 @@ WITH updated AS (
     FROM task_types tt
     WHERE tasks.id = $4::uuid AND tasks.user_id = $5::uuid
       AND tt.id = $6::uuid AND tt.user_id = $5::uuid
-    RETURNING tasks.id, tasks.user_id, tasks.type_id, tasks.job_id, tasks.link, tasks.notes, tasks.completed_at, tasks.created_at, tasks.updated_at
+    RETURNING tasks.id, tasks.user_id, tasks.type_id, tasks.job_id, tasks.contact_id, tasks.link, tasks.notes, tasks.completed_at, tasks.created_at, tasks.updated_at
 )
 SELECT
-    t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
+    t.id, t.type_id, t.job_id, t.contact_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
     tt.system_key AS type_system_key,
@@ -570,6 +631,7 @@ type UpdateTaskRow struct {
 	ID             pgtype.UUID
 	TypeID         pgtype.UUID
 	JobID          pgtype.UUID
+	ContactID      pgtype.UUID
 	Link           pgtype.Text
 	Notes          pgtype.Text
 	CompletedAt    pgtype.Timestamptz
@@ -599,6 +661,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateT
 		&i.ID,
 		&i.TypeID,
 		&i.JobID,
+		&i.ContactID,
 		&i.Link,
 		&i.Notes,
 		&i.CompletedAt,

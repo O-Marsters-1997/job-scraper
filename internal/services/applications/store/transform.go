@@ -140,7 +140,13 @@ func optIDString(id pgtype.UUID) *string {
 	return &s
 }
 
-func toContactDTOs(rows []sqlc.ListContactsRow, events []sqlc.ListContactEventsRow) []dto.Contact {
+func toContactDTOs(rows []sqlc.ListContactsRow, events []sqlc.ListContactEventsRow, reachOuts []sqlc.ListContactReachOutsRow) []dto.Contact {
+	reachOutsBy := make(map[pgtype.UUID][]dto.ReachOut, len(rows))
+	for _, r := range reachOuts {
+		reachOutsBy[r.ContactID] = append(reachOutsBy[r.ContactID], dto.ReachOut{
+			TaskID: r.TaskID.String(), JobID: r.JobID.String(), JobTitle: r.JobTitle, DoneAt: fromOptionalTimestamp(r.CompletedAt),
+		})
+	}
 	history := make(map[pgtype.UUID][]dto.ContactEvent, len(rows))
 	for _, e := range events {
 		history[e.ContactID] = append(history[e.ContactID], dto.ContactEvent{
@@ -165,10 +171,13 @@ func toContactDTOs(rows []sqlc.ListContactsRow, events []sqlc.ListContactEventsR
 			LinkedInURL: r.LinkedinUrl, Email: r.Email,
 			Stage: dto.ContactStage(r.Stage), Outcome: dto.ContactOutcome(r.Outcome.String),
 			Reply: r.Reply, SentSinceReply: int(r.SentSinceReply),
-			History: history[r.ID], CreatedAt: r.CreatedAt.Time,
+			History: history[r.ID], ReachOuts: reachOutsBy[r.ID], CreatedAt: r.CreatedAt.Time,
 		}
 		if c.History == nil {
 			c.History = []dto.ContactEvent{}
+		}
+		if c.ReachOuts == nil {
+			c.ReachOuts = []dto.ReachOut{}
 		}
 		if t := fromOptionalDate(r.FollowUpBy); t != nil {
 			day := t.Format(time.DateOnly)

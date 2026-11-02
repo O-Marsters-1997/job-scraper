@@ -5,8 +5,10 @@ import type {
 	ContactInput,
 	ContactSent,
 	MarkSentInput,
+	ReachOutInput,
 	RecordReplyInput,
 } from "@/types/contact";
+import { getJobs } from "./jobs";
 
 let contacts: Contact[] = [];
 let nextId = 1;
@@ -83,10 +85,31 @@ export function createContact(input: ContactInput): Contact {
 		reply: "",
 		sent_since_reply: 0,
 		history: [event("added", { job_id: input.job_id })],
+		reach_outs: [],
 		created_at: new Date().toISOString(),
 	};
 	contacts = [...contacts, contact];
 	return contact;
+}
+
+export function reachOut(input: ReachOutInput): Contact {
+	const contact =
+		input.contact === null
+			? replace(input.contact_id, (c) => c)
+			: createContact({ ...input.contact, job_id: input.job_id });
+	const job = getJobs().find((j) => j.ID === input.job_id);
+	return replace(contact.id, (c) => ({
+		...c,
+		reach_outs: [
+			{
+				task_id: `task-${nextId++}`,
+				job_id: input.job_id,
+				job_title: job?.Title ?? "",
+				done_at: null,
+			},
+			...c.reach_outs,
+		],
+	}));
 }
 
 export function markContactSent(id: string, input: MarkSentInput): ContactSent {

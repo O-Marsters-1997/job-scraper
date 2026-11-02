@@ -303,6 +303,40 @@ func (s *Store) DeleteOpenApplyTasks(ctx context.Context, tx pgx.Tx, userID stri
 	return nil
 }
 
+func (s *Store) OpenReachOutTask(ctx context.Context, tx pgx.Tx, userID, jobID, contactID string) (string, error) {
+	uid, jid, err := userAndJob(userID, jobID)
+	if err != nil {
+		return "", err
+	}
+	cid, err := data.UUID(contactID)
+	if err != nil {
+		return "", err
+	}
+	id, err := s.queries.WithTx(tx).OpenReachOutTask(ctx, sqlc.OpenReachOutTaskParams{UserID: uid, JobID: jid, ContactID: cid})
+	if err != nil {
+		return "", fmt.Errorf("store.OpenReachOutTask: %w", err)
+	}
+	return id.String(), nil
+}
+
+func (s *Store) CompleteReachOutTasksForContact(ctx context.Context, tx pgx.Tx, userID, contactID string, now time.Time) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	cid, err := data.UUID(contactID)
+	if err != nil {
+		return err
+	}
+	err = s.queries.WithTx(tx).CompleteReachOutTasksForContact(ctx, sqlc.CompleteReachOutTasksForContactParams{
+		UserID: uid, ContactID: cid, Now: pgtype.Timestamptz{Time: now, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("store.CompleteReachOutTasksForContact: %w", err)
+	}
+	return nil
+}
+
 func userAndJob(userID, jobID string) (uid, jid pgtype.UUID, err error) {
 	if uid, err = data.UUID(userID); err != nil {
 		return uid, jid, err

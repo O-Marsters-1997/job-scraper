@@ -77,7 +77,21 @@ type Contact struct {
 	Reply          string         `json:"reply"`
 	SentSinceReply int            `json:"sent_since_reply"`
 	History        []ContactEvent `json:"history"`
+	ReachOuts      []ReachOut     `json:"reach_outs"`
 	CreatedAt      time.Time      `json:"created_at"`
+}
+
+type ReachOut struct {
+	TaskID   string     `json:"task_id"`
+	JobID    string     `json:"job_id"`
+	JobTitle string     `json:"job_title"`
+	DoneAt   *time.Time `json:"done_at"`
+}
+
+type ReachOutInput struct {
+	JobID     string        `json:"job_id"`
+	ContactID *string       `json:"contact_id"` // an existing Contact at the Job's company
+	Contact   *ContactInput `json:"contact"`    // a new Contact; exactly one of ContactID or Contact is set
 }
 
 type ContactInput struct {
