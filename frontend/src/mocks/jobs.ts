@@ -6,6 +6,7 @@ import type {
 	JobScore,
 	RecomputeResult,
 } from "../types/scores";
+import type { SubmitJobUrlResult } from "../types/submitJobUrl";
 import { slugify } from "./helpers";
 import { seed } from "./seed";
 
@@ -55,6 +56,11 @@ export function correctAnswer(
 	});
 	jobs = jobs.map((j) => (j.ID === jobId ? { ...j, Breakdown: rows } : j));
 	return { jobId, score: job.SuitabilityScore, band: job.Band, rows };
+}
+
+export function submitJobUrl(url: string): SubmitJobUrlResult {
+	const held = jobs.find((j) => j.URL === url);
+	return held ? { status: "held", jobId: held.ID } : { status: "queued" };
 }
 
 export function addManualJob(input: AddManualJobInput): ManualJobResult {

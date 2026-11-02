@@ -21,7 +21,13 @@ import (
 type recordingQueue struct {
 	jobsearchtest.NoopQueue
 	tasks   []queue.Task
+	jobs    []dto.QueuedJob
 	failFor string
+}
+
+func (q *recordingQueue) EnqueueJobs(_ context.Context, jobs []dto.QueuedJob) error {
+	q.jobs = append(q.jobs, jobs...)
+	return nil
 }
 
 func (q *recordingQueue) Publish(_ context.Context, task queue.Task) error {
