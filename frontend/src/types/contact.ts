@@ -35,7 +35,7 @@ const contactEventSchema = z.object({
 	job_title: z.string().optional(),
 });
 
-export const reachOutSchema = z.object({
+const reachOutSchema = z.object({
 	task_id: z.string(),
 	job_id: z.string(),
 	job_title: z.string(),
