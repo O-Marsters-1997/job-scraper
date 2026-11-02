@@ -773,3 +773,9 @@ html[data-size="lg"] {
 		@apply pt-0 pb-4;
 	}
 }
+
+@media (prefers-reduced-motion: reduce) {
+	.z-accordion-content {
+		animation: none;
+	}
+}
