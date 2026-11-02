@@ -20,16 +20,34 @@ func (s *Service) SubmitJobURL(ctx context.Context, userID string, in dto.Submit
 		return dto.SubmitJobURLResult{}, apperr.Invalid("enter a valid job URL")
 	}
 
-	postSource, postToken, postingID, _ := detect.ResolvePosting(raw)
-	held, err := s.store.FindJobByPosting(ctx, raw, postSource, postToken, postingID)
-	switch {
-	case err == nil:
-		return dto.SubmitJobURLResult{Status: dto.SubmissionHeld, JobID: held.ID}, nil
-	case !errors.Is(err, data.ErrNotFound):
-		return dto.SubmitJobURLResult{}, err
+	listingSource, canonical, isListing := detect.ResolveListing(raw)
+	candidates := []string{raw}
+	if isListing && canonical != raw {
+		candidates = append(candidates, canonical)
+	}
+	var postingID string
+	for _, candidate := range candidates {
+		postSource, postToken, id, _ := detect.ResolvePosting(candidate)
+		if candidate == raw {
+			postingID = id
+		}
+		held, err := s.store.FindJobByPosting(ctx, candidate, postSource, postToken, id)
+		switch {
+		case err == nil:
+			return dto.SubmitJobURLResult{Status: dto.SubmissionHeld, JobID: held.ID}, nil
+		case !errors.Is(err, data.ErrNotFound):
+			return dto.SubmitJobURLResult{}, err
+		}
 	}
 
 	source, token, isATS := detect.ResolveBoard(raw)
+	if !isATS && isListing {
+		queued := dto.QueuedJob{URL: canonical, Card: dto.Job{URL: canonical, Source: listingSource}}
+		if err := s.queue.EnqueueJobs(ctx, []dto.QueuedJob{queued}); err != nil {
+			return dto.SubmitJobURLResult{}, err
+		}
+		return dto.SubmitJobURLResult{Status: dto.SubmissionQueued}, nil
+	}
 	if !isATS {
 		return dto.SubmitJobURLResult{}, apperr.Unprocessable(fmt.Sprintf("%s isn't a supported job board. Use Add application instead", parsed.Hostname()))
 	}
