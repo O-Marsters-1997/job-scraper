@@ -44,6 +44,8 @@ type Store interface {
 	CreateApplyTask(ctx context.Context, tx pgx.Tx, userID, jobID string) error
 	CompleteApplyTasks(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error
 	DeleteOpenApplyTasks(ctx context.Context, tx pgx.Tx, userID string, jobIDs []string) error
+	OpenReachOutTask(ctx context.Context, tx pgx.Tx, userID, jobID, contactID string) (string, error)
+	CompleteReachOutTasksForContact(ctx context.Context, tx pgx.Tx, userID, contactID string, now time.Time) error
 }
 
 type Service struct {

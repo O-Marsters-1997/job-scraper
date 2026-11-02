@@ -760,7 +760,7 @@ CREATE TABLE IF NOT EXISTS task_types (
     name       TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 50),
     colour     TEXT        NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    system_key TEXT        CHECK (system_key IN ('apply', 'finish')),
+    system_key TEXT        CHECK (system_key IN ('apply', 'finish', 'reach_out')),
     UNIQUE (user_id, name)
 );
 
@@ -776,12 +776,14 @@ CREATE TABLE IF NOT EXISTS tasks (
     notes        TEXT        CHECK (length(notes) <= 10000),
     completed_at TIMESTAMPTZ,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    contact_id   UUID        REFERENCES contacts(id) ON DELETE SET NULL
 );
 
 CREATE INDEX tasks_user_open_idx ON tasks (user_id, created_at DESC) WHERE completed_at IS NULL;
 CREATE INDEX tasks_job_idx ON tasks (job_id) WHERE job_id IS NOT NULL;
 CREATE INDEX tasks_type_idx ON tasks (type_id);
+CREATE INDEX tasks_contact_open_idx ON tasks (contact_id) WHERE contact_id IS NOT NULL AND completed_at IS NULL;
 
 CREATE TABLE notifications (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

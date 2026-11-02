@@ -10,6 +10,21 @@ RETURNING id;
 -- name: LockContact :one
 SELECT stage FROM contacts WHERE id = $1 AND user_id = $2 FOR UPDATE;
 
+-- name: LockContactAtJobCompany :one
+SELECT c.id
+FROM contacts c
+JOIN jobs j ON j.company_id = c.company_id
+WHERE c.id = sqlc.arg('id') AND c.user_id = sqlc.arg('user_id') AND j.id = sqlc.arg('job_id')
+FOR UPDATE OF c;
+
+-- name: ListContactReachOuts :many
+SELECT t.contact_id, t.id AS task_id, t.job_id, COALESCE(j.title, '')::text AS job_title, t.completed_at
+FROM tasks t
+JOIN task_types tt ON tt.id = t.type_id AND tt.system_key = 'reach_out'
+LEFT JOIN jobs j ON j.id = t.job_id
+WHERE t.contact_id = ANY(sqlc.arg('contact_ids')::uuid[]) AND t.job_id IS NOT NULL
+ORDER BY t.created_at DESC, t.id;
+
 -- name: CountSentSinceReply :one
 SELECT COUNT(*)::int FROM contact_events s
 WHERE s.contact_id = $1 AND s.kind = 'sent'

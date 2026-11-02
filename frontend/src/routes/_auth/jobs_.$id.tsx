@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { recordEvent } from "@/api/events";
-import { AddContactDialog } from "@/components/contacts/AddContactDialog";
+import { ReachOutDialog } from "@/components/contacts/ReachOutDialog";
 import { Icon } from "@/components/Icon";
 import { CvSheet } from "@/components/jobs/CvSheet";
 import { JobActionBar } from "@/components/jobs/JobActionBar";
@@ -12,6 +12,7 @@ import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { titleCase } from "@/lib/utils";
 import type { Job } from "@/types/job";
 import { applicationStatusesQueryOptions } from "../../hooks/useApplicationStatuses";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
@@ -200,7 +201,7 @@ function JobDetailPage() {
 											class="w-full"
 											onClick={() => setContactOpen(true)}
 										>
-											Add contact
+											Reach out
 										</Button>
 									</div>
 								</div>
@@ -225,10 +226,12 @@ function JobDetailPage() {
 						onOpenChange={setTaskOpen}
 						job={j()}
 					/>
-					<AddContactDialog
+					<ReachOutDialog
 						open={contactOpen()}
 						onOpenChange={setContactOpen}
-						job={j()}
+						jobId={j().ID}
+						companyId={j().CompanyID}
+						company={titleCase(j().CompanySlug)}
 					/>
 					<TrackApplicationDialog
 						open={track.modalOpen()}

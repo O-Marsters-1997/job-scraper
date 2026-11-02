@@ -21,7 +21,7 @@ var defaultTypes = []struct {
 	{"Apply", dto.TaskTypeApply},
 	{"Finish application", dto.TaskTypeFinish},
 	{"Follow up", ""},
-	{"Reach out", ""},
+	{"Reach out", dto.TaskTypeReachOut},
 	{"Prep", ""},
 }
 
@@ -285,6 +285,49 @@ func (f *FakeStore) DeleteOpenApplyTasks(_ context.Context, _ pgx.Tx, userID str
 	for id, t := range f.tasks {
 		if t.userID == userID && t.TypeSystemKey == dto.TaskTypeApply && t.JobID != nil && slices.Contains(jobIDs, *t.JobID) && t.CompletedAt == nil {
 			delete(f.tasks, id)
+		}
+	}
+	return nil
+}
+
+func (f *FakeStore) OpenReachOutTask(ctx context.Context, _ pgx.Tx, userID, jobID, contactID string) (string, error) {
+	f.mu.Lock()
+	var typeID string
+	for _, t := range f.types {
+		if t.userID == userID && t.SystemKey == dto.TaskTypeReachOut {
+			typeID = t.ID
+		}
+	}
+	for _, t := range f.tasks {
+		if t.userID == userID && t.TypeID == typeID && t.CompletedAt == nil &&
+			t.JobID != nil && *t.JobID == jobID && t.ContactID != nil && *t.ContactID == contactID {
+			f.mu.Unlock()
+			return t.ID, nil
+		}
+	}
+	f.mu.Unlock()
+	if typeID == "" {
+		return "", data.ErrNotFound
+	}
+	task, err := f.CreateTask(ctx, userID, dto.CreateTaskInput{TypeID: typeID, JobID: &jobID})
+	if err != nil {
+		return "", err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.tasks[task.ID]
+	t.ContactID = &contactID
+	f.tasks[task.ID] = t
+	return task.ID, nil
+}
+
+func (f *FakeStore) CompleteReachOutTasksForContact(_ context.Context, _ pgx.Tx, userID, contactID string, now time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, t := range f.tasks {
+		if t.userID == userID && t.TypeSystemKey == dto.TaskTypeReachOut && t.ContactID != nil && *t.ContactID == contactID && t.CompletedAt == nil {
+			t.CompletedAt = &now
+			f.tasks[id] = t
 		}
 	}
 	return nil

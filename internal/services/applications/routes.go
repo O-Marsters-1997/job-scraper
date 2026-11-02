@@ -20,6 +20,7 @@ func (m *Module) Routes(r chi.Router) {
 		r.Get("/", handlers.GetAll(m.store.ListContacts))
 		r.Get("/companies", handlers.GetAll(m.store.ListContactCompanies))
 		r.Post("/", handlers.Create(m.service.CreateContact))
+		r.Post("/reach-out", handlers.Create(m.service.ReachOut))
 		r.Delete("/{id}", handlers.Delete(m.store.DeleteContact))
 		r.Post("/{id}/sent", handlers.Update(m.service.MarkContactSent))
 		r.Post("/{id}/reply", handlers.Update(m.service.RecordContactReply))

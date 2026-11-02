@@ -452,6 +452,40 @@ func TestUpdateJobComment(t *testing.T) {
 	}
 }
 
+func TestReachOut(t *testing.T) {
+	t.Parallel()
+	svc, _ := newService(t)
+	existing := "c"
+
+	for _, tt := range []struct {
+		name string
+		in   dto.ReachOutInput
+	}{
+		{"no job", dto.ReachOutInput{Contact: &dto.ContactInput{Name: "Sam"}}},
+		{"neither contact nor contact_id", dto.ReachOutInput{JobID: "j"}},
+		{"both contact and contact_id", dto.ReachOutInput{JobID: "j", ContactID: &existing, Contact: &dto.ContactInput{Name: "Sam"}}},
+		{"blank new contact name", dto.ReachOutInput{JobID: "j", Contact: &dto.ContactInput{Name: " "}}},
+	} {
+		t.Run("rejects "+tt.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := svc.ReachOut(t.Context(), userID, tt.in); !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("ReachOut(%+v) err = %v, want invalid", tt.in, err)
+			}
+		})
+	}
+
+	t.Run("a new contact is listed with its reach out", func(t *testing.T) {
+		t.Parallel()
+		got, err := svc.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: "j", Contact: &dto.ContactInput{Name: " Sam "}})
+		if err != nil {
+			t.Fatalf("ReachOut err = %v", err)
+		}
+		if got.Name != "Sam" || len(got.ReachOuts) != 1 || got.ReachOuts[0].JobID != "j" {
+			t.Errorf("ReachOut = %q %+v, want Sam with one reach out for j", got.Name, got.ReachOuts)
+		}
+	})
+}
+
 func TestContactValidation(t *testing.T) {
 	t.Parallel()
 	svc, _ := newService(t)

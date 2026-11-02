@@ -769,6 +769,7 @@ type Task struct {
 	CompletedAt pgtype.Timestamptz
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
+	ContactID   pgtype.UUID
 }
 
 type TaskType struct {

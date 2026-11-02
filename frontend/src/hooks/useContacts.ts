@@ -5,6 +5,7 @@ import {
 	fetchContactCompanies,
 	fetchContacts,
 	markContactSent,
+	reachOut,
 	recordContactReply,
 } from "../api/contacts";
 import { keys } from "../api/keys";
@@ -31,6 +32,10 @@ export function useContactCompanies() {
 
 export function useCreateContact() {
 	return useInvalidatingMutation(createContact, [keys.contacts]);
+}
+
+export function useReachOut() {
+	return useInvalidatingMutation(reachOut, [keys.contacts, keys.tasks.all]);
 }
 
 export function useMarkContactSent() {

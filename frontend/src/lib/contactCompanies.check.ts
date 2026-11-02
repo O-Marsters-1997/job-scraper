@@ -20,6 +20,7 @@ const person = (id: string, change: Partial<Contact>): Contact => ({
 	reply: "",
 	sent_since_reply: 0,
 	history: [],
+	reach_outs: [],
 	created_at: "2026-10-01T00:00:00Z",
 	...change,
 });

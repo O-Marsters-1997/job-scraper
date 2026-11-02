@@ -34,6 +34,7 @@ func toTaskDTO(r sqlc.PageTasksRow) dto.Task {
 		TypeColour:     r.TypeColour,
 		TypeSystemKey:  dto.TaskTypeSystemKey(r.TypeSystemKey.String),
 		JobID:          uuidPtr(r.JobID),
+		ContactID:      uuidPtr(r.ContactID),
 		JobTitle:       r.JobTitle.String,
 		JobCompanySlug: r.JobCompanySlug.String,
 		JobCompanyID:   uuidPtr(r.JobCompanyID),

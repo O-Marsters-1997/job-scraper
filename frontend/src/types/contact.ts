@@ -36,6 +36,13 @@ const contactEventSchema = z.object({
 	job_title: z.string().optional(),
 });
 
+const reachOutSchema = z.object({
+	task_id: z.string(),
+	job_id: z.string(),
+	job_title: z.string(),
+	done_at: z.string().nullable(),
+});
+
 export const contactSchema = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -54,6 +61,7 @@ export const contactSchema = z.object({
 	reply: z.string(),
 	sent_since_reply: z.number().int(),
 	history: z.array(contactEventSchema),
+	reach_outs: z.array(reachOutSchema),
 	created_at: z.string(),
 });
 
@@ -78,6 +86,13 @@ export interface ContactInput {
 	linkedin_url: string;
 	email: string;
 }
+
+export type ReachOutInput = {
+	job_id: string;
+} & (
+	| { contact_id: string; contact: null }
+	| { contact_id: null; contact: ContactInput }
+);
 
 export interface MarkSentInput {
 	channel: ContactChannel;

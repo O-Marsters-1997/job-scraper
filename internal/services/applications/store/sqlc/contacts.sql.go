@@ -269,6 +269,49 @@ func (q *Queries) ListContactEvents(ctx context.Context, contactIds []pgtype.UUI
 	return items, nil
 }
 
+const listContactReachOuts = `-- name: ListContactReachOuts :many
+SELECT t.contact_id, t.id AS task_id, t.job_id, COALESCE(j.title, '')::text AS job_title, t.completed_at
+FROM tasks t
+JOIN task_types tt ON tt.id = t.type_id AND tt.system_key = 'reach_out'
+LEFT JOIN jobs j ON j.id = t.job_id
+WHERE t.contact_id = ANY($1::uuid[]) AND t.job_id IS NOT NULL
+ORDER BY t.created_at DESC, t.id
+`
+
+type ListContactReachOutsRow struct {
+	ContactID   pgtype.UUID
+	TaskID      pgtype.UUID
+	JobID       pgtype.UUID
+	JobTitle    string
+	CompletedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListContactReachOuts(ctx context.Context, contactIds []pgtype.UUID) ([]ListContactReachOutsRow, error) {
+	rows, err := q.db.Query(ctx, listContactReachOuts, contactIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListContactReachOutsRow
+	for rows.Next() {
+		var i ListContactReachOutsRow
+		if err := rows.Scan(
+			&i.ContactID,
+			&i.TaskID,
+			&i.JobID,
+			&i.JobTitle,
+			&i.CompletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listContacts = `-- name: ListContacts :many
 SELECT
     c.id, c.name, c.role, c.company_id,
@@ -375,6 +418,27 @@ func (q *Queries) LockContact(ctx context.Context, arg LockContactParams) (strin
 	var stage string
 	err := row.Scan(&stage)
 	return stage, err
+}
+
+const lockContactAtJobCompany = `-- name: LockContactAtJobCompany :one
+SELECT c.id
+FROM contacts c
+JOIN jobs j ON j.company_id = c.company_id
+WHERE c.id = $1 AND c.user_id = $2 AND j.id = $3
+FOR UPDATE OF c
+`
+
+type LockContactAtJobCompanyParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+}
+
+func (q *Queries) LockContactAtJobCompany(ctx context.Context, arg LockContactAtJobCompanyParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, lockContactAtJobCompany, arg.ID, arg.UserID, arg.JobID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const setContactState = `-- name: SetContactState :exec
