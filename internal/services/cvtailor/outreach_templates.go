@@ -25,7 +25,7 @@ func (m *Module) SeedDefaults(ctx context.Context, tx pgx.Tx, userID string) err
 
 func (s *Service) CreateOutreachTemplate(ctx context.Context, userID string, in dto.OutreachTemplateInput) (dto.OutreachTemplate, error) {
 	switch in.Kind {
-	case dto.OutreachRecruiter, dto.OutreachHiringManager, dto.OutreachReferral, dto.OutreachFollowUp:
+	case dto.OutreachJustApplied, dto.OutreachRecruiter, dto.OutreachHiringManager, dto.OutreachReferral, dto.OutreachFollowUp:
 	default:
 		return dto.OutreachTemplate{}, apperr.Invalid("unknown template kind")
 	}

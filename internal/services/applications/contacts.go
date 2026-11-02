@@ -48,7 +48,7 @@ func (s *Service) MarkContactSent(ctx context.Context, userID string, in dto.Mar
 		return dto.ContactSent{}, apperr.Invalid("invalid channel")
 	}
 	switch in.TemplateKind {
-	case "", dto.OutreachRecruiter, dto.OutreachHiringManager, dto.OutreachReferral, dto.OutreachFollowUp:
+	case "", dto.OutreachJustApplied, dto.OutreachRecruiter, dto.OutreachHiringManager, dto.OutreachReferral, dto.OutreachFollowUp:
 	default:
 		return dto.ContactSent{}, apperr.Invalid("invalid template_kind")
 	}

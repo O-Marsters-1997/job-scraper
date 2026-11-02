@@ -87,7 +87,7 @@ func TestModule_SeedDefaults(t *testing.T) {
 			kinds[tpl.Kind]++
 		}
 	}
-	if len(got) != 4 || len(kinds) != 4 {
-		t.Errorf("seeded %d templates with defaults per kind %v, want 4 and one default each", len(got), kinds)
+	if len(got) != 5 || len(kinds) != 5 || kinds[dto.OutreachJustApplied] != 1 {
+		t.Errorf("seeded %d templates with defaults per kind %v, want 5 and one default each", len(got), kinds)
 	}
 }

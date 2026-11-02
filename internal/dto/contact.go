@@ -40,6 +40,7 @@ const (
 )
 
 const (
+	OutreachJustApplied   OutreachKind = "just_applied"
 	OutreachRecruiter     OutreachKind = "recruiter"
 	OutreachHiringManager OutreachKind = "hiring_manager"
 	OutreachReferral      OutreachKind = "referral"

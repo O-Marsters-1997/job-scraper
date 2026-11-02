@@ -712,7 +712,7 @@ CREATE TABLE contact_events (
         CONSTRAINT contact_events_channel_check CHECK (channel IN ('linkedin', 'email', 'call', 'inbound')),
     template_kind TEXT
         CONSTRAINT contact_events_template_kind_check
-        CHECK (template_kind IN ('recruiter', 'hiring_manager', 'referral', 'follow_up')),
+        CHECK (template_kind IN ('just_applied', 'recruiter', 'hiring_manager', 'referral', 'follow_up')),
     template_name TEXT        NOT NULL DEFAULT '' CHECK (length(template_name) <= 100),
     outcome       TEXT
         CONSTRAINT contact_events_outcome_check
@@ -802,7 +802,7 @@ CREATE TABLE outreach_templates (
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     kind       TEXT        NOT NULL
         CONSTRAINT outreach_templates_kind_check
-        CHECK (kind IN ('recruiter', 'hiring_manager', 'referral', 'follow_up')),
+        CHECK (kind IN ('just_applied', 'recruiter', 'hiring_manager', 'referral', 'follow_up')),
     name       TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
     body       TEXT        NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
     is_default BOOLEAN     NOT NULL DEFAULT FALSE,
