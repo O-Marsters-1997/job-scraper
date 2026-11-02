@@ -39,6 +39,7 @@ type TaskSync interface {
 	ApplicationApplied(ctx context.Context, tx pgx.Tx, userID, jobID string) error
 	ApplicationsDeleted(ctx context.Context, tx pgx.Tx, userID string, jobIDs []string) error
 	Open(ctx context.Context, tx pgx.Tx, userID, jobID, contactID string) (taskID string, err error)
+	CompleteForContact(ctx context.Context, tx pgx.Tx, userID, contactID string) error
 }
 
 type Store struct {

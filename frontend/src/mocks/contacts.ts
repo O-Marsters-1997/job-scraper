@@ -124,27 +124,19 @@ export function markContactSent(id: string, input: MarkSentInput): ContactSent {
 				...(input.template_kind ? { template_kind: input.template_kind } : {}),
 			}),
 		];
-		if (sent + 1 >= 3) {
-			history.push(event("closed", { outcome: "no_reply" }));
-			return {
-				...c,
-				history,
-				stage: "closed",
-				outcome: "no_reply",
-				follow_up_by: null,
-				sent_since_reply: sent + 1,
-			};
-		}
 		const { outcome: _outcome, ...rest } = c;
 		return {
 			...rest,
 			history,
 			stage: "messaged",
-			follow_up_by: inDays(sent === 0 ? 5 : 7),
 			sent_since_reply: sent + 1,
+			reach_outs: c.reach_outs.map((r) => ({
+				...r,
+				done_at: r.done_at ?? new Date().toISOString(),
+			})),
 		};
 	});
-	return { contact, moved_application_chase: false };
+	return { contact };
 }
 
 export function recordContactReply(

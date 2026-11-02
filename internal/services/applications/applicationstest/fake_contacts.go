@@ -20,7 +20,9 @@ func dayString(t time.Time) string { return t.UTC().Format(time.DateOnly) }
 
 func (f *FakeStore) addEvent(c *fakeContact, e dto.ContactEvent) {
 	e.ID = fmt.Sprintf("event-%d", len(c.History)+1)
-	e.JobID = c.JobID
+	if e.JobID == nil {
+		e.JobID = c.JobID
+	}
 	c.History = append(c.History, e)
 	c.SentSinceReply = 0
 	for i := len(c.History) - 1; i >= 0 && c.History[i].Kind != dto.ContactEventReply; i-- {
@@ -122,32 +124,24 @@ func (f *FakeStore) MarkContactSent(_ context.Context, userID string, in dto.Mar
 	if !ok || c.userID != userID {
 		return dto.ContactSent{}, data.ErrNotFound
 	}
-	followUpBy, closes := store.NextSend(c.SentSinceReply, today)
-	f.addEvent(&c, dto.ContactEvent{
+	ev := dto.ContactEvent{
 		Kind: dto.ContactEventSent, OccurredOn: dayString(today), Channel: in.Channel,
 		TemplateKind: in.TemplateKind, TemplateName: in.TemplateName,
-	})
-	c.Stage, c.Outcome, c.FollowUpBy = dto.ContactStageMessaged, "", nil
-	if followUpBy != nil {
-		day := dayString(*followUpBy)
-		c.FollowUpBy = &day
 	}
-	if closes {
-		c.Stage, c.Outcome = dto.ContactStageClosed, dto.ContactOutcomeNoReply
-		f.addEvent(&c, dto.ContactEvent{Kind: dto.ContactEventClosed, OccurredOn: dayString(today), Outcome: dto.ContactOutcomeNoReply})
-	}
-	f.outreach[c.ID] = c
-
-	moved := false
-	if c.JobID != nil {
-		for id, a := range f.apps {
-			if a.UserID == userID && a.JobID == *c.JobID {
-				a.ChaseBy, moved = followUpBy, true
-				f.apps[id] = a
-			}
+	c.ReachOuts = slices.Clone(c.ReachOuts)
+	for i, r := range c.ReachOuts {
+		if r.DoneAt != nil {
+			continue
 		}
+		if ev.JobID == nil {
+			ev.JobID = &c.ReachOuts[i].JobID
+		}
+		c.ReachOuts[i].DoneAt = &today
 	}
-	return dto.ContactSent{Contact: f.viewContact(c), MovedApplicationChase: moved}, nil
+	f.addEvent(&c, ev)
+	c.Stage, c.Outcome = dto.ContactStageMessaged, ""
+	f.outreach[c.ID] = c
+	return dto.ContactSent{Contact: f.viewContact(c)}, nil
 }
 
 func (f *FakeStore) RecordContactReply(_ context.Context, userID string, in dto.RecordReplyInput, today time.Time) (dto.Contact, error) {

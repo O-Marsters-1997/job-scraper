@@ -118,8 +118,7 @@ type MarkSentInput struct {
 }
 
 type ContactSent struct {
-	Contact               Contact `json:"contact"`
-	MovedApplicationChase bool    `json:"moved_application_chase"`
+	Contact Contact `json:"contact"`
 }
 
 type RecordReplyInput struct {

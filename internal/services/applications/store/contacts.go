@@ -183,39 +183,23 @@ func (s *Store) MarkContactSent(ctx context.Context, userID string, in dto.MarkS
 		if _, err := q.LockContact(ctx, sqlc.LockContactParams{ID: cid, UserID: uid}); err != nil {
 			return err
 		}
-		sentBefore, err := q.CountSentSinceReply(ctx, cid)
-		if err != nil {
+		reachOutJob, err := q.OpenReachOutJob(ctx, sqlc.OpenReachOutJobParams{ContactID: cid, UserID: uid})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		if err := q.InsertContactEvent(ctx, sqlc.InsertContactEventParams{
 			ContactID: cid, Kind: string(dto.ContactEventSent), OccurredOn: pgDate(today),
 			Channel: data.Text(string(in.Channel)), TemplateKind: data.Text(string(in.TemplateKind)),
-			TemplateName: in.TemplateName,
+			TemplateName: in.TemplateName, JobID: reachOutJob,
 		}); err != nil {
 			return err
 		}
-		followUpBy, closes := NextSend(int(sentBefore), today)
-		state := sqlc.SetContactStateParams{ID: cid, UserID: uid, Stage: string(dto.ContactStageMessaged), FollowUpBy: optDate(followUpBy)}
-		if closes {
-			state.Stage = string(dto.ContactStageClosed)
-			state.Outcome = data.Text(string(dto.ContactOutcomeNoReply))
-			if err := q.InsertContactEvent(ctx, sqlc.InsertContactEventParams{
-				ContactID: cid, Kind: string(dto.ContactEventClosed), OccurredOn: pgDate(today),
-				Outcome: state.Outcome,
-			}); err != nil {
-				return err
-			}
-		}
-		if err := q.SetContactState(ctx, state); err != nil {
+		if err := q.SetContactMessaged(ctx, sqlc.SetContactMessagedParams{ID: cid, UserID: uid}); err != nil {
 			return err
 		}
-		moved, err := q.SetLinkedApplicationChase(ctx, sqlc.SetLinkedApplicationChaseParams{
-			ChaseBy: state.FollowUpBy, ContactID: cid, UserID: uid,
-		})
-		if err != nil {
+		if err := s.tasks.CompleteForContact(ctx, tx, userID, in.ID); err != nil {
 			return err
 		}
-		out.MovedApplicationChase = moved > 0
 		out.Contact, err = readContact(ctx, q, uid, cid)
 		return err
 	})
