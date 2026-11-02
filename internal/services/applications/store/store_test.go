@@ -590,11 +590,11 @@ func TestListContactCompanies(t *testing.T) {
 		}
 		return id
 	}
-	acme, tracked, dismissed, stranger := company("acme", "direct"), company("bolt", "agency"), company("cast", "direct"), company("dune", "direct")
+	acme, tracked, dismissed, stranger, bare := company("acme", "direct"), company("bolt", "agency"), company("cast", "direct"), company("dune", "direct"), company("elm", "direct")
 
-	exec(`INSERT INTO tracked_companies (user_id, company_id) VALUES ($1, $2)`, userID, tracked)
+	exec(`INSERT INTO tracked_companies (user_id, company_id) VALUES ($1, $2), ($1, $3)`, userID, tracked, bare)
 	exec(`INSERT INTO tracked_companies (user_id, company_id, review_state) VALUES ($1, $2, 'dismissed')`, userID, dismissed)
-	exec(`INSERT INTO contacts (user_id, name, company_id) VALUES ($1, 'Sam', $2)`, userID, acme)
+	exec(`INSERT INTO contacts (user_id, name, company_id) VALUES ($1, 'Sam', $2), ($1, 'Bo', $3)`, userID, acme, tracked)
 
 	covered := pgtest.InsertJob(t, pool, "Covered", "covered")
 	uncovered := pgtest.InsertJob(t, pool, "Uncovered", "uncovered")
@@ -612,7 +612,7 @@ func TestListContactCompanies(t *testing.T) {
 		t.Fatalf("ListContactCompanies err = %v", err)
 	}
 	if len(got) != 2 || got[0].ID != acme || got[1].ID != tracked {
-		t.Fatalf("ListContactCompanies = %+v, want acme (contact) then tracked bolt only", got)
+		t.Fatalf("ListContactCompanies = %+v, want acme and bolt only (tracked elm has no contact)", got)
 	}
 	if got[0].Tracked || !got[1].Tracked || got[1].Kind != "agency" {
 		t.Errorf("tracked/kind = %v/%v %q, want false/true agency", got[0].Tracked, got[1].Tracked, got[1].Kind)

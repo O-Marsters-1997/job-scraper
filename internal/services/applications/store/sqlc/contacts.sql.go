@@ -121,8 +121,7 @@ FROM companies co
 LEFT JOIN tracked_companies tc
        ON tc.user_id = $1 AND tc.company_id = co.id
       AND tc.enabled AND tc.review_state <> 'dismissed'
-WHERE tc.company_id IS NOT NULL
-   OR EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = $1 AND c.company_id = co.id)
+WHERE EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = $1 AND c.company_id = co.id)
 ORDER BY co.name, co.id
 LIMIT 500
 `
