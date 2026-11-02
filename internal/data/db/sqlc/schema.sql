@@ -803,7 +803,7 @@ CREATE TABLE outreach_templates (
     kind       TEXT        NOT NULL
         CONSTRAINT outreach_templates_kind_check
         CHECK (kind IN ('just_applied', 'recruiter', 'hiring_manager', 'referral', 'follow_up')),
-    name     TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
+    name       TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
     body       TEXT        NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
     is_default BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

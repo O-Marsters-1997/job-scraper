@@ -13,7 +13,7 @@ SELECT u.id, 'just_applied', 'Applied, CV attached',
 FROM users u;
 
 -- +goose Down
-DELETE FROM contact_events WHERE template_kind = 'just_applied';
+UPDATE contact_events SET template_kind = NULL WHERE template_kind = 'just_applied';
 DELETE FROM outreach_templates WHERE kind = 'just_applied';
 ALTER TABLE contact_events DROP CONSTRAINT contact_events_template_kind_check;
 ALTER TABLE contact_events ADD CONSTRAINT contact_events_template_kind_check

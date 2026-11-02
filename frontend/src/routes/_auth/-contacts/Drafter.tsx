@@ -114,6 +114,7 @@ export function Drafter(props: {
 									<Button
 										size="sm"
 										variant={k.key === d().kind ? "default" : "outline"}
+										aria-pressed={k.key === d().kind}
 										onClick={() => pickKind(k.key)}
 									>
 										{k.label}
