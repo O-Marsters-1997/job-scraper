@@ -20,6 +20,7 @@ export function DownloadPdfButton(props: {
 	jobId: string;
 	flush?: () => Promise<boolean>;
 	variant?: ButtonProps["variant"];
+	label?: string;
 }) {
 	const job = useJob(() => props.jobId);
 	const profile = useProfile();
@@ -47,7 +48,7 @@ export function DownloadPdfButton(props: {
 				loading={download.pending()}
 				onClick={() => void download.submit()}
 			>
-				Download PDF
+				{props.label ?? "Download PDF"}
 			</Button>
 			<Show when={download.error()}>
 				<span role="alert" class="text-xs text-destructive-strong">
