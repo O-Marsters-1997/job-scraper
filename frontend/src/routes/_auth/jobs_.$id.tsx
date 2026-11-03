@@ -111,6 +111,7 @@ function JobDetailPage() {
 						app={app()}
 						appSummary={track.appsForJobs()[params().id]}
 						onTrack={() => track.openTrack(params().id)}
+						onUntrack={() => track.untrack(params().id)}
 						onAddTask={() => setTaskOpen(true)}
 					/>
 

@@ -11,7 +11,7 @@ import type { ApplicationStatus } from "@/types/applicationStatus";
 import { failIfRequested } from "./helpers";
 import { getJobs } from "./jobs";
 import { seed } from "./seed";
-import { completeOpenApplyTasks } from "./tasks";
+import { completeOpenApplyTasks, dropApplyTasks } from "./tasks";
 
 let statuses: ApplicationStatus[] = seed.statuses;
 let applications: Application[] = seed.applications;
@@ -167,6 +167,9 @@ export function clearChase(id: string): void {
 }
 
 export function deleteApplications(ids: string[]): void {
+	dropApplyTasks(
+		applications.filter((a) => ids.includes(a.ID)).map((a) => a.JobID),
+	);
 	applications = applications.filter((a) => !ids.includes(a.ID));
 }
 

@@ -34,12 +34,14 @@ export interface ExistingApp {
 
 export function toApplicationSummary(
 	app: ApplicationWithDetails,
+	isDraft: boolean,
 ): JobApplicationSummary {
 	return {
 		ApplicationID: app.ID,
 		StatusID: app.StatusID,
 		StatusName: app.StatusName,
 		StatusColour: app.StatusColour,
+		IsDraft: isDraft,
 	};
 }
 

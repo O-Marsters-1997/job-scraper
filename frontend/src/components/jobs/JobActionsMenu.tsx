@@ -15,6 +15,7 @@ interface JobActionsMenuProps {
 	job: Job;
 	appSummary: JobApplicationSummary | undefined;
 	onTrack: () => void;
+	onUntrack?: () => void;
 	onAddTask?: () => void;
 	onGrade?: () => void;
 	onDismiss?: () => void;
@@ -66,6 +67,12 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 							{summary().StatusName || "Edit status"}
 						</DropdownMenuItem>
 					)}
+				</Show>
+				<Show when={props.onUntrack && props.appSummary?.IsDraft}>
+					<DropdownMenuItem onSelect={() => props.onUntrack?.()}>
+						<Icon name="x" size={14} />
+						Untrack
+					</DropdownMenuItem>
 				</Show>
 				<Show when={props.onAddTask}>
 					<DropdownMenuItem onSelect={() => props.onAddTask?.()}>
