@@ -12,13 +12,13 @@ import {
 	companyRows,
 	filterRows,
 } from "@/lib/contactCompanies";
+import { eventLabel } from "@/lib/eventLabel";
 import { cn } from "@/lib/utils";
 import {
 	type Contact,
 	type ContactCompany,
 	relationshipLabels,
 } from "@/types/contact";
-import { eventLabel } from "./ContactCard";
 
 const filters: { key: CompanyFilter; label: string }[] = [
 	{ key: "all", label: "All" },
