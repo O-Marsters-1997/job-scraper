@@ -47,6 +47,7 @@ export function ApplicationRow(props: {
 				<Link
 					to="/applications/$id"
 					params={{ id: props.app.ID }}
+					title={props.app.JobTitle}
 					class="block truncate font-medium text-foreground hover:underline"
 				>
 					{props.app.JobTitle}
@@ -54,8 +55,12 @@ export function ApplicationRow(props: {
 				<p class="truncate text-xs text-faint">
 					{props.app.JobCompanySlug}
 					{props.app.JobLocation ? ` · ${props.app.JobLocation}` : ""}
-					{props.app.JobClosedAt ? " · Listing closed" : ""}
 				</p>
+				<Show when={props.app.JobClosedAt}>
+					<span class="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-xs text-muted">
+						Listing closed
+					</span>
+				</Show>
 			</TableCell>
 			<TableCell>
 				<Show when={props.app.StatusName}>
@@ -100,6 +105,7 @@ export function ApplicationRow(props: {
 				</Show>
 				<button
 					type="button"
+					aria-label={`Edit ${props.app.JobTitle}`}
 					onClick={() => props.onEdit()}
 					class="rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle"
 				>
@@ -107,6 +113,7 @@ export function ApplicationRow(props: {
 				</button>
 				<button
 					type="button"
+					aria-label={`Delete ${props.app.JobTitle}`}
 					onClick={() => props.onDelete()}
 					class="rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle"
 				>

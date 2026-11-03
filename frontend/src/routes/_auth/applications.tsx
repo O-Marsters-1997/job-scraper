@@ -119,7 +119,9 @@ function ApplicationsPage() {
 	const [q, setQ] = createSignal("");
 	const visible = (apps: ApplicationWithDetails[]) =>
 		apps.filter((a) => matchesApplication(a, q()));
-	const filtered = () => !!(search().status || search().chase || q().trim());
+	const allQuery = useApplications();
+	const total = () => allQuery.data?.length;
+	const narrowed = () => !!(search().status || search().chase || q().trim());
 	const isBoard = () => search().view === "board";
 	const showView = (view: ApplicationsView, replace = false) => {
 		rememberView(view);
@@ -345,8 +347,8 @@ function ApplicationsPage() {
 										}
 									>
 										<p class="mb-2 font-mono text-xs tabular-nums text-muted">
-											{filtered()
-												? `${visible(data()).length} of ${data().length} applications`
+											{narrowed() && total() !== undefined
+												? `${visible(data()).length} of ${total()} applications`
 												: `${data().length} ${data().length === 1 ? "application" : "applications"}`}
 										</p>
 										<div class="overflow-hidden rounded-xl border border-border bg-surface">
