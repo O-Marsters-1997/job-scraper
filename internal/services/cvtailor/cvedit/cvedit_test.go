@@ -61,6 +61,7 @@ func TestEditSet_SkillsRoundTrip(t *testing.T) {
 }
 
 func TestPositionEdit_Lines_carriesVariantID(t *testing.T) {
+	t.Parallel()
 	pe := cvedit.PositionEdit{
 		Bullets: []cvedit.Bullet{{SlotID: "s0", Text: "A", AchievementIDs: []string{"a"}, VariantID: "va"}},
 		Added:   []cvedit.AddedBullet{{SlotID: "n0", After: "s0", Text: "B", AchievementIDs: []string{"b"}, VariantID: "vb"}},
