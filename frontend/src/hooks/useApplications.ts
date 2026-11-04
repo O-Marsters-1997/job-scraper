@@ -14,6 +14,7 @@ import {
 } from "../api/applications";
 import { keys } from "../api/keys";
 import { cvStage, isCvStageBusy } from "../lib/cvStage";
+import { loadedData } from "../lib/queryData";
 import type {
 	MoveApplicationPayload,
 	UpdateApplicationPayload,
@@ -44,6 +45,11 @@ export function useApplications(
 				? 3000
 				: false,
 	}));
+}
+
+export function useJobApplicationId(jobId: () => string) {
+	const applications = useApplications();
+	return () => loadedData(applications)?.find((a) => a.JobID === jobId())?.ID;
 }
 
 export function useCreateApplication() {
