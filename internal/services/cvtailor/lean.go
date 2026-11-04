@@ -28,15 +28,10 @@ func (s *Service) DraftLean(ctx context.Context, userID string, q dto.DraftLeanQ
 	if err != nil {
 		return nil, err
 	}
-	byID := map[string]dto.Achievement{}
-	byText := map[string]dto.Achievement{}
+	byID, byText := indexLines(bank)
 	bankByPosition := map[string][]dto.Achievement{}
 	for _, p := range bank {
 		bankByPosition[p.ID] = p.Achievements
-		for _, a := range p.Achievements {
-			byID[a.ID] = a
-			byText[normalizeText(a.Text)] = a
-		}
 	}
 	baseTexts, err := baseSlotTexts(draft)
 	if err != nil {
@@ -47,16 +42,21 @@ func (s *Service) DraftLean(ctx context.Context, userID string, q dto.DraftLeanQ
 	used := map[string]bool{}
 	var positionOf []string
 	var replacedFrom []string
+	var lineText []string
 	for _, p := range edits.Positions {
 		for _, a := range bankByPosition[p.PositionID] {
-			texts[a.Text] = true
+			for _, l := range achievementLines(a) {
+				texts[l.Text] = true
+			}
 		}
 		for _, l := range p.Lines() {
 			bullet := dto.BulletLean{SlotID: l.SlotID}
-			if a, ok := linkedAchievement(l, byID, byText); ok {
+			text := ""
+			if a, line, ok := linkedLine(l.AchievementIDs, l.VariantID, l.Text, byID, byText); ok {
 				bullet.AchievementID = &a.ID
 				used[a.ID] = true
-				texts[a.Text] = true
+				text = line.Text
+				texts[text] = true
 			}
 			old := ""
 			if b, ok := baseTexts[l.SlotID]; ok && len(l.AchievementIDs) > 0 && normalizeText(b) != normalizeText(l.Text) {
@@ -66,6 +66,7 @@ func (s *Service) DraftLean(ctx context.Context, userID string, q dto.DraftLeanQ
 			out = append(out, bullet)
 			positionOf = append(positionOf, p.PositionID)
 			replacedFrom = append(replacedFrom, old)
+			lineText = append(lineText, text)
 		}
 	}
 	if len(texts) == 0 {
@@ -86,7 +87,7 @@ func (s *Service) DraftLean(ctx context.Context, userID string, q dto.DraftLeanQ
 
 	for i := range out {
 		if out[i].AchievementID != nil {
-			lean := leanOf(byID[*out[i].AchievementID].Text)
+			lean := leanOf(lineText[i])
 			out[i].Lean, out[i].State = &lean, suggestionState(lean)
 		}
 		if replacedFrom[i] != "" {
@@ -101,8 +102,8 @@ func (s *Service) DraftLean(ctx context.Context, userID string, q dto.DraftLeanQ
 			if used[a.ID] {
 				continue
 			}
-			if lean := leanOf(a.Text); lean > *out[i].Lean && (best == nil || lean > best.Lean) {
-				best = &dto.CloserMatch{AchievementID: a.ID, Text: a.Text, Lean: lean}
+			if line, lean, ok := bestLine(a, answers); ok && lean > *out[i].Lean && (best == nil || lean > best.Lean) {
+				best = &dto.CloserMatch{AchievementID: a.ID, Text: line.Text, Lean: lean}
 			}
 		}
 		out[i].CloserMatch = best
@@ -136,14 +137,4 @@ func baseSlotTexts(draft dto.Draft) (map[string]string, error) {
 		}
 	}
 	return out, nil
-}
-
-func linkedAchievement(l cvedit.Line, byID, byText map[string]dto.Achievement) (dto.Achievement, bool) {
-	for _, id := range l.AchievementIDs {
-		if a, ok := byID[id]; ok {
-			return a, true
-		}
-	}
-	a, ok := byText[normalizeText(l.Text)]
-	return a, ok
 }

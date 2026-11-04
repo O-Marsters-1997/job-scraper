@@ -214,7 +214,7 @@ func (s *Service) replaceLowLean(ctx context.Context, claim dto.DraftClaim, pl p
 	if err != nil {
 		return cvedit.EditSet{}, err
 	}
-	answers, err := s.asker.Ask(ctx, claim.UserID, claim.JobID, bankQuestions(bank))
+	answers, err := s.asker.Ask(ctx, claim.UserID, claim.JobID, lineQuestions(bank))
 	if err != nil {
 		return cvedit.EditSet{}, err
 	}

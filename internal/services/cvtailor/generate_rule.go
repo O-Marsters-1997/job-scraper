@@ -17,10 +17,83 @@ const AppendSlot = -1
 
 const maxFreeLines = 1
 
+type Pick struct {
+	AchievementID string
+	VariantID     string
+}
+
 type Replacement struct {
-	PositionID     string
-	SlotIndex      int
-	AchievementIDs []string
+	PositionID string
+	SlotIndex  int
+	Picks      []Pick
+}
+
+type bankLine struct {
+	Pick
+	Text string
+}
+
+func achievementLines(a dto.Achievement) []bankLine {
+	out := make([]bankLine, 0, 1+len(a.Variants))
+	out = append(out, bankLine{Pick{AchievementID: a.ID}, a.Text})
+	for _, v := range a.Variants {
+		out = append(out, bankLine{Pick{AchievementID: a.ID, VariantID: v.ID}, v.Text})
+	}
+	return out
+}
+
+func lineQuestions(positions []dto.Position) []string {
+	var questions []string
+	for _, p := range positions {
+		for _, a := range p.Achievements {
+			for _, l := range achievementLines(a) {
+				questions = append(questions, achievementQuestion(l.Text))
+			}
+		}
+	}
+	return questions
+}
+
+func indexLines(positions []dto.Position) (byID map[string]dto.Achievement, byText map[string]bankLine) {
+	byID, byText = map[string]dto.Achievement{}, map[string]bankLine{}
+	for _, p := range positions {
+		for _, a := range p.Achievements {
+			byID[a.ID] = a
+			for _, l := range achievementLines(a) {
+				byText[normalizeText(l.Text)] = l
+			}
+		}
+	}
+	return byID, byText
+}
+
+func linkedLine(ids []string, variantID, text string, byID map[string]dto.Achievement, byText map[string]bankLine) (dto.Achievement, bankLine, bool) {
+	for _, id := range ids {
+		a, ok := byID[id]
+		if !ok {
+			continue
+		}
+		lines := achievementLines(a)
+		at := slices.IndexFunc(lines, func(l bankLine) bool {
+			if variantID != "" {
+				return l.VariantID == variantID
+			}
+			return normalizeText(l.Text) == normalizeText(text)
+		})
+		return a, lines[max(at, 0)], true
+	}
+	l, ok := byText[normalizeText(text)]
+	return byID[l.AchievementID], l, ok
+}
+
+func bestLine(a dto.Achievement, answers map[string]dto.Answer) (line bankLine, lean float64, ok bool) {
+	for _, l := range achievementLines(a) {
+		ans, answered := answers[achievementQuestion(l.Text)]
+		if v := ans.PYes - ans.PNo; answered && (!ok || v > lean) {
+			line, lean, ok = l, v, true
+		}
+	}
+	return line, lean, ok
 }
 
 type RuleInput struct {
@@ -44,38 +117,31 @@ var _ ReplacementRule = leanRule{}
 
 func (leanRule) Replacements(in RuleInput) []Replacement {
 	byPosition := make(map[string]dto.Position, len(in.Positions))
-	byText := map[string]dto.Achievement{}
-	byID := map[string]dto.Achievement{}
+	byID, byText := indexLines(in.Positions)
 	for _, p := range in.Positions {
 		byPosition[p.ID] = p
-		for _, a := range p.Achievements {
-			byText[normalizeText(a.Text)] = a
-			byID[a.ID] = a
-		}
 	}
-	leanOf := func(a dto.Achievement) (float64, bool) {
-		ans, ok := in.Answers[achievementQuestion(a.Text)]
+	leanOf := func(l bankLine) (float64, bool) {
+		ans, ok := in.Answers[achievementQuestion(l.Text)]
 		return ans.PYes - ans.PNo, ok
 	}
-	linked := func(b dto.DraftBullet) (dto.Achievement, bool) {
-		for _, id := range b.AchievementIDs {
-			if a, ok := byID[id]; ok {
-				return a, true
-			}
-		}
-		a, ok := byText[normalizeText(b.Text)]
-		return a, ok
+	linked := func(b dto.DraftBullet) (dto.Achievement, bankLine, bool) {
+		return linkedLine(b.AchievementIDs, "", b.Text, byID, byText)
 	}
 
 	used := map[string]bool{}
 	for _, cp := range in.Content.Positions {
 		for _, b := range cp.Bullets {
-			if a, ok := linked(b); ok {
+			if a, _, ok := linked(b); ok {
 				used[a.ID] = true
 			}
 		}
 	}
 
+	type scored struct {
+		bankLine
+		lean float64
+	}
 	var out []Replacement
 	for _, cp := range in.Content.Positions {
 		bank, ok := byPosition[cp.PositionID]
@@ -83,40 +149,44 @@ func (leanRule) Replacements(in RuleInput) []Replacement {
 			continue
 		}
 		for i, b := range cp.Bullets {
-			a, ok := linked(b)
+			a, current, ok := linked(b)
 			if !ok {
 				continue
 			}
-			lean, ok := leanOf(a)
-			if !ok || lean > lowFitLean {
+			lean, ok := leanOf(current)
+			if !ok {
 				continue
 			}
-			var pool []dto.Achievement
-			for _, c := range bank.Achievements {
-				if l, ok := leanOf(c); ok && !used[c.ID] && l > lean {
-					pool = append(pool, c)
+			var pool []scored
+			consider := func(c dto.Achievement) {
+				if l, v, ok := bestLine(c, in.Answers); ok && v > lean {
+					pool = append(pool, scored{l, v})
 				}
 			}
-			slices.SortStableFunc(pool, func(x, y dto.Achievement) int {
-				lx, _ := leanOf(x)
-				ly, _ := leanOf(y)
-				return cmp.Compare(ly, lx)
-			})
+			consider(a)
+			if lean <= lowFitLean {
+				for _, c := range bank.Achievements {
+					if !used[c.ID] {
+						consider(c)
+					}
+				}
+			}
+			slices.SortStableFunc(pool, func(x, y scored) int { return cmp.Compare(y.lean, x.lean) })
 			free := in.Lines(cp.PositionID, b.Text)
-			var ids []string
+			var picks []Pick
 			for _, c := range pool {
 				if n := in.Lines(cp.PositionID, c.Text); n <= free {
-					ids = append(ids, c.ID)
+					picks = append(picks, c.Pick)
 					free -= n
 				}
 			}
-			if len(ids) == 0 || free > maxFreeLines {
+			if len(picks) == 0 || free > maxFreeLines {
 				continue
 			}
-			for _, id := range ids {
-				used[id] = true
+			for _, p := range picks {
+				used[p.AchievementID] = true
 			}
-			out = append(out, Replacement{PositionID: cp.PositionID, SlotIndex: i, AchievementIDs: ids})
+			out = append(out, Replacement{PositionID: cp.PositionID, SlotIndex: i, Picks: picks})
 		}
 	}
 	return out
@@ -168,10 +238,12 @@ func sourceLines(raw json.RawMessage, pl plan) (func(positionID, text string) in
 
 func (pl plan) withReplacements(positions []dto.Position, reps []Replacement) cvedit.EditSet {
 	edits := pl.keepAll()
-	texts := map[string]string{}
+	texts := map[Pick]string{}
 	for _, p := range positions {
 		for _, a := range p.Achievements {
-			texts[a.ID] = a.Text
+			for _, l := range achievementLines(a) {
+				texts[l.Pick] = l.Text
+			}
 		}
 	}
 	index := make(map[string]int, len(pl.positions))
@@ -180,11 +252,11 @@ func (pl plan) withReplacements(positions []dto.Position, reps []Replacement) cv
 	}
 	for _, r := range reps {
 		i, ok := index[r.PositionID]
-		if !ok || len(r.AchievementIDs) == 0 {
+		if !ok || len(r.Picks) == 0 {
 			continue
 		}
 		pe := &edits.Positions[i]
-		ids := r.AchievementIDs
+		picks := r.Picks
 		after := ""
 		if r.SlotIndex == AppendSlot {
 			if n := len(pe.Bullets); n > 0 {
@@ -195,18 +267,19 @@ func (pl plan) withReplacements(positions []dto.Position, reps []Replacement) cv
 				after = pe.Added[at].SlotID
 			}
 		} else {
-			text := texts[ids[0]]
-			pl.positions[i].texts[ids[0]] = text
+			pick := picks[0]
+			text := texts[pick]
+			pl.positions[i].texts[pick.AchievementID] = text
 			slotID := pl.positions[i].slotIDs[r.SlotIndex]
-			pe.Bullets[r.SlotIndex] = cvedit.Bullet{SlotID: slotID, Text: text, AchievementIDs: []string{ids[0]}}
-			after, ids = slotID, ids[1:]
+			pe.Bullets[r.SlotIndex] = cvedit.Bullet{SlotID: slotID, Text: text, AchievementIDs: []string{pick.AchievementID}, VariantID: pick.VariantID}
+			after, picks = slotID, picks[1:]
 		}
-		for _, id := range ids {
-			text := texts[id]
-			pl.positions[i].texts[id] = text
+		for _, pick := range picks {
+			text := texts[pick]
+			pl.positions[i].texts[pick.AchievementID] = text
 			added := cvedit.AddedBullet{
 				SlotID: fmt.Sprintf("%s%s-%d", addedSlotPrefix, r.PositionID, len(pe.Added)),
-				After:  after, Text: text, AchievementIDs: []string{id},
+				After:  after, Text: text, AchievementIDs: []string{pick.AchievementID}, VariantID: pick.VariantID,
 			}
 			pe.Added = append(pe.Added, added)
 			after = added.SlotID
