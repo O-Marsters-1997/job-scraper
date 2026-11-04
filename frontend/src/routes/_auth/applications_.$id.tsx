@@ -1,4 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
+import {
+	createFileRoute,
+	Link,
+	useNavigate,
+	useRouter,
+} from "@tanstack/solid-router";
 import {
 	createSignal,
 	For,
@@ -61,6 +66,7 @@ import { runNeighbour } from "@/lib/applicationSelection";
 import { formatChaseDate } from "@/lib/chase";
 import { displayName } from "@/lib/contactName";
 import { dayKey, formatDate } from "@/lib/datetime";
+import { openInNewTab } from "@/lib/newTab";
 import { queryClient } from "@/lib/queryClient";
 import { loadedData } from "@/lib/queryData";
 import { cn, titleCase } from "@/lib/utils";
@@ -327,7 +333,7 @@ function CvRowBody(props: {
 	failed: Draft | undefined;
 	done: boolean;
 }) {
-	const navigate = useNavigate();
+	const router = useRouter();
 	const cvs = useCVTemplates();
 	const create = useCreateDraft();
 	const discard = useDiscardDraft();
@@ -342,14 +348,19 @@ function CvRowBody(props: {
 		const stale = props.draft?.outcome
 			? undefined
 			: (props.draft ?? props.failed);
-		if (stale) await discard.mutateAsync(stale.id);
-		const ref = await create.mutateAsync({
-			jobId: props.jobId,
-			docId: cv.DocID,
-			tabId: cv.TabID,
-			mode: "as_is",
+		await openInNewTab(async () => {
+			if (stale) await discard.mutateAsync(stale.id);
+			const ref = await create.mutateAsync({
+				jobId: props.jobId,
+				docId: cv.DocID,
+				tabId: cv.TabID,
+				mode: "as_is",
+			});
+			return router.buildLocation({
+				to: "/tailoring/drafts/$id",
+				params: { id: ref.id },
+			}).href;
 		});
-		await navigate({ to: "/tailoring/drafts/$id", params: { id: ref.id } });
 	});
 	const startOver = () => {
 		if (window.confirm("Discard this draft and start a new one?"))
@@ -386,6 +397,7 @@ function CvRowBody(props: {
 					<Link
 						to="/tailoring/drafts/$id"
 						params={{ id: draft().id }}
+						target="_blank"
 						class="flex items-center justify-between gap-3 rounded-md py-1.5 pr-3 text-sm transition-colors hover:bg-surface-muted"
 					>
 						<span>
@@ -423,10 +435,13 @@ function CvRowBody(props: {
 							<Button
 								size="sm"
 								onClick={() =>
-									void navigate({
-										to: "/tailoring/drafts/$id",
-										params: { id: draft().id },
-									})
+									window.open(
+										router.buildLocation({
+											to: "/tailoring/drafts/$id",
+											params: { id: draft().id },
+										}).href,
+										"_blank",
+									)
 								}
 							>
 								Open draft
