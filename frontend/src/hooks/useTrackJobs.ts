@@ -10,7 +10,12 @@ import {
 import { loadedData } from "@/lib/queryData";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
-import { useApplications, useCreateApplication } from "./useApplications";
+import { useApplicationStatuses } from "./useApplicationStatuses";
+import {
+	useApplications,
+	useCreateApplication,
+	useDeleteApplications,
+} from "./useApplications";
 import {
 	useSetCompaniesKind,
 	useSetCompanyFavourite,
@@ -32,11 +37,14 @@ export function useTrackJobs(
 	clearSelection: () => void = () => undefined,
 ) {
 	const applications = useApplications();
+	const statuses = useApplicationStatuses();
+	const draftStatusId = () =>
+		loadedData(statuses)?.find((s) => s.SystemKey === "draft")?.ID;
 	const appsForJobs = createMemo<Record<string, JobApplicationSummary>>(() =>
 		Object.fromEntries(
 			(loadedData(applications) ?? []).map((app) => [
 				app.JobID,
-				toApplicationSummary(app),
+				toApplicationSummary(app, app.StatusID === draftStatusId()),
 			]),
 		),
 	);
@@ -60,6 +68,18 @@ export function useTrackJobs(
 			announceNotice("Tracked as Draft.");
 		} catch {
 			announceNotice("Could not track application.");
+		}
+	};
+
+	const deleteApplications = useDeleteApplications();
+	const untrack = async (jobId: string) => {
+		const applicationId = appsForJobs()[jobId]?.ApplicationID;
+		if (!applicationId) return;
+		try {
+			await deleteApplications.mutateAsync([applicationId]);
+			announceNotice("Untracked.");
+		} catch {
+			announceNotice("Could not untrack application.");
 		}
 	};
 
@@ -131,6 +151,7 @@ export function useTrackJobs(
 	const columnContext: JobTableContext = {
 		appsForJobs,
 		onTrack: openTrack,
+		onUntrack: untrack,
 		onDismiss: dismiss.dismiss,
 		onGrade: (job) => openGrade([job]),
 		onToggleFavourite: (job) => {
@@ -153,6 +174,7 @@ export function useTrackJobs(
 		applications,
 		appsForJobs,
 		openTrack,
+		untrack,
 		bulkTrack,
 		modalOpen,
 		setModalOpen,

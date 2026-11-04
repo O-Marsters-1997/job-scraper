@@ -16,6 +16,7 @@ import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
 	onTrack: (jobId: string) => void;
+	onUntrack: (jobId: string) => void;
 	onDismiss: (job: Job) => void;
 	onGrade: (job: Job) => void;
 	onToggleFavourite: (job: Job) => void;
@@ -272,6 +273,7 @@ export function createJobColumns(
 						job={info.row.original}
 						appSummary={ctx.appsForJobs()?.[info.row.original.ID]}
 						onTrack={() => ctx.onTrack(info.row.original.ID)}
+						onUntrack={() => ctx.onUntrack(info.row.original.ID)}
 						onGrade={() => ctx.onGrade(info.row.original)}
 						onDismiss={() => ctx.onDismiss(info.row.original)}
 						onExcludeCompany={() => ctx.onExcludeCompany(info.row.original)}

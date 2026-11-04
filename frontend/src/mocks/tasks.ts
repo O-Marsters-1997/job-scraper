@@ -226,6 +226,13 @@ export function completeOpenApplyTasks(jobId: string): void {
 	);
 }
 
+export function dropApplyTasks(jobIds: string[]): void {
+	tasks = allTasks().filter(
+		(t) =>
+			!(t.JobID && jobIds.includes(t.JobID) && t.TypeSystemKey === "apply"),
+	);
+}
+
 export function deleteTask(id: string): void {
 	tasks = allTasks().filter((t) => t.ID !== id);
 }

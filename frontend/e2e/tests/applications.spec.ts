@@ -162,9 +162,7 @@ test.describe("Application page", () => {
 			.getByRole("link", { name: "Applications" })
 			.click();
 		await expect(
-			page
-				.locator("div.items-center")
-				.filter({ has: page.locator(`a[href="${path}"]`) }),
+			page.getByRole("row").filter({ has: page.locator(`a[href="${path}"]`) }),
 		).toContainText("Rejected");
 	});
 

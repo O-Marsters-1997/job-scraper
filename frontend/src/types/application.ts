@@ -58,6 +58,7 @@ export interface JobApplicationSummary {
 	StatusID: string;
 	StatusName: string;
 	StatusColour: string;
+	IsDraft: boolean;
 }
 
 export interface CreateApplicationPayload {
