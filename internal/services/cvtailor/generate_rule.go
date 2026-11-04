@@ -17,6 +17,7 @@ const AppendSlot = -1
 
 const maxFreeLines = 1
 
+// Pick's empty VariantID means the Achievement's default text.
 type Pick struct {
 	AchievementID string
 	VariantID     string
