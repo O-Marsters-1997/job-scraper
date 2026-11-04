@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useCreateVariant } from "@/hooks/useExperience";
 import { charsToSave, isSparse, type LineFit } from "@/lib/docLayout";
 import { cn } from "@/lib/utils";
+import { variantName } from "@/lib/variantName";
 import { wordDiff } from "@/lib/wordDiff";
 import type { DraftEditorState } from "../../hooks/useDraftEditor";
 
@@ -13,8 +14,9 @@ type Tone = { dot: string; text: string };
 export function cardHeader(ed: DraftEditorState, key: string): Tone {
 	if (ed.findingsFor(key).some((f) => f.severity === "block"))
 		return { dot: "bg-destructive", text: "Blocking issue" };
-	return ed.edited(key)
-		? { dot: "bg-border-strong", text: "Your edit" }
+	if (ed.edited(key)) return { dot: "bg-border-strong", text: "Your edit" };
+	return ed.variantsFor(key).length > 0
+		? { dot: "bg-border-strong", text: "Other wordings" }
 		: { dot: "bg-status-interview", text: "Short last line" };
 }
 
@@ -98,6 +100,17 @@ export function MarginCard(props: {
 	const header = () => cardHeader(props.editor, key());
 	const sparseFit = () => (isSparse(props.fit) ? props.fit : undefined);
 	const cited = () => props.editor.citedAchievement(key());
+	const variants = () => props.editor.variantsFor(key());
+	const selectedVariant = () => {
+		const id = props.editor.variantId(key());
+		const match = variants().find((v) => v.id === id);
+		return match && match.text === props.editor.text(key()) ? id : undefined;
+	};
+	const picked = (id: string | undefined) =>
+		id
+			? id === selectedVariant()
+			: selectedVariant() === undefined &&
+				props.editor.text(key()) === cited()?.text;
 	const [saving, setSaving] = createSignal(false);
 	const create = useCreateVariant();
 	onCleanup(() => props.onHover(key(), false));
@@ -186,6 +199,45 @@ export function MarginCard(props: {
 								onFit={props.onFit && (() => props.onFit?.(key()))}
 							/>
 						)}
+					</Show>
+
+					<Show when={props.editable && variants().length > 0}>
+						<fieldset class="flex flex-col gap-1.5">
+							<legend class="text-xs font-semibold text-muted">Wording</legend>
+							<For
+								each={[
+									{
+										id: undefined,
+										text: cited()?.text ?? "",
+										label: "Default",
+									},
+									...variants().map((v) => ({
+										id: v.id,
+										text: v.text,
+										label: variantName(v),
+									})),
+								]}
+							>
+								{(option) => (
+									<Button
+										variant={picked(option.id) ? "default" : "outline"}
+										size="sm"
+										class="max-w-full justify-start"
+										aria-pressed={picked(option.id)}
+										onClick={() =>
+											props.editor.swapVariant(
+												key(),
+												option.id
+													? { id: option.id, text: option.text }
+													: undefined,
+											)
+										}
+									>
+										<span class="truncate">{option.label}</span>
+									</Button>
+								)}
+							</For>
+						</fieldset>
 					</Show>
 
 					<Show when={edited() ? cited() : undefined}>

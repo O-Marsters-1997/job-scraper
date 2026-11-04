@@ -210,7 +210,11 @@ func editedContent(edits cvedit.EditSet) dto.DraftContent {
 			if ids == nil {
 				ids = []string{}
 			}
-			dp.Bullets = append(dp.Bullets, dto.DraftBullet{Text: l.Text, AchievementIDs: ids})
+			bullet := dto.DraftBullet{Text: l.Text, AchievementIDs: ids}
+			if l.VariantID != "" {
+				bullet.VariantID = &l.VariantID
+			}
+			dp.Bullets = append(dp.Bullets, bullet)
 		}
 		c.Positions = append(c.Positions, dp)
 	}

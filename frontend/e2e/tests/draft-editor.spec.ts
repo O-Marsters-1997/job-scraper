@@ -126,6 +126,25 @@ test.describe("Draft editor", () => {
 		await expect(page.getByLabel("Variant text")).toHaveCount(0);
 	});
 
+	test("swaps a bullet between its achievement's variants and saves", async ({
+		draftPage,
+	}) => {
+		await draftPage.line(BULLET).click();
+		const card = draftPage.card("s1");
+		const checkout = card.getByRole("button", { name: "Checkout" });
+		await checkout.click();
+		await expect(draftPage.line(BULLET)).toHaveText(/Halved p99 latency/);
+		await expect(checkout).toHaveAttribute("aria-pressed", "true");
+		await expect(draftPage.saveStatus).toHaveText("Saved", {
+			timeout: SAVED_TIMEOUT_MS,
+		});
+		await expect(checkout).toHaveAttribute("aria-pressed", "true");
+
+		await card.getByRole("button", { name: "Default" }).click();
+		await expect(draftPage.line(BULLET)).toHaveText(/by 40% by moving hot/);
+		await expect(checkout).toHaveAttribute("aria-pressed", "false");
+	});
+
 	test("undoes edits and saves the restored text", async ({ draftPage }) => {
 		const original = (await draftPage.line(BULLET).textContent()) ?? "";
 		await draftPage.type(BULLET, " Terraform");
@@ -136,7 +155,7 @@ test.describe("Draft editor", () => {
 			.getByRole("button", { name: "Undo my edits" })
 			.click();
 		await expect(draftPage.line(BULLET)).toHaveText(original);
-		await expect(draftPage.card("s1")).toHaveCount(0);
+		await expect(draftPage.card("s1").getByTestId("card-diff")).toHaveCount(0);
 		await expect(draftPage.saveStatus).toHaveText("Saved", {
 			timeout: SAVED_TIMEOUT_MS,
 		});

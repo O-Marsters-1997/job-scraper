@@ -109,6 +109,7 @@ type DraftPosition struct {
 type DraftBullet struct {
 	Text           string   `json:"text"`
 	AchievementIDs []string `json:"achievementIds"`
+	VariantID      *string  `json:"variantId,omitempty"`
 }
 
 const (
