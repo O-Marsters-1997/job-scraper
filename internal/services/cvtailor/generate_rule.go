@@ -122,10 +122,6 @@ func (leanRule) Replacements(in RuleInput) []Replacement {
 	for _, p := range in.Positions {
 		byPosition[p.ID] = p
 	}
-	leanOf := func(l bankLine) (float64, bool) {
-		ans, ok := in.Answers[achievementQuestion(l.Text)]
-		return ans.PYes - ans.PNo, ok
-	}
 	linked := func(b dto.DraftBullet) (dto.Achievement, bankLine, bool) {
 		return linkedLine(b.AchievementIDs, "", b.Text, byID, byText)
 	}
@@ -154,10 +150,11 @@ func (leanRule) Replacements(in RuleInput) []Replacement {
 			if !ok {
 				continue
 			}
-			lean, ok := leanOf(current)
+			ans, ok := in.Answers[achievementQuestion(current.Text)]
 			if !ok {
 				continue
 			}
+			lean := ans.PYes - ans.PNo
 			var pool []scored
 			consider := func(c dto.Achievement) {
 				if l, v, ok := bestLine(c, in.Answers); ok && v > lean {
