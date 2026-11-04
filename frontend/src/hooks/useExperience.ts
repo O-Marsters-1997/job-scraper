@@ -2,16 +2,22 @@ import { createQuery, queryOptions } from "@tanstack/solid-query";
 import {
 	createAchievement,
 	createPosition,
+	createVariant,
 	deleteAchievement,
 	deletePosition,
+	deleteVariant,
 	fetchExperience,
 	reorderAchievements,
 	reorderPositions,
 	updateAchievement,
 	updatePosition,
+	updateVariant,
 } from "../api/experience";
 import { keys } from "../api/keys";
-import type { PositionInput } from "../types/experience";
+import type {
+	AchievementVariantInput,
+	PositionInput,
+} from "../types/experience";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const experienceQueryOptions = queryOptions({
@@ -62,6 +68,31 @@ export function useUpdateAchievement() {
 
 export function useDeleteAchievement() {
 	return useInvalidatingMutation(deleteAchievement, invalidate);
+}
+
+export function useCreateVariant() {
+	return useInvalidatingMutation(
+		({
+			achievementId,
+			input,
+		}: {
+			achievementId: string;
+			input: AchievementVariantInput;
+		}) => createVariant(achievementId, input),
+		invalidate,
+	);
+}
+
+export function useUpdateVariant() {
+	return useInvalidatingMutation(
+		({ id, input }: { id: string; input: AchievementVariantInput }) =>
+			updateVariant(id, input),
+		invalidate,
+	);
+}
+
+export function useDeleteVariant() {
+	return useInvalidatingMutation(deleteVariant, invalidate);
 }
 
 export function useReorderAchievements() {

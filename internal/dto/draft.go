@@ -21,6 +21,7 @@ type DraftInput struct {
 
 type AchievementOutcome struct {
 	AchievementID           string
+	VariantID               *string
 	PYes, PNo               *float64
 	OnSourceCV              bool
 	InFinalCV               bool
@@ -109,6 +110,7 @@ type DraftPosition struct {
 type DraftBullet struct {
 	Text           string   `json:"text"`
 	AchievementIDs []string `json:"achievementIds"`
+	VariantID      *string  `json:"variantId,omitempty"`
 }
 
 const (
@@ -327,6 +329,7 @@ type SuggestInput struct {
 
 type CloserMatch struct {
 	AchievementID string  `json:"achievementId"`
+	VariantID     *string `json:"variantId"`
 	Text          string  `json:"text"`
 	Lean          float64 `json:"lean"`
 }

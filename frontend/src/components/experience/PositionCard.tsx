@@ -19,6 +19,7 @@ import {
 } from "../../lib/achievementStats";
 import type { Achievement, Position } from "../../types/experience";
 import { PositionForm } from "./PositionForm";
+import { VariantList } from "./VariantList";
 
 const iconButton =
 	"inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-foreground disabled:opacity-30";
@@ -251,6 +252,7 @@ function AchievementRow(props: {
 									{props.achievement.context}
 								</p>
 							</Show>
+							<VariantList achievement={props.achievement} />
 						</div>
 						<div class="flex shrink-0 items-center">
 							<button

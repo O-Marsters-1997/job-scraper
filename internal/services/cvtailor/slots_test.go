@@ -171,6 +171,36 @@ func TestSaveDraftSlots(t *testing.T) {
 		}
 	})
 
+	t.Run("a bullet records its variant until the text is edited by hand", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		svc := e.editing(t, e.drive)
+		a := e.pos.Achievements[0]
+		variant := "variant-1"
+		rep := dto.DraftPosition{PositionID: e.pos.ID, Bullets: []dto.DraftBullet{
+			{Text: "Cut latency a lot", AchievementIDs: []string{a.ID}, VariantID: &variant},
+			{Text: "Wrote docs", AchievementIDs: []string{a.ID}, VariantID: &variant},
+		}}
+
+		got, err := svc.SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{rep}})
+		if err != nil {
+			t.Fatalf("SaveDraftSlots() error = %v", err)
+		}
+		if diff := cmp.Diff(rep.Bullets, got.Content.Positions[0].Bullets); diff != "" {
+			t.Errorf("SaveDraftSlots().Content bullets mismatch (-want +got):\n%s", diff)
+		}
+
+		slot := got.Provenance.Positions[0].Bullets[0].SlotID
+		got = e.saved(t, svc, id, dto.SlotEdit{SlotID: slot, Text: "Cut latency by hand"})
+		if v := got.Content.Positions[0].Bullets[0].VariantID; v != nil {
+			t.Errorf("hand-edited bullet VariantID = %q, want none", *v)
+		}
+		if v := got.Content.Positions[0].Bullets[1].VariantID; v == nil || *v != variant {
+			t.Errorf("untouched bullet VariantID = %v, want %q", v, variant)
+		}
+	})
+
 	t.Run("a replace drops a cited achievement from the draft", func(t *testing.T) {
 		t.Parallel()
 		e := newDraftEnv(t)
@@ -419,6 +449,36 @@ func TestSaveDraftSlots(t *testing.T) {
 		want := []dto.AchievementOutcome{
 			{AchievementID: e.pos.Achievements[0].ID},
 			{AchievementID: swapped.ID, InFinalCV: true},
+		}
+		if diff := cmp.Diff(want, e.store.AchievementOutcomes(id)); diff != "" {
+			t.Errorf("outcomes (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a bullet matching a Variant verbatim records that Variant, not a reword", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		e.run(t, tick{})
+		target := e.pos.Achievements[1]
+		variant, err := e.store.CreateAchievementVariant(t.Context(), userID, dto.AchievementVariantInput{AchievementID: target.ID, Text: "Coached four engineers to promotion"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		replacement := dto.DraftPosition{PositionID: e.pos.ID, Bullets: []dto.DraftBullet{
+			{Text: variant.Text, AchievementIDs: []string{}},
+		}}
+
+		if _, err := e.svc.SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{replacement}}); err != nil {
+			t.Fatalf("SaveDraftSlots(kept) error = %v", err)
+		}
+
+		want := []dto.AchievementOutcome{
+			{AchievementID: e.pos.Achievements[0].ID},
+			{AchievementID: target.ID, VariantID: &variant.ID, InFinalCV: true},
 		}
 		if diff := cmp.Diff(want, e.store.AchievementOutcomes(id)); diff != "" {
 			t.Errorf("outcomes (-want +got):\n%s", diff)

@@ -55,6 +55,28 @@ SET sort_order = o.ord::int
 FROM unnest(sqlc.arg(ids)::uuid[]) WITH ORDINALITY AS o(id, ord)
 WHERE a.user_id = sqlc.arg(user_id) AND a.position_id = sqlc.arg(position_id) AND a.id = o.id;
 
+-- name: ListAchievementVariants :many
+SELECT id, achievement_id, user_id, text, label, created_at, updated_at
+FROM achievement_variants
+WHERE user_id = $1
+ORDER BY created_at, id;
+
+-- name: CreateAchievementVariant :one
+INSERT INTO achievement_variants (achievement_id, user_id, text, label)
+SELECT a.id, a.user_id, sqlc.arg(text), sqlc.arg(label)
+FROM achievements a
+WHERE a.user_id = sqlc.arg(user_id) AND a.id = sqlc.arg(achievement_id)
+RETURNING id, achievement_id, user_id, text, label, created_at, updated_at;
+
+-- name: UpdateAchievementVariant :one
+UPDATE achievement_variants
+SET text = sqlc.arg(text), label = sqlc.arg(label), updated_at = NOW()
+WHERE user_id = sqlc.arg(user_id) AND id = sqlc.arg(id)
+RETURNING id, achievement_id, user_id, text, label, created_at, updated_at;
+
+-- name: DeleteAchievementVariant :execrows
+DELETE FROM achievement_variants WHERE user_id = $1 AND id = $2;
+
 -- name: GetPosition :one
 SELECT * FROM positions WHERE user_id = $1 AND id = $2;
 
@@ -85,6 +107,8 @@ progress AS (
     GROUP BY r.application_id
 )
 SELECT o.achievement_id,
+       o.variant_id,
+       (GROUPING(o.variant_id) = 1)::bool AS is_rollup,
        (COUNT(*) FILTER (WHERE o.in_final_cv))::int AS in_cvs,
        (COUNT(*) FILTER (WHERE o.outscored_kept_but_left_out))::int AS left_out,
        (COUNT(*) FILTER (WHERE o.in_final_cv AND p.applied))::int AS applied,
@@ -94,4 +118,4 @@ JOIN tailored_cvs t ON t.id = o.draft_id AND t.outcome = 'kept'
 LEFT JOIN applications ap ON ap.user_id = o.user_id AND ap.job_id = o.job_id
 LEFT JOIN progress p ON p.application_id = ap.id
 WHERE o.user_id = sqlc.arg(user_id)
-GROUP BY o.achievement_id;
+GROUP BY GROUPING SETS ((o.achievement_id), (o.achievement_id, o.variant_id));

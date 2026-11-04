@@ -7,11 +7,27 @@ const achievementStatsSchema = z.object({
 	replied: z.number(),
 });
 
+export const achievementVariantSchema = z.object({
+	id: z.string(),
+	achievementId: z.string(),
+	text: z.string(),
+	label: z.string(),
+	stats: achievementStatsSchema.nullable(),
+});
+
+export type AchievementVariant = z.infer<typeof achievementVariantSchema>;
+
+export interface AchievementVariantInput {
+	text: string;
+	label: string;
+}
+
 export const achievementSchema = z.object({
 	id: z.string(),
 	positionId: z.string(),
 	text: z.string(),
 	context: z.string(),
+	variants: z.array(achievementVariantSchema),
 	stats: achievementStatsSchema.nullable(),
 });
 

@@ -156,6 +156,18 @@ CREATE TABLE achievements (
 );
 CREATE INDEX achievements_position_sort_idx ON achievements (position_id, sort_order);
 
+CREATE TABLE achievement_variants (
+    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    achievement_id UUID        NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
+    user_id        UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text           TEXT        NOT NULL CHECK (btrim(text) <> ''),
+    label          TEXT        NOT NULL DEFAULT '',
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX achievement_variants_achievement_idx ON achievement_variants (achievement_id, created_at);
+CREATE INDEX achievement_variants_user_idx ON achievement_variants (user_id);
+
 CREATE TABLE bank_skills (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -249,9 +261,11 @@ CREATE TABLE achievement_outcomes (
     outscored_kept_but_left_out BOOLEAN     NOT NULL,
     reworded                    BOOLEAN     NOT NULL,
     created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    variant_id                  UUID        REFERENCES achievement_variants(id) ON DELETE SET NULL,
     PRIMARY KEY (draft_id, achievement_id)
 );
 CREATE INDEX achievement_outcomes_achievement_idx ON achievement_outcomes (achievement_id);
+CREATE INDEX achievement_outcomes_variant_idx ON achievement_outcomes (variant_id) WHERE variant_id IS NOT NULL;
 
 CREATE TABLE profile_attempts (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

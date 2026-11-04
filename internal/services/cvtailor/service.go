@@ -24,6 +24,9 @@ type Store interface {
 	UpdateAchievement(ctx context.Context, userID string, in dto.AchievementInput) (dto.Achievement, error)
 	DeleteAchievement(ctx context.Context, userID, id string) error
 	ReorderAchievements(ctx context.Context, userID, positionID string, ids []string) error
+	CreateAchievementVariant(ctx context.Context, userID string, in dto.AchievementVariantInput) (dto.AchievementVariant, error)
+	UpdateAchievementVariant(ctx context.Context, userID string, in dto.AchievementVariantInput) (dto.AchievementVariant, error)
+	DeleteAchievementVariant(ctx context.Context, userID, id string) error
 	SetAchievementContexts(ctx context.Context, userID string, ids, contexts []string) error
 	ListBankSkills(ctx context.Context, userID string) ([]dto.BankSkill, error)
 	CreateBankSkill(ctx context.Context, userID string, in dto.BankSkillInput) (dto.BankSkill, error)
@@ -118,6 +121,22 @@ func (s *Service) UpdateAchievement(ctx context.Context, userID string, in dto.A
 	return s.store.UpdateAchievement(ctx, userID, in)
 }
 
+func (s *Service) CreateAchievementVariant(ctx context.Context, userID string, in dto.AchievementVariantInput) (dto.AchievementVariant, error) {
+	in, err := validateVariant(in)
+	if err != nil {
+		return dto.AchievementVariant{}, err
+	}
+	return s.store.CreateAchievementVariant(ctx, userID, in)
+}
+
+func (s *Service) UpdateAchievementVariant(ctx context.Context, userID string, in dto.AchievementVariantInput) (dto.AchievementVariant, error) {
+	in, err := validateVariant(in)
+	if err != nil {
+		return dto.AchievementVariant{}, err
+	}
+	return s.store.UpdateAchievementVariant(ctx, userID, in)
+}
+
 // ReorderPositions moves the Positions into the order of in.IDs.
 func (s *Service) ReorderPositions(ctx context.Context, userID string, in dto.ReorderInput) (struct{}, error) {
 	if hasDuplicates(in.IDs) {
@@ -152,6 +171,15 @@ func validatePosition(in dto.PositionInput) (dto.PositionInput, error) {
 	}
 	if in.StartDate != nil && in.EndDate != nil && *in.EndDate < *in.StartDate {
 		return in, apperr.Invalid("end date must not be before start date")
+	}
+	return in, nil
+}
+
+func validateVariant(in dto.AchievementVariantInput) (dto.AchievementVariantInput, error) {
+	in.Text = strings.TrimSpace(in.Text)
+	in.Label = strings.TrimSpace(in.Label)
+	if in.Text == "" {
+		return in, apperr.Invalid("text is required")
 	}
 	return in, nil
 }

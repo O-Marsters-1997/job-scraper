@@ -10,11 +10,20 @@ type Position struct {
 }
 
 type Achievement struct {
-	ID         string            `json:"id"`
-	PositionID string            `json:"positionId"`
-	Text       string            `json:"text"`
-	Context    string            `json:"context"`
-	Stats      *AchievementStats `json:"stats"`
+	ID         string               `json:"id"`
+	PositionID string               `json:"positionId"`
+	Text       string               `json:"text"`
+	Context    string               `json:"context"`
+	Variants   []AchievementVariant `json:"variants"`
+	Stats      *AchievementStats    `json:"stats"`
+}
+
+type AchievementVariant struct {
+	ID            string            `json:"id"`
+	AchievementID string            `json:"achievementId"`
+	Text          string            `json:"text"`
+	Label         string            `json:"label"`
+	Stats         *AchievementStats `json:"stats"`
 }
 
 type AchievementStats struct {
@@ -37,6 +46,13 @@ type AchievementInput struct {
 	ID         string `json:"-" path:"id"`
 	PositionID string `json:"-" path:"positionId"`
 	Text       string `json:"text"`
+}
+
+type AchievementVariantInput struct {
+	ID            string `json:"-" path:"id"`
+	AchievementID string `json:"-" path:"achievementId"`
+	Text          string `json:"text"`
+	Label         string `json:"label"`
 }
 
 type ReorderInput struct {

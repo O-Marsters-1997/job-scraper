@@ -106,8 +106,8 @@ SELECT body FROM job_comments WHERE user_id = $1 AND job_id = $2 ORDER BY create
 DELETE FROM achievement_outcomes WHERE draft_id = $1 AND user_id = $2;
 
 -- name: InsertAchievementOutcomes :copyfrom
-INSERT INTO achievement_outcomes (draft_id, achievement_id, user_id, job_id, p_yes, p_no, on_source_cv, in_final_cv, outscored_kept_but_left_out, reworded)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+INSERT INTO achievement_outcomes (draft_id, achievement_id, user_id, job_id, p_yes, p_no, on_source_cv, in_final_cv, outscored_kept_but_left_out, reworded, variant_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
 
 -- name: AddProfileAttempt :execrows
 INSERT INTO profile_attempts (draft_id, text, steer, rejection, prompt_key, model, cost, created_at)

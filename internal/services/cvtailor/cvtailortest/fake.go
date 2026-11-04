@@ -48,6 +48,7 @@ type FakeStore struct {
 	annotations    map[string]dto.JobAnnotations
 	skeletons      map[string]dto.LetterSkeleton
 	letterTabs     map[letterTab]bool
+	variants       []*variant
 	letterTabOrder []letterTab
 	coverLetters   []coverLetter
 	outcomes       map[string][]dto.AchievementOutcome
@@ -89,7 +90,9 @@ func (f *FakeStore) view(p *position) dto.Position {
 	out := p.Position
 	out.Achievements = []dto.Achievement{}
 	for _, a := range f.ownedAchievements(p.userID, p.ID) {
-		out.Achievements = append(out.Achievements, a.Achievement)
+		ach := a.Achievement
+		ach.Variants = f.variantsOf(a.ID)
+		out.Achievements = append(out.Achievements, ach)
 	}
 	return out
 }
@@ -172,7 +175,7 @@ func (f *FakeStore) CreateAchievement(_ context.Context, userID string, in dto.A
 		order = owned[len(owned)-1].order + 1
 	}
 	a := &achievement{
-		Achievement: dto.Achievement{ID: f.nextID(), PositionID: p.ID, Text: in.Text},
+		Achievement: dto.Achievement{ID: f.nextID(), PositionID: p.ID, Text: in.Text, Variants: []dto.AchievementVariant{}},
 		userID:      userID,
 		order:       order,
 	}
@@ -199,6 +202,7 @@ func (f *FakeStore) DeleteAchievement(_ context.Context, userID, id string) erro
 		return errAchievementNotFound
 	}
 	delete(f.achievements, id)
+	f.variants = slices.DeleteFunc(f.variants, func(v *variant) bool { return v.AchievementID == id })
 	return nil
 }
 
