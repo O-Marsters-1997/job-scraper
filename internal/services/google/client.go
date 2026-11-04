@@ -353,8 +353,18 @@ func (c *Client) AddChildTab(ctx context.Context, userID, docID, parentTabID, ti
 	return c.addTab(ctx, userID, docID, parentTabID, title)
 }
 
+const maxTabTitle = 50
+
+func tabTitle(title string) string {
+	runes := []rune(title)
+	if len(runes) <= maxTabTitle {
+		return title
+	}
+	return strings.TrimSpace(string(runes[:maxTabTitle-1])) + "…"
+}
+
 func (c *Client) addTab(ctx context.Context, userID, docID, parentTabID, title string) (string, error) {
-	props := map[string]string{"title": title}
+	props := map[string]string{"title": tabTitle(title)}
 	if parentTabID != "" {
 		props["parentTabId"] = parentTabID
 	}
