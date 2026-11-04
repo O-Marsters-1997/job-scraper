@@ -19,10 +19,11 @@ type Achievement struct {
 }
 
 type AchievementVariant struct {
-	ID            string `json:"id"`
-	AchievementID string `json:"achievementId"`
-	Text          string `json:"text"`
-	Label         string `json:"label"`
+	ID            string            `json:"id"`
+	AchievementID string            `json:"achievementId"`
+	Text          string            `json:"text"`
+	Label         string            `json:"label"`
+	Stats         *AchievementStats `json:"stats"`
 }
 
 type AchievementStats struct {

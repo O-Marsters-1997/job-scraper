@@ -135,15 +135,24 @@ func listPositions(ctx context.Context, q *sqlc.Queries, uid pgtype.UUID) ([]dto
 	if err != nil {
 		return nil, fmt.Errorf("store.ListPositions variants: %w", err)
 	}
-	variantsOf := make(map[pgtype.UUID][]dto.AchievementVariant, len(achievements))
-	for _, v := range variants {
-		variantsOf[v.AchievementID] = append(variantsOf[v.AchievementID], toVariant(v))
-	}
 	statsOf := make(map[pgtype.UUID]*dto.AchievementStats, len(stats))
+	variantStatsOf := make(map[pgtype.UUID]*dto.AchievementStats, len(stats))
 	for _, st := range stats {
-		statsOf[st.AchievementID] = &dto.AchievementStats{
+		s := &dto.AchievementStats{
 			InCVs: int(st.InCvs), LeftOut: int(st.LeftOut), Applied: int(st.Applied), Replied: int(st.Replied),
 		}
+		switch {
+		case st.IsRollup:
+			statsOf[st.AchievementID] = s
+		case st.VariantID.Valid:
+			variantStatsOf[st.VariantID] = s
+		}
+	}
+	variantsOf := make(map[pgtype.UUID][]dto.AchievementVariant, len(achievements))
+	for _, v := range variants {
+		dv := toVariant(v)
+		dv.Stats = variantStatsOf[v.ID]
+		variantsOf[v.AchievementID] = append(variantsOf[v.AchievementID], dv)
 	}
 	out := make([]dto.Position, len(positions))
 	byID := make(map[pgtype.UUID]int, len(positions))

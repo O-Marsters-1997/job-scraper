@@ -33,12 +33,14 @@ let experience: Position[] = [
 						achievementId: "achievement-1",
 						text: "Halved p99 latency on the checkout API with a read-through cache",
 						label: "Checkout",
+						stats: { inCvs: 5, leftOut: 0, applied: 4, replied: 2 },
 					},
 					{
 						id: "variant-2",
 						achievementId: "achievement-1",
 						text: "Cut API latency by 40%",
 						label: "",
+						stats: null,
 					},
 				],
 				stats: { inCvs: 8, leftOut: 1, applied: 6, replied: 3 },
@@ -246,6 +248,7 @@ export function createVariant(
 	const variant: AchievementVariant = {
 		id: `variant-${faker.string.uuid().slice(0, 8)}`,
 		achievementId,
+		stats: null,
 		...input,
 	};
 	mapAchievement(achievementId, (a) => ({

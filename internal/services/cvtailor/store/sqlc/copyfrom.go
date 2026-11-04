@@ -39,6 +39,7 @@ func (r iteratorForInsertAchievementOutcomes) Values() ([]interface{}, error) {
 		r.rows[0].InFinalCv,
 		r.rows[0].OutscoredKeptButLeftOut,
 		r.rows[0].Reworded,
+		r.rows[0].VariantID,
 	}, nil
 }
 
@@ -47,5 +48,5 @@ func (r iteratorForInsertAchievementOutcomes) Err() error {
 }
 
 func (q *Queries) InsertAchievementOutcomes(ctx context.Context, arg []InsertAchievementOutcomesParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"achievement_outcomes"}, []string{"draft_id", "achievement_id", "user_id", "job_id", "p_yes", "p_no", "on_source_cv", "in_final_cv", "outscored_kept_but_left_out", "reworded"}, &iteratorForInsertAchievementOutcomes{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"achievement_outcomes"}, []string{"draft_id", "achievement_id", "user_id", "job_id", "p_yes", "p_no", "on_source_cv", "in_final_cv", "outscored_kept_but_left_out", "reworded", "variant_id"}, &iteratorForInsertAchievementOutcomes{rows: arg})
 }

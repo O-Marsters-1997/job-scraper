@@ -98,8 +98,14 @@ func achievementOutcomeParams(draftID, userID, jobID pgtype.UUID, outcomes []dto
 		if err != nil {
 			return nil, err
 		}
+		var vid pgtype.UUID
+		if o.VariantID != nil {
+			if vid, err = data.UUID(*o.VariantID); err != nil {
+				return nil, err
+			}
+		}
 		params[i] = sqlc.InsertAchievementOutcomesParams{
-			DraftID: draftID, AchievementID: aid, UserID: userID, JobID: jobID,
+			DraftID: draftID, AchievementID: aid, VariantID: vid, UserID: userID, JobID: jobID,
 			PYes: float8(o.PYes), PNo: float8(o.PNo),
 			OnSourceCv: o.OnSourceCV, InFinalCv: o.InFinalCV, OutscoredKeptButLeftOut: o.OutscoredKeptButLeftOut, Reworded: o.Reworded,
 		}

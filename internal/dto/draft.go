@@ -21,6 +21,7 @@ type DraftInput struct {
 
 type AchievementOutcome struct {
 	AchievementID           string
+	VariantID               *string
 	PYes, PNo               *float64
 	OnSourceCV              bool
 	InFinalCV               bool

@@ -170,6 +170,7 @@ type AchievementOutcome struct {
 	OutscoredKeptButLeftOut bool
 	Reworded                bool
 	CreatedAt               pgtype.Timestamptz
+	VariantID               pgtype.UUID
 }
 
 type AchievementVariant struct {

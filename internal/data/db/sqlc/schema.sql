@@ -261,9 +261,11 @@ CREATE TABLE achievement_outcomes (
     outscored_kept_but_left_out BOOLEAN     NOT NULL,
     reworded                    BOOLEAN     NOT NULL,
     created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    variant_id                  UUID        REFERENCES achievement_variants(id) ON DELETE SET NULL,
     PRIMARY KEY (draft_id, achievement_id)
 );
 CREATE INDEX achievement_outcomes_achievement_idx ON achievement_outcomes (achievement_id);
+CREATE INDEX achievement_outcomes_variant_idx ON achievement_outcomes (variant_id) WHERE variant_id IS NOT NULL;
 
 CREATE TABLE profile_attempts (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

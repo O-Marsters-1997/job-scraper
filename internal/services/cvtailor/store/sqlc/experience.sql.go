@@ -215,6 +215,8 @@ progress AS (
     GROUP BY r.application_id
 )
 SELECT o.achievement_id,
+       o.variant_id,
+       (GROUPING(o.variant_id) = 1)::bool AS is_rollup,
        (COUNT(*) FILTER (WHERE o.in_final_cv))::int AS in_cvs,
        (COUNT(*) FILTER (WHERE o.outscored_kept_but_left_out))::int AS left_out,
        (COUNT(*) FILTER (WHERE o.in_final_cv AND p.applied))::int AS applied,
@@ -224,11 +226,13 @@ JOIN tailored_cvs t ON t.id = o.draft_id AND t.outcome = 'kept'
 LEFT JOIN applications ap ON ap.user_id = o.user_id AND ap.job_id = o.job_id
 LEFT JOIN progress p ON p.application_id = ap.id
 WHERE o.user_id = $1
-GROUP BY o.achievement_id
+GROUP BY GROUPING SETS ((o.achievement_id), (o.achievement_id, o.variant_id))
 `
 
 type ListAchievementStatsRow struct {
 	AchievementID pgtype.UUID
+	VariantID     pgtype.UUID
+	IsRollup      bool
 	InCvs         int32
 	LeftOut       int32
 	Applied       int32
@@ -246,6 +250,8 @@ func (q *Queries) ListAchievementStats(ctx context.Context, userID pgtype.UUID) 
 		var i ListAchievementStatsRow
 		if err := rows.Scan(
 			&i.AchievementID,
+			&i.VariantID,
+			&i.IsRollup,
 			&i.InCvs,
 			&i.LeftOut,
 			&i.Applied,

@@ -12,6 +12,7 @@ export const achievementVariantSchema = z.object({
 	achievementId: z.string(),
 	text: z.string(),
 	label: z.string(),
+	stats: achievementStatsSchema.nullable(),
 });
 
 export type AchievementVariant = z.infer<typeof achievementVariantSchema>;
