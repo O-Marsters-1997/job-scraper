@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -79,6 +81,47 @@ func TestService_DraftLean(t *testing.T) {
 		}
 		if got[0].CloserMatch != nil {
 			t.Errorf("CloserMatch = %+v, want none when the bullet scores higher", got[0].CloserMatch)
+		}
+	})
+
+	t.Run("a variant is a closer match, from the bullet's own achievement or another", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		own, other := e.pos.Achievements[0], e.pos.Achievements[1]
+		ownVariant, err := e.store.CreateAchievementVariant(t.Context(), userID, dto.AchievementVariantInput{AchievementID: own.ID, Text: "Own variant"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		otherVariant, err := e.store.CreateAchievementVariant(t.Context(), userID, dto.AchievementVariantInput{AchievementID: other.ID, Text: "Other variant"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.asker.answers = map[string]dto.Answer{
+			questionPrefix + own.Text:          {PYes: 0.4, PNo: 0.1},
+			questionPrefix + ownVariant.Text:   {PYes: 0.7, PNo: 0.1},
+			questionPrefix + other.Text:        {PYes: 0.5, PNo: 0.1},
+			questionPrefix + otherVariant.Text: {PYes: 0.2, PNo: 0.1},
+		}
+
+		got, err := e.svc.DraftLean(t.Context(), userID, dto.DraftLeanQuery{ID: id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := &dto.CloserMatch{AchievementID: own.ID, VariantID: &ownVariant.ID, Text: ownVariant.Text, Lean: 0.6}
+		if diff := cmp.Diff(want, got[0].CloserMatch, cmpopts.EquateApprox(0, 1e-9)); diff != "" {
+			t.Errorf("own variant CloserMatch (-want +got):\n%s", diff)
+		}
+
+		e.asker.answers[questionPrefix+ownVariant.Text] = dto.Answer{PYes: 0.2, PNo: 0.1}
+		e.asker.answers[questionPrefix+otherVariant.Text] = dto.Answer{PYes: 0.9, PNo: 0.1}
+		got, err = e.svc.DraftLean(t.Context(), userID, dto.DraftLeanQuery{ID: id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want = &dto.CloserMatch{AchievementID: other.ID, VariantID: &otherVariant.ID, Text: otherVariant.Text, Lean: 0.8}
+		if diff := cmp.Diff(want, got[0].CloserMatch, cmpopts.EquateApprox(0, 1e-9)); diff != "" {
+			t.Errorf("other achievement's best line CloserMatch (-want +got):\n%s", diff)
 		}
 	})
 

@@ -327,6 +327,7 @@ type SuggestInput struct {
 
 type CloserMatch struct {
 	AchievementID string  `json:"achievementId"`
+	VariantID     *string `json:"variantId"`
 	Text          string  `json:"text"`
 	Lean          float64 `json:"lean"`
 }
