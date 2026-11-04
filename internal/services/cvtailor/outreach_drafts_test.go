@@ -2,6 +2,7 @@ package cvtailor_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -121,6 +122,21 @@ func TestModule_OutreachDraft(t *testing.T) {
 		}
 	})
 
+	t.Run("an open Reach out suggests just applied with that job's title", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t, cachedAnswers{})
+		id := e.store.SeedOutreachSubject(userID, dto.OutreachSubject{Name: "Sam", Role: "Recruiter", Company: "Globex", SentSinceReply: 1, JobID: "job-1", JobTitle: "Platform Engineer", ReachingOut: true})
+
+		got, err := e.mod.OutreachDraft(ctx, userID, dto.DraftQuery{ContactID: id})
+		if err != nil {
+			t.Fatalf("OutreachDraft() error = %v", err)
+		}
+
+		if got.Kind != dto.OutreachJustApplied || !strings.Contains(got.Body, "Platform Engineer") {
+			t.Errorf("OutreachDraft() = %+v, want just_applied naming Platform Engineer", got)
+		}
+	})
+
 	t.Run("a chosen template and Achievement override the suggestion", func(t *testing.T) {
 		t.Parallel()
 		e := newEnv(t, cachedAnswers{})
@@ -134,6 +150,16 @@ func TestModule_OutreachDraft(t *testing.T) {
 		want := "Hi Sam, I'm a backend engineer looking at Globex's CTO roles. Recently I cut p99 latency by 40%. Open to a quick chat about what you're hiring for?"
 		if got.Kind != dto.OutreachRecruiter || got.AchievementID != e.first.ID || got.Body != want {
 			t.Errorf("OutreachDraft() = %+v, want the chosen recruiter template and Achievement", got)
+		}
+	})
+
+	t.Run("a placeholder contact is refused until it has a name", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t, cachedAnswers{})
+		id := e.store.SeedOutreachSubject(userID, dto.OutreachSubject{Company: "Globex"})
+		_, err := e.mod.OutreachDraft(ctx, userID, dto.DraftQuery{ContactID: id})
+		if !apperr.IsKind(err, apperr.KindUnprocessable) {
+			t.Errorf("OutreachDraft(placeholder) error = %v, want unprocessable", err)
 		}
 	})
 

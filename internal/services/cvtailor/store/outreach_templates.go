@@ -22,6 +22,7 @@ var (
 // DefaultOutreachTemplates is the one default per kind a new User starts with.
 func DefaultOutreachTemplates() []dto.OutreachTemplateInput {
 	return []dto.OutreachTemplateInput{
+		{Kind: dto.OutreachJustApplied, Name: "Applied, CV attached", Body: "Hi {first_name}, I've just applied for the {role} role at {company} and attached my CV. [hook] Happy to chat whenever suits."},
 		{Kind: dto.OutreachRecruiter, Name: "Agency intro", Body: "Hi {first_name}, I'm a backend engineer looking at {company}'s {role} roles. Recently I {achievement}. Open to a quick chat about what you're hiring for?"},
 		{Kind: dto.OutreachHiringManager, Name: "Short and direct", Body: "Hi {first_name}, {hook} I {achievement}, and I'd love to bring that to {company}. Worth 15 minutes?"},
 		{Kind: dto.OutreachReferral, Name: "Referral ask", Body: "Hi {first_name}, I'm applying to {company} and saw you're on the team. {hook} Would you be open to referring me, or telling me what the team's like?"},
@@ -184,7 +185,7 @@ func (s *Store) OutreachSubject(ctx context.Context, userID, contactID string) (
 	if err != nil {
 		return dto.OutreachSubject{}, fmt.Errorf("store.OutreachSubject: %w", err)
 	}
-	return dto.OutreachSubject{Name: r.Name, Role: r.Role, Company: r.Company, JobID: r.JobID, JobTitle: r.JobTitle, SentSinceReply: int(r.SentSinceReply)}, nil
+	return dto.OutreachSubject{Name: r.Name, Role: r.Role, Company: r.Company, JobID: r.JobID, JobTitle: r.JobTitle, SentSinceReply: int(r.SentSinceReply), ReachingOut: r.ReachingOut}, nil
 }
 
 func (s *Store) ListAchievementsNewestFirst(ctx context.Context, userID string) ([]dto.Achievement, error) {

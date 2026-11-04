@@ -15,6 +15,7 @@ const contactOutcomeSchema = z.enum([
 ]);
 const contactChannelSchema = z.enum(["linkedin", "email", "call", "inbound"]);
 export const outreachKindSchema = z.enum([
+	"just_applied",
 	"recruiter",
 	"hiring_manager",
 	"referral",
@@ -35,9 +36,16 @@ const contactEventSchema = z.object({
 	job_title: z.string().optional(),
 });
 
+const reachOutSchema = z.object({
+	task_id: z.string(),
+	job_id: z.string(),
+	job_title: z.string(),
+	done_at: z.string().nullable(),
+});
+
 export const contactSchema = z.object({
 	id: z.string(),
-	name: z.string(),
+	name: z.string().nullable(),
 	role: z.string(),
 	company_id: z.string().nullable(),
 	company_name: z.string(),
@@ -53,12 +61,12 @@ export const contactSchema = z.object({
 	reply: z.string(),
 	sent_since_reply: z.number().int(),
 	history: z.array(contactEventSchema),
+	reach_outs: z.array(reachOutSchema),
 	created_at: z.string(),
 });
 
 export const contactSentSchema = z.object({
 	contact: contactSchema,
-	moved_application_chase: z.boolean(),
 });
 
 type ContactOutcome = z.infer<typeof contactOutcomeSchema>;
@@ -77,6 +85,13 @@ export interface ContactInput {
 	linkedin_url: string;
 	email: string;
 }
+
+export type ReachOutInput = {
+	job_id: string;
+} & (
+	| { contact_id: string; contact: null }
+	| { contact_id: null; contact: ContactInput | null }
+);
 
 export interface MarkSentInput {
 	channel: ContactChannel;

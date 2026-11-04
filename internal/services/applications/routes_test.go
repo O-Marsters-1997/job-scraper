@@ -36,7 +36,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PUT /applications/{id}/status", "PUT /applications/{id}/chase",
 		"DELETE /applications/{id}/chase",
 		"GET /applications/for-jobs",
-		"GET /contacts/", "POST /contacts/", "DELETE /contacts/{id}", "POST /contacts/{id}/sent", "POST /contacts/{id}/reply",
+		"GET /contacts/", "POST /contacts/", "POST /contacts/reach-out", "DELETE /contacts/{id}", "POST /contacts/{id}/sent", "POST /contacts/{id}/reply",
 		"GET /jobs/{id}/note", "PUT /jobs/{id}/note",
 		"GET /jobs/{id}/comments",
 		"POST /jobs/{id}/comments", "PATCH /comments/{id}", "DELETE /comments/{id}",
@@ -44,7 +44,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	handlerstest.RejectsMalformedBody(t, r,
 		"POST /application-statuses/", "PATCH /application-statuses/{id}",
 		"POST /applications/", "PATCH /applications/{id}", "POST /applications/delete", "PUT /applications/{id}/chase", "PUT /applications/{id}/status",
-		"POST /contacts/", "POST /contacts/{id}/sent", "POST /contacts/{id}/reply",
+		"POST /contacts/", "POST /contacts/reach-out", "POST /contacts/{id}/sent", "POST /contacts/{id}/reply",
 		"PUT /jobs/{id}/note",
 		"POST /jobs/{id}/comments", "PATCH /comments/{id}",
 	)
@@ -129,6 +129,10 @@ func TestRoutesHappyPaths(t *testing.T) {
 		t.Fatalf("got %d contacts, want 1", len(got))
 	}
 	handlerstest.Do[[]dto.ContactCompany](t, r, http.StatusOK, "GET /contacts/companies", "")
+	reached := handlerstest.Do[dto.Contact](t, r, http.StatusCreated, "POST /contacts/reach-out", `{"job_id":"job-1","contact":{"name":"Pat"}}`)
+	if len(reached.ReachOuts) != 1 {
+		t.Errorf("reach-out reach_outs = %+v, want one", reached.ReachOuts)
+	}
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /contacts/"+contact.ID, "")
 
 	if got := handlerstest.Do[dto.JobNote](t, r, http.StatusOK, "GET /jobs/job-1/note", ""); got.Body != "" {

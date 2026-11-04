@@ -98,7 +98,7 @@ const AccordionContent = <T extends ValidComponent = "div">(
 		>
 			<div
 				class={cn(
-					"z-accordion-content-inner h-(--kb-collapsible-content-height) [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
+					"z-accordion-content-inner [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
 					local.class,
 				)}
 				data-slot="accordion-content-inner"

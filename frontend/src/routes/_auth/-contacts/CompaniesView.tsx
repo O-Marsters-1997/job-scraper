@@ -12,13 +12,14 @@ import {
 	companyRows,
 	filterRows,
 } from "@/lib/contactCompanies";
+import { displayName } from "@/lib/contactName";
+import { eventLabel } from "@/lib/eventLabel";
 import { cn } from "@/lib/utils";
 import {
 	type Contact,
 	type ContactCompany,
 	relationshipLabels,
 } from "@/types/contact";
-import { eventLabel } from "./ContactCard";
 
 const filters: { key: CompanyFilter; label: string }[] = [
 	{ key: "all", label: "All" },
@@ -49,7 +50,9 @@ function CompanyPeople(props: {
 						onClick={() => props.onOpenPerson(c)}
 						class="flex items-baseline justify-between gap-3 px-4 py-2 text-left text-sm hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 					>
-						<span class="truncate font-medium text-foreground">{c.name}</span>
+						<span class="truncate font-medium text-foreground">
+							{displayName(c)}
+						</span>
 						<span class="truncate text-xs text-muted">{c.role}</span>
 					</button>
 				)}
@@ -233,7 +236,7 @@ export function CompaniesView(props: {
 											<For each={row.people.slice(0, 4)}>
 												{(c) => (
 													<span class="flex h-7 w-7 items-center justify-center rounded-full bg-surface-muted text-xs font-medium text-muted ring-2 ring-surface">
-														{c.name.charAt(0).toUpperCase()}
+														{(c.name ?? "?").charAt(0).toUpperCase()}
 													</span>
 												)}
 											</For>

@@ -137,6 +137,10 @@ _Avoid_: Todo, reminder, action
 A label for what kind of Task it is (Apply, Follow up, Reach out, Prep by default, plus custom). Each user has their own set, seeded at signup.
 _Avoid_: Category, kind
 
+**Placeholder contact**:
+A Contact with no name yet, made when the user skips the Reach out dialog. It keeps its open Reach out; drafting and marking sent wait until it is named.
+_Avoid_: Anonymous contact, stub
+
 **Due list**:
 The iOS tab of what needs acting on now: chases due, open Tasks and ready CV drafts (ADR 0035).
 _Avoid_: Agenda, today, inbox — Tasks have no due date, only chases do

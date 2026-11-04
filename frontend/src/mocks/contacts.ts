@@ -5,8 +5,10 @@ import type {
 	ContactInput,
 	ContactSent,
 	MarkSentInput,
+	ReachOutInput,
 	RecordReplyInput,
 } from "@/types/contact";
+import { getJobs } from "./jobs";
 
 let contacts: Contact[] = [];
 let nextId = 1;
@@ -83,10 +85,50 @@ export function createContact(input: ContactInput): Contact {
 		reply: "",
 		sent_since_reply: 0,
 		history: [event("added", { job_id: input.job_id })],
+		reach_outs: [],
 		created_at: new Date().toISOString(),
 	};
 	contacts = [...contacts, contact];
 	return contact;
+}
+
+export function reachOut(input: ReachOutInput): Contact {
+	const job = getJobs().find((j) => j.ID === input.job_id);
+	let contact: Contact;
+	if (input.contact_id !== null) {
+		contact = replace(input.contact_id, (c) => c);
+	} else if (input.contact !== null) {
+		contact = createContact({ ...input.contact, job_id: input.job_id });
+	} else {
+		contact = replace(
+			createContact({
+				name: "",
+				role: "",
+				company_id: job?.CompanyID ?? null,
+				company_name: job?.CompanySlug ?? "",
+				job_id: input.job_id,
+				linkedin_url: "",
+				email: "",
+			}).id,
+			(c) => ({ ...c, name: null }),
+		);
+	}
+	return replace(contact.id, (c) => ({
+		...c,
+		reach_outs: [
+			{
+				task_id: `task-${nextId++}`,
+				job_id: input.job_id,
+				job_title: job?.Title ?? "",
+				done_at: null,
+			},
+			...c.reach_outs,
+		],
+	}));
+}
+
+export function nameContact(id: string, name: string): Contact {
+	return replace(id, (c) => ({ ...c, name }));
 }
 
 export function markContactSent(id: string, input: MarkSentInput): ContactSent {
@@ -101,27 +143,19 @@ export function markContactSent(id: string, input: MarkSentInput): ContactSent {
 				...(input.template_kind ? { template_kind: input.template_kind } : {}),
 			}),
 		];
-		if (sent + 1 >= 3) {
-			history.push(event("closed", { outcome: "no_reply" }));
-			return {
-				...c,
-				history,
-				stage: "closed",
-				outcome: "no_reply",
-				follow_up_by: null,
-				sent_since_reply: sent + 1,
-			};
-		}
 		const { outcome: _outcome, ...rest } = c;
 		return {
 			...rest,
 			history,
 			stage: "messaged",
-			follow_up_by: inDays(sent === 0 ? 5 : 7),
 			sent_since_reply: sent + 1,
+			reach_outs: c.reach_outs.map((r) => ({
+				...r,
+				done_at: r.done_at ?? new Date().toISOString(),
+			})),
 		};
 	});
-	return { contact, moved_application_chase: false };
+	return { contact };
 }
 
 export function recordContactReply(

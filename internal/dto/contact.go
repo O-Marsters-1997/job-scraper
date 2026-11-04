@@ -40,6 +40,7 @@ const (
 )
 
 const (
+	OutreachJustApplied   OutreachKind = "just_applied"
 	OutreachRecruiter     OutreachKind = "recruiter"
 	OutreachHiringManager OutreachKind = "hiring_manager"
 	OutreachReferral      OutreachKind = "referral"
@@ -61,7 +62,7 @@ type ContactEvent struct {
 
 type Contact struct {
 	ID             string         `json:"id"`
-	Name           string         `json:"name"`
+	Name           *string        `json:"name"` // nil for a Placeholder contact
 	Role           string         `json:"role"`
 	CompanyID      *string        `json:"company_id"`
 	CompanyName    string         `json:"company_name"` // the Company's name when linked, else the typed fallback
@@ -77,7 +78,26 @@ type Contact struct {
 	Reply          string         `json:"reply"`
 	SentSinceReply int            `json:"sent_since_reply"`
 	History        []ContactEvent `json:"history"`
+	ReachOuts      []ReachOut     `json:"reach_outs"`
 	CreatedAt      time.Time      `json:"created_at"`
+}
+
+type ReachOut struct {
+	TaskID   string     `json:"task_id"`
+	JobID    string     `json:"job_id"`
+	JobTitle string     `json:"job_title"`
+	DoneAt   *time.Time `json:"done_at"`
+}
+
+type ReachOutInput struct {
+	JobID     string        `json:"job_id"`
+	ContactID *string       `json:"contact_id"`
+	Contact   *ContactInput `json:"contact"` // at most one of ContactID or Contact; neither makes a Placeholder contact
+}
+
+type NameContactInput struct {
+	ID   string `json:"-" path:"id"`
+	Name string `json:"name"`
 }
 
 type ContactInput struct {
@@ -103,8 +123,7 @@ type MarkSentInput struct {
 }
 
 type ContactSent struct {
-	Contact               Contact `json:"contact"`
-	MovedApplicationChase bool    `json:"moved_application_chase"`
+	Contact Contact `json:"contact"`
 }
 
 type RecordReplyInput struct {

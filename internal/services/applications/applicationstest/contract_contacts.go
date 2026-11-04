@@ -69,30 +69,25 @@ func runContactContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
-	t.Run("sends book follow-ups at five then seven days and the third send closes", func(t *testing.T) {
+	t.Run("a send marks the contact messaged and never sets a follow-up or closes it", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
 		c := addContact(t, f, dto.ContactInput{Name: "Sam"})
-		first := sendContact(t, f, c.ID, 0).Contact
-		if first.Stage != dto.ContactStageMessaged || followUp(first) != "2026-10-06" {
-			t.Errorf("first send = stage %q follow-up %q, want messaged 2026-10-06", first.Stage, followUp(first))
+		var got dto.Contact
+		for _, day := range []int{0, 5, 12} {
+			got = sendContact(t, f, c.ID, day).Contact
 		}
-		second := sendContact(t, f, c.ID, 5).Contact
-		if followUp(second) != "2026-10-13" || second.SentSinceReply != 2 {
-			t.Errorf("second send = follow-up %q sent %d, want 2026-10-13 and 2", followUp(second), second.SentSinceReply)
-		}
-		third := sendContact(t, f, c.ID, 12).Contact
-		if third.Stage != dto.ContactStageClosed || third.Outcome != dto.ContactOutcomeNoReply || third.FollowUpBy != nil {
-			t.Errorf("third send = %q %q %v, want closed no_reply and no follow-up", third.Stage, third.Outcome, third.FollowUpBy)
+		if got.Stage != dto.ContactStageMessaged || got.FollowUpBy != nil || got.SentSinceReply != 3 {
+			t.Errorf("third send = stage %q follow-up %v sent %d, want messaged, none, 3", got.Stage, got.FollowUpBy, got.SentSinceReply)
 		}
 		wantKinds := []dto.ContactEventKind{
-			dto.ContactEventAdded, dto.ContactEventSent, dto.ContactEventSent, dto.ContactEventSent, dto.ContactEventClosed,
+			dto.ContactEventAdded, dto.ContactEventSent, dto.ContactEventSent, dto.ContactEventSent,
 		}
-		if diff := cmp.Diff(wantKinds, historyKinds(third)); diff != "" {
+		if diff := cmp.Diff(wantKinds, historyKinds(got)); diff != "" {
 			t.Errorf("history after third send mismatch (-want +got):\n%s", diff)
 		}
-		if got := third.History[1]; got.Channel != dto.ContactChannelEmail || got.TemplateName != "Intro" || got.TemplateKind != dto.OutreachRecruiter {
-			t.Errorf("sent event = %+v, want email, Intro, recruiter", got)
+		if e := got.History[1]; e.Channel != dto.ContactChannelEmail || e.TemplateName != "Intro" || e.TemplateKind != dto.OutreachRecruiter {
+			t.Errorf("sent event = %+v, want email, Intro, recruiter", e)
 		}
 	})
 
@@ -107,8 +102,8 @@ func runContactContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Fatalf("RecordContactReply(...) err = %v", err)
 		}
 		got := sendContact(t, f, c.ID, 7).Contact
-		if got.SentSinceReply != 1 || followUp(got) != "2026-10-13" || got.Stage != dto.ContactStageMessaged {
-			t.Errorf("send after reply = sent %d follow-up %q stage %q, want 1, 2026-10-13, messaged", got.SentSinceReply, followUp(got), got.Stage)
+		if got.SentSinceReply != 1 || got.Stage != dto.ContactStageMessaged {
+			t.Errorf("send after reply = sent %d stage %q, want 1, messaged", got.SentSinceReply, got.Stage)
 		}
 		if got.Reply != "ping me later" {
 			t.Errorf("reply after a later send = %q, want it kept", got.Reply)
@@ -158,30 +153,19 @@ func runContactContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
-	t.Run("a send moves the linked application's chase", func(t *testing.T) {
+	t.Run("a send leaves the linked application's chase alone", func(t *testing.T) {
 		t.Parallel()
 		f := newStore(t)
-		app := createApp(t, f, dto.CreateApplicationInput{})
+		createApp(t, f, dto.CreateApplicationInput{})
+		before, err := f.Store.ListApplications(t.Context(), f.UserID, dto.ApplicationsQuery{})
+		if err != nil || len(before) != 1 {
+			t.Fatalf("ListApplications(before) = %+v, %v, want one", before, err)
+		}
 		c := addContact(t, f, dto.ContactInput{Name: "Sam", JobID: &f.JobID})
-		if c.ApplicationID == nil || *c.ApplicationID != app.ID {
-			t.Errorf("CreateContact(...) application = %v, want %s", c.ApplicationID, app.ID)
-		}
-		got := sendContact(t, f, c.ID, 0)
-		if !got.MovedApplicationChase {
-			t.Errorf("MarkContactSent(...) moved_application_chase = false, want true")
-		}
-		apps, err := f.Store.ListApplications(t.Context(), f.UserID, dto.ApplicationsQuery{})
-		if err != nil || len(apps) != 1 || apps[0].ChaseBy == nil || apps[0].ChaseBy.Format(time.DateOnly) != "2026-10-06" {
-			t.Errorf("ListApplications(...) = %+v, %v, want chase_by 2026-10-06", apps, err)
-		}
-	})
-
-	t.Run("a send without a linked application moves nothing", func(t *testing.T) {
-		t.Parallel()
-		f := newStore(t)
-		c := addContact(t, f, dto.ContactInput{Name: "Sam", JobID: &f.JobID})
-		if got := sendContact(t, f, c.ID, 0); got.MovedApplicationChase {
-			t.Errorf("MarkContactSent(no application) moved_application_chase = true, want false")
+		sendContact(t, f, c.ID, 0)
+		after, err := f.Store.ListApplications(t.Context(), f.UserID, dto.ApplicationsQuery{})
+		if err != nil || len(after) != 1 || !cmp.Equal(before[0].ChaseBy, after[0].ChaseBy) {
+			t.Errorf("ListApplications(after send) = %+v, %v, want chase_by unchanged from %+v", after, err, before)
 		}
 	})
 

@@ -11,25 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countSentSinceReply = `-- name: CountSentSinceReply :one
-SELECT COUNT(*)::int FROM contact_events s
-WHERE s.contact_id = $1 AND s.kind = 'sent'
-  AND NOT EXISTS (
-      SELECT 1 FROM contact_events r
-      WHERE r.contact_id = s.contact_id AND r.kind = 'reply'
-        AND (r.occurred_on, r.created_at) > (s.occurred_on, s.created_at))
-`
-
-func (q *Queries) CountSentSinceReply(ctx context.Context, contactID pgtype.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, countSentSinceReply, contactID)
-	var column_1 int32
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const createContact = `-- name: CreateContact :one
 INSERT INTO contacts (user_id, name, role, company_id, company_name, job_id, linkedin_url, email)
-SELECT $1::uuid, $2, $3,
+SELECT $1::uuid, $2::text, $3,
        COALESCE($4::uuid, j.company_id), $5,
        $6::uuid, $7, $8
 FROM (SELECT 1) one
@@ -39,7 +23,7 @@ RETURNING id
 
 type CreateContactParams struct {
 	UserID      pgtype.UUID
-	Name        string
+	Name        pgtype.Text
 	Role        string
 	CompanyID   pgtype.UUID
 	CompanyName string
@@ -84,8 +68,8 @@ func (q *Queries) DeleteContact(ctx context.Context, arg DeleteContactParams) (i
 const insertContactEvent = `-- name: InsertContactEvent :exec
 INSERT INTO contact_events (contact_id, kind, occurred_on, channel, template_kind, template_name, outcome, job_id)
 SELECT c.id, $1, $2::date, $3, $4,
-       $5, $6, c.job_id
-FROM contacts c WHERE c.id = $7
+       $5, $6, COALESCE($7::uuid, c.job_id)
+FROM contacts c WHERE c.id = $8
 `
 
 type InsertContactEventParams struct {
@@ -95,6 +79,7 @@ type InsertContactEventParams struct {
 	TemplateKind pgtype.Text
 	TemplateName string
 	Outcome      pgtype.Text
+	JobID        pgtype.UUID
 	ContactID    pgtype.UUID
 }
 
@@ -106,6 +91,7 @@ func (q *Queries) InsertContactEvent(ctx context.Context, arg InsertContactEvent
 		arg.TemplateKind,
 		arg.TemplateName,
 		arg.Outcome,
+		arg.JobID,
 		arg.ContactID,
 	)
 	return err
@@ -121,8 +107,7 @@ FROM companies co
 LEFT JOIN tracked_companies tc
        ON tc.user_id = $1 AND tc.company_id = co.id
       AND tc.enabled AND tc.review_state <> 'dismissed'
-WHERE tc.company_id IS NOT NULL
-   OR EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = $1 AND c.company_id = co.id)
+WHERE EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = $1 AND c.company_id = co.id)
 ORDER BY co.name, co.id
 LIMIT 500
 `
@@ -270,6 +255,49 @@ func (q *Queries) ListContactEvents(ctx context.Context, contactIds []pgtype.UUI
 	return items, nil
 }
 
+const listContactReachOuts = `-- name: ListContactReachOuts :many
+SELECT t.contact_id, t.id AS task_id, t.job_id, COALESCE(j.title, '')::text AS job_title, t.completed_at
+FROM tasks t
+JOIN task_types tt ON tt.id = t.type_id AND tt.system_key = 'reach_out'
+LEFT JOIN jobs j ON j.id = t.job_id
+WHERE t.contact_id = ANY($1::uuid[]) AND t.job_id IS NOT NULL
+ORDER BY t.created_at DESC, t.id
+`
+
+type ListContactReachOutsRow struct {
+	ContactID   pgtype.UUID
+	TaskID      pgtype.UUID
+	JobID       pgtype.UUID
+	JobTitle    string
+	CompletedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListContactReachOuts(ctx context.Context, contactIds []pgtype.UUID) ([]ListContactReachOutsRow, error) {
+	rows, err := q.db.Query(ctx, listContactReachOuts, contactIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListContactReachOutsRow
+	for rows.Next() {
+		var i ListContactReachOutsRow
+		if err := rows.Scan(
+			&i.ContactID,
+			&i.TaskID,
+			&i.JobID,
+			&i.JobTitle,
+			&i.CompletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listContacts = `-- name: ListContacts :many
 SELECT
     c.id, c.name, c.role, c.company_id,
@@ -306,7 +334,7 @@ type ListContactsParams struct {
 
 type ListContactsRow struct {
 	ID             pgtype.UUID
-	Name           string
+	Name           pgtype.Text
 	Role           string
 	CompanyID      pgtype.UUID
 	CompanyName    string
@@ -363,7 +391,7 @@ func (q *Queries) ListContacts(ctx context.Context, arg ListContactsParams) ([]L
 }
 
 const lockContact = `-- name: LockContact :one
-SELECT stage FROM contacts WHERE id = $1 AND user_id = $2 FOR UPDATE
+SELECT stage, name FROM contacts WHERE id = $1 AND user_id = $2 FOR UPDATE
 `
 
 type LockContactParams struct {
@@ -371,11 +399,90 @@ type LockContactParams struct {
 	UserID pgtype.UUID
 }
 
-func (q *Queries) LockContact(ctx context.Context, arg LockContactParams) (string, error) {
+type LockContactRow struct {
+	Stage string
+	Name  pgtype.Text
+}
+
+func (q *Queries) LockContact(ctx context.Context, arg LockContactParams) (LockContactRow, error) {
 	row := q.db.QueryRow(ctx, lockContact, arg.ID, arg.UserID)
-	var stage string
-	err := row.Scan(&stage)
-	return stage, err
+	var i LockContactRow
+	err := row.Scan(&i.Stage, &i.Name)
+	return i, err
+}
+
+const lockContactAtJobCompany = `-- name: LockContactAtJobCompany :one
+SELECT c.id
+FROM contacts c
+JOIN jobs j ON j.company_id = c.company_id
+WHERE c.id = $1 AND c.user_id = $2 AND j.id = $3
+FOR UPDATE OF c
+`
+
+type LockContactAtJobCompanyParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+}
+
+func (q *Queries) LockContactAtJobCompany(ctx context.Context, arg LockContactAtJobCompanyParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, lockContactAtJobCompany, arg.ID, arg.UserID, arg.JobID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const openReachOutJob = `-- name: OpenReachOutJob :one
+SELECT t.job_id FROM tasks t
+JOIN task_types tt ON tt.id = t.type_id AND tt.system_key = 'reach_out'
+WHERE t.contact_id = $1 AND t.user_id = $2 AND t.completed_at IS NULL AND t.job_id IS NOT NULL
+ORDER BY t.created_at DESC, t.id
+LIMIT 1
+`
+
+type OpenReachOutJobParams struct {
+	ContactID pgtype.UUID
+	UserID    pgtype.UUID
+}
+
+func (q *Queries) OpenReachOutJob(ctx context.Context, arg OpenReachOutJobParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, openReachOutJob, arg.ContactID, arg.UserID)
+	var job_id pgtype.UUID
+	err := row.Scan(&job_id)
+	return job_id, err
+}
+
+const setContactMessaged = `-- name: SetContactMessaged :exec
+UPDATE contacts SET stage = 'messaged', outcome = NULL, updated_at = NOW()
+WHERE id = $1 AND user_id = $2
+`
+
+type SetContactMessagedParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) SetContactMessaged(ctx context.Context, arg SetContactMessagedParams) error {
+	_, err := q.db.Exec(ctx, setContactMessaged, arg.ID, arg.UserID)
+	return err
+}
+
+const setContactName = `-- name: SetContactName :execrows
+UPDATE contacts SET name = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3
+`
+
+type SetContactNameParams struct {
+	Name   pgtype.Text
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) SetContactName(ctx context.Context, arg SetContactNameParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setContactName, arg.Name, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setContactState = `-- name: SetContactState :exec
@@ -404,26 +511,4 @@ func (q *Queries) SetContactState(ctx context.Context, arg SetContactStateParams
 		arg.UserID,
 	)
 	return err
-}
-
-const setLinkedApplicationChase = `-- name: SetLinkedApplicationChase :execrows
-UPDATE applications a
-SET chase_by = $1::date
-FROM contacts c
-WHERE c.id = $2 AND c.user_id = $3
-  AND a.user_id = c.user_id AND a.job_id = c.job_id
-`
-
-type SetLinkedApplicationChaseParams struct {
-	ChaseBy   pgtype.Date
-	ContactID pgtype.UUID
-	UserID    pgtype.UUID
-}
-
-func (q *Queries) SetLinkedApplicationChase(ctx context.Context, arg SetLinkedApplicationChaseParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setLinkedApplicationChase, arg.ChaseBy, arg.ContactID, arg.UserID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }

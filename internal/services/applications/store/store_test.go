@@ -556,6 +556,175 @@ func TestCreateContactRejectsUnknownJob(t *testing.T) {
 	}
 }
 
+func TestReachOut(t *testing.T) {
+	t.Parallel()
+	setup := func(t *testing.T) (st *store.Store, pool *pgxpool.Pool, userID, jobID, otherJobID string) {
+		t.Helper()
+		st, pool, userID = newStore(t)
+		pgtest.InTx(t, pool, true, func(tx pgx.Tx) error {
+			return tasks.NewFacade(pool).SeedDefaults(t.Context(), tx, userID)
+		})
+		jobID = pgtest.InsertJob(t, pool, "Engineer", "Engineer")
+		otherJobID = pgtest.InsertJob(t, pool, "Designer", "Designer")
+		var acme string
+		if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug, name) VALUES ('acme', 'Acme Ltd') RETURNING id`).Scan(&acme); err != nil {
+			t.Fatalf("insert company err = %v", err)
+		}
+		if _, err := pool.Exec(t.Context(), `UPDATE jobs SET company_id = $1 WHERE id = $2`, acme, jobID); err != nil {
+			t.Fatalf("link job to company err = %v", err)
+		}
+		return st, pool, userID, jobID, otherJobID
+	}
+
+	t.Run("new contact opens a reach out task linked to the contact", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID, jobID, _ := setup(t)
+		if _, err := pool.Exec(t.Context(), `UPDATE task_types SET name = 'Say hello' WHERE user_id = $1 AND system_key = 'reach_out'`, userID); err != nil {
+			t.Fatalf("rename type err = %v", err)
+		}
+
+		got, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID, Contact: &dto.ContactInput{Name: "Sam"}}, time.Now())
+		if err != nil {
+			t.Fatalf("ReachOut err = %v", err)
+		}
+		if len(got.ReachOuts) != 1 || got.ReachOuts[0].JobID != jobID || got.ReachOuts[0].JobTitle != "Engineer" || got.ReachOuts[0].DoneAt != nil {
+			t.Fatalf("ReachOut reach_outs = %+v, want one open for the job", got.ReachOuts)
+		}
+		var linked int
+		if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM tasks WHERE id = $1 AND contact_id = $2 AND job_id = $3`,
+			got.ReachOuts[0].TaskID, got.ID, jobID).Scan(&linked); err != nil || linked != 1 {
+			t.Errorf("linked task rows = %d (err %v), want 1", linked, err)
+		}
+	})
+
+	t.Run("a placeholder is listed with its reach out, refuses mark sent, and keeps the reach out once named", func(t *testing.T) {
+		t.Parallel()
+		st, _, userID, jobID, _ := setup(t)
+		ph, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID}, time.Now())
+		if err != nil {
+			t.Fatalf("ReachOut err = %v", err)
+		}
+		if ph.Name != nil || ph.CompanyName != "Acme Ltd" || len(ph.ReachOuts) != 1 {
+			t.Fatalf("placeholder = name %v company %q reach_outs %+v, want unnamed at Acme with one reach out", ph.Name, ph.CompanyName, ph.ReachOuts)
+		}
+		if _, err := st.MarkContactSent(t.Context(), userID, dto.MarkSentInput{ID: ph.ID, Channel: dto.ContactChannelEmail}, time.Now()); !errors.Is(err, store.ErrContactUnnamed) {
+			t.Errorf("MarkContactSent(placeholder) err = %v, want ErrContactUnnamed", err)
+		}
+		named, err := st.NameContact(t.Context(), userID, dto.NameContactInput{ID: ph.ID, Name: "Sam"})
+		if err != nil || named.Name == nil || *named.Name != "Sam" || len(named.ReachOuts) != 1 {
+			t.Errorf("NameContact = %+v, %v, want Sam with the reach out kept", named, err)
+		}
+	})
+
+	t.Run("existing contact is reused and a repeat does not duplicate the task", func(t *testing.T) {
+		t.Parallel()
+		st, _, userID, jobID, _ := setup(t)
+		first, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID, Contact: &dto.ContactInput{Name: "Sam"}}, time.Now())
+		if err != nil {
+			t.Fatalf("first ReachOut err = %v", err)
+		}
+		again, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID, ContactID: &first.ID}, time.Now())
+		if err != nil {
+			t.Fatalf("repeat ReachOut err = %v", err)
+		}
+		if len(again.ReachOuts) != 1 || again.ReachOuts[0].TaskID != first.ReachOuts[0].TaskID {
+			t.Errorf("repeat reach_outs = %+v, want the original task only", again.ReachOuts)
+		}
+	})
+
+	t.Run("a second contact at the same job opens a second task", func(t *testing.T) {
+		t.Parallel()
+		st, _, userID, jobID, _ := setup(t)
+		a, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID, Contact: &dto.ContactInput{Name: "Sam"}}, time.Now())
+		if err != nil {
+			t.Fatalf("ReachOut a err = %v", err)
+		}
+		b, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID, Contact: &dto.ContactInput{Name: "Pat"}}, time.Now())
+		if err != nil {
+			t.Fatalf("ReachOut b err = %v", err)
+		}
+		if a.ReachOuts[0].TaskID == b.ReachOuts[0].TaskID {
+			t.Errorf("both contacts share task %s, want one task each", a.ReachOuts[0].TaskID)
+		}
+	})
+
+	t.Run("CompleteForContact closes the contact's open tasks only", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID, jobID, _ := setup(t)
+		sam, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID, Contact: &dto.ContactInput{Name: "Sam"}}, time.Now())
+		if err != nil {
+			t.Fatalf("ReachOut sam err = %v", err)
+		}
+		if _, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID, Contact: &dto.ContactInput{Name: "Pat"}}, time.Now()); err != nil {
+			t.Fatalf("ReachOut pat err = %v", err)
+		}
+		pgtest.InTx(t, pool, true, func(tx pgx.Tx) error {
+			return tasks.NewFacade(pool).CompleteForContact(t.Context(), tx, userID, sam.ID)
+		})
+
+		got, err := st.ListContacts(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("ListContacts err = %v", err)
+		}
+		for _, c := range got {
+			if done := c.ReachOuts[0].DoneAt != nil; done != (c.ID == sam.ID) {
+				t.Errorf("%v reach out done = %v, want %v", c.Name, done, c.ID == sam.ID)
+			}
+		}
+	})
+
+	t.Run("mark sent completes the open reach out and records its job", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID, jobID, otherJobID := setup(t)
+		c, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID, Contact: &dto.ContactInput{Name: "Sam"}}, time.Now())
+		if err != nil {
+			t.Fatalf("ReachOut err = %v", err)
+		}
+		if _, err := pool.Exec(t.Context(), `UPDATE contacts SET job_id = $1 WHERE id = $2`, otherJobID, c.ID); err != nil {
+			t.Fatalf("repoint contact err = %v", err)
+		}
+		sent, err := st.MarkContactSent(t.Context(), userID, dto.MarkSentInput{ID: c.ID, Channel: dto.ContactChannelEmail}, time.Now())
+		if err != nil {
+			t.Fatalf("MarkContactSent err = %v", err)
+		}
+		if len(sent.Contact.ReachOuts) != 1 || sent.Contact.ReachOuts[0].DoneAt == nil || sent.Contact.Stage != dto.ContactStageMessaged {
+			t.Errorf("MarkContactSent = stage %q reach_outs %+v, want messaged with the task done", sent.Contact.Stage, sent.Contact.ReachOuts)
+		}
+		last := sent.Contact.History[len(sent.Contact.History)-1]
+		if last.Kind != dto.ContactEventSent || last.JobID == nil || *last.JobID != jobID {
+			t.Errorf("last event = %+v, want a sent event for the reach out's job %s", last, jobID)
+		}
+	})
+
+	t.Run("contact at another company is rejected", func(t *testing.T) {
+		t.Parallel()
+		st, _, userID, jobID, otherJobID := setup(t)
+		elsewhere, err := st.CreateContact(t.Context(), userID, dto.ContactInput{Name: "Eve", CompanyName: "Elsewhere", JobID: &otherJobID}, time.Now())
+		if err != nil {
+			t.Fatalf("CreateContact err = %v", err)
+		}
+		_, err = st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID, ContactID: &elsewhere.ID}, time.Now())
+		if !errors.Is(err, store.ErrReachOutContact) {
+			t.Errorf("ReachOut(contact elsewhere) err = %v, want ErrReachOutContact", err)
+		}
+	})
+
+	t.Run("a failed task write rolls the contact back", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID, jobID, _ := setup(t)
+		if _, err := pool.Exec(t.Context(), `DELETE FROM task_types WHERE user_id = $1 AND system_key = 'reach_out'`, userID); err != nil {
+			t.Fatalf("delete type err = %v", err)
+		}
+		if _, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID, Contact: &dto.ContactInput{Name: "Sam"}}, time.Now()); err == nil {
+			t.Fatal("ReachOut without a reach out type err = nil, want error")
+		}
+		var n int
+		if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM contacts WHERE user_id = $1`, userID).Scan(&n); err != nil || n != 0 {
+			t.Errorf("contacts after failed ReachOut = %d (err %v), want 0", n, err)
+		}
+	})
+}
+
 func TestDeleteContactRemovesEvents(t *testing.T) {
 	t.Parallel()
 	st, pool, userID := newStore(t)
@@ -590,11 +759,11 @@ func TestListContactCompanies(t *testing.T) {
 		}
 		return id
 	}
-	acme, tracked, dismissed, stranger := company("acme", "direct"), company("bolt", "agency"), company("cast", "direct"), company("dune", "direct")
+	acme, tracked, dismissed, stranger, bare := company("acme", "direct"), company("bolt", "agency"), company("cast", "direct"), company("dune", "direct"), company("elm", "direct")
 
-	exec(`INSERT INTO tracked_companies (user_id, company_id) VALUES ($1, $2)`, userID, tracked)
+	exec(`INSERT INTO tracked_companies (user_id, company_id) VALUES ($1, $2), ($1, $3)`, userID, tracked, bare)
 	exec(`INSERT INTO tracked_companies (user_id, company_id, review_state) VALUES ($1, $2, 'dismissed')`, userID, dismissed)
-	exec(`INSERT INTO contacts (user_id, name, company_id) VALUES ($1, 'Sam', $2)`, userID, acme)
+	exec(`INSERT INTO contacts (user_id, name, company_id) VALUES ($1, 'Sam', $2), ($1, 'Bo', $3), ($1, 'Di', $4)`, userID, acme, tracked, dismissed)
 
 	covered := pgtest.InsertJob(t, pool, "Covered", "covered")
 	uncovered := pgtest.InsertJob(t, pool, "Uncovered", "uncovered")
@@ -611,10 +780,10 @@ func TestListContactCompanies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListContactCompanies err = %v", err)
 	}
-	if len(got) != 2 || got[0].ID != acme || got[1].ID != tracked {
-		t.Fatalf("ListContactCompanies = %+v, want acme (contact) then tracked bolt only", got)
+	if len(got) != 3 || got[0].ID != acme || got[1].ID != tracked || got[2].ID != dismissed {
+		t.Fatalf("ListContactCompanies = %+v, want acme, bolt, cast (tracked elm has no contact)", got)
 	}
-	if got[0].Tracked || !got[1].Tracked || got[1].Kind != "agency" {
+	if got[0].Tracked || !got[1].Tracked || got[2].Tracked || got[1].Kind != "agency" {
 		t.Errorf("tracked/kind = %v/%v %q, want false/true agency", got[0].Tracked, got[1].Tracked, got[1].Kind)
 	}
 	wantJobs := []dto.ContactCompanyJob{{JobID: uncovered, Title: "Uncovered"}, {JobID: covered, Title: "Covered", HasContact: true}}

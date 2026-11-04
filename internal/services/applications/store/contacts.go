@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -37,41 +38,106 @@ func (s *Store) CreateContact(ctx context.Context, userID string, in dto.Contact
 	if err != nil {
 		return dto.Contact{}, err
 	}
-	companyID, err := optUUID(in.CompanyID)
-	if err != nil {
-		return dto.Contact{}, err
-	}
-	jobID, err := optUUID(in.JobID)
-	if err != nil {
-		return dto.Contact{}, err
-	}
 	var out dto.Contact
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.queries.WithTx(tx)
-		id, err := q.CreateContact(ctx, sqlc.CreateContactParams{
-			UserID: uid, Name: in.Name, Role: in.Role, CompanyID: companyID, CompanyName: in.CompanyName,
-			JobID: jobID, LinkedinUrl: data.Text(in.LinkedInURL), Email: data.Text(in.Email),
-		})
+		id, err := insertContact(ctx, q, uid, in, today)
 		if err != nil {
-			return err
-		}
-		if err := q.InsertContactEvent(ctx, sqlc.InsertContactEventParams{
-			ContactID: id, Kind: string(dto.ContactEventAdded), OccurredOn: pgDate(today),
-		}); err != nil {
 			return err
 		}
 		out, err = readContact(ctx, q, uid, id)
 		return err
 	})
-	switch {
-	case data.IsForeignKeyViolation(err, "contacts_job_id_fkey"):
-		return dto.Contact{}, ErrContactJobNotFound
-	case data.IsForeignKeyViolation(err, "contacts_company_id_fkey"):
-		return dto.Contact{}, ErrContactCompanyNotFound
-	case err != nil:
-		return dto.Contact{}, data.QueryErr("CreateContact", err)
+	if err != nil {
+		return dto.Contact{}, contactWriteErr("CreateContact", err)
 	}
 	return out, nil
+}
+
+func (s *Store) ReachOut(ctx context.Context, userID string, in dto.ReachOutInput, today time.Time) (dto.Contact, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.Contact{}, err
+	}
+	jid, err := data.UUID(in.JobID)
+	if err != nil {
+		return dto.Contact{}, ErrContactJobNotFound
+	}
+	var out dto.Contact
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.queries.WithTx(tx)
+		var (
+			id  pgtype.UUID
+			err error
+		)
+		switch {
+		case in.Contact != nil || in.ContactID == nil:
+			contact := dto.ContactInput{}
+			if in.Contact != nil {
+				contact = *in.Contact
+			}
+			contact.JobID = &in.JobID
+			contact.CompanyID = nil
+			if id, err = insertContact(ctx, q, uid, contact, today); err != nil {
+				return err
+			}
+		default:
+			var cid pgtype.UUID
+			if cid, err = optUUID(in.ContactID); err != nil {
+				return ErrReachOutContact
+			}
+			id, err = q.LockContactAtJobCompany(ctx, sqlc.LockContactAtJobCompanyParams{ID: cid, UserID: uid, JobID: jid})
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrReachOutContact
+			}
+			if err != nil {
+				return err
+			}
+		}
+		if _, err := s.tasks.Open(ctx, tx, userID, in.JobID, id.String()); err != nil {
+			return err
+		}
+		out, err = readContact(ctx, q, uid, id)
+		return err
+	})
+	if err != nil {
+		return dto.Contact{}, contactWriteErr("ReachOut", err)
+	}
+	return out, nil
+}
+
+func insertContact(ctx context.Context, q *sqlc.Queries, uid pgtype.UUID, in dto.ContactInput, today time.Time) (pgtype.UUID, error) {
+	companyID, err := optUUID(in.CompanyID)
+	if err != nil {
+		return pgtype.UUID{}, err
+	}
+	jobID, err := optUUID(in.JobID)
+	if err != nil {
+		return pgtype.UUID{}, err
+	}
+	id, err := q.CreateContact(ctx, sqlc.CreateContactParams{
+		UserID: uid, Name: data.Text(in.Name), Role: in.Role, CompanyID: companyID, CompanyName: in.CompanyName,
+		JobID: jobID, LinkedinUrl: data.Text(in.LinkedInURL), Email: data.Text(in.Email),
+	})
+	if err != nil {
+		return pgtype.UUID{}, err
+	}
+	err = q.InsertContactEvent(ctx, sqlc.InsertContactEventParams{
+		ContactID: id, Kind: string(dto.ContactEventAdded), OccurredOn: pgDate(today),
+	})
+	return id, err
+}
+
+func contactWriteErr(op string, err error) error {
+	switch {
+	case errors.Is(err, ErrReachOutContact):
+		return err
+	case data.IsForeignKeyViolation(err, "contacts_job_id_fkey"), data.IsForeignKeyViolation(err, "tasks_job_id_fkey"):
+		return ErrContactJobNotFound
+	case data.IsForeignKeyViolation(err, "contacts_company_id_fkey"):
+		return ErrContactCompanyNotFound
+	}
+	return data.QueryErr(op, err)
 }
 
 func (s *Store) ListContacts(ctx context.Context, userID string) ([]dto.Contact, error) {
@@ -84,6 +150,25 @@ func (s *Store) ListContacts(ctx context.Context, userID string) ([]dto.Contact,
 		return nil, fmt.Errorf("store.ListContacts: %w", err)
 	}
 	return out, nil
+}
+
+func (s *Store) NameContact(ctx context.Context, userID string, in dto.NameContactInput) (dto.Contact, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.Contact{}, err
+	}
+	cid, err := data.UUID(in.ID)
+	if err != nil {
+		return dto.Contact{}, err
+	}
+	n, err := s.queries.SetContactName(ctx, sqlc.SetContactNameParams{Name: data.Text(in.Name), ID: cid, UserID: uid})
+	if err != nil {
+		return dto.Contact{}, fmt.Errorf("store.NameContact: %w", err)
+	}
+	if n == 0 {
+		return dto.Contact{}, data.ErrNotFound
+	}
+	return readContact(ctx, s.queries, uid, cid)
 }
 
 func (s *Store) DeleteContact(ctx context.Context, userID, id string) error {
@@ -117,42 +202,30 @@ func (s *Store) MarkContactSent(ctx context.Context, userID string, in dto.MarkS
 	var out dto.ContactSent
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.queries.WithTx(tx)
-		if _, err := q.LockContact(ctx, sqlc.LockContactParams{ID: cid, UserID: uid}); err != nil {
+		locked, err := q.LockContact(ctx, sqlc.LockContactParams{ID: cid, UserID: uid})
+		if err != nil {
 			return err
 		}
-		sentBefore, err := q.CountSentSinceReply(ctx, cid)
-		if err != nil {
+		if !locked.Name.Valid {
+			return ErrContactUnnamed
+		}
+		reachOutJob, err := q.OpenReachOutJob(ctx, sqlc.OpenReachOutJobParams{ContactID: cid, UserID: uid})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		if err := q.InsertContactEvent(ctx, sqlc.InsertContactEventParams{
 			ContactID: cid, Kind: string(dto.ContactEventSent), OccurredOn: pgDate(today),
 			Channel: data.Text(string(in.Channel)), TemplateKind: data.Text(string(in.TemplateKind)),
-			TemplateName: in.TemplateName,
+			TemplateName: in.TemplateName, JobID: reachOutJob,
 		}); err != nil {
 			return err
 		}
-		followUpBy, closes := NextSend(int(sentBefore), today)
-		state := sqlc.SetContactStateParams{ID: cid, UserID: uid, Stage: string(dto.ContactStageMessaged), FollowUpBy: optDate(followUpBy)}
-		if closes {
-			state.Stage = string(dto.ContactStageClosed)
-			state.Outcome = data.Text(string(dto.ContactOutcomeNoReply))
-			if err := q.InsertContactEvent(ctx, sqlc.InsertContactEventParams{
-				ContactID: cid, Kind: string(dto.ContactEventClosed), OccurredOn: pgDate(today),
-				Outcome: state.Outcome,
-			}); err != nil {
-				return err
-			}
-		}
-		if err := q.SetContactState(ctx, state); err != nil {
+		if err := q.SetContactMessaged(ctx, sqlc.SetContactMessagedParams{ID: cid, UserID: uid}); err != nil {
 			return err
 		}
-		moved, err := q.SetLinkedApplicationChase(ctx, sqlc.SetLinkedApplicationChaseParams{
-			ChaseBy: state.FollowUpBy, ContactID: cid, UserID: uid,
-		})
-		if err != nil {
+		if err := s.tasks.CompleteForContact(ctx, tx, userID, in.ID); err != nil {
 			return err
 		}
-		out.MovedApplicationChase = moved > 0
 		out.Contact, err = readContact(ctx, q, uid, cid)
 		return err
 	})
@@ -223,7 +296,11 @@ func readContacts(ctx context.Context, q *sqlc.Queries, userID, id pgtype.UUID) 
 	if err != nil {
 		return nil, err
 	}
-	return toContactDTOs(rows, events), nil
+	reachOuts, err := q.ListContactReachOuts(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	return toContactDTOs(rows, events, reachOuts), nil
 }
 
 func (s *Store) ListContactCompanies(ctx context.Context, userID string) ([]dto.ContactCompany, error) {

@@ -20,9 +20,44 @@ func tooLong(field, v string, limit int) error {
 }
 
 func (s *Service) CreateContact(ctx context.Context, userID string, in dto.ContactInput) (dto.Contact, error) {
+	if err := validateContact(&in); err != nil {
+		return dto.Contact{}, err
+	}
+	return s.store.CreateContact(ctx, userID, in, time.Now())
+}
+
+func (s *Service) ReachOut(ctx context.Context, userID string, in dto.ReachOutInput) (dto.Contact, error) {
+	if in.JobID == "" {
+		return dto.Contact{}, apperr.Invalid("job_id is required")
+	}
+	if in.ContactID != nil && in.Contact != nil {
+		return dto.Contact{}, apperr.Invalid("set at most one of contact_id or contact")
+	}
+	if in.Contact != nil {
+		contact := *in.Contact
+		if err := validateContact(&contact); err != nil {
+			return dto.Contact{}, err
+		}
+		in.Contact = &contact
+	}
+	return s.store.ReachOut(ctx, userID, in, time.Now())
+}
+
+func (s *Service) NameContact(ctx context.Context, userID string, in dto.NameContactInput) (dto.Contact, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
 		return dto.Contact{}, apperr.Invalid("name is required")
+	}
+	if err := tooLong("name", in.Name, 200); err != nil {
+		return dto.Contact{}, err
+	}
+	return s.store.NameContact(ctx, userID, in)
+}
+
+func validateContact(in *dto.ContactInput) error {
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" {
+		return apperr.Invalid("name is required")
 	}
 	for _, f := range []struct {
 		field, value string
@@ -32,13 +67,13 @@ func (s *Service) CreateContact(ctx context.Context, userID string, in dto.Conta
 		{"linkedin_url", in.LinkedInURL, 2048}, {"email", in.Email, 320},
 	} {
 		if err := tooLong(f.field, f.value, f.limit); err != nil {
-			return dto.Contact{}, err
+			return err
 		}
 	}
 	if in.LinkedInURL != "" && !strings.HasPrefix(in.LinkedInURL, "http://") && !strings.HasPrefix(in.LinkedInURL, "https://") {
-		return dto.Contact{}, apperr.Invalid("linkedin_url must start with http:// or https://")
+		return apperr.Invalid("linkedin_url must start with http:// or https://")
 	}
-	return s.store.CreateContact(ctx, userID, in, time.Now())
+	return nil
 }
 
 func (s *Service) MarkContactSent(ctx context.Context, userID string, in dto.MarkSentInput) (dto.ContactSent, error) {
@@ -48,7 +83,7 @@ func (s *Service) MarkContactSent(ctx context.Context, userID string, in dto.Mar
 		return dto.ContactSent{}, apperr.Invalid("invalid channel")
 	}
 	switch in.TemplateKind {
-	case "", dto.OutreachRecruiter, dto.OutreachHiringManager, dto.OutreachReferral, dto.OutreachFollowUp:
+	case "", dto.OutreachJustApplied, dto.OutreachRecruiter, dto.OutreachHiringManager, dto.OutreachReferral, dto.OutreachFollowUp:
 	default:
 		return dto.ContactSent{}, apperr.Invalid("invalid template_kind")
 	}

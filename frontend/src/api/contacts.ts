@@ -7,6 +7,7 @@ import {
 	contactSchema,
 	contactSentSchema,
 	type MarkSentInput,
+	type ReachOutInput,
 	type RecordReplyInput,
 } from "../types/contact";
 import { apiFetch, apiFetchVoid, jsonInit } from "./client";
@@ -30,6 +31,26 @@ export async function createContact(input: ContactInput): Promise<Contact> {
 	return mocked(
 		(db) => db.createContact(input),
 		() => apiFetch("/contacts", contactSchema, jsonInit("POST", input)),
+	);
+}
+
+export async function reachOut(input: ReachOutInput): Promise<Contact> {
+	return mocked(
+		(db) => db.reachOut(input),
+		() =>
+			apiFetch("/contacts/reach-out", contactSchema, jsonInit("POST", input)),
+	);
+}
+
+export async function nameContact(id: string, name: string): Promise<Contact> {
+	return mocked(
+		(db) => db.nameContact(id, name),
+		() =>
+			apiFetch(
+				`/contacts/${encodeURIComponent(id)}/name`,
+				contactSchema,
+				jsonInit("POST", { name }),
+			),
 	);
 }
 

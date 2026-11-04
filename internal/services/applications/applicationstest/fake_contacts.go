@@ -20,7 +20,9 @@ func dayString(t time.Time) string { return t.UTC().Format(time.DateOnly) }
 
 func (f *FakeStore) addEvent(c *fakeContact, e dto.ContactEvent) {
 	e.ID = fmt.Sprintf("event-%d", len(c.History)+1)
-	e.JobID = c.JobID
+	if e.JobID == nil {
+		e.JobID = c.JobID
+	}
 	c.History = append(c.History, e)
 	c.SentSinceReply = 0
 	for i := len(c.History) - 1; i >= 0 && c.History[i].Kind != dto.ContactEventReply; i-- {
@@ -33,6 +35,7 @@ func (f *FakeStore) addEvent(c *fakeContact, e dto.ContactEvent) {
 func (f *FakeStore) viewContact(c fakeContact) dto.Contact {
 	out := c.Contact
 	out.History = slices.Clone(c.History)
+	out.ReachOuts = slices.Clone(c.ReachOuts)
 	out.ApplicationID = nil
 	if c.JobID != nil {
 		for _, a := range f.apps {
@@ -48,14 +51,49 @@ func (f *FakeStore) CreateContact(_ context.Context, userID string, in dto.Conta
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.nextOutreach++
+	var name *string
+	if in.Name != "" {
+		name = &in.Name
+	}
 	c := fakeContact{userID: userID, Contact: dto.Contact{
-		ID: fmt.Sprintf("contact-%d", f.nextOutreach), Name: in.Name, Role: in.Role,
+		ID: fmt.Sprintf("contact-%d", f.nextOutreach), Name: name, Role: in.Role,
 		CompanyID: in.CompanyID, CompanyName: in.CompanyName, JobID: in.JobID,
 		LinkedInURL: in.LinkedInURL, Email: in.Email, Stage: dto.ContactStageToContact,
-		History: []dto.ContactEvent{}, CreatedAt: time.Now(),
+		History: []dto.ContactEvent{}, ReachOuts: []dto.ReachOut{}, CreatedAt: time.Now(),
 	}}
 	f.addEvent(&c, dto.ContactEvent{Kind: dto.ContactEventAdded, OccurredOn: dayString(today)})
 	f.outreach[c.ID] = c
+	return f.viewContact(c), nil
+}
+
+func (f *FakeStore) ReachOut(ctx context.Context, userID string, in dto.ReachOutInput, today time.Time) (dto.Contact, error) {
+	var cid string
+	if in.Contact != nil || in.ContactID == nil {
+		contact := dto.ContactInput{}
+		if in.Contact != nil {
+			contact = *in.Contact
+		}
+		contact.JobID = &in.JobID
+		created, err := f.CreateContact(ctx, userID, contact, today)
+		if err != nil {
+			return dto.Contact{}, err
+		}
+		cid = created.ID
+	} else {
+		cid = *in.ContactID
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.outreach[cid]
+	if !ok || c.userID != userID {
+		return dto.Contact{}, store.ErrReachOutContact
+	}
+	open := slices.ContainsFunc(c.ReachOuts, func(r dto.ReachOut) bool { return r.JobID == in.JobID && r.DoneAt == nil })
+	if !open {
+		f.nextOutreach++
+		c.ReachOuts = append([]dto.ReachOut{{TaskID: fmt.Sprintf("task-%d", f.nextOutreach), JobID: in.JobID}}, c.ReachOuts...)
+		f.outreach[cid] = c
+	}
 	return f.viewContact(c), nil
 }
 
@@ -76,6 +114,18 @@ func (f *FakeStore) ListContactCompanies(context.Context, string) ([]dto.Contact
 	return []dto.ContactCompany{}, nil
 }
 
+func (f *FakeStore) NameContact(_ context.Context, userID string, in dto.NameContactInput) (dto.Contact, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.outreach[in.ID]
+	if !ok || c.userID != userID {
+		return dto.Contact{}, data.ErrNotFound
+	}
+	c.Name = &in.Name
+	f.outreach[c.ID] = c
+	return f.viewContact(c), nil
+}
+
 func (f *FakeStore) DeleteContact(_ context.Context, userID, id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -93,32 +143,27 @@ func (f *FakeStore) MarkContactSent(_ context.Context, userID string, in dto.Mar
 	if !ok || c.userID != userID {
 		return dto.ContactSent{}, data.ErrNotFound
 	}
-	followUpBy, closes := store.NextSend(c.SentSinceReply, today)
-	f.addEvent(&c, dto.ContactEvent{
+	if c.Name == nil {
+		return dto.ContactSent{}, store.ErrContactUnnamed
+	}
+	ev := dto.ContactEvent{
 		Kind: dto.ContactEventSent, OccurredOn: dayString(today), Channel: in.Channel,
 		TemplateKind: in.TemplateKind, TemplateName: in.TemplateName,
-	})
-	c.Stage, c.Outcome, c.FollowUpBy = dto.ContactStageMessaged, "", nil
-	if followUpBy != nil {
-		day := dayString(*followUpBy)
-		c.FollowUpBy = &day
 	}
-	if closes {
-		c.Stage, c.Outcome = dto.ContactStageClosed, dto.ContactOutcomeNoReply
-		f.addEvent(&c, dto.ContactEvent{Kind: dto.ContactEventClosed, OccurredOn: dayString(today), Outcome: dto.ContactOutcomeNoReply})
-	}
-	f.outreach[c.ID] = c
-
-	moved := false
-	if c.JobID != nil {
-		for id, a := range f.apps {
-			if a.UserID == userID && a.JobID == *c.JobID {
-				a.ChaseBy, moved = followUpBy, true
-				f.apps[id] = a
-			}
+	c.ReachOuts = slices.Clone(c.ReachOuts)
+	for i, r := range c.ReachOuts {
+		if r.DoneAt != nil {
+			continue
 		}
+		if ev.JobID == nil {
+			ev.JobID = &c.ReachOuts[i].JobID
+		}
+		c.ReachOuts[i].DoneAt = &today
 	}
-	return dto.ContactSent{Contact: f.viewContact(c), MovedApplicationChase: moved}, nil
+	f.addEvent(&c, ev)
+	c.Stage, c.Outcome = dto.ContactStageMessaged, ""
+	f.outreach[c.ID] = c
+	return dto.ContactSent{Contact: f.viewContact(c)}, nil
 }
 
 func (f *FakeStore) RecordContactReply(_ context.Context, userID string, in dto.RecordReplyInput, today time.Time) (dto.Contact, error) {

@@ -23,6 +23,8 @@ var ErrApplicationExists = apperr.Conflict("application already exists for this 
 var (
 	ErrContactJobNotFound     = apperr.Invalid("job not found")
 	ErrContactCompanyNotFound = apperr.Invalid("company not found")
+	ErrReachOutContact        = apperr.Invalid("contact is not at this job's company")
+	ErrContactUnnamed         = apperr.Unprocessable("name this contact first")
 )
 
 // EventRecorder logs application events inside the caller's transaction; the
@@ -37,6 +39,8 @@ type TaskSync interface {
 	ApplicationTracked(ctx context.Context, tx pgx.Tx, userID, jobID string) error
 	ApplicationApplied(ctx context.Context, tx pgx.Tx, userID, jobID string) error
 	ApplicationsDeleted(ctx context.Context, tx pgx.Tx, userID string, jobIDs []string) error
+	Open(ctx context.Context, tx pgx.Tx, userID, jobID, contactID string) (taskID string, err error)
+	CompleteForContact(ctx context.Context, tx pgx.Tx, userID, contactID string) error
 }
 
 type Store struct {

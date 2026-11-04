@@ -303,7 +303,7 @@ type CompanyProfile struct {
 type Contact struct {
 	ID          pgtype.UUID
 	UserID      pgtype.UUID
-	Name        string
+	Name        pgtype.Text
 	Role        string
 	CompanyID   pgtype.UUID
 	CompanyName string
@@ -769,6 +769,7 @@ type Task struct {
 	CompletedAt pgtype.Timestamptz
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
+	ContactID   pgtype.UUID
 }
 
 type TaskType struct {

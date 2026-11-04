@@ -7,6 +7,7 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
+import { ReachOutDialog } from "@/components/contacts/ReachOutDialog";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
@@ -37,6 +38,7 @@ import {
 	useApplications,
 	useUpdateApplication,
 } from "@/hooks/useApplications";
+import { useContacts } from "@/hooks/useContacts";
 import { useCoverLetters } from "@/hooks/useCoverLetters";
 import { useCVTemplates } from "@/hooks/useCVTemplates";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
@@ -57,12 +59,14 @@ import {
 import { checklistState, linkedDraft } from "@/lib/applicationChecklist";
 import { runNeighbour } from "@/lib/applicationSelection";
 import { formatChaseDate } from "@/lib/chase";
+import { displayName } from "@/lib/contactName";
 import { dayKey, formatDate } from "@/lib/datetime";
 import { queryClient } from "@/lib/queryClient";
 import { loadedData } from "@/lib/queryData";
 import { cn, titleCase } from "@/lib/utils";
 import type { ApplicationWithDetails } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
+import type { Contact } from "@/types/contact";
 import type { CV } from "@/types/cv";
 import type { Job } from "@/types/job";
 import type { Draft } from "@/types/tailoring";
@@ -447,6 +451,99 @@ function CvRowBody(props: {
 	);
 }
 
+const stageLabels: Record<Contact["stage"], string> = {
+	to_contact: "To contact",
+	messaged: "Messaged",
+	replied: "Replied",
+	closed: "Closed",
+};
+
+function ReachOutRow(props: { app: ApplicationWithDetails }) {
+	const job = useJob(() => props.app.JobID);
+	const contacts = useContacts();
+	const [dialogOpen, setDialogOpen] = createSignal(false);
+	const company = () => titleCase(props.app.JobCompanySlug);
+	const people = () =>
+		(contacts.data ?? []).filter((c) =>
+			c.reach_outs.some((r) => r.job_id === props.app.JobID),
+		);
+	const toContact = () =>
+		people().filter((c) =>
+			c.reach_outs.some((r) => r.job_id === props.app.JobID && !r.done_at),
+		).length;
+
+	return (
+		<>
+			<ChecklistRow
+				value="reach-out"
+				done={people().length > 0 && toContact() === 0}
+				title="Reach out"
+				summary={
+					toContact() > 0
+						? `${toContact()} to contact`
+						: people().length > 0
+							? "Sent"
+							: "Optional"
+				}
+			>
+				<Show
+					when={people().length > 0}
+					fallback={
+						<p class="text-xs text-muted">
+							Message the recruiter or hiring manager about this role. They'll
+							wait on your Contacts page until it's sent.
+						</p>
+					}
+				>
+					<ul class="divide-y divide-border overflow-hidden rounded-lg border border-border">
+						<For each={people()}>
+							{(c) => (
+								<li class="flex items-center gap-3 px-3 py-2 text-sm">
+									<span class="min-w-0 flex-1">
+										<span class="block truncate font-medium text-foreground">
+											{displayName(c)}
+										</span>
+										<span class="block truncate text-xs text-muted">
+											{c.role}
+										</span>
+									</span>
+									<Badge variant="secondary">{stageLabels[c.stage]}</Badge>
+								</li>
+							)}
+						</For>
+					</ul>
+				</Show>
+				<div class="flex flex-wrap items-center gap-3">
+					<Button
+						size="sm"
+						variant={people().length > 0 ? "outline" : "default"}
+						class="w-fit"
+						onClick={() => setDialogOpen(true)}
+					>
+						<Icon name="messageSquare" size={14} />
+						{people().length > 0 ? "Reach out to someone else" : "Reach out"}
+					</Button>
+					<Show when={people().length > 0}>
+						<Link
+							to="/contacts"
+							class="text-xs font-medium text-accent-text underline underline-offset-2"
+						>
+							Open Contacts
+						</Link>
+					</Show>
+				</div>
+			</ChecklistRow>
+			<ReachOutDialog
+				open={dialogOpen()}
+				onOpenChange={setDialogOpen}
+				jobId={props.app.JobID}
+				companyId={loadedData(job)?.CompanyID}
+				company={company()}
+			/>
+		</>
+	);
+}
+
 function ChecklistTab(props: {
 	app: ApplicationWithDetails;
 	onAddStep: () => void;
@@ -543,6 +640,7 @@ function ChecklistTab(props: {
 						onAsk={() => setOpen(["apply"])}
 						onApplied={props.onApplied}
 					/>
+					<ReachOutRow app={props.app} />
 					<ChecklistRow
 						value="chase"
 						done={state().followUp === "done"}

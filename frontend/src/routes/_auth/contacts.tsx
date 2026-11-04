@@ -1,21 +1,16 @@
 import { createFileRoute } from "@tanstack/solid-router";
-import { createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, on, onCleanup, Show } from "solid-js";
 import { AddContactDialog } from "@/components/contacts/AddContactDialog";
+import { ContactSection } from "@/components/contacts/ContactSection";
+import { ContactSheet } from "@/components/contacts/ContactSheet";
 import { TemplatesPanel } from "@/components/contacts/TemplatesPanel";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { chaseNowRows } from "@/lib/chaseNow";
-import { contactGroups, groupContacts } from "@/lib/contactGroups";
+import { contactSections } from "@/lib/contactStatus";
 import { loadedData } from "@/lib/queryData";
-import type { ApplicationWithDetails } from "@/types/application";
 import type { Contact, ContactSent } from "@/types/contact";
-import {
-	chasesQueryOptions,
-	useApplications,
-	useChases,
-} from "../../hooks/useApplications";
 import {
 	contactCompaniesQueryOptions,
 	contactsQueryOptions,
@@ -23,19 +18,18 @@ import {
 	useContacts,
 	useDeleteContact,
 } from "../../hooks/useContacts";
+import { displayName } from "../../lib/contactName";
 import { queryClient } from "../../lib/queryClient";
-import { SetAnotherChase } from "./-applications/SetAnotherChase";
-import { ChaseNow } from "./-contacts/ChaseNow";
 import { CompaniesView } from "./-contacts/CompaniesView";
-import { ContactCard } from "./-contacts/ContactCard";
 import { MarkSentDialog, ReplyDialog } from "./-contacts/ContactDialogs";
 import { ReceiptToast } from "./-contacts/ReceiptToast";
+
+const HIGHLIGHT_MS = 3000;
 
 export const Route = createFileRoute("/_auth/contacts")({
 	loader: () =>
 		Promise.all([
 			queryClient.prefetchQuery(contactsQueryOptions),
-			queryClient.prefetchQuery(chasesQueryOptions),
 			queryClient.prefetchQuery(contactCompaniesQueryOptions),
 		]),
 	component: ContactsPage,
@@ -43,8 +37,6 @@ export const Route = createFileRoute("/_auth/contacts")({
 
 function ContactsPage() {
 	const contacts = useContacts();
-	const chases = useChases();
-	const apps = useApplications();
 	const remove = useDeleteContact();
 	const companies = useContactCompanies();
 	const [tab, setTab] = createSignal("people");
@@ -54,13 +46,28 @@ function ContactsPage() {
 	>();
 	const [sending, setSending] = createSignal<Contact | undefined>();
 	const [replying, setReplying] = createSignal<Contact | undefined>();
+	const [openId, setOpenId] = createSignal<string | undefined>();
+	const [highlightId, setHighlightId] = createSignal<string | undefined>();
 	const [receipt, setReceipt] = createSignal<ContactSent | undefined>();
-	const [chasedApps, setChasedApps] = createSignal<ApplicationWithDetails[]>(
-		[],
-	);
+	const openContact = () =>
+		loadedData(contacts)?.find((c) => c.id === openId());
 	const deleteContact = (c: Contact) => {
-		if (confirm(`Delete ${c.name} and their history?`)) remove.mutate(c.id);
+		if (!confirm(`Delete ${displayName(c)} and their history?`)) return;
+		setOpenId(undefined);
+		remove.mutate(c.id);
 	};
+	const sent = (s: ContactSent) => {
+		setOpenId(undefined);
+		setReceipt(s);
+		setHighlightId(s.contact.id);
+	};
+	createEffect(
+		on(highlightId, (id) => {
+			if (!id) return;
+			const timer = setTimeout(() => setHighlightId(undefined), HIGHLIGHT_MS);
+			onCleanup(() => clearTimeout(timer));
+		}),
+	);
 
 	return (
 		<div class="px-7 py-6">
@@ -87,20 +94,14 @@ function ContactsPage() {
 				contact={replying()}
 				onClose={() => setReplying(undefined)}
 			/>
+			<ContactSheet
+				contact={openContact()}
+				onClose={() => setOpenId(undefined)}
+				onDraftSent={sent}
+				onDelete={deleteContact}
+			/>
 
 			<ReceiptToast sent={receipt()} onDismiss={() => setReceipt(undefined)} />
-
-			<For each={chasedApps()}>
-				{(app) => (
-					<SetAnotherChase
-						applicationId={app.ID}
-						title={app.JobTitle}
-						onDone={() =>
-							setChasedApps((prev) => prev.filter((p) => p.ID !== app.ID))
-						}
-					/>
-				)}
-			</For>
 
 			<Tabs value={tab()} onChange={setTab}>
 				<TabsList variant="line" class="mb-3">
@@ -129,66 +130,45 @@ function ContactsPage() {
 				<TabsContent value="people">
 					<QueryBoundary query={contacts}>
 						{(all) => {
-							const rows = () =>
-								chaseNowRows(
-									all(),
-									loadedData(chases) ?? [],
-									new Date(),
-									loadedData(apps) ?? [],
-								);
-							const chaseIds = () =>
-								new Set(
-									rows().flatMap((r) =>
-										r.kind === "contact" ? [r.contact.id] : [],
-									),
-								);
-							const grouped = () =>
-								groupContacts(all().filter((c) => !chaseIds().has(c.id)));
+							const sections = () => contactSections(all());
+							const open = (c: Contact) => setOpenId(c.id);
 							return (
-								<div class="flex flex-col gap-6">
-									<ChaseNow
-										rows={rows()}
-										onSent={setSending}
-										onReply={setReplying}
-										onDelete={deleteContact}
-										onDraftSent={setReceipt}
-										onChased={(app) => setChasedApps((prev) => [...prev, app])}
-									/>
-									<Show
-										when={all().length > 0}
-										fallback={
-											<p class="text-sm text-faint">
-												No contacts yet. Add a recruiter or hiring manager to
-												start.
-											</p>
-										}
-									>
-										<For each={contactGroups}>
-											{(group) => (
-												<Show when={grouped()[group.key].length > 0}>
-													<section>
-														<h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
-															{group.label} ({grouped()[group.key].length})
-														</h2>
-														<div class="grid gap-3 md:grid-cols-2">
-															<For each={grouped()[group.key]}>
-																{(c) => (
-																	<ContactCard
-																		contact={c}
-																		onSent={() => setSending(c)}
-																		onReply={() => setReplying(c)}
-																		onDelete={() => deleteContact(c)}
-																		onDraftSent={setReceipt}
-																	/>
-																)}
-															</For>
-														</div>
-													</section>
-												</Show>
-											)}
-										</For>
-									</Show>
-								</div>
+								<Show
+									when={all().length > 0}
+									fallback={
+										<p class="text-sm text-faint">
+											No contacts yet. Add a recruiter or hiring manager to
+											start.
+										</p>
+									}
+								>
+									<div class="flex flex-col gap-6">
+										<ContactSection
+											title="To contact"
+											kind="toContact"
+											contacts={sections().toContact}
+											highlightId={highlightId()}
+											onOpen={open}
+											onReply={setReplying}
+										/>
+										<ContactSection
+											title="Waiting for a reply"
+											kind="waiting"
+											contacts={sections().waiting}
+											highlightId={highlightId()}
+											onOpen={open}
+											onReply={setReplying}
+										/>
+										<ContactSection
+											title="Everyone else"
+											kind="rest"
+											contacts={sections().rest}
+											highlightId={highlightId()}
+											onOpen={open}
+											onReply={setReplying}
+										/>
+									</div>
+								</Show>
 							);
 						}}
 					</QueryBoundary>

@@ -32,8 +32,10 @@ type Store interface {
 	MarkApplied(ctx context.Context, tx pgx.Tx, userID, jobID string, now time.Time) error
 
 	CreateContact(ctx context.Context, userID string, in dto.ContactInput, today time.Time) (dto.Contact, error)
+	ReachOut(ctx context.Context, userID string, in dto.ReachOutInput, today time.Time) (dto.Contact, error)
 	ListContacts(ctx context.Context, userID string) ([]dto.Contact, error)
 	ListContactCompanies(ctx context.Context, userID string) ([]dto.ContactCompany, error)
+	NameContact(ctx context.Context, userID string, in dto.NameContactInput) (dto.Contact, error)
 	DeleteContact(ctx context.Context, userID, id string) error
 	MarkContactSent(ctx context.Context, userID string, in dto.MarkSentInput, today time.Time) (dto.ContactSent, error)
 	RecordContactReply(ctx context.Context, userID string, in dto.RecordReplyInput, today time.Time) (dto.Contact, error)

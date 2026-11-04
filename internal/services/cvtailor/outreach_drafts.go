@@ -19,6 +19,8 @@ var recruiterRole = regexp.MustCompile(`(?i)recruit|talent|consultant`)
 
 func suggestedKind(s dto.OutreachSubject) dto.OutreachKind {
 	switch {
+	case s.ReachingOut:
+		return dto.OutreachJustApplied
 	case s.SentSinceReply > 0:
 		return dto.OutreachFollowUp
 	case recruiterRole.MatchString(s.Role):
@@ -41,6 +43,9 @@ func (m *Module) outreachSubject(ctx context.Context, userID, contactID string) 
 	subject, err := m.store.OutreachSubject(ctx, userID, contactID)
 	if errors.Is(err, store.ErrContactNotFound) {
 		return dto.OutreachSubject{}, apperr.NotFound("contact not found")
+	}
+	if err == nil && subject.Name == "" {
+		return dto.OutreachSubject{}, apperr.Unprocessable("name this contact before drafting")
 	}
 	return subject, err
 }

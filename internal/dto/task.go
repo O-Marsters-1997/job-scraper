@@ -12,8 +12,9 @@ const (
 type TaskTypeSystemKey string
 
 const (
-	TaskTypeApply  TaskTypeSystemKey = "apply"
-	TaskTypeFinish TaskTypeSystemKey = "finish"
+	TaskTypeApply    TaskTypeSystemKey = "apply"
+	TaskTypeFinish   TaskTypeSystemKey = "finish"
+	TaskTypeReachOut TaskTypeSystemKey = "reach_out"
 )
 
 type TaskType struct {
@@ -38,6 +39,7 @@ type Task struct {
 	TypeColour     string
 	TypeSystemKey  TaskTypeSystemKey
 	JobID          *string
+	ContactID      *string
 	JobTitle       string
 	JobCompanySlug string
 	JobCompanyID   *string

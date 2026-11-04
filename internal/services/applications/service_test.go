@@ -452,6 +452,63 @@ func TestUpdateJobComment(t *testing.T) {
 	}
 }
 
+func TestReachOut(t *testing.T) {
+	t.Parallel()
+	svc, _ := newService(t)
+	existing := "c"
+
+	for _, tt := range []struct {
+		name string
+		in   dto.ReachOutInput
+	}{
+		{"no job", dto.ReachOutInput{Contact: &dto.ContactInput{Name: "Sam"}}},
+		{"both contact and contact_id", dto.ReachOutInput{JobID: "j", ContactID: &existing, Contact: &dto.ContactInput{Name: "Sam"}}},
+		{"blank new contact name", dto.ReachOutInput{JobID: "j", Contact: &dto.ContactInput{Name: " "}}},
+	} {
+		t.Run("rejects "+tt.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := svc.ReachOut(t.Context(), userID, tt.in); !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("ReachOut(%+v) err = %v, want invalid", tt.in, err)
+			}
+		})
+	}
+
+	t.Run("a new contact is listed with its reach out", func(t *testing.T) {
+		t.Parallel()
+		got, err := svc.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: "j", Contact: &dto.ContactInput{Name: " Sam "}})
+		if err != nil {
+			t.Fatalf("ReachOut err = %v", err)
+		}
+		if got.Name == nil || *got.Name != "Sam" || len(got.ReachOuts) != 1 || got.ReachOuts[0].JobID != "j" {
+			t.Errorf("ReachOut = %v %+v, want Sam with one reach out for j", got.Name, got.ReachOuts)
+		}
+	})
+
+	t.Run("neither contact nor contact_id makes a placeholder that cannot be marked sent until named", func(t *testing.T) {
+		t.Parallel()
+		got, err := svc.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: "j"})
+		if err != nil {
+			t.Fatalf("ReachOut err = %v", err)
+		}
+		if got.Name != nil || len(got.ReachOuts) != 1 {
+			t.Fatalf("ReachOut = %v %+v, want no name and one reach out", got.Name, got.ReachOuts)
+		}
+		if _, err := svc.MarkContactSent(t.Context(), userID, dto.MarkSentInput{ID: got.ID, Channel: dto.ContactChannelEmail}); !apperr.IsKind(err, apperr.KindUnprocessable) {
+			t.Errorf("MarkContactSent(placeholder) err = %v, want unprocessable", err)
+		}
+		if _, err := svc.NameContact(t.Context(), userID, dto.NameContactInput{ID: got.ID, Name: " "}); !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("NameContact(blank) err = %v, want invalid", err)
+		}
+		named, err := svc.NameContact(t.Context(), userID, dto.NameContactInput{ID: got.ID, Name: " Sam "})
+		if err != nil || named.Name == nil || *named.Name != "Sam" || len(named.ReachOuts) != 1 {
+			t.Fatalf("NameContact = %+v, %v, want Sam keeping its reach out", named, err)
+		}
+		if _, err := svc.MarkContactSent(t.Context(), userID, dto.MarkSentInput{ID: got.ID, Channel: dto.ContactChannelEmail}); err != nil {
+			t.Errorf("MarkContactSent(named) err = %v", err)
+		}
+	})
+}
+
 func TestContactValidation(t *testing.T) {
 	t.Parallel()
 	svc, _ := newService(t)

@@ -45,7 +45,8 @@ type OutreachSubject struct {
 	Name           string
 	Role           string
 	Company        string
-	JobID          string
+	JobID          string // the open Reach out's Job, else the latest Reach out's, else contacts.job_id
 	JobTitle       string
 	SentSinceReply int
+	ReachingOut    bool
 }

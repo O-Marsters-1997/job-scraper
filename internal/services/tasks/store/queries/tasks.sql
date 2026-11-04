@@ -4,7 +4,7 @@ VALUES
     ($1, 'Apply',     '#6366f1', 'apply'),
     ($1, 'Finish application', '#0f766e', 'finish'),
     ($1, 'Follow up', '#c2410c', NULL),
-    ($1, 'Reach out', '#15803d', NULL),
+    ($1, 'Reach out', '#15803d', 'reach_out'),
     ($1, 'Prep',      '#64748b', NULL);
 
 -- name: ListTaskTypes :many
@@ -34,7 +34,7 @@ DELETE FROM task_types WHERE id = $1 AND user_id = $2 AND system_key IS NULL;
 
 -- name: PageTasks :many
 SELECT
-    t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
+    t.id, t.type_id, t.job_id, t.contact_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
     tt.system_key AS type_system_key,
@@ -71,10 +71,10 @@ WITH created AS (
     SELECT sqlc.arg(user_id)::uuid, tt.id, sqlc.narg(job_id)::uuid, sqlc.narg(link)::text, sqlc.narg(notes)::text
     FROM task_types tt
     WHERE tt.id = sqlc.arg(type_id)::uuid AND tt.user_id = sqlc.arg(user_id)::uuid
-    RETURNING id, user_id, type_id, job_id, link, notes, completed_at, created_at, updated_at
+    RETURNING id, user_id, type_id, job_id, contact_id, link, notes, completed_at, created_at, updated_at
 )
 SELECT
-    t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
+    t.id, t.type_id, t.job_id, t.contact_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
     tt.system_key AS type_system_key,
@@ -94,10 +94,10 @@ WITH updated AS (
     SET completed_at = CASE WHEN sqlc.arg(done)::bool THEN COALESCE(completed_at, sqlc.arg(now)::timestamptz) END,
         updated_at = sqlc.arg(now)::timestamptz
     WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid
-    RETURNING id, user_id, type_id, job_id, link, notes, completed_at, created_at, updated_at
+    RETURNING id, user_id, type_id, job_id, contact_id, link, notes, completed_at, created_at, updated_at
 )
 SELECT
-    t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
+    t.id, t.type_id, t.job_id, t.contact_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
     tt.system_key AS type_system_key,
@@ -124,10 +124,10 @@ WITH updated AS (
     FROM task_types tt
     WHERE tasks.id = sqlc.arg(id)::uuid AND tasks.user_id = sqlc.arg(user_id)::uuid
       AND tt.id = sqlc.arg(type_id)::uuid AND tt.user_id = sqlc.arg(user_id)::uuid
-    RETURNING tasks.id, tasks.user_id, tasks.type_id, tasks.job_id, tasks.link, tasks.notes, tasks.completed_at, tasks.created_at, tasks.updated_at
+    RETURNING tasks.id, tasks.user_id, tasks.type_id, tasks.job_id, tasks.contact_id, tasks.link, tasks.notes, tasks.completed_at, tasks.created_at, tasks.updated_at
 )
 SELECT
-    t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
+    t.id, t.type_id, t.job_id, t.contact_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
     tt.name   AS type_name,
     tt.colour AS type_colour,
     tt.system_key AS type_system_key,
@@ -164,6 +164,35 @@ USING task_types tt
 WHERE tt.id = t.type_id AND tt.system_key = 'apply'
   AND t.user_id = sqlc.arg(user_id)::uuid
   AND t.job_id = ANY(sqlc.arg(job_ids)::uuid[])
+  AND t.completed_at IS NULL;
+
+-- name: OpenReachOutTask :one
+WITH existing AS (
+    SELECT t.id
+    FROM tasks t
+    JOIN task_types tt ON tt.id = t.type_id
+    WHERE tt.system_key = 'reach_out' AND t.user_id = sqlc.arg(user_id)::uuid
+      AND t.job_id = sqlc.arg(job_id)::uuid AND t.contact_id = sqlc.arg(contact_id)::uuid
+      AND t.completed_at IS NULL
+    LIMIT 1
+), inserted AS (
+    INSERT INTO tasks (user_id, type_id, job_id, contact_id)
+    SELECT sqlc.arg(user_id)::uuid, tt.id, sqlc.arg(job_id)::uuid, sqlc.arg(contact_id)::uuid
+    FROM task_types tt
+    WHERE tt.user_id = sqlc.arg(user_id)::uuid AND tt.system_key = 'reach_out'
+      AND NOT EXISTS (SELECT 1 FROM existing)
+    RETURNING id
+)
+SELECT id FROM existing
+UNION ALL
+SELECT id FROM inserted;
+
+-- name: CompleteReachOutTasksForContact :exec
+UPDATE tasks t
+SET completed_at = sqlc.arg(now)::timestamptz, updated_at = sqlc.arg(now)::timestamptz
+FROM task_types tt
+WHERE tt.id = t.type_id AND tt.system_key = 'reach_out'
+  AND t.user_id = sqlc.arg(user_id)::uuid AND t.contact_id = sqlc.arg(contact_id)::uuid
   AND t.completed_at IS NULL;
 
 -- name: CompleteApplyTasks :exec

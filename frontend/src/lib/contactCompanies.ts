@@ -1,3 +1,4 @@
+import { displayName } from "@/lib/contactName";
 import {
 	type Contact,
 	type ContactCompany,
@@ -84,6 +85,11 @@ export function firstName(name: string): string {
 
 export function combinedHistory(people: Contact[]): HistoryEntry[] {
 	return people
-		.flatMap((c) => c.history.map((e) => ({ ...e, who: firstName(c.name) })))
+		.flatMap((c) =>
+			c.history.map((e) => ({
+				...e,
+				who: c.name ? firstName(c.name) : displayName(c),
+			})),
+		)
 		.sort((a, b) => b.occurred_on.localeCompare(a.occurred_on));
 }

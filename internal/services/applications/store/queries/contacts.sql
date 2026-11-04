@@ -1,27 +1,44 @@
 -- name: CreateContact :one
 INSERT INTO contacts (user_id, name, role, company_id, company_name, job_id, linkedin_url, email)
-SELECT sqlc.arg('user_id')::uuid, sqlc.arg('name'), sqlc.arg('role'),
+SELECT sqlc.arg('user_id')::uuid, sqlc.narg('name')::text, sqlc.arg('role'),
        COALESCE(sqlc.narg('company_id')::uuid, j.company_id), sqlc.arg('company_name'),
        sqlc.narg('job_id')::uuid, sqlc.narg('linkedin_url'), sqlc.narg('email')
 FROM (SELECT 1) one
 LEFT JOIN jobs j ON j.id = sqlc.narg('job_id')::uuid
 RETURNING id;
 
--- name: LockContact :one
-SELECT stage FROM contacts WHERE id = $1 AND user_id = $2 FOR UPDATE;
+-- name: SetContactName :execrows
+UPDATE contacts SET name = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3;
 
--- name: CountSentSinceReply :one
-SELECT COUNT(*)::int FROM contact_events s
-WHERE s.contact_id = $1 AND s.kind = 'sent'
-  AND NOT EXISTS (
-      SELECT 1 FROM contact_events r
-      WHERE r.contact_id = s.contact_id AND r.kind = 'reply'
-        AND (r.occurred_on, r.created_at) > (s.occurred_on, s.created_at));
+-- name: LockContact :one
+SELECT stage, name FROM contacts WHERE id = $1 AND user_id = $2 FOR UPDATE;
+
+-- name: LockContactAtJobCompany :one
+SELECT c.id
+FROM contacts c
+JOIN jobs j ON j.company_id = c.company_id
+WHERE c.id = sqlc.arg('id') AND c.user_id = sqlc.arg('user_id') AND j.id = sqlc.arg('job_id')
+FOR UPDATE OF c;
+
+-- name: ListContactReachOuts :many
+SELECT t.contact_id, t.id AS task_id, t.job_id, COALESCE(j.title, '')::text AS job_title, t.completed_at
+FROM tasks t
+JOIN task_types tt ON tt.id = t.type_id AND tt.system_key = 'reach_out'
+LEFT JOIN jobs j ON j.id = t.job_id
+WHERE t.contact_id = ANY(sqlc.arg('contact_ids')::uuid[]) AND t.job_id IS NOT NULL
+ORDER BY t.created_at DESC, t.id;
+
+-- name: OpenReachOutJob :one
+SELECT t.job_id FROM tasks t
+JOIN task_types tt ON tt.id = t.type_id AND tt.system_key = 'reach_out'
+WHERE t.contact_id = $1 AND t.user_id = $2 AND t.completed_at IS NULL AND t.job_id IS NOT NULL
+ORDER BY t.created_at DESC, t.id
+LIMIT 1;
 
 -- name: InsertContactEvent :exec
 INSERT INTO contact_events (contact_id, kind, occurred_on, channel, template_kind, template_name, outcome, job_id)
 SELECT c.id, sqlc.arg('kind'), sqlc.arg('occurred_on')::date, sqlc.narg('channel'), sqlc.narg('template_kind'),
-       sqlc.arg('template_name'), sqlc.narg('outcome'), c.job_id
+       sqlc.arg('template_name'), sqlc.narg('outcome'), COALESCE(sqlc.narg('job_id')::uuid, c.job_id)
 FROM contacts c WHERE c.id = sqlc.arg('contact_id');
 
 -- name: SetContactState :exec
@@ -30,12 +47,9 @@ SET stage = sqlc.arg('stage'), outcome = sqlc.narg('outcome'), follow_up_by = sq
     reply = COALESCE(sqlc.narg('reply'), reply), updated_at = NOW()
 WHERE id = sqlc.arg('id') AND user_id = sqlc.arg('user_id');
 
--- name: SetLinkedApplicationChase :execrows
-UPDATE applications a
-SET chase_by = sqlc.narg('chase_by')::date
-FROM contacts c
-WHERE c.id = sqlc.arg('contact_id') AND c.user_id = sqlc.arg('user_id')
-  AND a.user_id = c.user_id AND a.job_id = c.job_id;
+-- name: SetContactMessaged :exec
+UPDATE contacts SET stage = 'messaged', outcome = NULL, updated_at = NOW()
+WHERE id = $1 AND user_id = $2;
 
 -- name: ListContacts :many
 SELECT
@@ -86,8 +100,7 @@ FROM companies co
 LEFT JOIN tracked_companies tc
        ON tc.user_id = sqlc.arg('user_id') AND tc.company_id = co.id
       AND tc.enabled AND tc.review_state <> 'dismissed'
-WHERE tc.company_id IS NOT NULL
-   OR EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = sqlc.arg('user_id') AND c.company_id = co.id)
+WHERE EXISTS (SELECT 1 FROM contacts c WHERE c.user_id = sqlc.arg('user_id') AND c.company_id = co.id)
 ORDER BY co.name, co.id
 LIMIT 500;
 

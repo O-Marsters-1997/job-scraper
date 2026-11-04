@@ -681,7 +681,7 @@ CREATE INDEX events_user_subject_idx ON events (user_id, subject_id);
 CREATE TABLE contacts (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name         TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
+    name         TEXT        CHECK (length(name) BETWEEN 1 AND 200),
     role         TEXT        NOT NULL DEFAULT '' CHECK (length(role) <= 200),
     company_id   UUID        REFERENCES companies(id) ON DELETE SET NULL,
     company_name TEXT        NOT NULL DEFAULT '' CHECK (length(company_name) <= 200),
@@ -712,7 +712,7 @@ CREATE TABLE contact_events (
         CONSTRAINT contact_events_channel_check CHECK (channel IN ('linkedin', 'email', 'call', 'inbound')),
     template_kind TEXT
         CONSTRAINT contact_events_template_kind_check
-        CHECK (template_kind IN ('recruiter', 'hiring_manager', 'referral', 'follow_up')),
+        CHECK (template_kind IN ('just_applied', 'recruiter', 'hiring_manager', 'referral', 'follow_up')),
     template_name TEXT        NOT NULL DEFAULT '' CHECK (length(template_name) <= 100),
     outcome       TEXT
         CONSTRAINT contact_events_outcome_check
@@ -760,7 +760,7 @@ CREATE TABLE IF NOT EXISTS task_types (
     name       TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 50),
     colour     TEXT        NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    system_key TEXT        CHECK (system_key IN ('apply', 'finish')),
+    system_key TEXT        CHECK (system_key IN ('apply', 'finish', 'reach_out')),
     UNIQUE (user_id, name)
 );
 
@@ -776,12 +776,14 @@ CREATE TABLE IF NOT EXISTS tasks (
     notes        TEXT        CHECK (length(notes) <= 10000),
     completed_at TIMESTAMPTZ,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    contact_id   UUID        REFERENCES contacts(id) ON DELETE SET NULL
 );
 
 CREATE INDEX tasks_user_open_idx ON tasks (user_id, created_at DESC) WHERE completed_at IS NULL;
 CREATE INDEX tasks_job_idx ON tasks (job_id) WHERE job_id IS NOT NULL;
 CREATE INDEX tasks_type_idx ON tasks (type_id);
+CREATE INDEX tasks_contact_open_idx ON tasks (contact_id) WHERE contact_id IS NOT NULL AND completed_at IS NULL;
 
 CREATE TABLE notifications (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -802,7 +804,7 @@ CREATE TABLE outreach_templates (
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     kind       TEXT        NOT NULL
         CONSTRAINT outreach_templates_kind_check
-        CHECK (kind IN ('recruiter', 'hiring_manager', 'referral', 'follow_up')),
+        CHECK (kind IN ('just_applied', 'recruiter', 'hiring_manager', 'referral', 'follow_up')),
     name       TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
     body       TEXT        NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
     is_default BOOLEAN     NOT NULL DEFAULT FALSE,
