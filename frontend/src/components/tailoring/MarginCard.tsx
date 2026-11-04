@@ -1,6 +1,8 @@
-import { For, onCleanup, Show } from "solid-js";
+import { createSignal, For, onCleanup, Show } from "solid-js";
+import { VariantForm } from "@/components/experience/VariantList";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
+import { useCreateVariant } from "@/hooks/useExperience";
 import { charsToSave, isSparse, type LineFit } from "@/lib/docLayout";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
@@ -95,6 +97,9 @@ export function MarginCard(props: {
 	const edited = () => props.editor.edited(key());
 	const header = () => cardHeader(props.editor, key());
 	const sparseFit = () => (isSparse(props.fit) ? props.fit : undefined);
+	const cited = () => props.editor.citedAchievement(key());
+	const [saving, setSaving] = createSignal(false);
+	const create = useCreateVariant();
 	onCleanup(() => props.onHover(key(), false));
 	return (
 		<div
@@ -180,6 +185,42 @@ export function MarginCard(props: {
 								fit={fit()}
 								onFit={props.onFit && (() => props.onFit?.(key()))}
 							/>
+						)}
+					</Show>
+
+					<Show when={edited() ? cited() : undefined}>
+						{(achievement) => (
+							<Show
+								when={saving()}
+								fallback={
+									<Button
+										variant="outline"
+										size="sm"
+										class="max-w-full justify-start"
+										onClick={() => {
+											create.reset();
+											setSaving(true);
+										}}
+									>
+										<span class="truncate">
+											Save as variant of {achievement().text}
+										</span>
+									</Button>
+								}
+							>
+								<VariantForm
+									initial={{ text: props.editor.text(key()), label: "" }}
+									pending={create.isPending}
+									error={create.error?.message}
+									onCancel={() => setSaving(false)}
+									onSubmit={(input) =>
+										create.mutate(
+											{ achievementId: achievement().id, input },
+											{ onSuccess: () => setSaving(false) },
+										)
+									}
+								/>
+							</Show>
 						)}
 					</Show>
 

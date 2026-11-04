@@ -105,6 +105,27 @@ test.describe("Draft editor", () => {
 		);
 	});
 
+	test("offers to save an edited bullet as a variant, only after an edit", async ({
+		page,
+		draftPage,
+	}) => {
+		const offer = draftPage
+			.card("s1")
+			.getByRole("button", { name: /^Save as variant of Cut p99/ });
+		await draftPage.type(BULLET, " Terraform");
+		await expect(offer).toBeVisible();
+		await offer.click();
+		await expect(page.getByLabel("Variant text")).toHaveValue(/Terraform/);
+		await expect(page.getByLabel("Variant label")).toHaveValue("");
+		await page.getByRole("button", { name: "Cancel" }).click();
+		await expect(page.getByLabel("Variant text")).toHaveCount(0);
+
+		await offer.click();
+		await page.getByLabel("Variant label").fill("Infra");
+		await page.getByRole("button", { name: "Save", exact: true }).click();
+		await expect(page.getByLabel("Variant text")).toHaveCount(0);
+	});
+
 	test("undoes edits and saves the restored text", async ({ draftPage }) => {
 		const original = (await draftPage.line(BULLET).textContent()) ?? "";
 		await draftPage.type(BULLET, " Terraform");

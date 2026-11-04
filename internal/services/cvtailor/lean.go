@@ -99,11 +99,18 @@ func (s *Service) DraftLean(ctx context.Context, userID string, q dto.DraftLeanQ
 		}
 		var best *dto.CloserMatch
 		for _, a := range bankByPosition[positionOf[i]] {
-			if used[a.ID] {
+			if used[a.ID] && a.ID != *out[i].AchievementID {
 				continue
 			}
-			if line, lean, ok := bestLine(a, answers); ok && lean > *out[i].Lean && (best == nil || lean > best.Lean) {
-				best = &dto.CloserMatch{AchievementID: a.ID, Text: line.Text, Lean: lean}
+			for _, l := range achievementLines(a) {
+				lean := leanOf(l.Text)
+				if lean <= *out[i].Lean || (best != nil && lean <= best.Lean) {
+					continue
+				}
+				best = &dto.CloserMatch{AchievementID: a.ID, Text: l.Text, Lean: lean}
+				if l.VariantID != "" {
+					best.VariantID = &l.VariantID
+				}
 			}
 		}
 		out[i].CloserMatch = best
