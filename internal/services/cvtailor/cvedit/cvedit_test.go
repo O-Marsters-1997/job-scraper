@@ -59,3 +59,18 @@ func TestEditSet_SkillsRoundTrip(t *testing.T) {
 		}
 	})
 }
+
+func TestPositionEdit_Lines_carriesVariantID(t *testing.T) {
+	t.Parallel()
+	pe := cvedit.PositionEdit{
+		Bullets: []cvedit.Bullet{{SlotID: "s0", Text: "A", AchievementIDs: []string{"a"}, VariantID: "va"}},
+		Added:   []cvedit.AddedBullet{{SlotID: "n0", After: "s0", Text: "B", AchievementIDs: []string{"b"}, VariantID: "vb"}},
+	}
+	want := []cvedit.Line{
+		{SlotID: "s0", Text: "A", AchievementIDs: []string{"a"}, VariantID: "va"},
+		{SlotID: "n0", Text: "B", AchievementIDs: []string{"b"}, VariantID: "vb", Added: true},
+	}
+	if diff := cmp.Diff(want, pe.Lines()); diff != "" {
+		t.Errorf("Lines() mismatch (-want +got):\n%s", diff)
+	}
+}
