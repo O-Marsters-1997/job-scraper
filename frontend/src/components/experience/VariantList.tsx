@@ -15,8 +15,8 @@ const iconButton =
 const dangerIconButton =
 	"inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-subtle hover:text-destructive-strong disabled:opacity-50";
 
-function VariantForm(props: {
-	initial?: AchievementVariant;
+export function VariantForm(props: {
+	initial?: Pick<AchievementVariant, "text" | "label">;
 	pending: boolean;
 	error?: string | undefined;
 	onSubmit: (input: { text: string; label: string }) => void;
