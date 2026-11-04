@@ -1,9 +1,11 @@
 import { For, type JSX, Show } from "solid-js";
+import { NameContactField } from "@/components/contacts/NameContactField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { chaseOverdueDays } from "@/lib/chase";
 import { firstName } from "@/lib/contactCompanies";
+import { displayName } from "@/lib/contactName";
 import { lastSentOn, openReachOut, stageLabel } from "@/lib/contactStatus";
 import { cn } from "@/lib/utils";
 import type { Contact } from "@/types/contact";
@@ -48,11 +50,13 @@ export function ContactSection(props: {
 									onClick={() => props.onOpen(c)}
 								>
 									<span class="block truncate text-sm font-semibold text-foreground">
-										{c.name}
+										{displayName(c)}
 									</span>
 									<span class="block truncate text-xs text-muted">
 										{props.kind === "toContact"
-											? openReachOut(c)?.job_title
+											? c.name === null
+												? "Name not added yet"
+												: openReachOut(c)?.job_title
 											: props.kind === "waiting"
 												? sentAgo(c)
 												: [c.role, c.company_name].filter(Boolean).join(" · ")}
@@ -78,7 +82,9 @@ function rowAction(
 ): JSX.Element {
 	switch (props.kind) {
 		case "toContact":
-			return (
+			return c.name === null ? (
+				<NameContactField contact={c} />
+			) : (
 				<Button size="sm" onClick={() => props.onOpen(c)}>
 					Write to {firstName(c.name)}
 				</Button>

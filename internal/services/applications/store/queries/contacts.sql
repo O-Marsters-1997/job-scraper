@@ -1,14 +1,17 @@
 -- name: CreateContact :one
 INSERT INTO contacts (user_id, name, role, company_id, company_name, job_id, linkedin_url, email)
-SELECT sqlc.arg('user_id')::uuid, sqlc.arg('name'), sqlc.arg('role'),
+SELECT sqlc.arg('user_id')::uuid, sqlc.narg('name')::text, sqlc.arg('role'),
        COALESCE(sqlc.narg('company_id')::uuid, j.company_id), sqlc.arg('company_name'),
        sqlc.narg('job_id')::uuid, sqlc.narg('linkedin_url'), sqlc.narg('email')
 FROM (SELECT 1) one
 LEFT JOIN jobs j ON j.id = sqlc.narg('job_id')::uuid
 RETURNING id;
 
+-- name: SetContactName :execrows
+UPDATE contacts SET name = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3;
+
 -- name: LockContact :one
-SELECT stage FROM contacts WHERE id = $1 AND user_id = $2 FOR UPDATE;
+SELECT stage, name FROM contacts WHERE id = $1 AND user_id = $2 FOR UPDATE;
 
 -- name: LockContactAtJobCompany :one
 SELECT c.id

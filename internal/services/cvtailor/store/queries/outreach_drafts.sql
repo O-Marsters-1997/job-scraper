@@ -1,6 +1,6 @@
 -- name: OutreachSubject :one
 SELECT
-    c.name, c.role,
+    COALESCE(c.name, '')::text AS name, c.role,
     COALESCE(co.name, c.company_name)::text AS company,
     COALESCE(ro.job_id::text, c.job_id::text, '')::text AS job_id,
     COALESCE(j.title, '')::text AS job_title,

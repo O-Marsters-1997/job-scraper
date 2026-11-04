@@ -71,8 +71,11 @@ func (s *Store) ReachOut(ctx context.Context, userID string, in dto.ReachOutInpu
 			err error
 		)
 		switch {
-		case in.Contact != nil:
-			contact := *in.Contact
+		case in.Contact != nil || in.ContactID == nil:
+			contact := dto.ContactInput{}
+			if in.Contact != nil {
+				contact = *in.Contact
+			}
 			contact.JobID = &in.JobID
 			contact.CompanyID = nil
 			if id, err = insertContact(ctx, q, uid, contact, today); err != nil {
@@ -113,7 +116,7 @@ func insertContact(ctx context.Context, q *sqlc.Queries, uid pgtype.UUID, in dto
 		return pgtype.UUID{}, err
 	}
 	id, err := q.CreateContact(ctx, sqlc.CreateContactParams{
-		UserID: uid, Name: in.Name, Role: in.Role, CompanyID: companyID, CompanyName: in.CompanyName,
+		UserID: uid, Name: data.Text(in.Name), Role: in.Role, CompanyID: companyID, CompanyName: in.CompanyName,
 		JobID: jobID, LinkedinUrl: data.Text(in.LinkedInURL), Email: data.Text(in.Email),
 	})
 	if err != nil {
@@ -149,6 +152,25 @@ func (s *Store) ListContacts(ctx context.Context, userID string) ([]dto.Contact,
 	return out, nil
 }
 
+func (s *Store) NameContact(ctx context.Context, userID string, in dto.NameContactInput) (dto.Contact, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.Contact{}, err
+	}
+	cid, err := data.UUID(in.ID)
+	if err != nil {
+		return dto.Contact{}, err
+	}
+	n, err := s.queries.SetContactName(ctx, sqlc.SetContactNameParams{Name: data.Text(in.Name), ID: cid, UserID: uid})
+	if err != nil {
+		return dto.Contact{}, fmt.Errorf("store.NameContact: %w", err)
+	}
+	if n == 0 {
+		return dto.Contact{}, data.ErrNotFound
+	}
+	return readContact(ctx, s.queries, uid, cid)
+}
+
 func (s *Store) DeleteContact(ctx context.Context, userID, id string) error {
 	uid, err := data.UUID(userID)
 	if err != nil {
@@ -180,8 +202,12 @@ func (s *Store) MarkContactSent(ctx context.Context, userID string, in dto.MarkS
 	var out dto.ContactSent
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.queries.WithTx(tx)
-		if _, err := q.LockContact(ctx, sqlc.LockContactParams{ID: cid, UserID: uid}); err != nil {
+		locked, err := q.LockContact(ctx, sqlc.LockContactParams{ID: cid, UserID: uid})
+		if err != nil {
 			return err
+		}
+		if !locked.Name.Valid {
+			return ErrContactUnnamed
 		}
 		reachOutJob, err := q.OpenReachOutJob(ctx, sqlc.OpenReachOutJobParams{ContactID: cid, UserID: uid})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {

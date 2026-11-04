@@ -11,6 +11,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useMarkContactSent, useRecordContactReply } from "@/hooks/useContacts";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
+import { displayName } from "@/lib/contactName";
 import {
 	type Contact,
 	type ContactChannel,
@@ -33,7 +34,7 @@ export function MarkSentDialog(props: DialogProps) {
 				<DialogHeader>
 					<DialogTitle>Mark sent</DialogTitle>
 					<Show when={props.contact}>
-						{(c) => <p class="text-sm text-muted">{c().name}</p>}
+						{(c) => <p class="text-sm text-muted">{displayName(c())}</p>}
 					</Show>
 				</DialogHeader>
 				<Show when={props.contact}>
@@ -93,7 +94,7 @@ export function ReplyDialog(props: DialogProps) {
 				<DialogHeader>
 					<DialogTitle>They replied</DialogTitle>
 					<Show when={props.contact}>
-						{(c) => <p class="text-sm text-muted">{c().name}</p>}
+						{(c) => <p class="text-sm text-muted">{displayName(c())}</p>}
 					</Show>
 				</DialogHeader>
 				<Show when={props.contact}>

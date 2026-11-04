@@ -681,7 +681,7 @@ CREATE INDEX events_user_subject_idx ON events (user_id, subject_id);
 CREATE TABLE contacts (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name         TEXT        NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
+    name         TEXT        CHECK (length(name) BETWEEN 1 AND 200),
     role         TEXT        NOT NULL DEFAULT '' CHECK (length(role) <= 200),
     company_id   UUID        REFERENCES companies(id) ON DELETE SET NULL,
     company_name TEXT        NOT NULL DEFAULT '' CHECK (length(company_name) <= 200),

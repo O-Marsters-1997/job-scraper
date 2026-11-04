@@ -303,7 +303,7 @@ type CompanyProfile struct {
 type Contact struct {
 	ID          pgtype.UUID
 	UserID      pgtype.UUID
-	Name        string
+	Name        pgtype.Text
 	Role        string
 	CompanyID   pgtype.UUID
 	CompanyName string

@@ -51,8 +51,12 @@ func (f *FakeStore) CreateContact(_ context.Context, userID string, in dto.Conta
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.nextOutreach++
+	var name *string
+	if in.Name != "" {
+		name = &in.Name
+	}
 	c := fakeContact{userID: userID, Contact: dto.Contact{
-		ID: fmt.Sprintf("contact-%d", f.nextOutreach), Name: in.Name, Role: in.Role,
+		ID: fmt.Sprintf("contact-%d", f.nextOutreach), Name: name, Role: in.Role,
 		CompanyID: in.CompanyID, CompanyName: in.CompanyName, JobID: in.JobID,
 		LinkedInURL: in.LinkedInURL, Email: in.Email, Stage: dto.ContactStageToContact,
 		History: []dto.ContactEvent{}, ReachOuts: []dto.ReachOut{}, CreatedAt: time.Now(),
@@ -64,8 +68,11 @@ func (f *FakeStore) CreateContact(_ context.Context, userID string, in dto.Conta
 
 func (f *FakeStore) ReachOut(ctx context.Context, userID string, in dto.ReachOutInput, today time.Time) (dto.Contact, error) {
 	var cid string
-	if in.Contact != nil {
-		contact := *in.Contact
+	if in.Contact != nil || in.ContactID == nil {
+		contact := dto.ContactInput{}
+		if in.Contact != nil {
+			contact = *in.Contact
+		}
 		contact.JobID = &in.JobID
 		created, err := f.CreateContact(ctx, userID, contact, today)
 		if err != nil {
@@ -107,6 +114,18 @@ func (f *FakeStore) ListContactCompanies(context.Context, string) ([]dto.Contact
 	return []dto.ContactCompany{}, nil
 }
 
+func (f *FakeStore) NameContact(_ context.Context, userID string, in dto.NameContactInput) (dto.Contact, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.outreach[in.ID]
+	if !ok || c.userID != userID {
+		return dto.Contact{}, data.ErrNotFound
+	}
+	c.Name = &in.Name
+	f.outreach[c.ID] = c
+	return f.viewContact(c), nil
+}
+
 func (f *FakeStore) DeleteContact(_ context.Context, userID, id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -123,6 +142,9 @@ func (f *FakeStore) MarkContactSent(_ context.Context, userID string, in dto.Mar
 	c, ok := f.outreach[in.ID]
 	if !ok || c.userID != userID {
 		return dto.ContactSent{}, data.ErrNotFound
+	}
+	if c.Name == nil {
+		return dto.ContactSent{}, store.ErrContactUnnamed
 	}
 	ev := dto.ContactEvent{
 		Kind: dto.ContactEventSent, OccurredOn: dayString(today), Channel: in.Channel,

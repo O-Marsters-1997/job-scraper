@@ -24,6 +24,7 @@ var (
 	ErrContactJobNotFound     = apperr.Invalid("job not found")
 	ErrContactCompanyNotFound = apperr.Invalid("company not found")
 	ErrReachOutContact        = apperr.Invalid("contact is not at this job's company")
+	ErrContactUnnamed         = apperr.Unprocessable("name this contact first")
 )
 
 // EventRecorder logs application events inside the caller's transaction; the

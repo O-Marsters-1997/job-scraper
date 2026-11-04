@@ -597,6 +597,25 @@ func TestReachOut(t *testing.T) {
 		}
 	})
 
+	t.Run("a placeholder is listed with its reach out, refuses mark sent, and keeps the reach out once named", func(t *testing.T) {
+		t.Parallel()
+		st, _, userID, jobID, _ := setup(t)
+		ph, err := st.ReachOut(t.Context(), userID, dto.ReachOutInput{JobID: jobID}, time.Now())
+		if err != nil {
+			t.Fatalf("ReachOut err = %v", err)
+		}
+		if ph.Name != nil || ph.CompanyName != "Acme Ltd" || len(ph.ReachOuts) != 1 {
+			t.Fatalf("placeholder = name %v company %q reach_outs %+v, want unnamed at Acme with one reach out", ph.Name, ph.CompanyName, ph.ReachOuts)
+		}
+		if _, err := st.MarkContactSent(t.Context(), userID, dto.MarkSentInput{ID: ph.ID, Channel: dto.ContactChannelEmail}, time.Now()); !errors.Is(err, store.ErrContactUnnamed) {
+			t.Errorf("MarkContactSent(placeholder) err = %v, want ErrContactUnnamed", err)
+		}
+		named, err := st.NameContact(t.Context(), userID, dto.NameContactInput{ID: ph.ID, Name: "Sam"})
+		if err != nil || named.Name == nil || *named.Name != "Sam" || len(named.ReachOuts) != 1 {
+			t.Errorf("NameContact = %+v, %v, want Sam with the reach out kept", named, err)
+		}
+	})
+
 	t.Run("existing contact is reused and a repeat does not duplicate the task", func(t *testing.T) {
 		t.Parallel()
 		st, _, userID, jobID, _ := setup(t)
@@ -649,7 +668,7 @@ func TestReachOut(t *testing.T) {
 		}
 		for _, c := range got {
 			if done := c.ReachOuts[0].DoneAt != nil; done != (c.ID == sam.ID) {
-				t.Errorf("%s reach out done = %v, want %v", c.Name, done, c.ID == sam.ID)
+				t.Errorf("%v reach out done = %v, want %v", c.Name, done, c.ID == sam.ID)
 			}
 		}
 	})

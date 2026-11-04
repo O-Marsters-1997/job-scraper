@@ -59,6 +59,7 @@ import {
 import { checklistState, linkedDraft } from "@/lib/applicationChecklist";
 import { runNeighbour } from "@/lib/applicationSelection";
 import { formatChaseDate } from "@/lib/chase";
+import { displayName } from "@/lib/contactName";
 import { dayKey, formatDate } from "@/lib/datetime";
 import { queryClient } from "@/lib/queryClient";
 import { loadedData } from "@/lib/queryData";
@@ -500,7 +501,7 @@ function ReachOutRow(props: { app: ApplicationWithDetails }) {
 								<li class="flex items-center gap-3 px-3 py-2 text-sm">
 									<span class="min-w-0 flex-1">
 										<span class="block truncate font-medium text-foreground">
-											{c.name}
+											{displayName(c)}
 										</span>
 										<span class="block truncate text-xs text-muted">
 											{c.role}

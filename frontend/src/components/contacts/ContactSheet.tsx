@@ -1,4 +1,5 @@
 import { For, Show } from "solid-js";
+import { NameContactField } from "@/components/contacts/NameContactField";
 import { Icon } from "@/components/Icon";
 import { DownloadPdfButton } from "@/components/tailoring/DownloadPdfButton";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { useJobDrafts } from "@/hooks/useTailoring";
 import { formatChaseDate } from "@/lib/chase";
+import { displayName } from "@/lib/contactName";
 import { openReachOut } from "@/lib/contactStatus";
 import { eventLabel } from "@/lib/eventLabel";
 import { loadedData } from "@/lib/queryData";
@@ -48,7 +50,7 @@ export function ContactSheet(props: {
 						<>
 							<SheetHeader>
 								<div class="min-w-0">
-									<SheetTitle class="truncate">{c().name}</SheetTitle>
+									<SheetTitle class="truncate">{displayName(c())}</SheetTitle>
 									<p class="truncate text-xs text-muted">
 										{[c().role, c().company_name].filter(Boolean).join(" · ")}
 									</p>
@@ -96,7 +98,15 @@ export function ContactSheet(props: {
 										{c().reply}
 									</blockquote>
 								</Show>
-								<Show when={c().stage !== "closed"}>
+								<Show when={c().name === null}>
+									<div class="flex flex-col gap-2">
+										<p class="text-sm text-muted">
+											Name not added yet. Add it to write to them.
+										</p>
+										<NameContactField contact={c()} />
+									</div>
+								</Show>
+								<Show when={c().stage !== "closed" && c().name !== null}>
 									<Drafter contact={c()} onSent={props.onDraftSent} />
 								</Show>
 								<ol class="flex flex-col gap-1 border-t border-border pt-3 text-xs text-muted">

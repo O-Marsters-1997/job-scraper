@@ -42,6 +42,18 @@ export async function reachOut(input: ReachOutInput): Promise<Contact> {
 	);
 }
 
+export async function nameContact(id: string, name: string): Promise<Contact> {
+	return mocked(
+		(db) => db.nameContact(id, name),
+		() =>
+			apiFetch(
+				`/contacts/${encodeURIComponent(id)}/name`,
+				contactSchema,
+				jsonInit("POST", { name }),
+			),
+	);
+}
+
 export async function markContactSent(
 	id: string,
 	input: MarkSentInput,
