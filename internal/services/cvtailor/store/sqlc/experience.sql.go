@@ -42,6 +42,41 @@ func (q *Queries) CreateAchievement(ctx context.Context, arg CreateAchievementPa
 	return i, err
 }
 
+const createAchievementVariant = `-- name: CreateAchievementVariant :one
+INSERT INTO achievement_variants (achievement_id, user_id, text, label)
+SELECT a.id, a.user_id, $1, $2
+FROM achievements a
+WHERE a.user_id = $3 AND a.id = $4
+RETURNING id, achievement_id, user_id, text, label, created_at, updated_at
+`
+
+type CreateAchievementVariantParams struct {
+	Text          string
+	Label         string
+	UserID        pgtype.UUID
+	AchievementID pgtype.UUID
+}
+
+func (q *Queries) CreateAchievementVariant(ctx context.Context, arg CreateAchievementVariantParams) (AchievementVariant, error) {
+	row := q.db.QueryRow(ctx, createAchievementVariant,
+		arg.Text,
+		arg.Label,
+		arg.UserID,
+		arg.AchievementID,
+	)
+	var i AchievementVariant
+	err := row.Scan(
+		&i.ID,
+		&i.AchievementID,
+		&i.UserID,
+		&i.Text,
+		&i.Label,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createPosition = `-- name: CreatePosition :one
 INSERT INTO positions (user_id, employer, title, start_date, end_date, sort_order)
 VALUES (
@@ -93,6 +128,23 @@ type DeleteAchievementParams struct {
 
 func (q *Queries) DeleteAchievement(ctx context.Context, arg DeleteAchievementParams) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteAchievement, arg.UserID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteAchievementVariant = `-- name: DeleteAchievementVariant :execrows
+DELETE FROM achievement_variants WHERE user_id = $1 AND id = $2
+`
+
+type DeleteAchievementVariantParams struct {
+	UserID pgtype.UUID
+	ID     pgtype.UUID
+}
+
+func (q *Queries) DeleteAchievementVariant(ctx context.Context, arg DeleteAchievementVariantParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAchievementVariant, arg.UserID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -198,6 +250,41 @@ func (q *Queries) ListAchievementStats(ctx context.Context, userID pgtype.UUID) 
 			&i.LeftOut,
 			&i.Applied,
 			&i.Replied,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAchievementVariants = `-- name: ListAchievementVariants :many
+SELECT id, achievement_id, user_id, text, label, created_at, updated_at
+FROM achievement_variants
+WHERE user_id = $1
+ORDER BY created_at, id
+`
+
+func (q *Queries) ListAchievementVariants(ctx context.Context, userID pgtype.UUID) ([]AchievementVariant, error) {
+	rows, err := q.db.Query(ctx, listAchievementVariants, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AchievementVariant
+	for rows.Next() {
+		var i AchievementVariant
+		if err := rows.Scan(
+			&i.ID,
+			&i.AchievementID,
+			&i.UserID,
+			&i.Text,
+			&i.Label,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -367,6 +454,40 @@ func (q *Queries) UpdateAchievement(ctx context.Context, arg UpdateAchievementPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Context,
+	)
+	return i, err
+}
+
+const updateAchievementVariant = `-- name: UpdateAchievementVariant :one
+UPDATE achievement_variants
+SET text = $1, label = $2, updated_at = NOW()
+WHERE user_id = $3 AND id = $4
+RETURNING id, achievement_id, user_id, text, label, created_at, updated_at
+`
+
+type UpdateAchievementVariantParams struct {
+	Text   string
+	Label  string
+	UserID pgtype.UUID
+	ID     pgtype.UUID
+}
+
+func (q *Queries) UpdateAchievementVariant(ctx context.Context, arg UpdateAchievementVariantParams) (AchievementVariant, error) {
+	row := q.db.QueryRow(ctx, updateAchievementVariant,
+		arg.Text,
+		arg.Label,
+		arg.UserID,
+		arg.ID,
+	)
+	var i AchievementVariant
+	err := row.Scan(
+		&i.ID,
+		&i.AchievementID,
+		&i.UserID,
+		&i.Text,
+		&i.Label,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

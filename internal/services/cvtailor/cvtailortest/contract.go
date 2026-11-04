@@ -37,6 +37,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		run  func(*testing.T, func(t *testing.T) Fixture)
 	}{
 		{"positions", runPositionContract},
+		{"achievement variants", runVariantContract},
 		{"bank skills", runBankSkillContract},
 		{"heading mappings", runHeadingMappingContract},
 		{"drafts", runDraftContract},
@@ -257,8 +258,8 @@ func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Fatal(err)
 		}
 		want := []dto.Achievement{
-			{ID: a.ID, PositionID: p.ID, Text: "first", Context: "why a"},
-			{ID: b.ID, PositionID: p.ID, Text: "second", Context: "why b"},
+			{ID: a.ID, PositionID: p.ID, Text: "first", Context: "why a", Variants: []dto.AchievementVariant{}},
+			{ID: b.ID, PositionID: p.ID, Text: "second", Context: "why b", Variants: []dto.AchievementVariant{}},
 		}
 		if diff := cmp.Diff(want, got[0].Achievements); diff != "" {
 			t.Fatalf("achievements (-want +got):\n%s", diff)

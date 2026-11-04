@@ -137,7 +137,7 @@ func TestApplyContext(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := dto.Achievement{ID: a.ID, PositionID: p.ID, Text: "Cut latency", Context: "why"}
+		want := dto.Achievement{ID: a.ID, PositionID: p.ID, Text: "Cut latency", Context: "why", Variants: []dto.AchievementVariant{}}
 		if diff := cmp.Diff(want, got[0].Achievements[0]); diff != "" {
 			t.Fatalf("achievement (-want +got):\n%s", diff)
 		}

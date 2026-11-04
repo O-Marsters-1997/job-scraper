@@ -14,6 +14,7 @@ const item = (id: string, s: AchievementStats | null): Achievement => ({
 	positionId: "p",
 	text: id,
 	context: "",
+	variants: [],
 	stats: s,
 });
 

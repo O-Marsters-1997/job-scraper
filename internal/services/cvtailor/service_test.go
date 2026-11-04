@@ -57,6 +57,20 @@ func TestCreateAchievementRejectsBlankText(t *testing.T) {
 	}
 }
 
+func TestVariantRejectsBlankText(t *testing.T) {
+	t.Parallel()
+	svc, _ := newService(t, nil, nil)
+	in := dto.AchievementVariantInput{ID: "v", AchievementID: "a", Text: " ", Label: "short"}
+	_, err := svc.CreateAchievementVariant(t.Context(), userID, in)
+	if !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Fatalf("CreateAchievementVariant() err = %v, want an invalid error", err)
+	}
+	_, err = svc.UpdateAchievementVariant(t.Context(), userID, in)
+	if !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Fatalf("UpdateAchievementVariant() err = %v, want an invalid error", err)
+	}
+}
+
 func TestBankSkillRejectsBlankName(t *testing.T) {
 	svc, _ := newService(t, nil, nil)
 	_, err := svc.CreateBankSkill(t.Context(), userID, dto.BankSkillInput{Name: "  ", Category: "Languages"})

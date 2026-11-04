@@ -21,6 +21,34 @@ test.describe("Experience", () => {
 		await expect(card).toHaveCount(0);
 	});
 
+	test("adds, edits and deletes an achievement variant", async ({
+		experiencePage,
+	}) => {
+		const employer = `Hooli ${Date.now()}`;
+		await experiencePage.addPosition(employer, "Engineer");
+		await experiencePage.addAchievement(employer, "Shipped the thing");
+		const card = experiencePage.positions.filter({ hasText: employer });
+
+		await experiencePage.addVariant(employer, "Launched the widget early");
+		await expect(card).toContainText("Launched the widget early");
+
+		await experiencePage.editVariantText(
+			employer,
+			"Launched the widget early",
+			"Shipped the widget ahead of schedule on a tight budget",
+		);
+		await expect(card).toContainText("Shipped the widget ahead of schedule…");
+
+		await experiencePage.addVariant(employer, "Another take", "Short");
+		await expect(card.getByTestId("variant")).toHaveCount(2);
+
+		await experiencePage.deleteVariant(employer, "Short");
+		await expect(card.getByTestId("variant")).toHaveCount(1);
+
+		await experiencePage.deletePosition(employer);
+		await expect(card).toHaveCount(0);
+	});
+
 	test("adds a Bank Skill under its category, then deletes it", async ({
 		experiencePage,
 	}) => {

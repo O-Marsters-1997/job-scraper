@@ -1,6 +1,9 @@
 import {
 	type Achievement,
+	type AchievementVariant,
+	type AchievementVariantInput,
 	achievementSchema,
+	achievementVariantSchema,
 	type Position,
 	type PositionInput,
 	positionSchema,
@@ -90,6 +93,43 @@ export async function deleteAchievement(id: string): Promise<void> {
 	return mocked(
 		(db) => db.deleteAchievement(id),
 		() => apiFetchVoid(`/experience/achievements/${id}`, { method: "DELETE" }),
+	);
+}
+
+export async function createVariant(
+	achievementId: string,
+	input: AchievementVariantInput,
+): Promise<AchievementVariant> {
+	return mocked(
+		(db) => db.createVariant(achievementId, input),
+		() =>
+			apiFetch(
+				`/experience/achievements/${achievementId}/variants`,
+				achievementVariantSchema,
+				jsonInit("POST", input),
+			),
+	);
+}
+
+export async function updateVariant(
+	id: string,
+	input: AchievementVariantInput,
+): Promise<AchievementVariant> {
+	return mocked(
+		(db) => db.updateVariant(id, input),
+		() =>
+			apiFetch(
+				`/experience/variants/${id}`,
+				achievementVariantSchema,
+				jsonInit("PATCH", input),
+			),
+	);
+}
+
+export async function deleteVariant(id: string): Promise<void> {
+	return mocked(
+		(db) => db.deleteVariant(id),
+		() => apiFetchVoid(`/experience/variants/${id}`, { method: "DELETE" }),
 	);
 }
 

@@ -29,6 +29,9 @@ func (m *Module) Routes(r chi.Router) {
 		r.Put("/positions/{positionId}/achievements/order", handlers.Update(m.svc.ReorderAchievements))
 		r.Patch("/achievements/{id}", handlers.Update(m.svc.UpdateAchievement))
 		r.Delete("/achievements/{id}", handlers.Delete(m.store.DeleteAchievement))
+		r.Post("/achievements/{achievementId}/variants", handlers.Create(m.svc.CreateAchievementVariant))
+		r.Patch("/variants/{id}", handlers.Update(m.svc.UpdateAchievementVariant))
+		r.Delete("/variants/{id}", handlers.Delete(m.store.DeleteAchievementVariant))
 	})
 	r.Route("/outreach-templates", func(r chi.Router) {
 		r.Get("/", handlers.GetAll(m.store.ListOutreachTemplates))
