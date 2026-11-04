@@ -431,6 +431,7 @@ function ApplicationsPage() {
 											search: { queue: draftSelected().map((a) => a.ID) },
 										}).href,
 										"_blank",
+										"noopener",
 									)
 								}
 							>

@@ -441,6 +441,7 @@ function CvRowBody(props: {
 											params: { id: draft().id },
 										}).href,
 										"_blank",
+										"noopener",
 									)
 								}
 							>
