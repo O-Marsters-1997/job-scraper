@@ -47,9 +47,18 @@ export function useApplications(
 	}));
 }
 
-export function useJobApplicationId(jobId: () => string) {
+export function useJobBackLink(jobId: () => string) {
 	const applications = useApplications();
-	return () => loadedData(applications)?.find((a) => a.JobID === jobId())?.ID;
+	return () => {
+		const id = loadedData(applications)?.find((a) => a.JobID === jobId())?.ID;
+		return id
+			? ({
+					to: "/applications/$id",
+					params: { id },
+					label: "Application",
+				} as const)
+			: ({ to: "/jobs/$id", params: { id: jobId() }, label: "Job" } as const);
+	};
 }
 
 export function useCreateApplication() {
