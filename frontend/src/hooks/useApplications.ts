@@ -14,6 +14,7 @@ import {
 } from "../api/applications";
 import { keys } from "../api/keys";
 import { cvStage, isCvStageBusy } from "../lib/cvStage";
+import { loadedData } from "../lib/queryData";
 import type {
 	MoveApplicationPayload,
 	UpdateApplicationPayload,
@@ -44,6 +45,20 @@ export function useApplications(
 				? 3000
 				: false,
 	}));
+}
+
+export function useJobBackLink(jobId: () => string) {
+	const applications = useApplications();
+	return () => {
+		const id = loadedData(applications)?.find((a) => a.JobID === jobId())?.ID;
+		return id
+			? ({
+					to: "/applications/$id",
+					params: { id },
+					label: "Application",
+				} as const)
+			: ({ to: "/jobs/$id", params: { id: jobId() }, label: "Job" } as const);
+	};
 }
 
 export function useCreateApplication() {

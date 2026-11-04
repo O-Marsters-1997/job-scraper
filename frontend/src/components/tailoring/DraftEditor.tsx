@@ -21,6 +21,7 @@ import { roleBudget } from "@/lib/tailoring";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
 import type { Draft, DraftLayout } from "@/types/tailoring";
+import { useJobBackLink } from "../../hooks/useApplications";
 import { createDraftEditor, PROFILE_SLOT } from "../../hooks/useDraftEditor";
 import { useExperience } from "../../hooks/useExperience";
 import { useJobComments } from "../../hooks/useJobComments";
@@ -109,6 +110,7 @@ export function DraftEditor(props: {
 	);
 	const flow = createKeepFlow(() => props.draft, ed.flush);
 	const job = useJob(() => props.draft.jobId);
+	const back = useJobBackLink(() => props.draft.jobId);
 
 	const [active, setActive] = createSignal<string>();
 	const [hovered, setHovered] = createSignal<string>();
@@ -548,9 +550,9 @@ export function DraftEditor(props: {
 		<div class="fixed inset-0 z-50 flex flex-col bg-background">
 			<header class="flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-surface px-4 py-1.5">
 				<Link
-					to="/jobs/$id"
-					params={{ id: props.draft.jobId }}
-					aria-label="Back to job"
+					to={back().to}
+					params={back().params}
+					aria-label={`Back to ${back().label.toLowerCase()}`}
 					class="grid size-8 place-items-center rounded-md text-muted transition-colors hover:bg-accent-subtle hover:text-foreground"
 				>
 					<Icon name="chevronLeft" size={16} />

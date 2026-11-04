@@ -8,6 +8,7 @@ import { PhoneDraftReview } from "@/components/tailoring/PhoneDraftReview";
 import { PolishDock } from "@/components/tailoring/PolishDock";
 import type { Draft } from "@/types/tailoring";
 import { LayoutUnsupportedError } from "../../api/tailoring";
+import { useJobBackLink } from "../../hooks/useApplications";
 import { useDraft, useDraftLayout } from "../../hooks/useTailoring";
 
 type DraftSearch = {
@@ -76,15 +77,16 @@ function ReviewableDraft(props: { draft: Draft }) {
 }
 
 function Progress(props: { draft: Draft }) {
+	const back = useJobBackLink(() => props.draft.jobId);
 	return (
 		<div class="px-7 py-6">
 			<Link
-				to="/jobs/$id"
-				params={{ id: props.draft.jobId }}
+				to={back().to}
+				params={back().params}
 				class="mb-1 flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
 			>
 				<Icon name="chevronLeft" size={14} />
-				Job
+				{back().label}
 			</Link>
 			<h1 class="text-lg font-bold tracking-tight text-foreground">Draft CV</h1>
 			<Show
