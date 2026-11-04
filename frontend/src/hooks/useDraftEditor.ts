@@ -125,6 +125,11 @@ export function createDraftEditor(
 
 	const text = (slotId: string) => texts[slotId] ?? "";
 
+	const citedAchievement = (slotId: string) =>
+		draft()
+			.provenance?.positions.flatMap((p) => p.bullets)
+			.find((b) => b.slotId === slotId)?.achievements[0];
+
 	const [roleEdits, setRoleEdits] = createSignal<Record<string, RoleEdit>>({});
 
 	const rekey = (
@@ -457,6 +462,7 @@ export function createDraftEditor(
 		rearrange,
 		label,
 		text,
+		citedAchievement,
 		original: (slotId: string) => original[slotId] ?? "",
 		setText,
 		undo: (slotId: string) => {
