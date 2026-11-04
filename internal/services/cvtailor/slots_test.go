@@ -425,6 +425,36 @@ func TestSaveDraftSlots(t *testing.T) {
 		}
 	})
 
+	t.Run("a bullet matching a Variant verbatim records that Variant, not a reword", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.TailoringDraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		e.run(t, tick{})
+		target := e.pos.Achievements[1]
+		variant, err := e.store.CreateAchievementVariant(t.Context(), userID, dto.AchievementVariantInput{AchievementID: target.ID, Text: "Coached four engineers to promotion"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		replacement := dto.DraftPosition{PositionID: e.pos.ID, Bullets: []dto.DraftBullet{
+			{Text: variant.Text, AchievementIDs: []string{}},
+		}}
+
+		if _, err := e.svc.SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Positions: []dto.DraftPosition{replacement}}); err != nil {
+			t.Fatalf("SaveDraftSlots(kept) error = %v", err)
+		}
+
+		want := []dto.AchievementOutcome{
+			{AchievementID: e.pos.Achievements[0].ID},
+			{AchievementID: target.ID, VariantID: &variant.ID, InFinalCV: true},
+		}
+		if diff := cmp.Diff(want, e.store.AchievementOutcomes(id)); diff != "" {
+			t.Errorf("outcomes (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("another user's draft is not found", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]

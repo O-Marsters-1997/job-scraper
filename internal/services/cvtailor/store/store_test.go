@@ -343,7 +343,11 @@ func TestListPositionsAchievementStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cv := func(jobID, outcome string, inFinal, leftOut bool) {
+	variant, err := st.CreateAchievementVariant(ctx, uid, dto.AchievementVariantInput{AchievementID: ach.ID, Text: "Cut p99 latency"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cv := func(jobID, outcome string, inFinal, leftOut bool, variantID *string) {
 		t.Helper()
 		var draftID string
 		err := pool.QueryRow(ctx, `INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, status, outcome)
@@ -351,8 +355,8 @@ func TestListPositionsAchievementStats(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		exec(`INSERT INTO achievement_outcomes (draft_id, achievement_id, user_id, job_id, on_source_cv, in_final_cv, outscored_kept_but_left_out, reworded)
-			VALUES ($1, $2, $3, $4, FALSE, $5, $6, FALSE)`, draftID, ach.ID, uid, jobID, inFinal, leftOut)
+		exec(`INSERT INTO achievement_outcomes (draft_id, achievement_id, user_id, job_id, on_source_cv, in_final_cv, outscored_kept_but_left_out, reworded, variant_id)
+			VALUES ($1, $2, $3, $4, FALSE, $5, $6, FALSE, $7)`, draftID, ach.ID, uid, jobID, inFinal, leftOut, variantID)
 	}
 	application := func(jobID, statusID string) (id string) {
 		t.Helper()
@@ -368,19 +372,19 @@ func TestListPositionsAchievementStats(t *testing.T) {
 	}
 
 	movedOn := pgtest.InsertJob(t, pool, "Replied then rejected", "fp-1")
-	cv(movedOn, "kept", true, false)
+	cv(movedOn, "kept", true, false, &variant.ID)
 	app := application(movedOn, rejectedID)
 	changedTo(app, appliedID)
 	changedTo(app, interviewID)
 	changedTo(app, rejectedID)
 	createdApplied := pgtest.InsertJob(t, pool, "Created applied", "fp-2")
-	cv(createdApplied, "kept", true, true)
+	cv(createdApplied, "kept", true, true, nil)
 	application(createdApplied, appliedID)
 	notApplied := pgtest.InsertJob(t, pool, "Never applied", "fp-3")
-	cv(notApplied, "kept", false, true)
+	cv(notApplied, "kept", false, true, nil)
 	application(notApplied, interviewID)
 	discarded := pgtest.InsertJob(t, pool, "Discarded draft", "fp-4")
-	cv(discarded, "discarded", true, false)
+	cv(discarded, "discarded", true, false, &variant.ID)
 
 	got, err := st.ListPositions(ctx, uid)
 	if err != nil {
@@ -394,6 +398,21 @@ func TestListPositionsAchievementStats(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, stats); diff != "" {
 		t.Errorf("ListPositions() stats for %s, %s (-want +got):\n%s", ach.ID, unused.ID, diff)
+	}
+	wantVariant := &dto.AchievementStats{InCVs: 1, Applied: 1, Replied: 1}
+	if diff := cmp.Diff(wantVariant, got[0].Achievements[0].Variants[0].Stats); diff != "" {
+		t.Errorf("ListPositions() variant stats (-want +got):\n%s", diff)
+	}
+
+	if err := st.DeleteAchievementVariant(ctx, uid, variant.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, err = st.ListPositions(ctx, uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(want[0], got[0].Achievements[0].Stats); diff != "" {
+		t.Errorf("ListPositions() stats after deleting the variant (-want +got):\n%s", diff)
 	}
 }
 

@@ -52,21 +52,41 @@ func achievementOutcomes(bank []dto.Position, answers map[string]dto.Answer, edi
 	var out []dto.AchievementOutcome
 	for _, p := range bank {
 		idByText := make(map[string]string, len(p.Achievements))
+		variantByText := map[string]dto.AchievementVariant{}
+		variantByID := map[string]dto.AchievementVariant{}
 		leans := map[string]float64{}
 		for _, a := range p.Achievements {
 			idByText[normalizeText(a.Text)] = a.ID
+			for _, v := range a.Variants {
+				variantByText[normalizeText(v.Text)] = v
+				variantByID[v.ID] = v
+			}
 			if ans, ok := answers[achievementQuestion(a.Text)]; ok {
 				leans[a.ID] = ans.PYes - ans.PNo
 			}
 		}
 		inFinal := map[string]bool{}
 		verbatim := map[string]bool{}
+		variantOf := map[string]string{}
 		var keptLeans []float64
 		for _, l := range linesOf[p.ID] {
 			ids := slices.Clone(l.AchievementIDs)
 			if id, ok := idByText[normalizeText(l.Text)]; ok {
 				ids = append(ids, id)
 				verbatim[id] = true
+			}
+			v, ok := variantByID[l.VariantID]
+			if !ok {
+				v, ok = variantByText[normalizeText(l.Text)]
+			}
+			if ok {
+				ids = append(ids, v.AchievementID)
+				if _, seen := variantOf[v.AchievementID]; !seen {
+					variantOf[v.AchievementID] = v.ID
+				}
+				if normalizeText(l.Text) == normalizeText(v.Text) {
+					verbatim[v.AchievementID] = true
+				}
 			}
 			best, answered := 0.0, false
 			for _, id := range ids {
@@ -86,6 +106,9 @@ func achievementOutcomes(bank []dto.Position, answers map[string]dto.Answer, edi
 				OnSourceCV:    source[normalizeText(a.Text)],
 				InFinalCV:     inFinal[a.ID],
 				Reworded:      inFinal[a.ID] && !verbatim[a.ID],
+			}
+			if vid, ok := variantOf[a.ID]; ok {
+				o.VariantID = &vid
 			}
 			if answered {
 				ans := answers[achievementQuestion(a.Text)]

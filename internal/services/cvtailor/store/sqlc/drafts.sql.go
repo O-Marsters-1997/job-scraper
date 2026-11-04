@@ -349,6 +349,7 @@ type InsertAchievementOutcomesParams struct {
 	InFinalCv               bool
 	OutscoredKeptButLeftOut bool
 	Reworded                bool
+	VariantID               pgtype.UUID
 }
 
 const insertDraft = `-- name: InsertDraft :one

@@ -7,6 +7,7 @@ import {
 	useDeleteVariant,
 	useUpdateVariant,
 } from "../../hooks/useExperience";
+import { statLine } from "../../lib/achievementStats";
 import { variantName } from "../../lib/variantName";
 import type { Achievement, AchievementVariant } from "../../types/experience";
 
@@ -75,6 +76,14 @@ function VariantRow(props: { variant: AchievementVariant }) {
 					<div class="flex items-center gap-2">
 						<span class="flex-1 text-sm text-muted" title={props.variant.text}>
 							{variantName(props.variant)}
+							<Show when={statLine(props.variant.stats)}>
+								<span
+									class="ml-2 font-mono text-xs tabular-nums text-faint"
+									data-testid="variant-stats"
+								>
+									{statLine(props.variant.stats)}
+								</span>
+							</Show>
 						</span>
 						<button
 							type="button"
