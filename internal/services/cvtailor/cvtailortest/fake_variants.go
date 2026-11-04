@@ -2,6 +2,7 @@ package cvtailortest
 
 import (
 	"context"
+	"slices"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -53,11 +54,10 @@ func (f *FakeStore) UpdateAchievementVariant(_ context.Context, userID string, i
 func (f *FakeStore) DeleteAchievementVariant(_ context.Context, userID, id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for i, v := range f.variants {
-		if v.ID == id && v.userID == userID {
-			f.variants = append(f.variants[:i], f.variants[i+1:]...)
-			return nil
-		}
+	n := len(f.variants)
+	f.variants = slices.DeleteFunc(f.variants, func(v *variant) bool { return v.ID == id && v.userID == userID })
+	if len(f.variants) == n {
+		return errVariantNotFound
 	}
-	return errVariantNotFound
+	return nil
 }
