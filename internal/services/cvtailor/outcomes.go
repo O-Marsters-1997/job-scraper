@@ -81,7 +81,7 @@ func achievementOutcomes(bank []dto.Position, answers map[string]dto.Answer, edi
 			}
 			if ok {
 				ids = append(ids, v.AchievementID)
-				if _, set := variantOf[v.AchievementID]; !set {
+				if _, seen := variantOf[v.AchievementID]; !seen {
 					variantOf[v.AchievementID] = v.ID
 				}
 				if normalizeText(l.Text) == normalizeText(v.Text) {
