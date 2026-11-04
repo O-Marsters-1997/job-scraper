@@ -261,7 +261,12 @@ export const bulletLeanSchema = z.object({
 	replacedFrom: z.string().nullable(),
 	replacedLean: z.number().nullable(),
 	closerMatch: z
-		.object({ achievementId: z.string(), text: z.string(), lean: z.number() })
+		.object({
+			achievementId: z.string(),
+			variantId: z.string().nullable(),
+			text: z.string(),
+			lean: z.number(),
+		})
 		.nullable(),
 });
 export type BulletLean = z.infer<typeof bulletLeanSchema>;

@@ -50,6 +50,9 @@ func (s *Service) DraftLean(ctx context.Context, userID string, q dto.DraftLeanQ
 	for _, p := range edits.Positions {
 		for _, a := range bankByPosition[p.PositionID] {
 			texts[a.Text] = true
+			for _, v := range a.Variants {
+				texts[v.Text] = true
+			}
 		}
 		for _, l := range p.Lines() {
 			bullet := dto.BulletLean{SlotID: l.SlotID}
@@ -98,11 +101,16 @@ func (s *Service) DraftLean(ctx context.Context, userID string, q dto.DraftLeanQ
 		}
 		var best *dto.CloserMatch
 		for _, a := range bankByPosition[positionOf[i]] {
-			if used[a.ID] {
+			if used[a.ID] && a.ID != *out[i].AchievementID {
 				continue
 			}
 			if lean := leanOf(a.Text); lean > *out[i].Lean && (best == nil || lean > best.Lean) {
 				best = &dto.CloserMatch{AchievementID: a.ID, Text: a.Text, Lean: lean}
+			}
+			for _, v := range a.Variants {
+				if lean := leanOf(v.Text); lean > *out[i].Lean && (best == nil || lean > best.Lean) {
+					best = &dto.CloserMatch{AchievementID: a.ID, VariantID: &v.ID, Text: v.Text, Lean: lean}
+				}
 			}
 		}
 		out[i].CloserMatch = best
