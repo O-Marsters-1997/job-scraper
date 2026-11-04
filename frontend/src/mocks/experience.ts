@@ -1,6 +1,8 @@
 import { faker } from "@faker-js/faker";
 import type {
 	Achievement,
+	AchievementVariant,
+	AchievementVariantInput,
 	BankSkill,
 	BankSkillInput,
 	ContextChange,
@@ -25,6 +27,20 @@ let experience: Position[] = [
 				positionId: "position-1",
 				text: "Cut p99 API latency by 40% by moving hot paths to a read-through cache",
 				context: "",
+				variants: [
+					{
+						id: "variant-1",
+						achievementId: "achievement-1",
+						text: "Halved p99 latency on the checkout API with a read-through cache",
+						label: "Checkout",
+					},
+					{
+						id: "variant-2",
+						achievementId: "achievement-1",
+						text: "Cut API latency by 40%",
+						label: "",
+					},
+				],
 				stats: { inCvs: 8, leftOut: 1, applied: 6, replied: 3 },
 			},
 			{
@@ -33,6 +49,7 @@ let experience: Position[] = [
 				text: "Led the migration of 12 services from EC2 to Kubernetes",
 				context:
 					"Cost pressure forced the move; we kept Postgres on RDS to limit risk.",
+				variants: [],
 				stats: { inCvs: 3, leftOut: 4, applied: 2, replied: 0 },
 			},
 			{
@@ -40,6 +57,7 @@ let experience: Position[] = [
 				positionId: "position-1",
 				text: "Mentored three engineers through their first on-call rotation",
 				context: "",
+				variants: [],
 				stats: null,
 			},
 		],
@@ -56,6 +74,7 @@ let experience: Position[] = [
 				positionId: "position-2",
 				text: "Built the billing export pipeline used by finance every month",
 				context: "",
+				variants: [],
 				stats: { inCvs: 5, leftOut: 0, applied: 1, replied: 1 },
 			},
 		],
@@ -72,6 +91,7 @@ let experience: Position[] = [
 				positionId: "position-3",
 				text: "Replaced a nightly batch job with a streaming pipeline",
 				context: "",
+				variants: [],
 				stats: null,
 			},
 		],
@@ -154,6 +174,7 @@ export function importExperience(
 				positionId: id,
 				text,
 				context: "",
+				variants: [],
 				stats: null,
 			})),
 		};
@@ -179,6 +200,7 @@ export function createAchievement(
 		positionId,
 		text,
 		context: "",
+		variants: [],
 		stats: null,
 	};
 	experience = experience.map((p) =>
@@ -207,6 +229,56 @@ export function deleteAchievement(id: string): void {
 	experience = experience.map((p) => ({
 		...p,
 		achievements: p.achievements.filter((a) => a.id !== id),
+	}));
+}
+
+function mapAchievement(id: string, fn: (a: Achievement) => Achievement): void {
+	experience = experience.map((p) => ({
+		...p,
+		achievements: p.achievements.map((a) => (a.id === id ? fn(a) : a)),
+	}));
+}
+
+export function createVariant(
+	achievementId: string,
+	input: AchievementVariantInput,
+): AchievementVariant {
+	const variant: AchievementVariant = {
+		id: `variant-${faker.string.uuid().slice(0, 8)}`,
+		achievementId,
+		...input,
+	};
+	mapAchievement(achievementId, (a) => ({
+		...a,
+		variants: [...a.variants, variant],
+	}));
+	return variant;
+}
+
+export function updateVariant(
+	id: string,
+	input: AchievementVariantInput,
+): AchievementVariant {
+	const owner = experience
+		.flatMap((p) => p.achievements)
+		.find((a) => a.variants.some((v) => v.id === id));
+	const existing = owner?.variants.find((v) => v.id === id);
+	if (!owner || !existing) throw new Error("variant not found");
+	const updated = { ...existing, ...input };
+	mapAchievement(owner.id, (a) => ({
+		...a,
+		variants: a.variants.map((v) => (v.id === id ? updated : v)),
+	}));
+	return updated;
+}
+
+export function deleteVariant(id: string): void {
+	experience = experience.map((p) => ({
+		...p,
+		achievements: p.achievements.map((a) => ({
+			...a,
+			variants: a.variants.filter((v) => v.id !== id),
+		})),
 	}));
 }
 

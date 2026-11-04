@@ -41,6 +41,9 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PUT /experience/positions/{id}/achievements/order",
 		"PATCH /experience/achievements/{id}",
 		"DELETE /experience/achievements/{id}",
+		"POST /experience/achievements/{id}/variants",
+		"PATCH /experience/variants/{id}",
+		"DELETE /experience/variants/{id}",
 		"GET /experience/skills",
 		"POST /experience/skills",
 		"PUT /experience/skills/order",
@@ -72,6 +75,8 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PATCH /experience/positions/{id}",
 		"POST /experience/positions/{id}/achievements",
 		"PATCH /experience/achievements/{id}",
+		"POST /experience/achievements/{id}/variants",
+		"PATCH /experience/variants/{id}",
 		"POST /experience/skills",
 		"PUT /experience/skills/order",
 		"PATCH /experience/skills/{id}",
@@ -84,6 +89,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	handlerstest.RejectsBadPathID(t, r,
 		"DELETE /experience/positions/{id}",
 		"DELETE /experience/achievements/{id}",
+		"DELETE /experience/variants/{id}",
 		"DELETE /experience/skills/{id}",
 	)
 }
@@ -119,16 +125,24 @@ func TestExperienceJourney(t *testing.T) {
 	handlerstest.Do[dto.Achievement](t, r, http.StatusOK, "PATCH /experience/achievements/"+a.ID, `{"text":"cut p99 latency"}`)
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "PUT /experience/positions/"+p.ID+"/achievements/order", `{"ids":["`+a.ID+`"]}`)
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "PUT /experience/positions/order", `{"ids":["`+p.ID+`"]}`)
+	v := handlerstest.Do[dto.AchievementVariant](t, r, http.StatusCreated, "POST /experience/achievements/"+a.ID+"/variants", `{"text":" cut latency 40% ","label":"metric"}`)
+	handlerstest.Do[dto.AchievementVariant](t, r, http.StatusOK, "PATCH /experience/variants/"+v.ID, `{"text":"cut latency by 40%","label":""}`)
+	handlerstest.Do[struct{}](t, r, http.StatusBadRequest, "POST /experience/achievements/"+a.ID+"/variants", `{"text":" "}`)
 
 	got := handlerstest.Do[[]dto.Position](t, r, http.StatusOK, "GET /experience/", "")
 
 	want := []dto.Position{{
 		ID: p.ID, Employer: "Acme", Title: "Engineer", StartDate: ptr("2020-01-01"),
-		Achievements: []dto.Achievement{{ID: a.ID, PositionID: p.ID, Text: "cut p99 latency"}},
+		Achievements: []dto.Achievement{{
+			ID: a.ID, PositionID: p.ID, Text: "cut p99 latency",
+			Variants: []dto.AchievementVariant{{ID: v.ID, AchievementID: a.ID, Text: "cut latency by 40%"}},
+		}},
 	}}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("GET /experience/ (-want +got):\n%s", diff)
 	}
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /experience/variants/"+v.ID, "")
+	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "DELETE /experience/variants/"+v.ID, "")
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /experience/positions/"+p.ID, "")
 	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "DELETE /experience/achievements/"+a.ID, "")
 }

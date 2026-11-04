@@ -23,6 +23,7 @@ const dateLayout = time.DateOnly
 var (
 	ErrPositionNotFound    = apperr.NotFound("position not found")
 	ErrAchievementNotFound = apperr.NotFound("achievement not found")
+	ErrVariantNotFound     = apperr.NotFound("variant not found")
 	ErrIncompleteOrder     = apperr.Invalid("ids must list every item exactly once")
 )
 
@@ -74,7 +75,14 @@ func toPosition(p sqlc.Position) dto.Position {
 }
 
 func toAchievement(a sqlc.Achievement) dto.Achievement {
-	return dto.Achievement{ID: a.ID.String(), PositionID: a.PositionID.String(), Text: a.Text, Context: a.Context}
+	return dto.Achievement{
+		ID: a.ID.String(), PositionID: a.PositionID.String(), Text: a.Text, Context: a.Context,
+		Variants: []dto.AchievementVariant{},
+	}
+}
+
+func toVariant(v sqlc.AchievementVariant) dto.AchievementVariant {
+	return dto.AchievementVariant{ID: v.ID.String(), AchievementID: v.AchievementID.String(), Text: v.Text, Label: v.Label}
 }
 
 func (s *Store) SetAchievementContexts(ctx context.Context, userID string, ids, contexts []string) error {
@@ -123,6 +131,14 @@ func listPositions(ctx context.Context, q *sqlc.Queries, uid pgtype.UUID) ([]dto
 	if err != nil {
 		return nil, fmt.Errorf("store.ListPositions stats: %w", err)
 	}
+	variants, err := q.ListAchievementVariants(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListPositions variants: %w", err)
+	}
+	variantsOf := make(map[pgtype.UUID][]dto.AchievementVariant, len(achievements))
+	for _, v := range variants {
+		variantsOf[v.AchievementID] = append(variantsOf[v.AchievementID], toVariant(v))
+	}
 	statsOf := make(map[pgtype.UUID]*dto.AchievementStats, len(stats))
 	for _, st := range stats {
 		statsOf[st.AchievementID] = &dto.AchievementStats{
@@ -139,6 +155,9 @@ func listPositions(ctx context.Context, q *sqlc.Queries, uid pgtype.UUID) ([]dto
 		if i, ok := byID[a.PositionID]; ok {
 			ach := toAchievement(a)
 			ach.Stats = statsOf[a.ID]
+			if vs := variantsOf[a.ID]; vs != nil {
+				ach.Variants = vs
+			}
 			out[i].Achievements = append(out[i].Achievements, ach)
 		}
 	}
@@ -358,6 +377,67 @@ func (s *Store) ReorderAchievements(ctx context.Context, userID, positionID stri
 		}
 		return nil
 	})
+}
+
+func (s *Store) CreateAchievementVariant(ctx context.Context, userID string, in dto.AchievementVariantInput) (dto.AchievementVariant, error) {
+	uid, err := parseID(userID, ErrAchievementNotFound)
+	if err != nil {
+		return dto.AchievementVariant{}, err
+	}
+	aid, err := parseID(in.AchievementID, ErrAchievementNotFound)
+	if err != nil {
+		return dto.AchievementVariant{}, err
+	}
+	v, err := s.queries.CreateAchievementVariant(ctx, sqlc.CreateAchievementVariantParams{
+		UserID: uid, AchievementID: aid, Text: in.Text, Label: in.Label,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.AchievementVariant{}, ErrAchievementNotFound
+	}
+	if err != nil {
+		return dto.AchievementVariant{}, fmt.Errorf("store.CreateAchievementVariant: %w", err)
+	}
+	return toVariant(v), nil
+}
+
+func (s *Store) UpdateAchievementVariant(ctx context.Context, userID string, in dto.AchievementVariantInput) (dto.AchievementVariant, error) {
+	uid, err := parseID(userID, ErrVariantNotFound)
+	if err != nil {
+		return dto.AchievementVariant{}, err
+	}
+	id, err := parseID(in.ID, ErrVariantNotFound)
+	if err != nil {
+		return dto.AchievementVariant{}, err
+	}
+	v, err := s.queries.UpdateAchievementVariant(ctx, sqlc.UpdateAchievementVariantParams{
+		UserID: uid, ID: id, Text: in.Text, Label: in.Label,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.AchievementVariant{}, ErrVariantNotFound
+	}
+	if err != nil {
+		return dto.AchievementVariant{}, fmt.Errorf("store.UpdateAchievementVariant: %w", err)
+	}
+	return toVariant(v), nil
+}
+
+func (s *Store) DeleteAchievementVariant(ctx context.Context, userID, id string) error {
+	uid, err := parseID(userID, ErrVariantNotFound)
+	if err != nil {
+		return err
+	}
+	vid, err := parseID(id, ErrVariantNotFound)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.DeleteAchievementVariant(ctx, sqlc.DeleteAchievementVariantParams{UserID: uid, ID: vid})
+	if err != nil {
+		return fmt.Errorf("store.DeleteAchievementVariant: %w", err)
+	}
+	if n == 0 {
+		return ErrVariantNotFound
+	}
+	return nil
 }
 
 func (s *Store) inTx(ctx context.Context, fn func(q *sqlc.Queries) error) error {

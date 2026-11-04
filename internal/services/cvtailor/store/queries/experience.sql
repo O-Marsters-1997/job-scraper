@@ -55,6 +55,28 @@ SET sort_order = o.ord::int
 FROM unnest(sqlc.arg(ids)::uuid[]) WITH ORDINALITY AS o(id, ord)
 WHERE a.user_id = sqlc.arg(user_id) AND a.position_id = sqlc.arg(position_id) AND a.id = o.id;
 
+-- name: ListAchievementVariants :many
+SELECT id, achievement_id, user_id, text, label, created_at, updated_at
+FROM achievement_variants
+WHERE user_id = $1
+ORDER BY created_at, id;
+
+-- name: CreateAchievementVariant :one
+INSERT INTO achievement_variants (achievement_id, user_id, text, label)
+SELECT a.id, a.user_id, sqlc.arg(text), sqlc.arg(label)
+FROM achievements a
+WHERE a.user_id = sqlc.arg(user_id) AND a.id = sqlc.arg(achievement_id)
+RETURNING id, achievement_id, user_id, text, label, created_at, updated_at;
+
+-- name: UpdateAchievementVariant :one
+UPDATE achievement_variants
+SET text = sqlc.arg(text), label = sqlc.arg(label), updated_at = NOW()
+WHERE user_id = sqlc.arg(user_id) AND id = sqlc.arg(id)
+RETURNING id, achievement_id, user_id, text, label, created_at, updated_at;
+
+-- name: DeleteAchievementVariant :execrows
+DELETE FROM achievement_variants WHERE user_id = $1 AND id = $2;
+
 -- name: GetPosition :one
 SELECT * FROM positions WHERE user_id = $1 AND id = $2;
 

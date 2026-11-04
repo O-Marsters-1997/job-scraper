@@ -172,6 +172,16 @@ type AchievementOutcome struct {
 	CreatedAt               pgtype.Timestamptz
 }
 
+type AchievementVariant struct {
+	ID            pgtype.UUID
+	AchievementID pgtype.UUID
+	UserID        pgtype.UUID
+	Text          string
+	Label         string
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
 type AnswerCorrection struct {
 	UserID    pgtype.UUID
 	JobID     pgtype.UUID

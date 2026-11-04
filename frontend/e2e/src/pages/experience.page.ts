@@ -35,6 +35,28 @@ export class ExperiencePage {
 		await card.getByRole("button", { name: "Add", exact: true }).click();
 	}
 
+	async addVariant(employer: string, text: string, label = "") {
+		const card = this.positions.filter({ hasText: employer });
+		await card.getByRole("button", { name: "Add variant" }).click();
+		await card.getByLabel("Variant text").fill(text);
+		await card.getByLabel("Variant label").fill(label);
+		await card.getByRole("button", { name: "Save", exact: true }).click();
+	}
+
+	async editVariantText(employer: string, name: string, text: string) {
+		const card = this.positions.filter({ hasText: employer });
+		await card.getByRole("button", { name: `Edit variant ${name}` }).click();
+		await card.getByLabel("Variant text").fill(text);
+		await card.getByRole("button", { name: "Save", exact: true }).click();
+	}
+
+	async deleteVariant(employer: string, name: string) {
+		await this.positions
+			.filter({ hasText: employer })
+			.getByRole("button", { name: `Delete variant ${name}` })
+			.click();
+	}
+
 	async deletePosition(employer: string) {
 		this.page.once("dialog", (dialog) => dialog.accept());
 		await this.positions
