@@ -13,7 +13,7 @@ import (
 
 const createContact = `-- name: CreateContact :one
 INSERT INTO contacts (user_id, name, role, company_id, company_name, job_id, linkedin_url, email)
-SELECT $1::uuid, $2, $3,
+SELECT $1::uuid, $2::text, $3,
        COALESCE($4::uuid, j.company_id), $5,
        $6::uuid, $7, $8
 FROM (SELECT 1) one
@@ -23,7 +23,7 @@ RETURNING id
 
 type CreateContactParams struct {
 	UserID      pgtype.UUID
-	Name        string
+	Name        pgtype.Text
 	Role        string
 	CompanyID   pgtype.UUID
 	CompanyName string
@@ -334,7 +334,7 @@ type ListContactsParams struct {
 
 type ListContactsRow struct {
 	ID             pgtype.UUID
-	Name           string
+	Name           pgtype.Text
 	Role           string
 	CompanyID      pgtype.UUID
 	CompanyName    string
@@ -391,7 +391,7 @@ func (q *Queries) ListContacts(ctx context.Context, arg ListContactsParams) ([]L
 }
 
 const lockContact = `-- name: LockContact :one
-SELECT stage FROM contacts WHERE id = $1 AND user_id = $2 FOR UPDATE
+SELECT stage, name FROM contacts WHERE id = $1 AND user_id = $2 FOR UPDATE
 `
 
 type LockContactParams struct {
@@ -399,11 +399,16 @@ type LockContactParams struct {
 	UserID pgtype.UUID
 }
 
-func (q *Queries) LockContact(ctx context.Context, arg LockContactParams) (string, error) {
+type LockContactRow struct {
+	Stage string
+	Name  pgtype.Text
+}
+
+func (q *Queries) LockContact(ctx context.Context, arg LockContactParams) (LockContactRow, error) {
 	row := q.db.QueryRow(ctx, lockContact, arg.ID, arg.UserID)
-	var stage string
-	err := row.Scan(&stage)
-	return stage, err
+	var i LockContactRow
+	err := row.Scan(&i.Stage, &i.Name)
+	return i, err
 }
 
 const lockContactAtJobCompany = `-- name: LockContactAtJobCompany :one
@@ -460,6 +465,24 @@ type SetContactMessagedParams struct {
 func (q *Queries) SetContactMessaged(ctx context.Context, arg SetContactMessagedParams) error {
 	_, err := q.db.Exec(ctx, setContactMessaged, arg.ID, arg.UserID)
 	return err
+}
+
+const setContactName = `-- name: SetContactName :execrows
+UPDATE contacts SET name = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3
+`
+
+type SetContactNameParams struct {
+	Name   pgtype.Text
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) SetContactName(ctx context.Context, arg SetContactNameParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setContactName, arg.Name, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setContactState = `-- name: SetContactState :exec

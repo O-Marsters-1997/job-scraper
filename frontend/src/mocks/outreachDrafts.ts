@@ -33,7 +33,7 @@ export function getOutreachDraft(
 		: achievements.at(-1);
 	const hook = hooks.get(contactId);
 	const body = template.body
-		.replaceAll("{first_name}", contact.name.split(/\s+/)[0] ?? "there")
+		.replaceAll("{first_name}", contact.name?.split(/\s+/)[0] || "there")
 		.replaceAll("{company}", contact.company_name || "[company]")
 		.replaceAll("{role}", contact.job_title || contact.role || "[role]")
 		.replaceAll("{achievement}", achievement?.text ?? "[achievement]")

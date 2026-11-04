@@ -45,7 +45,7 @@ const reachOutSchema = z.object({
 
 export const contactSchema = z.object({
 	id: z.string(),
-	name: z.string(),
+	name: z.string().nullable(),
 	role: z.string(),
 	company_id: z.string().nullable(),
 	company_name: z.string(),
@@ -90,7 +90,7 @@ export type ReachOutInput = {
 	job_id: string;
 } & (
 	| { contact_id: string; contact: null }
-	| { contact_id: null; contact: ContactInput }
+	| { contact_id: null; contact: ContactInput | null }
 );
 
 export interface MarkSentInput {

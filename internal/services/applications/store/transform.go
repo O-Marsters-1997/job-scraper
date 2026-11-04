@@ -132,6 +132,13 @@ func toJobCommentDTO(c sqlc.JobComment) dto.JobComment {
 	}
 }
 
+func optText(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	return &t.String
+}
+
 func optIDString(id pgtype.UUID) *string {
 	if !id.Valid {
 		return nil
@@ -165,7 +172,7 @@ func toContactDTOs(rows []sqlc.ListContactsRow, events []sqlc.ListContactEventsR
 	out := make([]dto.Contact, len(rows))
 	for i, r := range rows {
 		c := dto.Contact{
-			ID: r.ID.String(), Name: r.Name, Role: r.Role,
+			ID: r.ID.String(), Name: optText(r.Name), Role: r.Role,
 			CompanyID: optIDString(r.CompanyID), CompanyName: r.CompanyName, CompanyKind: r.CompanyKind,
 			JobID: optIDString(r.JobID), JobTitle: r.JobTitle, ApplicationID: optIDString(r.ApplicationID),
 			LinkedInURL: r.LinkedinUrl, Email: r.Email,

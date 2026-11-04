@@ -18,6 +18,7 @@ import {
 	useContacts,
 	useDeleteContact,
 } from "../../hooks/useContacts";
+import { displayName } from "../../lib/contactName";
 import { queryClient } from "../../lib/queryClient";
 import { CompaniesView } from "./-contacts/CompaniesView";
 import { MarkSentDialog, ReplyDialog } from "./-contacts/ContactDialogs";
@@ -51,7 +52,7 @@ function ContactsPage() {
 	const openContact = () =>
 		loadedData(contacts)?.find((c) => c.id === openId());
 	const deleteContact = (c: Contact) => {
-		if (!confirm(`Delete ${c.name} and their history?`)) return;
+		if (!confirm(`Delete ${displayName(c)} and their history?`)) return;
 		setOpenId(undefined);
 		remove.mutate(c.id);
 	};

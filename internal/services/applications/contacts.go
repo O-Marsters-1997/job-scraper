@@ -30,8 +30,8 @@ func (s *Service) ReachOut(ctx context.Context, userID string, in dto.ReachOutIn
 	if in.JobID == "" {
 		return dto.Contact{}, apperr.Invalid("job_id is required")
 	}
-	if (in.ContactID == nil) == (in.Contact == nil) {
-		return dto.Contact{}, apperr.Invalid("set exactly one of contact_id or contact")
+	if in.ContactID != nil && in.Contact != nil {
+		return dto.Contact{}, apperr.Invalid("set at most one of contact_id or contact")
 	}
 	if in.Contact != nil {
 		contact := *in.Contact
@@ -41,6 +41,17 @@ func (s *Service) ReachOut(ctx context.Context, userID string, in dto.ReachOutIn
 		in.Contact = &contact
 	}
 	return s.store.ReachOut(ctx, userID, in, time.Now())
+}
+
+func (s *Service) NameContact(ctx context.Context, userID string, in dto.NameContactInput) (dto.Contact, error) {
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" {
+		return dto.Contact{}, apperr.Invalid("name is required")
+	}
+	if err := tooLong("name", in.Name, 200); err != nil {
+		return dto.Contact{}, err
+	}
+	return s.store.NameContact(ctx, userID, in)
 }
 
 func validateContact(in *dto.ContactInput) error {

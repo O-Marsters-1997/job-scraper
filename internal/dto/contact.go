@@ -62,7 +62,7 @@ type ContactEvent struct {
 
 type Contact struct {
 	ID             string         `json:"id"`
-	Name           string         `json:"name"`
+	Name           *string        `json:"name"` // nil for a Placeholder contact
 	Role           string         `json:"role"`
 	CompanyID      *string        `json:"company_id"`
 	CompanyName    string         `json:"company_name"` // the Company's name when linked, else the typed fallback
@@ -91,8 +91,13 @@ type ReachOut struct {
 
 type ReachOutInput struct {
 	JobID     string        `json:"job_id"`
-	ContactID *string       `json:"contact_id"` // an existing Contact at the Job's company
-	Contact   *ContactInput `json:"contact"`    // a new Contact; exactly one of ContactID or Contact is set
+	ContactID *string       `json:"contact_id"`
+	Contact   *ContactInput `json:"contact"` // at most one of ContactID or Contact; neither makes a Placeholder contact
+}
+
+type NameContactInput struct {
+	ID   string `json:"-" path:"id"`
+	Name string `json:"name"`
 }
 
 type ContactInput struct {

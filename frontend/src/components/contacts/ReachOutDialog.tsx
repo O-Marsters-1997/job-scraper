@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useContacts, useReachOut } from "@/hooks/useContacts";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
+import { displayName } from "@/lib/contactName";
 import { cn } from "@/lib/utils";
 
 const NEW = "new";
@@ -33,7 +34,9 @@ function errorMessage(err: unknown): string {
 	return "Couldn't set up the reach out. Try again.";
 }
 
-function ReachOutForm(props: ReachOutDialogProps) {
+function ReachOutForm(
+	props: ReachOutDialogProps & { skip: ReturnType<typeof useFormSubmit> },
+) {
 	const contacts = useContacts();
 	const reachOut = useReachOut();
 	const [choice, setChoice] = createSignal(NEW);
@@ -80,7 +83,7 @@ function ReachOutForm(props: ReachOutDialogProps) {
 
 	return (
 		<form onSubmit={form.submit} class="flex flex-col gap-4">
-			<FormFeedback error={form.error()} />
+			<FormFeedback error={form.error() ?? props.skip.error()} />
 			<div
 				role="radiogroup"
 				aria-label="Who to message"
@@ -98,7 +101,7 @@ function ReachOutForm(props: ReachOutDialogProps) {
 							/>
 							<span class="min-w-0 flex-1">
 								<span class="block truncate text-sm font-medium text-foreground">
-									{c.name}
+									{displayName(c)}
 								</span>
 								<span class="block truncate text-xs text-muted">{c.role}</span>
 							</span>
@@ -157,9 +160,10 @@ function ReachOutForm(props: ReachOutDialogProps) {
 				<Button
 					type="button"
 					variant="outline"
-					onClick={() => props.onOpenChange(false)}
+					loading={props.skip.pending()}
+					onClick={() => props.skip.submit()}
 				>
-					Cancel
+					Skip for now
 				</Button>
 				<Button
 					type="submit"
@@ -174,8 +178,21 @@ function ReachOutForm(props: ReachOutDialogProps) {
 }
 
 export function ReachOutDialog(props: ReachOutDialogProps) {
+	const reachOut = useReachOut();
+	const skip = useFormSubmit(async () => {
+		await reachOut.mutateAsync({
+			job_id: props.jobId,
+			contact_id: null,
+			contact: null,
+		});
+		props.onOpenChange(false);
+	}, errorMessage);
+
 	return (
-		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
+		<Dialog
+			open={props.open}
+			onOpenChange={(open) => (open ? props.onOpenChange(true) : skip.submit())}
+		>
 			<DialogContent class="max-w-lg">
 				<DialogHeader>
 					<DialogTitle>Reach out at {props.company}</DialogTitle>
@@ -185,7 +202,7 @@ export function ReachOutDialog(props: ReachOutDialogProps) {
 					</p>
 				</DialogHeader>
 				<Show when={props.open}>
-					<ReachOutForm {...props} />
+					<ReachOutForm {...props} skip={skip} />
 				</Show>
 			</DialogContent>
 		</Dialog>

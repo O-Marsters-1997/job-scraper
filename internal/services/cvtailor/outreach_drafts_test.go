@@ -153,6 +153,16 @@ func TestModule_OutreachDraft(t *testing.T) {
 		}
 	})
 
+	t.Run("a placeholder contact is refused until it has a name", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t, cachedAnswers{})
+		id := e.store.SeedOutreachSubject(userID, dto.OutreachSubject{Company: "Globex"})
+		_, err := e.mod.OutreachDraft(ctx, userID, dto.DraftQuery{ContactID: id})
+		if !apperr.IsKind(err, apperr.KindUnprocessable) {
+			t.Errorf("OutreachDraft(placeholder) error = %v, want unprocessable", err)
+		}
+	})
+
 	t.Run("an unknown contact or achievement is not found", func(t *testing.T) {
 		t.Parallel()
 		e := newEnv(t, cachedAnswers{})

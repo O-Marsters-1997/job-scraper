@@ -44,6 +44,9 @@ func (m *Module) outreachSubject(ctx context.Context, userID, contactID string) 
 	if errors.Is(err, store.ErrContactNotFound) {
 		return dto.OutreachSubject{}, apperr.NotFound("contact not found")
 	}
+	if err == nil && subject.Name == "" {
+		return dto.OutreachSubject{}, apperr.Unprocessable("name this contact before drafting")
+	}
 	return subject, err
 }
 

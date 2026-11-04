@@ -93,11 +93,26 @@ export function createContact(input: ContactInput): Contact {
 }
 
 export function reachOut(input: ReachOutInput): Contact {
-	const contact =
-		input.contact === null
-			? replace(input.contact_id, (c) => c)
-			: createContact({ ...input.contact, job_id: input.job_id });
 	const job = getJobs().find((j) => j.ID === input.job_id);
+	let contact: Contact;
+	if (input.contact_id !== null) {
+		contact = replace(input.contact_id, (c) => c);
+	} else if (input.contact !== null) {
+		contact = createContact({ ...input.contact, job_id: input.job_id });
+	} else {
+		contact = replace(
+			createContact({
+				name: "",
+				role: "",
+				company_id: job?.CompanyID ?? null,
+				company_name: job?.CompanySlug ?? "",
+				job_id: input.job_id,
+				linkedin_url: "",
+				email: "",
+			}).id,
+			(c) => ({ ...c, name: null }),
+		);
+	}
 	return replace(contact.id, (c) => ({
 		...c,
 		reach_outs: [
@@ -110,6 +125,10 @@ export function reachOut(input: ReachOutInput): Contact {
 			...c.reach_outs,
 		],
 	}));
+}
+
+export function nameContact(id: string, name: string): Contact {
+	return replace(id, (c) => ({ ...c, name }));
 }
 
 export function markContactSent(id: string, input: MarkSentInput): ContactSent {
