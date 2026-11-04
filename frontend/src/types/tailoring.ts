@@ -138,7 +138,11 @@ const draftContentSchema = z.object({
 			headingText: z.string(),
 			linked: z.boolean(),
 			bullets: z.array(
-				z.object({ text: z.string(), achievementIds: z.array(z.string()) }),
+				z.object({
+					text: z.string(),
+					achievementIds: z.array(z.string()),
+					variantId: z.string().optional(),
+				}),
 			),
 		}),
 	),
@@ -239,7 +243,11 @@ export type SlotEdit = {
 };
 export type DraftPositionEdit = {
 	positionId: string;
-	bullets: { text: string; achievementIds: string[] }[];
+	bullets: {
+		text: string;
+		achievementIds: string[];
+		variantId?: string | undefined;
+	}[];
 };
 export type DraftFinding = z.infer<typeof draftFindingSchema>;
 export type DraftProvenance = z.infer<typeof draftProvenanceSchema>;

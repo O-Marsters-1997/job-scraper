@@ -13,6 +13,7 @@ import { createStore, produce, reconcile, unwrap } from "solid-js/store";
 import { z } from "zod";
 import { keys } from "@/api/keys";
 import { saveDraftSlots } from "@/api/tailoring";
+import { useExperience } from "@/hooks/useExperience";
 import { blockText } from "@/lib/docLayout";
 import { ADDED_PREFIX, isAddedSlot, slotsToSave } from "@/lib/draftSlots";
 import { createSaveLoop, type SaveStatus } from "@/lib/saveLoop";
@@ -47,7 +48,11 @@ function readResolved(id: string): Record<string, boolean> {
 	}
 }
 
-type RoleEdit = { slots: string[]; ids: string[][] };
+type RoleEdit = {
+	slots: string[];
+	ids: string[][];
+	variants: (string | undefined)[];
+};
 
 export function createDraftEditor(
 	draft: Accessor<Draft>,
@@ -132,6 +137,67 @@ export function createDraftEditor(
 
 	const [roleEdits, setRoleEdits] = createSignal<Record<string, RoleEdit>>({});
 
+	const experience = useExperience();
+	const variantsFor = (slotId: string) => {
+		const cited = citedAchievement(slotId);
+		return (
+			experience.data
+				?.flatMap((p) => p.achievements)
+				.find((a) => a.id === cited?.id)?.variants ?? []
+		);
+	};
+
+	const positionOfSlot = (slotId: string) =>
+		draft().provenance?.positions.find((p) =>
+			p.bullets.some((b) => b.slotId === slotId),
+		);
+
+	const variantId = (slotId: string): string | undefined => {
+		const position = positionOfSlot(slotId);
+		if (!position) return;
+		const pending = roleEdits()[position.positionId];
+		const at = (
+			pending?.slots ?? position.bullets.map((b) => b.slotId)
+		).indexOf(slotId);
+		if (pending) return pending.variants[at];
+		return draft().content?.positions.find(
+			(p) => p.positionId === position.positionId,
+		)?.bullets[at]?.variantId;
+	};
+
+	const swapVariant = (
+		slotId: string,
+		pick: { id: string; text: string } | undefined,
+	) => {
+		const position = positionOfSlot(slotId);
+		const cited = citedAchievement(slotId);
+		const content = draft().content?.positions.find(
+			(p) => p.positionId === position?.positionId,
+		);
+		if (!position || !cited || !content) return;
+		const pending = roleEdits()[position.positionId];
+		const slots = pending?.slots ?? position.bullets.map((b) => b.slotId);
+		if (slots.length !== content.bullets.length && !pending) return;
+		setTexts(slotId, pick?.text ?? cited.text);
+		setRoleEdits((now) => ({
+			...now,
+			[position.positionId]: {
+				slots,
+				ids: slots.map(
+					(_, i) => pending?.ids[i] ?? content.bullets[i]?.achievementIds ?? [],
+				),
+				variants: slots.map((s, i) =>
+					s === slotId
+						? pick?.id
+						: pending
+							? pending.variants[i]
+							: content.bullets[i]?.variantId,
+				),
+			},
+		}));
+		loop.schedule();
+	};
+
 	const rekey = (
 		result: Draft,
 		sent: { positionId: string; slots: string[]; texts: string[] }[],
@@ -182,7 +248,16 @@ export function createDraftEditor(
 		Object.entries(edits).flatMap(([positionId, edit]) => {
 			const kept = edit.slots.flatMap((slot, i) => {
 				const body = text(slot).trim();
-				return body ? [{ slot, body, ids: edit.ids[i] ?? [] }] : [];
+				return body
+					? [
+							{
+								slot,
+								body,
+								ids: edit.ids[i] ?? [],
+								variantId: edit.variants[i],
+							},
+						]
+					: [];
 			});
 			if (kept.length === 0 && edit.ids.length === 0)
 				return [{ positionId, slots: [], texts: [], bullets: [] }];
@@ -195,6 +270,7 @@ export function createDraftEditor(
 							bullets: kept.map((k) => ({
 								text: k.body,
 								achievementIds: k.ids,
+								variantId: k.variantId,
 							})),
 						},
 					]
@@ -315,6 +391,20 @@ export function createDraftEditor(
 		const clean = oneLine(next);
 		if (clean === text(slotId)) return;
 		setTexts(slotId, clean);
+		if (Object.values(roleEdits()).some((v) => v.slots.includes(slotId)))
+			setRoleEdits((now) =>
+				Object.fromEntries(
+					Object.entries(now).map(([k, v]) => [
+						k,
+						{
+							...v,
+							variants: v.variants.map((id, i) =>
+								v.slots[i] === slotId ? undefined : id,
+							),
+						},
+					]),
+				),
+			);
 		loop.schedule();
 	};
 
@@ -397,7 +487,11 @@ export function createDraftEditor(
 		);
 		setRoleEdits((now) => ({
 			...now,
-			[positionId]: { slots: final, ids: bullets.map((b) => b.achievementIds) },
+			[positionId]: {
+				slots: final,
+				ids: bullets.map((b) => b.achievementIds),
+				variants: bullets.map((b) => b.variantId),
+			},
 		}));
 		loop.schedule();
 	};
@@ -463,6 +557,9 @@ export function createDraftEditor(
 		label,
 		text,
 		citedAchievement,
+		variantsFor,
+		variantId,
+		swapVariant,
 		original: (slotId: string) => original[slotId] ?? "",
 		setText,
 		undo: (slotId: string) => {

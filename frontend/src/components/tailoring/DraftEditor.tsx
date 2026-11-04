@@ -228,6 +228,7 @@ export function DraftEditor(props: {
 	const needsCard = (slotId: string) =>
 		ed.edited(slotId) ||
 		!!suggestions.get(slotId) ||
+		ed.variantsFor(slotId).length > 0 ||
 		isSparse(metrics().fits[slotId]);
 	const cardKeys = createMemo(() =>
 		ed.cardKeys(needsCard).filter((k) => k !== PROFILE_SLOT),

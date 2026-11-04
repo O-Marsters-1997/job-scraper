@@ -189,13 +189,17 @@ func (pl plan) replaceBullets(edits cvedit.EditSet, reps []dto.DraftPosition) (c
 			if text == "" || strings.ContainsAny(text, "\r\n") {
 				return edits, apperr.Invalid("a bullet must be one non-empty line")
 			}
+			variantID := ""
+			if b.VariantID != nil && len(b.AchievementIDs) > 0 {
+				variantID = *b.VariantID
+			}
 			if i < len(ids) {
 				keep := len(b.AchievementIDs) == 0 && text == byID[r.PositionID].SlotTexts[i]
-				pe.Bullets = append(pe.Bullets, cvedit.Bullet{Keep: keep, Text: text, AchievementIDs: slices.Clone(b.AchievementIDs), SlotID: ids[i]})
+				pe.Bullets = append(pe.Bullets, cvedit.Bullet{Keep: keep, Text: text, AchievementIDs: slices.Clone(b.AchievementIDs), VariantID: variantID, SlotID: ids[i]})
 				after = ids[i]
 				continue
 			}
-			added := cvedit.AddedBullet{SlotID: fmt.Sprintf("%s%s-%d", addedSlotPrefix, r.PositionID, i), After: after, Text: text, AchievementIDs: slices.Clone(b.AchievementIDs)}
+			added := cvedit.AddedBullet{SlotID: fmt.Sprintf("%s%s-%d", addedSlotPrefix, r.PositionID, i), After: after, Text: text, AchievementIDs: slices.Clone(b.AchievementIDs), VariantID: variantID}
 			pe.Added = append(pe.Added, added)
 			after = added.SlotID
 		}
@@ -273,7 +277,7 @@ func (pl plan) overlay(edits cvedit.EditSet, slots []dto.SlotEdit) (cvedit.EditS
 		for i := range pe.Bullets {
 			id := slotIDs[pe.PositionID][i]
 			if text, ok := texts[id]; ok && text != pe.Bullets[i].Text {
-				pe.Bullets[i].Text, pe.Bullets[i].Keep = text, false
+				pe.Bullets[i].Text, pe.Bullets[i].Keep, pe.Bullets[i].VariantID = text, false, ""
 			}
 			delete(texts, id)
 		}
