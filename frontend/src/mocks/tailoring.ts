@@ -1,4 +1,9 @@
-import type { PromptLab, PromptPart } from "@/types/promptLab";
+import type {
+	PromptLab,
+	PromptPart,
+	PromptTryDone,
+	PromptTryRequest,
+} from "@/types/promptLab";
 import type {
 	BulletLean,
 	CVHeading,
@@ -804,6 +809,27 @@ function mockSuggestion(req: SuggestRequest): string {
 	}
 	if (req.action === "verb") return ["Led", ...words.slice(1)].join(" ");
 	return words.slice(0, Math.ceil(words.length * 0.75)).join(" ");
+}
+
+export async function streamPromptTry(
+	req: PromptTryRequest,
+	onDelta: (text: string) => void,
+	signal: AbortSignal,
+): Promise<PromptTryDone> {
+	const text = `Engineer who ships reliable services${req.steer ? `, ${req.steer}` : ""}.`;
+	for (const [i, w] of text.split(" ").entries()) {
+		signal.throwIfAborted();
+		onDelta(i === 0 ? w : ` ${w}`);
+		await new Promise((resolve) => setTimeout(resolve, MOCK_WORD_MS));
+	}
+	return {
+		text,
+		findings: [],
+		cost: 0.012,
+		promptKey: Object.keys(req.parts).length
+			? "edited0000000000"
+			: "default000000000",
+	};
 }
 
 export async function streamSuggestion(

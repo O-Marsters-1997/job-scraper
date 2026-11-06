@@ -33,3 +33,16 @@ type PromptLab struct {
 type PromptLabQuery struct {
 	ID string `path:"id"`
 }
+
+type PromptTryInput struct {
+	ID    string            `json:"-" path:"id"`
+	Parts map[string]string `json:"parts"`
+	Steer string            `json:"steer"`
+}
+
+type PromptTryDone struct {
+	Text      string         `json:"text"`
+	Findings  []DraftFinding `json:"findings"`
+	Cost      float64        `json:"cost"`
+	PromptKey string         `json:"promptKey"`
+}

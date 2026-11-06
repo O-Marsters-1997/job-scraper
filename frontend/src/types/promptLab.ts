@@ -36,4 +36,6 @@ export type PromptTry = {
 	changed: string[];
 	steer: string;
 	cost: number;
+	error?: string;
 };
+export type PromptTryRequest = { parts: Record<string, string>; steer: string };

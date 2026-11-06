@@ -4,8 +4,11 @@ import { KeptDraftExistsError } from "../lib/tailoring";
 import {
 	type PromptLab,
 	type PromptPart,
+	type PromptTryDone,
+	type PromptTryRequest,
 	promptLabSchema,
 	promptPartSchema,
+	promptTryDoneSchema,
 } from "../types/promptLab";
 import {
 	type BulletLean,
@@ -296,6 +299,43 @@ const bodyError = (err: ApiError) =>
 const parseData = <S extends z.ZodType>(schema: S, data: string): z.infer<S> =>
 	schema.parse(JSON.parse(data));
 
+async function readStream<S extends z.ZodType>(
+	path: string,
+	body: unknown,
+	doneSchema: S,
+	onDelta: (text: string) => void,
+	signal: AbortSignal,
+): Promise<z.infer<S>> {
+	const res = await request(path, { ...jsonInit("POST", body), signal }).catch(
+		(err) => {
+			const message = err instanceof ApiError && bodyError(err);
+			throw message ? new Error(message) : err;
+		},
+	);
+	if (!res.body) throw new Error("Request failed");
+	let done: z.infer<S> | undefined;
+	let failure: string | undefined;
+	const feed = createSseParser((event, data) => {
+		if (event === "delta") onDelta(parseData(deltaSchema, data).text);
+		if (event === "done") done = parseData(doneSchema, data);
+		if (event === "error")
+			failure = parseData(failureSchema, data).message ?? "Request failed";
+	});
+	const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+	try {
+		for (;;) {
+			const chunk = await reader.read();
+			if (chunk.done) break;
+			feed(chunk.value);
+		}
+	} finally {
+		void reader.cancel().catch(() => {});
+	}
+	if (failure !== undefined) throw new Error(failure);
+	if (!done) throw new Error("Stream ended early");
+	return done;
+}
+
 export async function streamSuggestion(
 	id: string,
 	slotId: string,
@@ -305,37 +345,32 @@ export async function streamSuggestion(
 ): Promise<SuggestDone> {
 	return mocked(
 		(db) => db.streamSuggestion(req, onDelta, signal),
-		async () => {
-			const res = await request(
+		() =>
+			readStream(
 				`/tailoring/drafts/${id}/slots/${encodeURIComponent(slotId)}/suggest`,
-				{ ...jsonInit("POST", req), signal },
-			).catch((err) => {
-				const message = err instanceof ApiError && bodyError(err);
-				throw message ? new Error(message) : err;
-			});
-			if (!res.body) throw new Error("Suggestion failed");
-			let done: SuggestDone | undefined;
-			let failure: string | undefined;
-			const feed = createSseParser((event, data) => {
-				if (event === "delta") onDelta(parseData(deltaSchema, data).text);
-				if (event === "done") done = parseData(suggestDoneSchema, data);
-				if (event === "error")
-					failure =
-						parseData(failureSchema, data).message ?? "Suggestion failed";
-			});
-			const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-			try {
-				for (;;) {
-					const chunk = await reader.read();
-					if (chunk.done) break;
-					feed(chunk.value);
-				}
-			} finally {
-				void reader.cancel().catch(() => {});
-			}
-			if (failure !== undefined) throw new Error(failure);
-			if (!done) throw new Error("Suggestion ended early");
-			return done;
-		},
+				req,
+				suggestDoneSchema,
+				onDelta,
+				signal,
+			),
+	);
+}
+
+export async function streamPromptTry(
+	id: string,
+	req: PromptTryRequest,
+	onDelta: (text: string) => void,
+	signal: AbortSignal,
+): Promise<PromptTryDone> {
+	return mocked(
+		(db) => db.streamPromptTry(req, onDelta, signal),
+		() =>
+			readStream(
+				`/tailoring/drafts/${id}/prompt/try`,
+				req,
+				promptTryDoneSchema,
+				onDelta,
+				signal,
+			),
 	);
 }
