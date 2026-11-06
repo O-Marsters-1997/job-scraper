@@ -27,6 +27,15 @@ export function missingReferences(lab: PromptLab): string[] {
 	);
 }
 
+export function partTexts(
+	lab: PromptLab,
+	edits: Record<string, string>,
+): Record<string, string> {
+	return Object.fromEntries(
+		lab.parts.map((p) => [p.path, edits[p.path] ?? p.text]),
+	);
+}
+
 export function sentRows(lab: PromptLab): SentRow[] {
 	return [
 		...lab.documents.map((d) => ({
