@@ -12,8 +12,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/profiledraft"
 )
 
-const maxPartRunes = 20000
-
 func profileRedraftChecks() []string {
 	return []string{
 		"Grounding: every claim must come from your experience bank or skills.",
