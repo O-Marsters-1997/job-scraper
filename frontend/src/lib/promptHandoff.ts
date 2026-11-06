@@ -19,7 +19,7 @@ export function tailoringPrompt(input: HandoffInput): string {
 		"",
 		"## How the prompt is built",
 		`The model receives a shared system prompt I can't change, then the documents below, then the instructions in ${lab.main}.`,
-		`I can edit ${editable.join(" and ")}. ${lab.documents.map((d) => d.path).join(" and ")} come from the Draft and are read-only.`,
+		`I can edit ${editable.join(" and ")}.${lab.documents.length ? ` ${lab.documents.map((d) => d.path).join(" and ")} come from the Draft and are read-only.` : ""}`,
 		"",
 		"## Checks the app runs on every output",
 		...lab.checks.map((c) => `- ${c}`),
