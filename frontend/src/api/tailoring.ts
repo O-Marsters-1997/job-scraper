@@ -279,14 +279,14 @@ async function readStream<S extends z.ZodType>(
 			throw message ? new Error(message) : err;
 		},
 	);
-	if (!res.body) throw new Error("Suggestion failed");
+	if (!res.body) throw new Error("Request failed");
 	let done: z.infer<S> | undefined;
 	let failure: string | undefined;
 	const feed = createSseParser((event, data) => {
 		if (event === "delta") onDelta(parseData(deltaSchema, data).text);
 		if (event === "done") done = parseData(doneSchema, data);
 		if (event === "error")
-			failure = parseData(failureSchema, data).message ?? "Suggestion failed";
+			failure = parseData(failureSchema, data).message ?? "Request failed";
 	});
 	const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
 	try {
@@ -299,7 +299,7 @@ async function readStream<S extends z.ZodType>(
 		void reader.cancel().catch(() => {});
 	}
 	if (failure !== undefined) throw new Error(failure);
-	if (!done) throw new Error("Suggestion ended early");
+	if (!done) throw new Error("Stream ended early");
 	return done;
 }
 

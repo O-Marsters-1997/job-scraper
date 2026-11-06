@@ -41,14 +41,14 @@ func (m *Module) PromptTry(ctx context.Context, userID string, in dto.PromptTryI
 			return nil, apperr.Invalid(path + " is too long")
 		}
 	}
-	draft, key, input, err := m.redraftInput(ctx, userID, in.ID, in.Steer, in.Parts)
+	key, input, err := m.redraftInput(ctx, userID, in.ID, in.Steer, in.Parts)
 	if err != nil {
 		return nil, err
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	events := make(chan PromptTryEvent, suggestBuffer)
-	go m.streamTry(ctx, events, key, draft.ID, input)
+	go m.streamTry(ctx, events, key, in.ID, input)
 
 	return func(yield func(PromptTryEvent) bool) {
 		defer cancel()

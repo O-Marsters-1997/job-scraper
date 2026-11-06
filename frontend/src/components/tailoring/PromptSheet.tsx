@@ -233,6 +233,7 @@ function TryCard(props: {
 }) {
 	const words = () => wordCount(props.t.text);
 	const over = () => words() > props.budgetWords;
+	const overLines = () => (props.t.lines ?? 0) > props.baseLines;
 	const reduceMotion = () =>
 		window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 	return (
@@ -301,16 +302,9 @@ function TryCard(props: {
 					/>
 				</span>
 				<Show when={props.t.lines !== null}>
-					<span
-						class={
-							(props.t.lines ?? 0) > props.baseLines
-								? "text-destructive-strong"
-								: "text-muted"
-						}
-					>
+					<span class={overLines() ? "text-destructive-strong" : "text-muted"}>
 						{props.t.lines} {props.t.lines === 1 ? "line" : "lines"}
-						{(props.t.lines ?? 0) > props.baseLines &&
-							`, over the ${props.baseLines}-line budget`}
+						{overLines() && `, over the ${props.baseLines}-line budget`}
 					</span>
 				</Show>
 			</div>
@@ -361,6 +355,8 @@ function Workbench(props: {
 		})),
 	}));
 	const base = () => baseProfile(props.loaded);
+	const budgetWords = createMemo(() => wordCount(base()));
+	const baseLines = createMemo(() => props.measureLines(base()));
 	const sessionCost = () => tries.reduce((sum, t) => sum + t.cost, 0);
 
 	async function run() {
@@ -438,8 +434,8 @@ function Workbench(props: {
 									<TryCard
 										t={t}
 										base={base()}
-										budgetWords={wordCount(base())}
-										baseLines={props.measureLines(base())}
+										budgetWords={budgetWords()}
+										baseLines={baseLines()}
 									/>
 								)}
 							</For>
@@ -471,11 +467,9 @@ function Workbench(props: {
 					value={steer()}
 					onInput={(e) => setSteer(e.currentTarget.value)}
 				/>
-				<Button disabled={running()} onClick={() => void run()}>
-					{running() ? "Trying…" : "Try"}
-					<Show when={!running()}>
-						<kbd class="ml-1.5 font-sans text-2xs opacity-70">⌘↵</kbd>
-					</Show>
+				<Button loading={running()} onClick={() => void run()}>
+					Try
+					<kbd class="ml-1.5 font-sans text-2xs opacity-70">⌘↵</kbd>
 				</Button>
 			</footer>
 		</>

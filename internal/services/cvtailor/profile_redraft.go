@@ -20,38 +20,37 @@ import (
 
 const maxSteerRunes = 200
 
-func (m *Module) redraftInput(ctx context.Context, userID, draftID, steer string, parts map[string]string) (dto.Draft, string, profiledraft.Input, error) {
-	var none profiledraft.Input
+func (m *Module) redraftInput(ctx context.Context, userID, draftID, steer string, parts map[string]string) (string, profiledraft.Input, error) {
 	steer = strings.TrimSpace(steer)
 	if strings.ContainsAny(steer, "\r\n") || len([]rune(steer)) > maxSteerRunes {
-		return dto.Draft{}, "", none, apperr.Invalid("the steer must be one line of at most 200 characters")
+		return "", profiledraft.Input{}, apperr.Invalid("the steer must be one line of at most 200 characters")
 	}
 	draft, err := m.editableDraft(ctx, userID, draftID)
 	if err != nil {
-		return dto.Draft{}, "", none, err
+		return "", profiledraft.Input{}, err
 	}
 	profile, err := baseProfile(draft)
 	if err != nil {
-		return dto.Draft{}, "", none, err
+		return "", profiledraft.Input{}, err
 	}
 	key, err := m.creds.Get(ctx, userID, jev.Provider)
 	if errors.Is(err, data.ErrNotFound) {
-		return dto.Draft{}, "", none, apperr.Unprocessable("connect an OpenRouter key in Settings, AI to redraft the profile")
+		return "", profiledraft.Input{}, apperr.Unprocessable("connect an OpenRouter key in Settings, AI to redraft the profile")
 	}
 	if err != nil {
-		return dto.Draft{}, "", none, fmt.Errorf("load credential: %w", err)
+		return "", profiledraft.Input{}, fmt.Errorf("load credential: %w", err)
 	}
 	job, err := m.store.JobBrief(ctx, draft.JobID)
 	if err != nil {
-		return dto.Draft{}, "", none, err
+		return "", profiledraft.Input{}, err
 	}
 	skills, err := m.store.ListBankSkills(ctx, userID)
 	if err != nil {
-		return dto.Draft{}, "", none, err
+		return "", profiledraft.Input{}, err
 	}
 	positions, err := m.store.ListPositions(ctx, userID)
 	if err != nil {
-		return dto.Draft{}, "", none, err
+		return "", profiledraft.Input{}, err
 	}
 	input := profiledraft.Input{
 		Profile: profile, Bank: indexBank(positions, nil).all, Steer: steer, Parts: parts,
@@ -61,22 +60,22 @@ func (m *Module) redraftInput(ctx context.Context, userID, draftID, steer string
 		input.BankSkills = append(input.BankSkills, s.Name)
 	}
 	if input.Lines, err = m.profileLines(ctx, userID, draft); err != nil {
-		return dto.Draft{}, "", none, err
+		return "", profiledraft.Input{}, err
 	}
-	return draft, key, input, nil
+	return key, input, nil
 }
 
 func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.ProfileRedraftInput) (dto.Draft, error) {
-	draft, key, input, err := m.redraftInput(ctx, userID, in.ID, in.Steer, nil)
+	key, input, err := m.redraftInput(ctx, userID, in.ID, in.Steer, nil)
 	if err != nil {
 		return dto.Draft{}, err
 	}
 
 	res, redraftErr := m.profile.Redraft(ctx, key, input)
-	m.log.InfoContext(ctx, "profile redraft", slog.String("draft_id", draft.ID),
+	m.log.InfoContext(ctx, "profile redraft", slog.String("draft_id", in.ID),
 		slog.Int("attempts", len(res.Attempts)), slog.Bool("accepted", res.Text != ""), slog.Any(logger.KeyErr, redraftErr))
 	if len(res.Attempts) > 0 {
-		if err := m.store.AddProfileAttempts(ctx, userID, draft.ID, toProfileAttempts(res.Attempts)); err != nil {
+		if err := m.store.AddProfileAttempts(ctx, userID, in.ID, toProfileAttempts(res.Attempts)); err != nil {
 			return dto.Draft{}, err
 		}
 	}
@@ -91,7 +90,7 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 		return dto.Draft{}, apperr.Unprocessable("the redraft broke the rules: " + reason)
 	}
 	saved, err := m.svc.SaveDraftSlots(ctx, userID, dto.DraftSlotsInput{
-		ID: draft.ID, Slots: []dto.SlotEdit{{SlotID: profileSlotID, Text: res.Text}},
+		ID: in.ID, Slots: []dto.SlotEdit{{SlotID: profileSlotID, Text: res.Text}},
 	})
 	if err == nil && res.Overlong {
 		saved.RedraftWarning = "The redraft is longer than your current profile. Shorten it to keep the page layout."

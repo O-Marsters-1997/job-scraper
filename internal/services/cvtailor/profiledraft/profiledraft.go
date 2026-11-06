@@ -123,7 +123,7 @@ func (w *Writer) Redraft(ctx context.Context, apiKey string, in Input) (Result, 
 
 type TryResult struct {
 	Text      string
-	Findings  []checks.Finding // blocking checks only; length is judged by the caller
+	Findings  []checks.Finding
 	Cost      float64
 	Model     string
 	PromptKey string
