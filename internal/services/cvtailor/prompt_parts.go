@@ -45,7 +45,7 @@ func (m *Module) SavePromptPart(ctx context.Context, userID string, in dto.Promp
 	if err := m.store.SavePartOverride(ctx, userID, g.Name, o); err != nil {
 		return dto.PromptPart{}, err
 	}
-	return dto.PromptPart{Path: o.Path, Text: o.Text, Source: string(promptparts.SourceYours)}, nil
+	return dto.PromptPart{Path: o.Path, Text: o.Text, Source: string(promptparts.SourceYours), Default: part.Default}, nil
 }
 
 func (m *Module) ResetPromptPart(ctx context.Context, userID string, ref dto.PromptPartRef) (struct{}, error) {

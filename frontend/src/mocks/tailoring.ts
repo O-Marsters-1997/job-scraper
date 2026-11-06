@@ -123,11 +123,15 @@ export function getDraftRoles(): DraftRoles {
 	};
 }
 
+const REDRAFT_DEFAULT =
+	"# Redraft the profile\n\nRewrite the paragraph in [profile.md](profile.md) so it speaks to the role in [job.md](job.md). Write it the way [voice.md](voice.md) describes.\n\n## Make a minimal edit\n- Keep the profile's structure and sentence order.\n\n## Reply\nThe new paragraph only.";
+
 const mockPartOverrides = new Map<string, string>();
 
 export function savePromptPart(path: string, text: string): PromptPart {
 	mockPartOverrides.set(path, text);
-	return { path, text, source: "yours" };
+	const base = defaultPromptLab().parts.find((p) => p.path === path);
+	return { path, text, source: "yours", default: base?.default ?? "" };
 }
 
 export function resetPromptPart(path: string): void {
@@ -152,13 +156,15 @@ function defaultPromptLab(): PromptLab {
 		parts: [
 			{
 				path: "redraft-profile.md",
-				text: "# Redraft the profile\n\nRewrite the paragraph in [profile.md](profile.md) so it speaks to the role in [job.md](job.md). Write it the way [voice.md](voice.md) describes.\n\n## Make a minimal edit\n- Keep the profile's structure and sentence order.\n\n## Reply\nThe new paragraph only.",
+				text: REDRAFT_DEFAULT,
 				source: "default",
+				default: REDRAFT_DEFAULT,
 			},
 			{
 				path: "voice.md",
 				text: "# Voice\n\nPlain, specific and calm. No hype.",
 				source: "default",
+				default: "# Voice\n\nPlain, specific and calm. No hype.",
 			},
 		],
 		documents: [

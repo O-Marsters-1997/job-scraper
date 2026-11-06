@@ -1,9 +1,11 @@
 package dto
 
 type PromptPart struct {
-	Path   string `json:"path"`
-	Text   string `json:"text"`
-	Source string `json:"source"` // "default" | "yours"
+	Path    string  `json:"path"`
+	Text    string  `json:"text"`
+	Source  string  `json:"source"` // "default" | "yours"
+	Default string  `json:"default"`
+	BasedOn *string `json:"basedOn,omitempty"` // non-nil: the default moved since this was saved
 }
 
 type PromptPartInput struct {

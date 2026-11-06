@@ -78,9 +78,11 @@ const (
 )
 
 type Resolved struct {
-	Path   string
-	Text   string
-	Source Source
+	Path    string
+	Text    string
+	Source  Source
+	BasedOn *string
+	Default string
 }
 
 // Resolve returns g's Parts in order; overrides for unknown paths are ignored.
@@ -91,9 +93,12 @@ func Resolve(g Generation, overrides []Override) []Resolved {
 	}
 	out := make([]Resolved, len(g.Parts))
 	for i, p := range g.Parts {
-		out[i] = Resolved{Path: p.Path, Text: p.Default, Source: SourceDefault}
+		out[i] = Resolved{Path: p.Path, Text: p.Default, Source: SourceDefault, Default: p.Default}
 		if o, ok := byPath[p.Path]; ok {
 			out[i].Text, out[i].Source = o.Text, SourceYours
+			if o.BaseDefault != p.Default {
+				out[i].BasedOn = &o.BaseDefault
+			}
 		}
 	}
 	return out

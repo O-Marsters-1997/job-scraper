@@ -5,6 +5,8 @@ export const promptPartSchema = z.object({
 	path: z.string(),
 	text: z.string(),
 	source: z.enum(["default", "yours"]),
+	default: z.string(),
+	basedOn: z.string().optional(),
 });
 export const promptDocumentSchema = z.object({
 	path: z.string(),

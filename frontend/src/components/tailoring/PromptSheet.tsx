@@ -12,6 +12,13 @@ import { streamPromptTry } from "@/api/tailoring";
 import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { tailoringPrompt } from "@/lib/promptHandoff";
@@ -89,6 +96,8 @@ function PartEditor(props: {
 			: props.part.source === "yours"
 				? "Yours"
 				: "Default";
+	const [seeChange, setSeeChange] = createSignal(false);
+	const moved = () => (props.dirty ? undefined : props.part.basedOn);
 	return (
 		<div class="flex flex-col gap-2">
 			<Textarea
@@ -102,7 +111,57 @@ function PartEditor(props: {
 			<div class="flex items-center gap-2">
 				<span data-testid="prompt-file-status" class="text-xs text-muted">
 					{status()}
+					{moved() !== undefined ? " · default updated" : ""}
 				</span>
+				<Show when={moved()}>
+					{(was) => (
+						<>
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => setSeeChange(true)}
+							>
+								See what changed
+							</Button>
+							<Dialog open={seeChange()} onOpenChange={setSeeChange}>
+								<DialogContent>
+									<DialogHeader>
+										<DialogTitle>
+											The default for {props.part.path} changed
+										</DialogTitle>
+									</DialogHeader>
+									<p class="max-h-72 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed">
+										<Marked ops={wordDiff(was(), props.part.default)} />
+									</p>
+									<DialogFooter>
+										<Button
+											variant="ghost"
+											disabled={save.isPending || reset.isPending}
+											onClick={() =>
+												reset.mutate(key(), {
+													onSuccess: () => setSeeChange(false),
+												})
+											}
+										>
+											Switch to the new default
+										</Button>
+										<Button
+											disabled={save.isPending || reset.isPending}
+											onClick={() =>
+												save.mutate(
+													{ ...key(), text: props.part.text },
+													{ onSuccess: () => setSeeChange(false) },
+												)
+											}
+										>
+											Keep mine
+										</Button>
+									</DialogFooter>
+								</DialogContent>
+							</Dialog>
+						</>
+					)}
+				</Show>
 				<Show when={props.dirty}>
 					<Button
 						size="sm"

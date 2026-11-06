@@ -75,15 +75,26 @@ func TestResolve(t *testing.T) {
 	}}
 
 	got := promptparts.Resolve(g, []promptparts.Override{
-		{Path: "voice.md", Text: "MINE"},
+		{Path: "voice.md", Text: "MINE", BaseDefault: "VOICE"},
 		{Path: "gone.md", Text: "ignored"},
 	})
 
 	want := []promptparts.Resolved{
-		{Path: "main.md", Text: "MAIN", Source: promptparts.SourceDefault},
-		{Path: "voice.md", Text: "MINE", Source: promptparts.SourceYours},
+		{Path: "main.md", Text: "MAIN", Source: promptparts.SourceDefault, Default: "MAIN"},
+		{Path: "voice.md", Text: "MINE", Source: promptparts.SourceYours, Default: "VOICE"},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Resolve() (-want +got):\n%s", diff)
+	}
+}
+
+func TestResolveBasedOn(t *testing.T) {
+	t.Parallel()
+	g := promptparts.Generation{Parts: []promptparts.Part{{Path: "voice.md", Default: "NEW"}}}
+
+	got := promptparts.Resolve(g, []promptparts.Override{{Path: "voice.md", Text: "MINE", BaseDefault: "OLD"}})
+
+	if got[0].BasedOn == nil || *got[0].BasedOn != "OLD" {
+		t.Errorf("BasedOn = %v, want OLD", got[0].BasedOn)
 	}
 }
