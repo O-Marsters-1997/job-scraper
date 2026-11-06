@@ -232,6 +232,10 @@ linters:
         linters:
           - gochecknoglobals
         text: '\b(foldText|Voice|suggestRules|systemPrompt|actions|actionNames|titleSeps|dateForms|promptTemplate|picksSchema|dummyHash|choiceCriteria|likeEscaper|individualTemplate|sizeOptionIDs|stageOptionIDs|pickStrength|defaultBands|cellEscaper|gradeValues|gradeReasons|Dimensions|allStances|dimensionSpecs|ladderLevels|currencySymbols)\b'
+      - path: ^internal/services/cvtailor/profiledraft/profiledraft\.go$
+        linters:
+          - gochecknoglobals
+        text: '\bGeneration\b'
       - path: ^internal/worker/(discover|sources)/
         linters:
           - gochecknoglobals

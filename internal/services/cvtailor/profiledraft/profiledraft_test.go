@@ -191,3 +191,35 @@ func TestWriterRedraft(t *testing.T) {
 		}
 	})
 }
+
+func TestDocuments(t *testing.T) {
+	t.Parallel()
+	in := input()
+	in.JobDescription = "<p>" + strings.Repeat("x", 7000) + "</p>"
+	docs := profiledraft.Documents(in)
+	if len(docs) != 2 || docs[0].Path != "job.md" || docs[1].Path != "profile.md" {
+		t.Fatalf("Documents paths = %+v, want job.md then profile.md", docs)
+	}
+	job := docs[0].Text
+	if !strings.HasPrefix(job, "# Platform Engineer at Acme\n\n") || !strings.Contains(job, strings.Repeat("x", 6000)) ||
+		strings.Contains(job, strings.Repeat("x", 6001)) || strings.Contains(job, "<p>") {
+		t.Errorf("job.md = %.80q, want title, company and a stripped, capped description", job)
+	}
+	want := "---\nbudget_words: 8\n---\n\n" + in.Profile
+	if docs[1].Text != want {
+		t.Errorf("profile.md = %q, want %q", docs[1].Text, want)
+	}
+}
+
+func TestGeneration(t *testing.T) {
+	t.Parallel()
+	g := profiledraft.Generation
+	if g.Main != "redraft-profile.md" || len(g.Parts) != 2 || g.Parts[0].Path != "redraft-profile.md" || g.Parts[1].Path != "voice.md" {
+		t.Fatalf("Generation = %+v, want redraft-profile.md first and voice.md second", g)
+	}
+	for _, p := range g.Parts {
+		if strings.TrimSpace(p.Default) == "" {
+			t.Errorf("Part %s has no embedded default", p.Path)
+		}
+	}
+}
