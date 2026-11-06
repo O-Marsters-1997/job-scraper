@@ -2,5 +2,8 @@
 	"$schema": "https://unpkg.com/knip@5/schema.json",
 	"entry": ["src/**/*.check.ts", "e2e/**/*.ts", "public/sw.js"],
 	"ignore": ["src/components/ui/**", "src/mocks/**"],
-	"ignoreIssues": { "src/hooks/useApplications.ts": ["exports"] }
+	"ignoreIssues": {
+		"src/hooks/useApplications.ts": ["exports"],
+		"src/types/promptLab.ts": ["exports", "types"]
+	}
 }
