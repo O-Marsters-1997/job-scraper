@@ -51,6 +51,7 @@ func (m *Module) tailorRoutes(r chi.Router) {
 		r.Get("/drafts/{id}/prompt", handlers.Query(m.PromptLab))
 		r.Post("/drafts/{id}/insights", withWriteWindow(scaffoldWriteWindow, handlers.Update(m.ExplainDraft)))
 		r.Get("/drafts/{id}/pdf", m.draftPDF())
+		r.Post("/drafts/{id}/prompt/try", m.promptTry())
 		r.Post("/drafts/{id}/profile/redraft", withWriteWindow(scaffoldWriteWindow, handlers.Update(m.RedraftProfile)))
 		r.Put("/drafts/{id}/slots", handlers.Update(m.svc.SaveDraftSlots))
 		r.Post("/drafts/{id}/slots/{slotId}/suggest", m.suggest())
@@ -123,28 +124,65 @@ func (m *Module) suggest() http.HandlerFunc {
 			return m.Suggest(ctx, in.userID, in.in)
 		},
 		func(w http.ResponseWriter, _ *http.Request, events iter.Seq[SuggestEvent]) {
-			w.Header().Set("Content-Type", "text/event-stream")
-			w.Header().Set("Cache-Control", "no-cache")
-			rc := http.NewResponseController(w)
-			_ = rc.SetWriteDeadline(time.Now().Add(suggestWriteWindow))
-			w.WriteHeader(http.StatusOK)
-			_ = rc.Flush()
-			for ev := range events {
-				_ = rc.SetWriteDeadline(time.Now().Add(suggestWriteWindow))
-				switch {
-				case ev.Err != nil:
-					writeEvent(w, "error", map[string]string{"message": ev.Err.Error()})
-				case ev.Done != nil:
-					writeEvent(w, "done", ev.Done)
-				default:
-					writeEvent(w, "delta", map[string]string{"text": ev.Delta})
-				}
-				if rc.Flush() != nil {
-					return
-				}
-			}
+			streamEvents(w, events, func(ev SuggestEvent) (string, any) {
+				return eventPayload(ev.Delta, ev.Done, ev.Err)
+			})
 		},
 	)
+}
+
+func (m *Module) promptTry() http.HandlerFunc {
+	type req struct {
+		userID string
+		in     dto.PromptTryInput
+	}
+	return handlers.Handle(
+		func(r *http.Request) (req, error) {
+			uid, err := handlers.UserID(r)
+			if err != nil {
+				return req{}, err
+			}
+			in, err := handlers.DecodeBody[dto.PromptTryInput](r)
+			in.ID = chi.URLParam(r, "id")
+			return req{userID: uid, in: in}, err
+		},
+		func(ctx context.Context, in req) (iter.Seq[PromptTryEvent], error) {
+			return m.PromptTry(ctx, in.userID, in.in)
+		},
+		func(w http.ResponseWriter, _ *http.Request, events iter.Seq[PromptTryEvent]) {
+			streamEvents(w, events, func(ev PromptTryEvent) (string, any) {
+				return eventPayload(ev.Delta, ev.Done, ev.Err)
+			})
+		},
+	)
+}
+
+func eventPayload[D any](delta string, done *D, err error) (string, any) {
+	switch {
+	case err != nil:
+		return "error", map[string]string{"message": err.Error()}
+	case done != nil:
+		return "done", done
+	default:
+		return "delta", map[string]string{"text": delta}
+	}
+}
+
+func streamEvents[E any](w http.ResponseWriter, events iter.Seq[E], payload func(E) (string, any)) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Now().Add(suggestWriteWindow))
+	w.WriteHeader(http.StatusOK)
+	_ = rc.Flush()
+	for ev := range events {
+		_ = rc.SetWriteDeadline(time.Now().Add(suggestWriteWindow))
+		name, data := payload(ev)
+		writeEvent(w, name, data)
+		if rc.Flush() != nil {
+			return
+		}
+	}
 }
 
 func writeEvent(w http.ResponseWriter, name string, data any) {

@@ -20,46 +20,55 @@ import (
 
 const maxSteerRunes = 200
 
-func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.ProfileRedraftInput) (dto.Draft, error) {
-	steer := strings.TrimSpace(in.Steer)
+func (m *Module) redraftInput(ctx context.Context, userID, draftID, steer string, parts map[string]string) (dto.Draft, string, profiledraft.Input, error) {
+	var none profiledraft.Input
+	steer = strings.TrimSpace(steer)
 	if strings.ContainsAny(steer, "\r\n") || len([]rune(steer)) > maxSteerRunes {
-		return dto.Draft{}, apperr.Invalid("the steer must be one line of at most 200 characters")
+		return dto.Draft{}, "", none, apperr.Invalid("the steer must be one line of at most 200 characters")
 	}
-	draft, err := m.editableDraft(ctx, userID, in.ID)
+	draft, err := m.editableDraft(ctx, userID, draftID)
 	if err != nil {
-		return dto.Draft{}, err
+		return dto.Draft{}, "", none, err
 	}
 	profile, err := baseProfile(draft)
 	if err != nil {
-		return dto.Draft{}, err
+		return dto.Draft{}, "", none, err
 	}
 	key, err := m.creds.Get(ctx, userID, jev.Provider)
 	if errors.Is(err, data.ErrNotFound) {
-		return dto.Draft{}, apperr.Unprocessable("connect an OpenRouter key in Settings, AI to redraft the profile")
+		return dto.Draft{}, "", none, apperr.Unprocessable("connect an OpenRouter key in Settings, AI to redraft the profile")
 	}
 	if err != nil {
-		return dto.Draft{}, fmt.Errorf("load credential: %w", err)
+		return dto.Draft{}, "", none, fmt.Errorf("load credential: %w", err)
 	}
 	job, err := m.store.JobBrief(ctx, draft.JobID)
 	if err != nil {
-		return dto.Draft{}, err
+		return dto.Draft{}, "", none, err
 	}
 	skills, err := m.store.ListBankSkills(ctx, userID)
 	if err != nil {
-		return dto.Draft{}, err
+		return dto.Draft{}, "", none, err
 	}
 	positions, err := m.store.ListPositions(ctx, userID)
 	if err != nil {
-		return dto.Draft{}, err
+		return dto.Draft{}, "", none, err
 	}
 	input := profiledraft.Input{
-		Profile: profile, Bank: indexBank(positions, nil).all, Steer: steer,
+		Profile: profile, Bank: indexBank(positions, nil).all, Steer: steer, Parts: parts,
 		JobTitle: job.Title, Company: job.Company, JobDescription: job.Description,
 	}
 	for _, s := range skills {
 		input.BankSkills = append(input.BankSkills, s.Name)
 	}
 	if input.Lines, err = m.profileLines(ctx, userID, draft); err != nil {
+		return dto.Draft{}, "", none, err
+	}
+	return draft, key, input, nil
+}
+
+func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.ProfileRedraftInput) (dto.Draft, error) {
+	draft, key, input, err := m.redraftInput(ctx, userID, in.ID, in.Steer, nil)
+	if err != nil {
 		return dto.Draft{}, err
 	}
 

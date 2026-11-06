@@ -221,6 +221,55 @@ func TestWriterRedraft(t *testing.T) {
 	})
 }
 
+func TestWriterTry(t *testing.T) {
+	t.Parallel()
+
+	t.Run("one call returns the text and blocking findings without retrying", func(t *testing.T) {
+		t.Parallel()
+		m := &scriptedModel{replies: []string{"Backend engineer who cut latency 40% with Go."}}
+
+		res, err := profiledraft.New(m).Try(t.Context(), "key", input(), func(string) {})
+
+		if err != nil {
+			t.Fatalf("Try error = %v", err)
+		}
+		if len(m.prompts) != 1 || len(res.Findings) == 0 || res.Cost == 0 || res.Model == "" {
+			t.Errorf("Try = %+v after %d calls, want one call with findings, cost and model", res, len(m.prompts))
+		}
+	})
+
+	t.Run("edited Parts change the prompt key", func(t *testing.T) {
+		t.Parallel()
+		edited := input()
+		edited.Parts = map[string]string{"voice.md": "Write like a pirate."}
+		w := profiledraft.New(&scriptedModel{replies: []string{"Backend engineer owning Go billing services."}})
+
+		def, err := w.Try(t.Context(), "key", input(), func(string) {})
+		if err != nil {
+			t.Fatalf("Try error = %v", err)
+		}
+		got, err := w.Try(t.Context(), "key", edited, func(string) {})
+		if err != nil {
+			t.Fatalf("Try error = %v", err)
+		}
+
+		if def.PromptKey == got.PromptKey {
+			t.Errorf("prompt key %q is the same for edited and default Parts", got.PromptKey)
+		}
+	})
+
+	t.Run("a model error is wrapped", func(t *testing.T) {
+		t.Parallel()
+		boom := errors.New("boom")
+
+		_, err := profiledraft.New(&scriptedModel{err: boom}).Try(t.Context(), "key", input(), func(string) {})
+
+		if !errors.Is(err, boom) {
+			t.Errorf("Try error = %v, want it to wrap boom", err)
+		}
+	})
+}
+
 func TestDocuments(t *testing.T) {
 	t.Parallel()
 	in := input()
