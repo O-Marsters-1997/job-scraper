@@ -30,8 +30,12 @@ func (m *Module) PromptLab(ctx context.Context, userID string, q dto.PromptLabQu
 	}
 	g := profiledraft.Generation
 	lab := dto.PromptLab{Generation: string(g.Name), Main: g.Main, Checks: profileRedraftChecks()}
-	for _, p := range g.Parts {
-		lab.Parts = append(lab.Parts, dto.PromptPart{Path: p.Path, Text: p.Default})
+	parts, err := m.resolvedParts(ctx, userID, g)
+	if err != nil {
+		return dto.PromptLab{}, err
+	}
+	for _, p := range parts {
+		lab.Parts = append(lab.Parts, dto.PromptPart{Path: p.Path, Text: p.Text, Source: string(p.Source)})
 	}
 	for _, d := range profiledraft.Documents(profiledraft.Input{
 		Profile: profile, JobTitle: job.Title, Company: job.Company, JobDescription: job.Description,

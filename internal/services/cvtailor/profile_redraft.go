@@ -56,6 +56,14 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 		Profile: profile, Bank: indexBank(positions, nil).all, Steer: steer,
 		JobTitle: job.Title, Company: job.Company, JobDescription: job.Description,
 	}
+	parts, err := m.resolvedParts(ctx, userID, profiledraft.Generation)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	input.Parts = make(map[string]string, len(parts))
+	for _, p := range parts {
+		input.Parts[p.Path] = p.Text
+	}
 	for _, s := range skills {
 		input.BankSkills = append(input.BankSkills, s.Name)
 	}

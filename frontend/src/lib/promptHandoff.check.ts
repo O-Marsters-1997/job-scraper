@@ -39,8 +39,8 @@ const prompt = tailoringPrompt({
 		generation: "g1",
 		main: "main.md",
 		parts: [
-			{ path: "main.md", text: "Write it." },
-			{ path: "voice.md", text: "Be plain." },
+			{ path: "main.md", text: "Write it.", source: "default" },
+			{ path: "voice.md", text: "Be plain.", source: "default" },
 		],
 		documents: [{ path: "job.md", text: "A job" }],
 		checks: ["Length: 80 words"],

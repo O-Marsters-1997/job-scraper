@@ -42,6 +42,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		{"heading mappings", runHeadingMappingContract},
 		{"drafts", runDraftContract},
 		{"letter skeletons", runLetterSkeletonContract},
+		{"prompt part overrides", runPromptPartOverrideContract},
 		{"cover letters", runCoverLetterContract},
 		{"outreach templates", runOutreachTemplateContract},
 		{"outreach hooks", runOutreachHookContract},

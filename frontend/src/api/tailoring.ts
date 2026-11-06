@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { createSseParser } from "../lib/sse";
 import { KeptDraftExistsError } from "../lib/tailoring";
-import { type PromptLab, promptLabSchema } from "../types/promptLab";
+import {
+	type PromptLab,
+	type PromptPart,
+	promptLabSchema,
+	promptPartSchema,
+} from "../types/promptLab";
 import {
 	type BulletLean,
 	bulletLeanSchema,
@@ -36,6 +41,7 @@ import {
 	ApiError,
 	apiFetch,
 	apiFetchBlob,
+	apiFetchVoid,
 	jsonInit,
 	request,
 	rethrowStatus,
@@ -228,6 +234,36 @@ export async function fetchPromptLab(id: string): Promise<PromptLab> {
 	return mocked(
 		(db) => db.getPromptLab(),
 		() => apiFetch(`/tailoring/drafts/${id}/prompt`, promptLabSchema),
+	);
+}
+
+export async function savePromptPart(input: {
+	generation: string;
+	path: string;
+	text: string;
+}): Promise<PromptPart> {
+	return mocked(
+		(db) => db.savePromptPart(input.path, input.text),
+		() =>
+			apiFetch(
+				`/prompt-parts/${input.generation}/${input.path}`,
+				promptPartSchema,
+				jsonInit("PUT", { text: input.text }),
+			),
+	);
+}
+
+export async function resetPromptPart(input: {
+	generation: string;
+	path: string;
+}): Promise<void> {
+	return mocked(
+		(db) => db.resetPromptPart(input.path),
+		() =>
+			apiFetchVoid(
+				`/prompt-parts/${input.generation}/${input.path}`,
+				jsonInit("DELETE", {}),
+			),
 	);
 }
 

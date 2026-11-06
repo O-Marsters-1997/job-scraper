@@ -2,6 +2,7 @@ import { createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
 	mainText,
 	missingReferences,
@@ -11,8 +12,12 @@ import {
 	wordCount,
 } from "@/lib/promptLab";
 import { cn } from "@/lib/utils";
-import type { PromptLab } from "@/types/promptLab";
-import { usePromptLab } from "../../hooks/useTailoring";
+import type { PromptLab, PromptPart } from "@/types/promptLab";
+import {
+	usePromptLab,
+	useResetPromptPart,
+	useSavePromptPart,
+} from "../../hooks/useTailoring";
 
 function Tab(props: { path: string; active: boolean; onPick: () => void }) {
 	return (
@@ -34,12 +39,83 @@ function Tab(props: { path: string; active: boolean; onPick: () => void }) {
 	);
 }
 
-function Files(props: { lab: PromptLab }) {
+function PartEditor(props: {
+	draftId: string;
+	generation: string;
+	part: PromptPart;
+}) {
+	const [edited, setEdited] = createSignal<string>();
+	const text = () => edited() ?? props.part.text;
+	const dirty = () => text() !== props.part.text;
+	const save = useSavePromptPart(() => props.draftId);
+	const reset = useResetPromptPart(() => props.draftId);
+	const key = () => ({ generation: props.generation, path: props.part.path });
+	const status = () =>
+		dirty() ? "Unsaved" : props.part.source === "yours" ? "Yours" : "Default";
+	return (
+		<div class="flex flex-col gap-2">
+			<Textarea
+				data-testid="prompt-file"
+				aria-label={props.part.path}
+				rows={14}
+				class="max-h-72 font-mono text-xs leading-relaxed"
+				value={text()}
+				onInput={(e) => setEdited(e.currentTarget.value)}
+			/>
+			<div class="flex items-center gap-2">
+				<span data-testid="prompt-file-status" class="text-xs text-muted">
+					{status()}
+				</span>
+				<Show when={dirty()}>
+					<Button
+						size="sm"
+						disabled={save.isPending || text().trim() === ""}
+						onClick={() =>
+							save.mutate(
+								{ ...key(), text: text() },
+								{ onSuccess: () => setEdited(undefined) },
+							)
+						}
+					>
+						Save as mine
+					</Button>
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={() => setEdited(undefined)}
+					>
+						Discard changes
+					</Button>
+				</Show>
+				<Show when={!dirty() && props.part.source === "yours"}>
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={reset.isPending}
+						onClick={() => reset.mutate(key())}
+					>
+						Use the default
+					</Button>
+				</Show>
+			</div>
+			<Show when={save.error ?? reset.error}>
+				{(err) => (
+					<p role="alert" class="text-xs text-destructive-strong">
+						{err().message}
+					</p>
+				)}
+			</Show>
+		</div>
+	);
+}
+
+function Files(props: { lab: PromptLab; draftId: string }) {
 	const [active, setActive] = createSignal(untrack(() => props.lab.main));
 	const file = () =>
 		[...props.lab.parts, ...props.lab.documents].find(
 			(f) => f.path === active(),
 		);
+	const activePart = () => props.lab.parts.find((p) => p.path === active());
 	const references = () =>
 		referencedPaths(mainText(props.lab)).filter((p) => p !== props.lab.main);
 	return (
@@ -65,7 +141,16 @@ function Files(props: { lab: PromptLab }) {
 					)}
 				</For>
 			</div>
-			<Show when={file()}>
+			<Show when={activePart()}>
+				{(p) => (
+					<PartEditor
+						draftId={props.draftId}
+						generation={props.lab.generation}
+						part={p()}
+					/>
+				)}
+			</Show>
+			<Show when={!activePart() && file()}>
 				{(f) => (
 					<pre
 						data-testid="prompt-file"
@@ -163,11 +248,11 @@ function Received(props: { lab: PromptLab }) {
 	);
 }
 
-function Body(props: { lab: PromptLab }) {
+function Body(props: { lab: PromptLab; draftId: string }) {
 	const [showMessage, setShowMessage] = createSignal(false);
 	return (
 		<div class="scroll-slim flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
-			<Files lab={props.lab} />
+			<Files lab={props.lab} draftId={props.draftId} />
 			<button
 				type="button"
 				aria-expanded={showMessage()}
@@ -209,7 +294,7 @@ export function PromptSheet(props: { draftId: string; onClose: () => void }) {
 						Tune the Profile prompt
 					</h2>
 					<p class="mt-0.5 text-xs text-muted">
-						The files the Redraft reads. Read-only for now.
+						The files the Redraft reads. Save your own version of a file.
 					</p>
 				</div>
 				<Button
@@ -223,7 +308,7 @@ export function PromptSheet(props: { draftId: string; onClose: () => void }) {
 				</Button>
 			</header>
 			<QueryBoundary query={lab} fallbackRows={4}>
-				{(l) => <Body lab={l()} />}
+				{(l) => <Body lab={l()} draftId={props.draftId} />}
 			</QueryBoundary>
 		</aside>
 	);

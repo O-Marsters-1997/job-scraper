@@ -28,6 +28,8 @@ func withWriteWindow(d time.Duration, h http.HandlerFunc) http.HandlerFunc {
 }
 
 func (m *Module) tailorRoutes(r chi.Router) {
+	r.Put("/prompt-parts/{generation}/{path}", handlers.Update(m.SavePromptPart))
+	r.Delete("/prompt-parts/{generation}/{path}", handlers.Update(m.ResetPromptPart))
 	r.Route("/tailoring", func(r chi.Router) {
 		r.Get("/cvs/{docId}/{tabId}/headings", handlers.Query(m.svc.Headings))
 		r.Put("/cvs/{docId}/{tabId}/headings", handlers.Update(m.svc.SaveHeadings))

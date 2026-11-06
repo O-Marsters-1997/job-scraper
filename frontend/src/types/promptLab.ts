@@ -4,12 +4,17 @@ import { type DraftFinding, draftFindingSchema } from "@/types/tailoring";
 export const promptPartSchema = z.object({
 	path: z.string(),
 	text: z.string(),
+	source: z.enum(["default", "yours"]),
+});
+export const promptDocumentSchema = z.object({
+	path: z.string(),
+	text: z.string(),
 });
 export const promptLabSchema = z.object({
 	generation: z.string(),
 	main: z.string(),
 	parts: z.array(promptPartSchema),
-	documents: z.array(promptPartSchema),
+	documents: z.array(promptDocumentSchema),
 	checks: z.array(z.string()),
 });
 export const promptTryDoneSchema = z.object({

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/ollymarsters/job-scraper/internal/promptparts"
 )
 
@@ -62,5 +64,26 @@ func TestSystemIsEmbedded(t *testing.T) {
 	t.Parallel()
 	if strings.TrimSpace(promptparts.System) == "" {
 		t.Error("System is empty")
+	}
+}
+
+func TestResolve(t *testing.T) {
+	t.Parallel()
+	g := promptparts.Generation{Parts: []promptparts.Part{
+		{Path: "main.md", Default: "MAIN"},
+		{Path: "voice.md", Default: "VOICE"},
+	}}
+
+	got := promptparts.Resolve(g, []promptparts.Override{
+		{Path: "voice.md", Text: "MINE"},
+		{Path: "gone.md", Text: "ignored"},
+	})
+
+	want := []promptparts.Resolved{
+		{Path: "main.md", Text: "MAIN", Source: promptparts.SourceDefault},
+		{Path: "voice.md", Text: "MINE", Source: promptparts.SourceYours},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("Resolve() (-want +got):\n%s", diff)
 	}
 }

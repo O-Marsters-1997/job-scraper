@@ -17,8 +17,10 @@ import {
 	fetchSuggestions,
 	keepDraft,
 	redraftProfile,
+	resetPromptPart,
 	saveDraftSlots,
 	saveHeadings,
+	savePromptPart,
 } from "../api/tailoring";
 import { isSettled } from "../lib/tailoring";
 import type {
@@ -197,6 +199,18 @@ export function useSaveDraftSlots(id: Accessor<string>) {
 			keys.tailoring.draftLean(id()),
 		],
 	);
+}
+
+export function useSavePromptPart(draftId: Accessor<string>) {
+	return useInvalidatingMutation(savePromptPart, () => [
+		keys.tailoring.promptLab(draftId()),
+	]);
+}
+
+export function useResetPromptPart(draftId: Accessor<string>) {
+	return useInvalidatingMutation(resetPromptPart, () => [
+		keys.tailoring.promptLab(draftId()),
+	]);
 }
 
 export function useRedraftProfile(id: Accessor<string>) {
