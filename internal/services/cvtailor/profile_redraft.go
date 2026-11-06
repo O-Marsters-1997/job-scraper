@@ -54,7 +54,7 @@ func (m *Module) redraftInput(ctx context.Context, userID, draftID, steer string
 		return "", profiledraft.Input{}, err
 	}
 	input := profiledraft.Input{
-		Profile: profile, Bank: indexBank(positions, nil).all, Steer: steer,
+		Profile: profile, Bank: indexBank(positions, nil).all, Steer: steer, Parts: parts,
 		JobTitle: job.Title, Company: job.Company, JobDescription: job.Description,
 	}
 	resolved, err := m.resolvedParts(ctx, userID, profiledraft.Generation)
