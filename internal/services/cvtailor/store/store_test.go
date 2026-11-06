@@ -3,6 +3,7 @@ package store_test
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -12,7 +13,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
+	"github.com/ollymarsters/job-scraper/internal/promptparts"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/profiledraft"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 )
 
@@ -598,5 +601,41 @@ func TestListAchievementsNewestFirst(t *testing.T) {
 
 	if err != nil || len(got) != 2 || got[0].Text != "second" || got[1].Text != "first" {
 		t.Errorf("ListAchievementsNewestFirst() = %+v, %v, want second then first", got, err)
+	}
+}
+
+func TestPromptPartOverridesReachTheResolvedParts(t *testing.T) {
+	t.Parallel()
+	st, pool, uid := newStore(t)
+	other := pgtest.InsertUser(t, pool)
+	ctx := t.Context()
+	g := profiledraft.Generation
+	if err := st.SavePartOverride(ctx, uid, g.Name, promptparts.Override{Path: "voice.md", Text: "mine", BaseDefault: "d"}); err != nil {
+		t.Fatal(err)
+	}
+
+	resolve := func(userID string) []promptparts.Resolved {
+		overrides, err := st.ListPartOverrides(ctx, userID, g.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return promptparts.Resolve(g, overrides)
+	}
+
+	if got := resolve(uid)[1]; got.Text != "mine" || got.Source != promptparts.SourceYours {
+		t.Errorf("own voice.md = %+v, want yours", got)
+	}
+	if got := resolve(other)[1]; got.Source != promptparts.SourceDefault {
+		t.Errorf("other user's voice.md = %+v, want the default", got)
+	}
+	if err := st.DeletePartOverride(ctx, uid, g.Name, "voice.md"); err != nil {
+		t.Fatal(err)
+	}
+	if got := resolve(uid)[1]; got.Source != promptparts.SourceDefault {
+		t.Errorf("voice.md after delete = %+v, want the default", got)
+	}
+	tooLong := promptparts.Override{Path: "voice.md", Text: strings.Repeat("a", 20001)}
+	if err := st.SavePartOverride(ctx, uid, g.Name, tooLong); err == nil {
+		t.Error("SavePartOverride(20001 chars) succeeded, want the CHECK to reject it")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -56,6 +57,15 @@ func (m *Module) redraftInput(ctx context.Context, userID, draftID, steer string
 		Profile: profile, Bank: indexBank(positions, nil).all, Steer: steer, Parts: parts,
 		JobTitle: job.Title, Company: job.Company, JobDescription: job.Description,
 	}
+	resolved, err := m.resolvedParts(ctx, userID, profiledraft.Generation)
+	if err != nil {
+		return "", profiledraft.Input{}, err
+	}
+	input.Parts = make(map[string]string, len(resolved))
+	for _, p := range resolved {
+		input.Parts[p.Path] = p.Text
+	}
+	maps.Copy(input.Parts, parts)
 	for _, s := range skills {
 		input.BankSkills = append(input.BankSkills, s.Name)
 	}

@@ -2,7 +2,7 @@ import type { PromptLab } from "@/types/promptLab";
 
 export type SentRow = {
 	path: string;
-	source: "From this Draft" | "Default" | "Instructions";
+	source: "From this Draft" | "Default" | "Yours" | "Instructions";
 	text: string;
 };
 
@@ -44,7 +44,12 @@ export function sentRows(lab: PromptLab): SentRow[] {
 		})),
 		...lab.parts
 			.filter((p) => p.path !== lab.main)
-			.map((p) => ({ ...p, source: "Default" as const })),
+			.map((p) => ({
+				path: p.path,
+				text: p.text,
+				source:
+					p.source === "yours" ? ("Yours" as const) : ("Default" as const),
+			})),
 		{
 			path: lab.main,
 			source: "Instructions" as const,

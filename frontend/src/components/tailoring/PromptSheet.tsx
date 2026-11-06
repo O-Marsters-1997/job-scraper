@@ -29,8 +29,12 @@ import {
 } from "@/lib/promptLab";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
-import type { PromptLab, PromptTry } from "@/types/promptLab";
-import { usePromptLab } from "../../hooks/useTailoring";
+import type { PromptLab, PromptPart, PromptTry } from "@/types/promptLab";
+import {
+	usePromptLab,
+	useResetPromptPart,
+	useSavePromptPart,
+} from "../../hooks/useTailoring";
 import { Marked } from "./ChangesDiff";
 import { PasteReplyDialog } from "./PasteReplyDialog";
 
@@ -68,21 +72,92 @@ function Tab(props: {
 	);
 }
 
+function PartEditor(props: {
+	draftId: string;
+	generation: string;
+	part: PromptPart;
+	dirty: boolean;
+	onEdit: (text: string) => void;
+	onClear: () => void;
+}) {
+	const save = useSavePromptPart(() => props.draftId);
+	const reset = useResetPromptPart(() => props.draftId);
+	const key = () => ({ generation: props.generation, path: props.part.path });
+	const status = () =>
+		props.dirty
+			? "Unsaved"
+			: props.part.source === "yours"
+				? "Yours"
+				: "Default";
+	return (
+		<div class="flex flex-col gap-2">
+			<Textarea
+				data-testid="prompt-file"
+				aria-label={props.part.path}
+				rows={14}
+				class="max-h-72 font-mono text-xs leading-relaxed"
+				value={props.part.text}
+				onInput={(e) => props.onEdit(e.currentTarget.value)}
+			/>
+			<div class="flex items-center gap-2">
+				<span data-testid="prompt-file-status" class="text-xs text-muted">
+					{status()}
+				</span>
+				<Show when={props.dirty}>
+					<Button
+						size="sm"
+						disabled={save.isPending || props.part.text.trim() === ""}
+						onClick={() =>
+							save.mutate(
+								{ ...key(), text: props.part.text },
+								{ onSuccess: () => props.onClear() },
+							)
+						}
+					>
+						Save as mine
+					</Button>
+					<Button variant="ghost" size="sm" onClick={() => props.onClear()}>
+						Discard changes
+					</Button>
+				</Show>
+				<Show when={!props.dirty && props.part.source === "yours"}>
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={reset.isPending}
+						onClick={() => reset.mutate(key())}
+					>
+						Use the default
+					</Button>
+				</Show>
+			</div>
+			<Show when={save.error ?? reset.error}>
+				{(err) => (
+					<p role="alert" class="text-xs text-destructive-strong">
+						{err().message}
+					</p>
+				)}
+			</Show>
+		</div>
+	);
+}
+
 function Files(props: {
+	draftId: string;
 	lab: PromptLab;
 	loaded: PromptLab;
 	active: string;
 	setActive: (path: string) => void;
 	flash: boolean;
 	onEdit: (path: string, text: string) => void;
+	onClear: (path: string) => void;
 }) {
 	const active = () => props.active;
 	const file = () =>
 		[...props.lab.parts, ...props.lab.documents].find(
 			(f) => f.path === active(),
 		);
-	const loadedText = () =>
-		props.loaded.parts.find((p) => p.path === active())?.text;
+	const activePart = () => props.lab.parts.find((p) => p.path === active());
 	const unsaved = (path: string) =>
 		props.loaded.parts.find((p) => p.path === path)?.text !==
 		props.lab.parts.find((p) => p.path === path)?.text;
@@ -113,37 +188,26 @@ function Files(props: {
 					)}
 				</For>
 			</div>
-			<Show when={file()}>
+			<Show when={activePart()}>
+				{(p) => (
+					<PartEditor
+						draftId={props.draftId}
+						generation={props.lab.generation}
+						part={p()}
+						dirty={unsaved(p().path)}
+						onEdit={(text) => props.onEdit(p().path, text)}
+						onClear={() => props.onClear(p().path)}
+					/>
+				)}
+			</Show>
+			<Show when={!activePart() && file()}>
 				{(f) => (
-					<Show
-						when={loadedText() !== undefined}
-						fallback={
-							<pre
-								data-testid="prompt-file"
-								class="max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-surface-muted px-3 py-2 font-mono text-xs leading-relaxed text-foreground"
-							>
-								{f().text}
-							</pre>
-						}
+					<pre
+						data-testid="prompt-file"
+						class="max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-surface-muted px-3 py-2 font-mono text-xs leading-relaxed text-foreground"
 					>
-						<Textarea
-							data-testid="prompt-file"
-							aria-label={`Edit ${f().path}`}
-							rows={12}
-							class="max-h-72 w-full resize-y font-mono text-xs leading-relaxed"
-							value={f().text}
-							onInput={(e) => props.onEdit(f().path, e.currentTarget.value)}
-						/>
-						<Show when={unsaved(f().path)}>
-							<button
-								type="button"
-								class="self-start text-xs font-medium text-muted underline-offset-4 hover:text-foreground hover:underline"
-								onClick={() => props.onEdit(f().path, loadedText() ?? "")}
-							>
-								Revert {f().path}
-							</button>
-						</Show>
-					</Show>
+						{f().text}
+					</pre>
 				)}
 			</Show>
 			<Show when={active() === props.lab.main && references().length > 0}>
@@ -507,12 +571,20 @@ function Workbench(props: {
 					</output>
 				</Show>
 				<Files
+					draftId={props.draftId}
 					lab={lab()}
 					loaded={props.loaded}
 					active={active()}
 					setActive={setActive}
 					flash={flash()}
 					onEdit={(path, text) => setEdited(path, text)}
+					onClear={(path) =>
+						setEdited(
+							produce((all) => {
+								delete all[path];
+							}),
+						)
+					}
 				/>
 				<Show when={tries.length > 0}>
 					<section class="flex flex-col gap-2" aria-label="Tries">
@@ -599,7 +671,8 @@ export function PromptSheet(props: {
 						Tune the Profile prompt
 					</h2>
 					<p class="mt-0.5 text-xs text-muted">
-						The files the Redraft reads. Edit them and Try; nothing is saved.
+						The files the Redraft reads. Edit them and Try, or save your own
+						version of a file.
 					</p>
 				</div>
 				<Button

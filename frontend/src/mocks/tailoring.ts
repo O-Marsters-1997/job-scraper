@@ -1,5 +1,6 @@
 import type {
 	PromptLab,
+	PromptPart,
 	PromptTryDone,
 	PromptTryRequest,
 } from "@/types/promptLab";
@@ -122,7 +123,29 @@ export function getDraftRoles(): DraftRoles {
 	};
 }
 
+const mockPartOverrides = new Map<string, string>();
+
+export function savePromptPart(path: string, text: string): PromptPart {
+	mockPartOverrides.set(path, text);
+	return { path, text, source: "yours" };
+}
+
+export function resetPromptPart(path: string): void {
+	mockPartOverrides.delete(path);
+}
+
 export function getPromptLab(): PromptLab {
+	const lab = defaultPromptLab();
+	return {
+		...lab,
+		parts: lab.parts.map((p) => {
+			const text = mockPartOverrides.get(p.path);
+			return text === undefined ? p : { ...p, text, source: "yours" };
+		}),
+	};
+}
+
+function defaultPromptLab(): PromptLab {
 	return {
 		generation: "profile-redraft",
 		main: "redraft-profile.md",
@@ -130,10 +153,12 @@ export function getPromptLab(): PromptLab {
 			{
 				path: "redraft-profile.md",
 				text: "# Redraft the profile\n\nRewrite the paragraph in [profile.md](profile.md) so it speaks to the role in [job.md](job.md). Write it the way [voice.md](voice.md) describes.\n\n## Make a minimal edit\n- Keep the profile's structure and sentence order.\n\n## Reply\nThe new paragraph only.",
+				source: "default",
 			},
 			{
 				path: "voice.md",
 				text: "# Voice\n\nPlain, specific and calm. No hype.",
+				source: "default",
 			},
 		],
 		documents: [

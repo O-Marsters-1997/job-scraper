@@ -63,3 +63,38 @@ func Message(g Generation, texts map[string]string, docs []Document, steer strin
 func writeDocument(b *strings.Builder, path, text string) {
 	fmt.Fprintf(b, "<document path=%q>\n%s\n</document>\n", path, text)
 }
+
+type Override struct {
+	Path        string
+	Text        string
+	BaseDefault string
+}
+
+type Source string
+
+const (
+	SourceDefault Source = "default"
+	SourceYours   Source = "yours"
+)
+
+type Resolved struct {
+	Path   string
+	Text   string
+	Source Source
+}
+
+// Resolve returns g's Parts in order; overrides for unknown paths are ignored.
+func Resolve(g Generation, overrides []Override) []Resolved {
+	byPath := make(map[string]Override, len(overrides))
+	for _, o := range overrides {
+		byPath[o.Path] = o
+	}
+	out := make([]Resolved, len(g.Parts))
+	for i, p := range g.Parts {
+		out[i] = Resolved{Path: p.Path, Text: p.Default, Source: SourceDefault}
+		if o, ok := byPath[p.Path]; ok {
+			out[i].Text, out[i].Source = o.Text, SourceYours
+		}
+	}
+	return out
+}

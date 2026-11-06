@@ -12,6 +12,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/promptparts"
 )
 
 type Store interface {
@@ -59,6 +60,9 @@ type Store interface {
 	JobDescription(ctx context.Context, jobID string) (string, error)
 	GetLetterSkeleton(ctx context.Context, userID string) (dto.LetterSkeleton, error)
 	SaveLetterSkeleton(ctx context.Context, userID string, in dto.LetterSkeleton) (dto.LetterSkeleton, error)
+	ListPartOverrides(ctx context.Context, userID string, g promptparts.GenerationName) ([]promptparts.Override, error)
+	SavePartOverride(ctx context.Context, userID string, g promptparts.GenerationName, o promptparts.Override) error
+	DeletePartOverride(ctx context.Context, userID string, g promptparts.GenerationName, path string) error
 	IsLetterTab(ctx context.Context, userID, docID, tabID string) (bool, error)
 	DefaultLetterTab(ctx context.Context, userID string) (docID, tabID string, ok bool, err error)
 	JobBrief(ctx context.Context, jobID string) (dto.JobBrief, error)
