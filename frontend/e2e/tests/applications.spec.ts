@@ -79,11 +79,16 @@ test.describe("Application page", () => {
 	test("a fresh application's CV row opens a draft as-is", async ({ page }) => {
 		await openFirstApplication(page);
 		await page.getByRole("button", { name: /^(To do|Done) CV/ }).click();
-		await page
-			.getByRole("region", { name: /^(To do|Done) CV/ })
-			.getByRole("button", { name: "Open as-is" })
-			.click();
-		await expect(page).toHaveURL(/\/tailoring\/drafts\/[^/]+$/);
+		const url = page.url();
+		const [tab] = await Promise.all([
+			page.waitForEvent("popup"),
+			page
+				.getByRole("region", { name: /^(To do|Done) CV/ })
+				.getByRole("button", { name: "Open as-is" })
+				.click(),
+		]);
+		await expect(tab).toHaveURL(/\/tailoring\/drafts\/[^/]+$/);
+		expect(page.url()).toBe(url);
 	});
 
 	test("an application with a kept draft shows Complete linking to it", async ({

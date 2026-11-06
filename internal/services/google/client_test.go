@@ -318,6 +318,35 @@ func TestAddTab(t *testing.T) {
 		}
 	})
 
+	t.Run("caps the title at 50 characters on a rune boundary", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct{ name, title, want string }{
+			{"fifty characters is unchanged", strings.Repeat("é", 50), strings.Repeat("é", 50)},
+			{
+				"longer is trimmed with an ellipsis",
+				"Ünïcödé Holdings Limited — Senior Staff Platform Engineer",
+				"Ünïcödé Holdings Limited — Senior Staff Platform…",
+			},
+			{"a cut before a space drops the space", strings.Repeat("a", 48) + " bc", strings.Repeat("a", 48) + "…"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				ctx, client, got := recordingClient(t, http.StatusOK, `{"replies":[{"addDocumentTab":{"tabProperties":{"tabId":"t.new"}}}]}`)
+
+				if _, err := client.AddChildTab(ctx, "u1", "doc", "t.parent", tt.title); err != nil {
+					t.Fatalf("AddChildTab() error = %v", err)
+				}
+				want := map[string]any{"requests": []any{map[string]any{"addDocumentTab": map[string]any{
+					"tabProperties": map[string]any{"title": tt.want, "parentTabId": "t.parent"},
+				}}}}
+				if diff := cmp.Diff(want, decodeJSON(t, got.body)); diff != "" {
+					t.Errorf("body (-want +got):\n%s", diff)
+				}
+			})
+		}
+	})
+
 	t.Run("a forbidden response asks to reconnect Google", func(t *testing.T) {
 		t.Parallel()
 		ctx, client, _ := recordingClient(t, http.StatusForbidden, "")

@@ -1,4 +1,8 @@
-import { createFileRoute, useNavigate } from "@tanstack/solid-router";
+import {
+	createFileRoute,
+	useNavigate,
+	useRouter,
+} from "@tanstack/solid-router";
 import { createEffect, createSignal, For, on, onMount, Show } from "solid-js";
 import { AddApplicationDialog } from "@/components/jobs/AddApplicationDialog";
 import {
@@ -94,6 +98,7 @@ export const Route = createFileRoute("/_auth/applications")({
 function ApplicationsPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate();
+	const router = useRouter();
 	const query = useApplications(
 		() => (search().view === "board" ? undefined : search().status),
 		() => search().view !== "board" && search().chase === true,
@@ -419,11 +424,15 @@ function ApplicationsPage() {
 								variant="outline"
 								disabled={polishQueue().length === 0}
 								onClick={() =>
-									navigate({
-										to: "/tailoring/drafts/$id",
-										params: { id: polishQueue()[0]?.Draft?.ID ?? "" },
-										search: { queue: draftSelected().map((a) => a.ID) },
-									})
+									window.open(
+										router.buildLocation({
+											to: "/tailoring/drafts/$id",
+											params: { id: polishQueue()[0]?.Draft?.ID ?? "" },
+											search: { queue: draftSelected().map((a) => a.ID) },
+										}).href,
+										"_blank",
+										"noopener",
+									)
 								}
 							>
 								Polish in editor ({polishQueue().length})

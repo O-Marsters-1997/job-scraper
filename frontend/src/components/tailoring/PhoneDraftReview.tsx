@@ -3,6 +3,7 @@ import { Match, Show, Switch } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
+import { useJobBackLink } from "@/hooks/useApplications";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { useJob } from "@/hooks/useJobs";
 import { loadedData } from "@/lib/queryData";
@@ -119,16 +120,17 @@ function Review(props: {
 }
 
 export function PhoneDraftReview(props: { draft: Draft }) {
+	const back = useJobBackLink(() => props.draft.jobId);
 	return (
 		<div class="flex min-h-full flex-col gap-4 px-4 py-4">
 			<div>
 				<Link
-					to="/jobs/$id"
-					params={{ id: props.draft.jobId }}
+					to={back().to}
+					params={back().params}
 					class="mb-1 flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
 				>
 					<Icon name="chevronLeft" size={14} />
-					Job
+					{back().label}
 				</Link>
 				<h1 class="text-lg font-bold tracking-tight text-foreground">
 					Draft CV
