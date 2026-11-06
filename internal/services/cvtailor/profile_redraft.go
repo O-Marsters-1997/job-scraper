@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -20,60 +21,71 @@ import (
 
 const maxSteerRunes = 200
 
-func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.ProfileRedraftInput) (dto.Draft, error) {
-	steer := strings.TrimSpace(in.Steer)
+func (m *Module) redraftInput(ctx context.Context, userID, draftID, steer string, parts map[string]string) (string, profiledraft.Input, error) {
+	steer = strings.TrimSpace(steer)
 	if strings.ContainsAny(steer, "\r\n") || len([]rune(steer)) > maxSteerRunes {
-		return dto.Draft{}, apperr.Invalid("the steer must be one line of at most 200 characters")
+		return "", profiledraft.Input{}, apperr.Invalid("the steer must be one line of at most 200 characters")
 	}
-	draft, err := m.store.GetDraft(ctx, userID, in.ID)
+	draft, err := m.editableDraft(ctx, userID, draftID)
 	if err != nil {
-		return dto.Draft{}, err
+		return "", profiledraft.Input{}, err
 	}
-	if draft.Status != statusReady || draft.DraftDocID == "" {
-		return dto.Draft{}, apperr.Conflict("only a ready draft can be edited")
-	}
-	if outcome(draft) == dto.OutcomeDiscarded {
-		return dto.Draft{}, apperr.Conflict("this draft was discarded")
-	}
-	var base baseContent
-	if len(draft.BaseContent) == 0 || json.Unmarshal(draft.BaseContent, &base) != nil || base.Profile == nil {
-		return dto.Draft{}, apperr.Unprocessable("this CV has no profile to redraft")
+	profile, err := baseProfile(draft)
+	if err != nil {
+		return "", profiledraft.Input{}, err
 	}
 	key, err := m.creds.Get(ctx, userID, jev.Provider)
 	if errors.Is(err, data.ErrNotFound) {
-		return dto.Draft{}, apperr.Unprocessable("connect an OpenRouter key in Settings, AI to redraft the profile")
+		return "", profiledraft.Input{}, apperr.Unprocessable("connect an OpenRouter key in Settings, AI to redraft the profile")
 	}
 	if err != nil {
-		return dto.Draft{}, fmt.Errorf("load credential: %w", err)
+		return "", profiledraft.Input{}, fmt.Errorf("load credential: %w", err)
 	}
 	job, err := m.store.JobBrief(ctx, draft.JobID)
 	if err != nil {
-		return dto.Draft{}, err
+		return "", profiledraft.Input{}, err
 	}
 	skills, err := m.store.ListBankSkills(ctx, userID)
 	if err != nil {
-		return dto.Draft{}, err
+		return "", profiledraft.Input{}, err
 	}
 	positions, err := m.store.ListPositions(ctx, userID)
 	if err != nil {
-		return dto.Draft{}, err
+		return "", profiledraft.Input{}, err
 	}
 	input := profiledraft.Input{
-		Profile: *base.Profile, Bank: indexBank(positions, nil).all, Steer: steer,
+		Profile: profile, Bank: indexBank(positions, nil).all, Steer: steer, Parts: parts,
 		JobTitle: job.Title, Company: job.Company, JobDescription: job.Description,
 	}
+	resolved, err := m.resolvedParts(ctx, userID, profiledraft.Generation)
+	if err != nil {
+		return "", profiledraft.Input{}, err
+	}
+	input.Parts = make(map[string]string, len(resolved))
+	for _, p := range resolved {
+		input.Parts[p.Path] = p.Text
+	}
+	maps.Copy(input.Parts, parts)
 	for _, s := range skills {
 		input.BankSkills = append(input.BankSkills, s.Name)
 	}
 	if input.Lines, err = m.profileLines(ctx, userID, draft); err != nil {
+		return "", profiledraft.Input{}, err
+	}
+	return key, input, nil
+}
+
+func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.ProfileRedraftInput) (dto.Draft, error) {
+	key, input, err := m.redraftInput(ctx, userID, in.ID, in.Steer, nil)
+	if err != nil {
 		return dto.Draft{}, err
 	}
 
 	res, redraftErr := m.profile.Redraft(ctx, key, input)
-	m.log.InfoContext(ctx, "profile redraft", slog.String("draft_id", draft.ID),
+	m.log.InfoContext(ctx, "profile redraft", slog.String("draft_id", in.ID),
 		slog.Int("attempts", len(res.Attempts)), slog.Bool("accepted", res.Text != ""), slog.Any(logger.KeyErr, redraftErr))
 	if len(res.Attempts) > 0 {
-		if err := m.store.AddProfileAttempts(ctx, userID, draft.ID, toProfileAttempts(res.Attempts)); err != nil {
+		if err := m.store.AddProfileAttempts(ctx, userID, in.ID, toProfileAttempts(res.Attempts)); err != nil {
 			return dto.Draft{}, err
 		}
 	}
@@ -88,12 +100,34 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 		return dto.Draft{}, apperr.Unprocessable("the redraft broke the rules: " + reason)
 	}
 	saved, err := m.svc.SaveDraftSlots(ctx, userID, dto.DraftSlotsInput{
-		ID: draft.ID, Slots: []dto.SlotEdit{{SlotID: profileSlotID, Text: res.Text}},
+		ID: in.ID, Slots: []dto.SlotEdit{{SlotID: profileSlotID, Text: res.Text}},
 	})
 	if err == nil && res.Overlong {
 		saved.RedraftWarning = "The redraft is longer than your current profile. Shorten it to keep the page layout."
 	}
 	return saved, err
+}
+
+func baseProfile(draft dto.Draft) (string, error) {
+	var base baseContent
+	if len(draft.BaseContent) == 0 || json.Unmarshal(draft.BaseContent, &base) != nil || base.Profile == nil {
+		return "", apperr.Unprocessable("this CV has no profile to redraft")
+	}
+	return *base.Profile, nil
+}
+
+func (m *Module) editableDraft(ctx context.Context, userID, id string) (dto.Draft, error) {
+	draft, err := m.store.GetDraft(ctx, userID, id)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	if draft.Status != statusReady || draft.DraftDocID == "" {
+		return dto.Draft{}, apperr.Conflict("only a ready draft can be edited")
+	}
+	if outcome(draft) == dto.OutcomeDiscarded {
+		return dto.Draft{}, apperr.Conflict("this draft was discarded")
+	}
+	return draft, nil
 }
 
 func (m *Module) profileLines(ctx context.Context, userID string, draft dto.Draft) (func(string) int, error) {

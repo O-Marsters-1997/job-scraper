@@ -623,6 +623,15 @@ type ProfileAttempt struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type PromptPartOverride struct {
+	UserID      pgtype.UUID
+	Generation  string
+	Path        string
+	Text        string
+	BaseDefault string
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type PushSubscription struct {
 	ID        pgtype.UUID
 	UserID    pgtype.UUID

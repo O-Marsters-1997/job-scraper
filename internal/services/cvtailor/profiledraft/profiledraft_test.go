@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ollymarsters/job-scraper/internal/promptparts"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/profiledraft"
 )
@@ -138,7 +139,7 @@ func TestWriterRedraft(t *testing.T) {
 		if res.Text != strings.TrimSpace(last) || !res.Overlong || len(res.Attempts) != 2 {
 			t.Errorf("Redraft = %q overlong=%v with %d attempts, want the last text flagged after 2", res.Text, res.Overlong, len(res.Attempts))
 		}
-		if p := m.prompts[0].User; !strings.Contains(p, "at most 8 words") {
+		if p := m.prompts[0].User; !strings.Contains(p, "budget_words: 8") {
 			t.Errorf("first prompt = %q, want a word budget", p)
 		}
 		if retry := m.prompts[1].User; !strings.Contains(retry, "Shorten that exact text") || !strings.Contains(retry, strings.TrimSpace(first)) {
@@ -169,7 +170,7 @@ func TestWriterRedraft(t *testing.T) {
 			t.Fatalf("Redraft error = %v", err)
 		}
 		p := m.prompts[0]
-		for _, want := range []string{in.Profile, "- PostgreSQL", "Platform Engineer", "Acme", strings.Repeat("x", 6000)} {
+		for _, want := range []string{in.Profile, "Platform Engineer", "Acme", strings.Repeat("x", 6000)} {
 			if !strings.Contains(p.User, want) {
 				t.Errorf("prompt lacks %.40q", want)
 			}
@@ -179,6 +180,34 @@ func TestWriterRedraft(t *testing.T) {
 		}
 		if strings.Contains(p.System+p.User, "Kubernetes") {
 			t.Error("prompt carries Achievement text")
+		}
+		if strings.Contains(p.System+p.User, "PostgreSQL") {
+			t.Error("prompt carries Bank Skill names")
+		}
+	})
+
+	t.Run("the prompt is assembled from promptparts", func(t *testing.T) {
+		t.Parallel()
+		in := input()
+		in.Parts = map[string]string{"voice.md": "CUSTOM VOICE"}
+		m := &scriptedModel{replies: []string{clean}}
+		if _, err := profiledraft.New(m).Redraft(t.Context(), "key", in); err != nil {
+			t.Fatalf("Redraft error = %v", err)
+		}
+		p := m.prompts[0]
+		if p.System != promptparts.System {
+			t.Errorf("system prompt = %q, want promptparts.System", p.System)
+		}
+		if want := promptparts.Message(profiledraft.Generation, in.Parts, profiledraft.Documents(in), in.Steer); p.User != want {
+			t.Errorf("user prompt = %q, want %q", p.User, want)
+		}
+		last := -1
+		for _, w := range []string{`path="job.md"`, `path="profile.md"`, `path="voice.md"`, `<instructions path="redraft-profile.md">`} {
+			i := strings.Index(p.User, w)
+			if i <= last {
+				t.Errorf("%s at %d, want after %d in %q", w, i, last, p.User)
+			}
+			last = i
 		}
 	})
 
@@ -190,4 +219,85 @@ func TestWriterRedraft(t *testing.T) {
 			t.Errorf("Redraft error = %v, want wrapping %v", err, boom)
 		}
 	})
+}
+
+func TestWriterTry(t *testing.T) {
+	t.Parallel()
+
+	t.Run("one call returns the text and blocking findings without retrying", func(t *testing.T) {
+		t.Parallel()
+		m := &scriptedModel{replies: []string{"Backend engineer who cut latency 40% with Go."}}
+
+		res, err := profiledraft.New(m).Try(t.Context(), "key", input(), func(string) {})
+
+		if err != nil {
+			t.Fatalf("Try error = %v", err)
+		}
+		if len(m.prompts) != 1 || len(res.Findings) == 0 || res.Cost == 0 || res.Model == "" {
+			t.Errorf("Try = %+v after %d calls, want one call with findings, cost and model", res, len(m.prompts))
+		}
+	})
+
+	t.Run("edited Parts change the prompt key", func(t *testing.T) {
+		t.Parallel()
+		edited := input()
+		edited.Parts = map[string]string{"voice.md": "Write like a pirate."}
+		w := profiledraft.New(&scriptedModel{replies: []string{"Backend engineer owning Go billing services."}})
+
+		def, err := w.Try(t.Context(), "key", input(), func(string) {})
+		if err != nil {
+			t.Fatalf("Try error = %v", err)
+		}
+		got, err := w.Try(t.Context(), "key", edited, func(string) {})
+		if err != nil {
+			t.Fatalf("Try error = %v", err)
+		}
+
+		if def.PromptKey == got.PromptKey {
+			t.Errorf("prompt key %q is the same for edited and default Parts", got.PromptKey)
+		}
+	})
+
+	t.Run("a model error is wrapped", func(t *testing.T) {
+		t.Parallel()
+		boom := errors.New("boom")
+
+		_, err := profiledraft.New(&scriptedModel{err: boom}).Try(t.Context(), "key", input(), func(string) {})
+
+		if !errors.Is(err, boom) {
+			t.Errorf("Try error = %v, want it to wrap boom", err)
+		}
+	})
+}
+
+func TestDocuments(t *testing.T) {
+	t.Parallel()
+	in := input()
+	in.JobDescription = "<p>" + strings.Repeat("x", 7000) + "</p>"
+	docs := profiledraft.Documents(in)
+	if len(docs) != 2 || docs[0].Path != "job.md" || docs[1].Path != "profile.md" {
+		t.Fatalf("Documents paths = %+v, want job.md then profile.md", docs)
+	}
+	job := docs[0].Text
+	if !strings.HasPrefix(job, "# Platform Engineer at Acme\n\n") || !strings.Contains(job, strings.Repeat("x", 6000)) ||
+		strings.Contains(job, strings.Repeat("x", 6001)) || strings.Contains(job, "<p>") {
+		t.Errorf("job.md = %.80q, want title, company and a stripped, capped description", job)
+	}
+	want := "---\nbudget_words: 8\n---\n\n" + in.Profile
+	if docs[1].Text != want {
+		t.Errorf("profile.md = %q, want %q", docs[1].Text, want)
+	}
+}
+
+func TestGeneration(t *testing.T) {
+	t.Parallel()
+	g := profiledraft.Generation
+	if g.Main != "redraft-profile.md" || len(g.Parts) != 2 || g.Parts[0].Path != "redraft-profile.md" || g.Parts[1].Path != "voice.md" {
+		t.Fatalf("Generation = %+v, want redraft-profile.md first and voice.md second", g)
+	}
+	for _, p := range g.Parts {
+		if strings.TrimSpace(p.Default) == "" {
+			t.Errorf("Part %s has no embedded default", p.Path)
+		}
+	}
 }

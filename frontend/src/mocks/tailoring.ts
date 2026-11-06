@@ -1,4 +1,11 @@
 import type {
+	ProfileUseRequest,
+	PromptLab,
+	PromptPart,
+	PromptTryDone,
+	PromptTryRequest,
+} from "@/types/promptLab";
+import type {
 	BulletLean,
 	CVHeading,
 	Draft,
@@ -113,6 +120,68 @@ export function getDraftRoles(): DraftRoles {
 		roles: [
 			role("position-1", "Senior Backend Engineer", "Acme Ltd", 4, 6),
 			role("position-2", "Software Engineer", "Globex", 3, 2),
+		],
+	};
+}
+
+const REDRAFT_DEFAULT =
+	"# Redraft the profile\n\nRewrite the paragraph in [profile.md](profile.md) so it speaks to the role in [job.md](job.md). Write it the way [voice.md](voice.md) describes.\n\n## Make a minimal edit\n- Keep the profile's structure and sentence order.\n\n## Reply\nThe new paragraph only.";
+
+const mockPartOverrides = new Map<string, string>();
+
+export function savePromptPart(path: string, text: string): PromptPart {
+	mockPartOverrides.set(path, text);
+	const base = defaultPromptLab().parts.find((p) => p.path === path);
+	return { path, text, source: "yours", default: base?.default ?? "" };
+}
+
+export function resetPromptPart(path: string): void {
+	mockPartOverrides.delete(path);
+}
+
+export function getPromptLab(): PromptLab {
+	const lab = defaultPromptLab();
+	return {
+		...lab,
+		parts: lab.parts.map((p) => {
+			const text = mockPartOverrides.get(p.path);
+			return text === undefined ? p : { ...p, text, source: "yours" };
+		}),
+	};
+}
+
+function defaultPromptLab(): PromptLab {
+	return {
+		generation: "profile-redraft",
+		main: "redraft-profile.md",
+		parts: [
+			{
+				path: "redraft-profile.md",
+				text: REDRAFT_DEFAULT,
+				source: "default",
+				default: REDRAFT_DEFAULT,
+			},
+			{
+				path: "voice.md",
+				text: "# Voice\n\nPlain, specific and calm. No hype.",
+				source: "default",
+				default: "# Voice\n\nPlain, specific and calm. No hype.",
+			},
+		],
+		documents: [
+			{
+				path: "job.md",
+				text: "# Platform Engineer at Acme\n\nBuild and run the platform.",
+			},
+			{
+				path: "profile.md",
+				text: "---\nbudget_words: 6\n---\n\nEngineer who ships reliable services.",
+			},
+		],
+		checks: [
+			"Grounding: every claim must come from your experience bank or skills.",
+			"Banned words: the redraft is rejected if it uses one.",
+			"Line budget: the redraft may not run longer than the current profile.",
 		],
 	};
 }
@@ -419,6 +488,14 @@ export function redraftProfile(id: string, input: ProfileRedraftInput): Draft {
 		...entry.draft,
 		content: { ...content, profile: `Redrafted profile${steer}.` },
 	};
+	return entry.draft;
+}
+
+export function adoptProfileTry(id: string, req: ProfileUseRequest): Draft {
+	const entry = mockEntry(id);
+	const { content } = entry.draft;
+	if (!content) throw new Error(`mock draft ${id} is not ready`);
+	entry.draft = { ...entry.draft, content: { ...content, profile: req.text } };
 	return entry.draft;
 }
 
@@ -747,6 +824,27 @@ function mockSuggestion(req: SuggestRequest): string {
 	}
 	if (req.action === "verb") return ["Led", ...words.slice(1)].join(" ");
 	return words.slice(0, Math.ceil(words.length * 0.75)).join(" ");
+}
+
+export async function streamPromptTry(
+	req: PromptTryRequest,
+	onDelta: (text: string) => void,
+	signal: AbortSignal,
+): Promise<PromptTryDone> {
+	const text = `Engineer who ships reliable services${req.steer ? `, ${req.steer}` : ""}.`;
+	for (const [i, w] of text.split(" ").entries()) {
+		signal.throwIfAborted();
+		onDelta(i === 0 ? w : ` ${w}`);
+		await new Promise((resolve) => setTimeout(resolve, MOCK_WORD_MS));
+	}
+	return {
+		text,
+		findings: [],
+		cost: 0.012,
+		promptKey: Object.keys(req.parts).length
+			? "edited0000000000"
+			: "default000000000",
+	};
 }
 
 export async function streamSuggestion(

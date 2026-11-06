@@ -19,6 +19,23 @@ type RecordingProfileWriter struct {
 	result profiledraft.Result
 	err    error
 	Inputs []profiledraft.Input
+
+	tryResult profiledraft.TryResult
+	tryErr    error
+	tryDeltas []string
+	TryInputs []profiledraft.Input
+}
+
+func Trying(res profiledraft.TryResult, err error, deltas ...string) *RecordingProfileWriter {
+	return &RecordingProfileWriter{tryResult: res, tryErr: err, tryDeltas: deltas}
+}
+
+func (w *RecordingProfileWriter) Try(_ context.Context, _ string, in profiledraft.Input, onDelta func(string)) (profiledraft.TryResult, error) {
+	w.TryInputs = append(w.TryInputs, in)
+	for _, d := range w.tryDeltas {
+		onDelta(d)
+	}
+	return w.tryResult, w.tryErr
 }
 
 func Redrafting(res profiledraft.Result, err error) *RecordingProfileWriter {

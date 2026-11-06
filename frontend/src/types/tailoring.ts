@@ -96,7 +96,7 @@ type DraftMode = z.infer<typeof draftModeSchema>;
 
 export const draftOutcomeSchema = z.enum(["kept", "discarded"]);
 
-const draftFindingSchema = z.object({
+export const draftFindingSchema = z.object({
 	check: z.string(),
 	severity: z.enum(["block", "warn", "info"]),
 	slotId: z.string().optional(),

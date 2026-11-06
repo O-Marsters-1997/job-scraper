@@ -9,8 +9,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 
+	"github.com/ollymarsters/job-scraper/internal/promptparts"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
-	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/linefit"
 )
@@ -24,20 +24,38 @@ const (
 	fallbackWidthPt    = 468
 )
 
-//go:embed profile.md
-var profileRules string
+//go:embed parts/redraft-profile.md
+var redraftProfilePart string
 
-var systemPrompt = cvedit.Voice + "\n" + profileRules
+//go:embed parts/voice.md
+var voicePart string
+
+var Generation = promptparts.Generation{
+	Name: promptparts.ProfileRedraft,
+	Main: "redraft-profile.md",
+	Parts: []promptparts.Part{
+		{Path: "redraft-profile.md", Default: redraftProfilePart},
+		{Path: "voice.md", Default: voicePart},
+	},
+}
 
 type Input struct {
 	Profile        string
-	BankSkills     []string
 	Bank           []string
+	BankSkills     []string
 	JobTitle       string
 	Company        string
 	JobDescription string
 	Steer          string
+	Parts          map[string]string
 	Lines          func(string) int
+}
+
+func Documents(in Input) []promptparts.Document {
+	return []promptparts.Document{
+		{Path: "job.md", Text: fmt.Sprintf("# %s at %s\n\n%s", in.JobTitle, in.Company, JobText(in.JobDescription))},
+		{Path: "profile.md", Text: fmt.Sprintf("---\nbudget_words: %d\n---\n\n%s", len(strings.Fields(in.Profile)), in.Profile)},
+	}
 }
 
 type Attempt struct {
@@ -62,7 +80,7 @@ type Writer struct{ model lineedit.Model }
 func New(model lineedit.Model) *Writer { return &Writer{model: model} }
 
 func (w *Writer) Redraft(ctx context.Context, apiKey string, in Input) (Result, error) {
-	base := userPrompt(in)
+	base := promptparts.Message(Generation, in.Parts, Documents(in), in.Steer)
 	user := base
 	var res Result
 	lines := defaultLines
@@ -71,7 +89,7 @@ func (w *Writer) Redraft(ctx context.Context, apiKey string, in Input) (Result, 
 	}
 	budget := lines(in.Profile)
 	for range 2 {
-		p := lineedit.Prompt{Model: redraftModel, System: systemPrompt, User: user, MaxTokens: redraftMaxTokens}
+		p := lineedit.Prompt{Model: redraftModel, System: promptparts.System, User: user, MaxTokens: redraftMaxTokens}
 		c, err := w.model.Complete(ctx, apiKey, p, func(string) {})
 		if err != nil {
 			return res, fmt.Errorf("redraft profile: %w", err)
@@ -103,22 +121,58 @@ func (w *Writer) Redraft(ctx context.Context, apiKey string, in Input) (Result, 
 	return res, nil
 }
 
-func defaultLines(text string) int {
-	return linefit.Lines(text, linefit.Style{Font: "Arial", Size: 11}, fallbackWidthPt)
+type TryResult struct {
+	Text      string
+	Findings  []checks.Finding
+	Cost      float64
+	Model     string
+	PromptKey string
 }
 
-func userPrompt(in Input) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Job: %s at %s\n\nJob description:\n%s\n\nCurrent profile:\n%s\n\nSkills the person has:\n",
-		in.JobTitle, in.Company, JobText(in.JobDescription), in.Profile)
-	for _, s := range in.BankSkills {
-		fmt.Fprintf(&b, "- %s\n", s)
+func tryPrompt(in Input) lineedit.Prompt {
+	return lineedit.Prompt{
+		Model: redraftModel, System: promptparts.System, MaxTokens: redraftMaxTokens,
+		User: promptparts.Message(Generation, in.Parts, Documents(in), in.Steer),
 	}
-	fmt.Fprintf(&b, "\nBudget: at most %d words, the length of the current profile.\n", len(strings.Fields(in.Profile)))
-	if steer := strings.TrimSpace(in.Steer); steer != "" {
-		fmt.Fprintf(&b, "The person asks: %s\nThe steer reorders and re-emphasises content within the budget; it does not add length.\n", steer)
+}
+
+type UseResult struct {
+	Overlong bool
+	Attempt  Attempt
+}
+
+func Use(in Input, text string) UseResult {
+	text = strings.TrimSpace(text)
+	p := tryPrompt(in)
+	found := guard(in, text)
+	lines := defaultLines
+	if in.Lines != nil {
+		lines = in.Lines
 	}
-	return b.String()
+	return UseResult{
+		Overlong: lines(text) > lines(in.Profile),
+		Attempt: Attempt{
+			Text: text, Steer: in.Steer, Findings: found, Model: p.Model,
+			PromptKey: p.Key(), Rejection: rejection(text, found),
+		},
+	}
+}
+
+func (w *Writer) Try(ctx context.Context, apiKey string, in Input, onDelta func(string)) (TryResult, error) {
+	p := tryPrompt(in)
+	res := TryResult{Model: p.Model, PromptKey: p.Key()}
+	c, err := w.model.Complete(ctx, apiKey, p, onDelta)
+	res.Cost = c.Cost
+	if err != nil {
+		return res, fmt.Errorf("try profile: %w", err)
+	}
+	res.Text = strings.TrimSpace(c.Text)
+	res.Findings = guard(in, res.Text)
+	return res, nil
+}
+
+func defaultLines(text string) int {
+	return linefit.Lines(text, linefit.Style{Font: "Arial", Size: 11}, fallbackWidthPt)
 }
 
 func guard(in Input, text string) []checks.Finding {

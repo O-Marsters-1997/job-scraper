@@ -1,5 +1,6 @@
-import { Link } from "@tanstack/solid-router";
+import { Link, useNavigate, useSearch } from "@tanstack/solid-router";
 import {
+	type Accessor,
 	createEffect,
 	createMemo,
 	createSignal,
@@ -55,6 +56,7 @@ import { KeepControls, KeepNotices } from "./KeepFlow";
 import { MarginCards } from "./MarginCards";
 import { PrintPreview } from "./PrintPreview";
 import { ProfileCard } from "./ProfileCard";
+import { PromptSheet } from "./PromptSheet";
 import { RolesDrawer } from "./RolesDrawer";
 import { SkillsPanel } from "./SkillsPanel";
 import { UnlinkedRoles } from "./UnlinkedRoles";
@@ -236,6 +238,18 @@ export function DraftEditor(props: {
 		ed.cardKeys(needsCard).filter((k) => k !== PROFILE_SLOT),
 	);
 
+	const search = useSearch({ strict: false }) as Accessor<{ lab?: boolean }>;
+	const navigate = useNavigate();
+	const lab = () => search().lab === true;
+	const setLab = (open: boolean) =>
+		void navigate({
+			to: ".",
+			search: ((prev: Record<string, unknown>) => {
+				const { lab: _, ...rest } = prev;
+				return open ? { ...rest, lab: true } : rest;
+			}) as never,
+			replace: true,
+		});
 	const redraft = useRedraftProfile(() => props.draft.id);
 	const [lastRedraft, setLastRedraft] = createSignal<{
 		from: string;
@@ -761,7 +775,11 @@ export function DraftEditor(props: {
 										)}
 									</Show>
 									<Show when={profileWand()}>
-										<RedraftWand top={wandTop()} onRedraft={openSteer} />
+										<RedraftWand
+											top={wandTop()}
+											onRedraft={openSteer}
+											onTune={() => setLab(true)}
+										/>
 									</Show>
 									<Show
 										when={
@@ -807,6 +825,13 @@ export function DraftEditor(props: {
 			<div class="sr-only" aria-live="polite">
 				{suggestions.announcement()}
 			</div>
+			<Show when={lab()}>
+				<PromptSheet
+					draftId={props.draft.id}
+					measureLines={(text) => measureLines(PROFILE_SLOT, text)}
+					onClose={() => setLab(false)}
+				/>
+			</Show>
 			<Show when={rolesOpen()}>
 				<RolesDrawer
 					positions={rolePositions()}
