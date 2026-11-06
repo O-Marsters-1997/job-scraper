@@ -14,12 +14,14 @@ import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { tailoringPrompt } from "@/lib/promptHandoff";
 import {
 	baseProfile,
 	changedPaths,
 	editedParts,
 	mainText,
 	missingReferences,
+	partTexts,
 	rawMessage,
 	referencedPaths,
 	sentRows,
@@ -30,6 +32,7 @@ import { wordDiff } from "@/lib/wordDiff";
 import type { PromptLab, PromptTry } from "@/types/promptLab";
 import { usePromptLab } from "../../hooks/useTailoring";
 import { Marked } from "./ChangesDiff";
+import { PasteReplyDialog } from "./PasteReplyDialog";
 
 const MAX_STEER = 200;
 
@@ -37,6 +40,7 @@ function Tab(props: {
 	path: string;
 	active: boolean;
 	unsaved?: boolean;
+	flash?: boolean;
 	onPick: () => void;
 }) {
 	return (
@@ -49,6 +53,7 @@ function Tab(props: {
 				props.active
 					? "bg-accent-subtle text-foreground"
 					: "text-muted hover:bg-surface-muted hover:text-foreground",
+				props.flash && "ring-2 ring-primary motion-safe:animate-pulse",
 			)}
 			onClick={() => props.onPick()}
 		>
@@ -66,9 +71,12 @@ function Tab(props: {
 function Files(props: {
 	lab: PromptLab;
 	loaded: PromptLab;
+	active: string;
+	setActive: (path: string) => void;
+	flash: boolean;
 	onEdit: (path: string, text: string) => void;
 }) {
-	const [active, setActive] = createSignal(untrack(() => props.lab.main));
+	const active = () => props.active;
 	const file = () =>
 		[...props.lab.parts, ...props.lab.documents].find(
 			(f) => f.path === active(),
@@ -89,7 +97,8 @@ function Files(props: {
 							path={p.path}
 							active={active() === p.path}
 							unsaved={unsaved(p.path)}
-							onPick={() => setActive(p.path)}
+							flash={props.flash && active() === p.path}
+							onPick={() => props.setActive(p.path)}
 						/>
 					)}
 				</For>
@@ -99,7 +108,7 @@ function Files(props: {
 						<Tab
 							path={d.path}
 							active={active() === d.path}
-							onPick={() => setActive(d.path)}
+							onPick={() => props.setActive(d.path)}
 						/>
 					)}
 				</For>
@@ -158,6 +167,66 @@ function Files(props: {
 				</p>
 			</Show>
 		</div>
+	);
+}
+
+function Brief(props: {
+	lab: PromptLab;
+	edits: Record<string, string>;
+	tries: PromptTry[];
+	onApply: (changes: { path: string; to: string }[]) => void;
+}) {
+	const [brief, setBrief] = createSignal("");
+	const [note, setNote] = createSignal("");
+	const [pasting, setPasting] = createSignal(false);
+	const texts = () => partTexts(props.lab, props.edits);
+	let timer: number | undefined;
+	onCleanup(() => clearTimeout(timer));
+	const copy = async () => {
+		try {
+			await navigator.clipboard.writeText(
+				tailoringPrompt({
+					brief: brief(),
+					lab: props.lab,
+					texts: texts(),
+					tries: props.tries,
+				}),
+			);
+			setNote("Copied, paste it into Claude Code");
+		} catch {
+			setNote("Could not copy. Check clipboard permission.");
+		}
+		clearTimeout(timer);
+		timer = window.setTimeout(() => setNote(""), 2500);
+	};
+	return (
+		<section class="flex flex-col gap-2">
+			<label for="prompt-brief" class="text-sm font-semibold text-foreground">
+				Brief
+			</label>
+			<Textarea
+				id="prompt-brief"
+				rows={3}
+				placeholder="What should change? e.g. the Profile sounds generic."
+				value={brief()}
+				onInput={(e) => setBrief(e.currentTarget.value)}
+			/>
+			<div class="flex items-center gap-2">
+				<Button size="sm" onClick={copy}>
+					Copy tailoring prompt
+				</Button>
+				<Button size="sm" variant="ghost" onClick={() => setPasting(true)}>
+					Paste reply
+				</Button>
+				<output class="text-xs text-muted">{note()}</output>
+			</div>
+			<PasteReplyDialog
+				open={pasting()}
+				texts={texts()}
+				onOpenChange={setPasting}
+				onApply={props.onApply}
+			/>
+		</section>
 	);
 }
 
@@ -337,6 +406,21 @@ function Workbench(props: {
 	const [tries, setTries] = createStore<PromptTry[]>([]);
 	const [steer, setSteer] = createSignal("");
 	const [running, setRunning] = createSignal(false);
+	const [active, setActive] = createSignal(untrack(() => props.loaded.main));
+	const [flash, setFlash] = createSignal(false);
+	const [applied, setApplied] = createSignal<string[]>([]);
+	let flashTimer: number | undefined;
+	onCleanup(() => clearTimeout(flashTimer));
+	const apply = (changes: { path: string; to: string }[]) => {
+		const first = changes[0];
+		if (!first) return;
+		setEdited(Object.fromEntries(changes.map((c) => [c.path, c.to])));
+		setApplied(changes.map((c) => c.path));
+		setActive(first.path);
+		setFlash(true);
+		clearTimeout(flashTimer);
+		flashTimer = window.setTimeout(() => setFlash(false), 2000);
+	};
 	const ctrl = new AbortController();
 	onMount(() => {
 		const onKey = (e: KeyboardEvent) => {
@@ -415,9 +499,19 @@ function Workbench(props: {
 	return (
 		<>
 			<div class="scroll-slim flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
+				<Brief lab={lab()} edits={edited} tries={[...tries]} onApply={apply} />
+				<Show when={applied().length > 0}>
+					<output class="block text-xs text-foreground">
+						Applied Claude Code's changes to {applied().join(", ")}. Try to see
+						the effect.
+					</output>
+				</Show>
 				<Files
 					lab={lab()}
 					loaded={props.loaded}
+					active={active()}
+					setActive={setActive}
+					flash={flash()}
 					onEdit={(path, text) => setEdited(path, text)}
 				/>
 				<Show when={tries.length > 0}>

@@ -5,6 +5,7 @@ import {
 	changedPaths,
 	editedParts,
 	missingReferences,
+	partTexts,
 	rawMessage,
 	sentRows,
 } from "./promptLab";
@@ -42,4 +43,8 @@ assert.equal(
 	}),
 	"Hello there",
 );
+assert.deepEqual(partTexts(lab, { "b.md": "B" }), {
+	"a.md": lab.parts[0]?.text,
+	"b.md": "B",
+});
 console.log("✓ promptLab checks passed");
