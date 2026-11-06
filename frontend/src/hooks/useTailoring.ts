@@ -12,6 +12,7 @@ import {
 	fetchDraftRoles,
 	fetchExperienceMatch,
 	fetchJobDrafts,
+	fetchPromptLab,
 	fetchSkillSuggestions,
 	fetchSuggestions,
 	keepDraft,
@@ -133,6 +134,15 @@ export function useDraftRoles(
 		queryKey: keys.tailoring.draftRoles(id()),
 		queryFn: () => fetchDraftRoles(id()),
 		enabled: enabled(),
+		retry: false,
+		refetchOnWindowFocus: false,
+	}));
+}
+
+export function usePromptLab(id: Accessor<string>) {
+	return createQuery(() => ({
+		queryKey: keys.tailoring.promptLab(id()),
+		queryFn: () => fetchPromptLab(id()),
 		retry: false,
 		refetchOnWindowFocus: false,
 	}));
