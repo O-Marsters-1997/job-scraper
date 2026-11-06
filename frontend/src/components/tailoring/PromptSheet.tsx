@@ -1,25 +1,36 @@
 import { createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
+import { createStore } from "solid-js/store";
 import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { tailoringPrompt } from "@/lib/promptHandoff";
 import {
 	mainText,
 	missingReferences,
+	partTexts,
 	rawMessage,
 	referencedPaths,
 	sentRows,
 	wordCount,
 } from "@/lib/promptLab";
 import { cn } from "@/lib/utils";
+
 import type { PromptLab, PromptPart } from "@/types/promptLab";
 import {
 	usePromptLab,
 	useResetPromptPart,
 	useSavePromptPart,
 } from "../../hooks/useTailoring";
+import { PasteReplyDialog } from "./PasteReplyDialog";
 
-function Tab(props: { path: string; active: boolean; onPick: () => void }) {
+function Tab(props: {
+	path: string;
+	active: boolean;
+	unsaved?: boolean;
+	flash?: boolean;
+	onPick: () => void;
+}) {
 	return (
 		<button
 			type="button"
@@ -30,11 +41,15 @@ function Tab(props: { path: string; active: boolean; onPick: () => void }) {
 				props.active
 					? "bg-accent-subtle text-foreground"
 					: "text-muted hover:bg-surface-muted hover:text-foreground",
+				props.flash && "ring-2 ring-primary motion-safe:animate-pulse",
 			)}
 			onClick={() => props.onPick()}
 		>
 			<Icon name="fileText" size={13} />
 			{props.path}
+			<Show when={props.unsaved}>
+				<span class="text-2xs text-faint">unsaved</span>
+			</Show>
 		</button>
 	);
 }
@@ -43,9 +58,10 @@ function PartEditor(props: {
 	draftId: string;
 	generation: string;
 	part: PromptPart;
+	edit: string | undefined;
+	onEdit: (text: string | undefined) => void;
 }) {
-	const [edited, setEdited] = createSignal<string>();
-	const text = () => edited() ?? props.part.text;
+	const text = () => props.edit ?? props.part.text;
 	const dirty = () => text() !== props.part.text;
 	const save = useSavePromptPart(() => props.draftId);
 	const reset = useResetPromptPart(() => props.draftId);
@@ -60,7 +76,7 @@ function PartEditor(props: {
 				rows={14}
 				class="max-h-72 font-mono text-xs leading-relaxed"
 				value={text()}
-				onInput={(e) => setEdited(e.currentTarget.value)}
+				onInput={(e) => props.onEdit(e.currentTarget.value)}
 			/>
 			<div class="flex items-center gap-2">
 				<span data-testid="prompt-file-status" class="text-xs text-muted">
@@ -73,7 +89,7 @@ function PartEditor(props: {
 						onClick={() =>
 							save.mutate(
 								{ ...key(), text: text() },
-								{ onSuccess: () => setEdited(undefined) },
+								{ onSuccess: () => props.onEdit(undefined) },
 							)
 						}
 					>
@@ -82,7 +98,7 @@ function PartEditor(props: {
 					<Button
 						variant="ghost"
 						size="sm"
-						onClick={() => setEdited(undefined)}
+						onClick={() => props.onEdit(undefined)}
 					>
 						Discard changes
 					</Button>
@@ -109,8 +125,16 @@ function PartEditor(props: {
 	);
 }
 
-function Files(props: { lab: PromptLab; draftId: string }) {
-	const [active, setActive] = createSignal(untrack(() => props.lab.main));
+type Handoff = {
+	active: string;
+	setActive: (path: string) => void;
+	edits: Record<string, string | undefined>;
+	setEdit: (path: string, text: string | undefined) => void;
+	flash: boolean;
+};
+
+function Files(props: { lab: PromptLab; draftId: string; handoff: Handoff }) {
+	const active = () => props.handoff.active;
 	const file = () =>
 		[...props.lab.parts, ...props.lab.documents].find(
 			(f) => f.path === active(),
@@ -126,7 +150,12 @@ function Files(props: { lab: PromptLab; draftId: string }) {
 						<Tab
 							path={p.path}
 							active={active() === p.path}
-							onPick={() => setActive(p.path)}
+							unsaved={
+								props.handoff.edits[p.path] !== undefined &&
+								props.handoff.edits[p.path] !== p.text
+							}
+							flash={props.handoff.flash && active() === p.path}
+							onPick={() => props.handoff.setActive(p.path)}
 						/>
 					)}
 				</For>
@@ -136,7 +165,7 @@ function Files(props: { lab: PromptLab; draftId: string }) {
 						<Tab
 							path={d.path}
 							active={active() === d.path}
-							onPick={() => setActive(d.path)}
+							onPick={() => props.handoff.setActive(d.path)}
 						/>
 					)}
 				</For>
@@ -147,6 +176,8 @@ function Files(props: { lab: PromptLab; draftId: string }) {
 						draftId={props.draftId}
 						generation={props.lab.generation}
 						part={p()}
+						edit={props.handoff.edits[p().path]}
+						onEdit={(t) => props.handoff.setEdit(p().path, t)}
 					/>
 				)}
 			</Show>
@@ -154,9 +185,12 @@ function Files(props: { lab: PromptLab; draftId: string }) {
 				{(f) => (
 					<pre
 						data-testid="prompt-file"
-						class="max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-surface-muted px-3 py-2 font-mono text-xs leading-relaxed text-foreground"
+						class={cn(
+							"max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-surface-muted px-3 py-2 font-mono text-xs leading-relaxed text-foreground",
+							props.handoff.flash && "outline-2 outline-primary",
+						)}
 					>
-						{f().text}
+						{props.handoff.edits[f().path] ?? f().text}
 					</pre>
 				)}
 			</Show>
@@ -248,11 +282,103 @@ function Received(props: { lab: PromptLab }) {
 	);
 }
 
+function Brief(props: {
+	lab: PromptLab;
+	edits: Record<string, string | undefined>;
+	onApply: (changes: { path: string; to: string }[]) => void;
+}) {
+	const [brief, setBrief] = createSignal("");
+	const [note, setNote] = createSignal("");
+	const [pasting, setPasting] = createSignal(false);
+	const texts = () => partTexts(props.lab, props.edits);
+	let timer: number | undefined;
+	onCleanup(() => clearTimeout(timer));
+	const copy = async () => {
+		try {
+			await navigator.clipboard.writeText(
+				tailoringPrompt({
+					brief: brief(),
+					lab: props.lab,
+					texts: texts(),
+					tries: [],
+				}),
+			);
+			setNote("Copied, paste it into Claude Code");
+		} catch {
+			setNote("Could not copy. Check clipboard permission.");
+		}
+		clearTimeout(timer);
+		timer = window.setTimeout(() => setNote(""), 2500);
+	};
+	return (
+		<section class="flex flex-col gap-2">
+			<label for="prompt-brief" class="text-sm font-semibold text-foreground">
+				Brief
+			</label>
+			<Textarea
+				id="prompt-brief"
+				rows={3}
+				placeholder="What should change? e.g. the Profile sounds generic."
+				value={brief()}
+				onInput={(e) => setBrief(e.currentTarget.value)}
+			/>
+			<div class="flex items-center gap-2">
+				<Button size="sm" onClick={copy}>
+					Copy tailoring prompt
+				</Button>
+				<Button size="sm" variant="ghost" onClick={() => setPasting(true)}>
+					Paste reply
+				</Button>
+				<output class="text-xs text-muted">{note()}</output>
+			</div>
+			<PasteReplyDialog
+				open={pasting()}
+				texts={texts()}
+				onOpenChange={setPasting}
+				onApply={props.onApply}
+			/>
+		</section>
+	);
+}
+
 function Body(props: { lab: PromptLab; draftId: string }) {
 	const [showMessage, setShowMessage] = createSignal(false);
+	const [active, setActive] = createSignal(untrack(() => props.lab.main));
+	const [edits, setEdits] = createStore<Record<string, string | undefined>>({});
+	const [flash, setFlash] = createSignal(false);
+	const [applied, setApplied] = createSignal<string[]>([]);
+	let timer: number | undefined;
+	onCleanup(() => clearTimeout(timer));
+	const apply = (changes: { path: string; to: string }[]) => {
+		const first = changes[0];
+		if (!first) return;
+		setEdits(Object.fromEntries(changes.map((c) => [c.path, c.to])));
+		setApplied(changes.map((c) => c.path));
+		setActive(first.path);
+		setFlash(true);
+		clearTimeout(timer);
+		timer = window.setTimeout(() => setFlash(false), 2000);
+	};
 	return (
 		<div class="scroll-slim flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
-			<Files lab={props.lab} draftId={props.draftId} />
+			<Brief lab={props.lab} edits={edits} onApply={apply} />
+			<Show when={applied().length > 0}>
+				<output class="block text-xs text-foreground">
+					Applied Claude Code's changes to {applied().join(", ")}. Try to see
+					the effect.
+				</output>
+			</Show>
+			<Files
+				lab={props.lab}
+				draftId={props.draftId}
+				handoff={{
+					active: active(),
+					setActive,
+					edits,
+					setEdit: (path, text) => setEdits(path, text),
+					flash: flash(),
+				}}
+			/>
 			<button
 				type="button"
 				aria-expanded={showMessage()}
