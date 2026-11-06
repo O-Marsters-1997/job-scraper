@@ -54,6 +54,7 @@ func (m *Module) tailorRoutes(r chi.Router) {
 		r.Post("/drafts/{id}/insights", withWriteWindow(scaffoldWriteWindow, handlers.Update(m.ExplainDraft)))
 		r.Get("/drafts/{id}/pdf", m.draftPDF())
 		r.Post("/drafts/{id}/prompt/try", m.promptTry())
+		r.Post("/drafts/{id}/profile/use", withWriteWindow(scaffoldWriteWindow, handlers.Update(m.UseProfileTry)))
 		r.Post("/drafts/{id}/profile/redraft", withWriteWindow(scaffoldWriteWindow, handlers.Update(m.RedraftProfile)))
 		r.Put("/drafts/{id}/slots", handlers.Update(m.svc.SaveDraftSlots))
 		r.Post("/drafts/{id}/slots/{slotId}/suggest", m.suggest())

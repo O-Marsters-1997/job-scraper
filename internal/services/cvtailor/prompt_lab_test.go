@@ -140,3 +140,61 @@ func TestPromptTryRoute(t *testing.T) {
 		})
 	}
 }
+
+func TestUseProfileTryRoute(t *testing.T) {
+	t.Parallel()
+	const base = "Engineer who ships."
+	setup := func(t *testing.T) (draftEnv, string, chi.Router) {
+		t.Helper()
+		e := newDraftEnv(t)
+		id, _ := e.readyWithProfile(t, base)
+		return e, id, newRouter(cvtailor.Deps{Store: e.store, Docs: profileTab(t), Drive: e.drive, Profile: cvtailortest.Trying(profiledraft.TryResult{}, nil), Creds: apiKey})
+	}
+	route := func(id string) string { return "POST /tailoring/drafts/" + id + "/profile/use" }
+
+	t.Run("a clean Try replaces the Profile and records one Attempt keyed like the Try", func(t *testing.T) {
+		t.Parallel()
+		e, id, r := setup(t)
+		body := `{"text":"Engineer who ships well.","steer":"calmer","parts":{"voice.md":"Be brief."}}`
+
+		got := handlerstest.Do[dto.Draft](t, r, http.StatusOK, route(id), body)
+
+		if got.Content == nil || got.Content.Profile == nil || *got.Content.Profile != "Engineer who ships well." {
+			t.Errorf("content.profile = %+v, want the Try's text", got.Content)
+		}
+		attempts := e.store.ProfileAttempts(id)
+		if len(attempts) != 1 || attempts[0].Steer != "calmer" || attempts[0].Rejection != "" || attempts[0].PromptKey == "" {
+			t.Fatalf("Attempts = %+v, want exactly one clean Attempt with the steer and a prompt key", attempts)
+		}
+		handlerstest.Do[dto.Draft](t, r, http.StatusOK, route(id), `{"text":"Engineer who ships well.","steer":"calmer"}`)
+		again := e.store.ProfileAttempts(id)
+		if len(again) != 2 {
+			t.Fatalf("recorded %d Attempts, want 2", len(again))
+		}
+		if again[0].PromptKey == again[1].PromptKey {
+			t.Errorf("prompt key %q is the same for edited and default Parts", again[0].PromptKey)
+		}
+	})
+
+	t.Run("a blocking finding is a 422 and the Draft is unchanged", func(t *testing.T) {
+		t.Parallel()
+		e, id, r := setup(t)
+
+		handlerstest.Do[struct{}](t, r, http.StatusUnprocessableEntity, route(id), `{"text":"Engineer who ships Go."}`)
+
+		if p := e.draft(t, id).Content.Profile; p == nil || *p != base {
+			t.Errorf("profile = %v, want unchanged %q", p, base)
+		}
+		if n := len(e.store.ProfileAttempts(id)); n != 0 {
+			t.Errorf("recorded %d Attempts, want 0", n)
+		}
+	})
+
+	t.Run("a discarded Draft is a 409", func(t *testing.T) {
+		t.Parallel()
+		_, id, r := setup(t)
+		handlerstest.Do[dto.Draft](t, r, http.StatusOK, "POST /tailoring/drafts/"+id+"/discard", "")
+
+		handlerstest.Do[struct{}](t, r, http.StatusConflict, route(id), `{"text":"Engineer who ships well."}`)
+	})
+}

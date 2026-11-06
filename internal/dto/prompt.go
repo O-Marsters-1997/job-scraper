@@ -40,6 +40,13 @@ type PromptTryInput struct {
 	Steer string            `json:"steer"`
 }
 
+type ProfileUseInput struct {
+	ID    string            `json:"-" path:"id"`
+	Text  string            `json:"text"`
+	Steer string            `json:"steer"`
+	Parts map[string]string `json:"parts"`
+}
+
 type PromptTryDone struct {
 	Text      string         `json:"text"`
 	Findings  []DraftFinding `json:"findings"`

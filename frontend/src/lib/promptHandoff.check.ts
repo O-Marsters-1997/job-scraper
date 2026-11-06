@@ -31,6 +31,7 @@ const base = {
 	findings: [],
 	lines: 2,
 	steer: "",
+	parts: {},
 	cost: 0,
 };
 const prompt = tailoringPrompt({

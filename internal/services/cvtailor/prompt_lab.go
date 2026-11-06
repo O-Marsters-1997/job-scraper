@@ -4,6 +4,7 @@ import (
 	"context"
 	"iter"
 	"log/slog"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -27,17 +28,8 @@ type PromptTryEvent struct {
 }
 
 func (m *Module) PromptTry(ctx context.Context, userID string, in dto.PromptTryInput) (iter.Seq[PromptTryEvent], error) {
-	known := make(map[string]bool, len(profiledraft.Generation.Parts))
-	for _, p := range profiledraft.Generation.Parts {
-		known[p.Path] = true
-	}
-	for path, text := range in.Parts {
-		if !known[path] {
-			return nil, apperr.Invalid("unknown prompt file " + path)
-		}
-		if utf8.RuneCountInString(text) > maxPartRunes {
-			return nil, apperr.Invalid(path + " is too long")
-		}
+	if err := validateParts(in.Parts); err != nil {
+		return nil, err
 	}
 	key, input, err := m.redraftInput(ctx, userID, in.ID, in.Steer, in.Parts)
 	if err != nil {
@@ -56,6 +48,50 @@ func (m *Module) PromptTry(ctx context.Context, userID string, in dto.PromptTryI
 			}
 		}
 	}, nil
+}
+
+func validateParts(parts map[string]string) error {
+	known := make(map[string]bool, len(profiledraft.Generation.Parts))
+	for _, p := range profiledraft.Generation.Parts {
+		known[p.Path] = true
+	}
+	for path, text := range parts {
+		if !known[path] {
+			return apperr.Invalid("unknown prompt file " + path)
+		}
+		if utf8.RuneCountInString(text) > maxPartRunes {
+			return apperr.Invalid(path + " is too long")
+		}
+	}
+	return nil
+}
+
+func (m *Module) UseProfileTry(ctx context.Context, userID string, in dto.ProfileUseInput) (dto.Draft, error) {
+	text := strings.TrimSpace(in.Text)
+	if err := validateParts(in.Parts); err != nil {
+		return dto.Draft{}, err
+	}
+	_, input, err := m.redraftInput(ctx, userID, in.ID, in.Steer, in.Parts)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	res := profiledraft.Use(input, text)
+	if res.Attempt.Rejection != "" {
+		return dto.Draft{}, apperr.Unprocessable("this text breaks the rules: " + res.Attempt.Rejection)
+	}
+	saved, err := m.svc.SaveDraftSlots(ctx, userID, dto.DraftSlotsInput{
+		ID: in.ID, Slots: []dto.SlotEdit{{SlotID: profileSlotID, Text: text}},
+	})
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	if err := m.store.AddProfileAttempts(ctx, userID, in.ID, toProfileAttempts([]profiledraft.Attempt{res.Attempt})); err != nil {
+		return dto.Draft{}, err
+	}
+	if res.Overlong {
+		saved.RedraftWarning = "The text is longer than your current profile. Shorten it to keep the page layout."
+	}
+	return saved, nil
 }
 
 func (m *Module) streamTry(ctx context.Context, events chan<- PromptTryEvent, key, draftID string, in profiledraft.Input) {
