@@ -38,6 +38,7 @@ type Deps struct {
 
 type ProfileWriter interface {
 	Redraft(ctx context.Context, apiKey string, in profiledraft.Input) (profiledraft.Result, error)
+	Try(ctx context.Context, apiKey string, in profiledraft.Input, onDelta func(string)) (profiledraft.TryResult, error)
 }
 
 type Module struct {

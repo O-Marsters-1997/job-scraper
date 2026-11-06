@@ -24,7 +24,7 @@ function baseGroupIndex(
 	return byLabel >= 0 || label !== "" ? byLabel : index;
 }
 
-function Marked(props: { ops: WordOp[] }) {
+export function Marked(props: { ops: WordOp[] }) {
 	return (
 		<For each={props.ops}>
 			{(d) => (

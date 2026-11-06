@@ -121,6 +121,30 @@ func (w *Writer) Redraft(ctx context.Context, apiKey string, in Input) (Result, 
 	return res, nil
 }
 
+type TryResult struct {
+	Text      string
+	Findings  []checks.Finding
+	Cost      float64
+	Model     string
+	PromptKey string
+}
+
+func (w *Writer) Try(ctx context.Context, apiKey string, in Input, onDelta func(string)) (TryResult, error) {
+	p := lineedit.Prompt{
+		Model: redraftModel, System: promptparts.System, MaxTokens: redraftMaxTokens,
+		User: promptparts.Message(Generation, in.Parts, Documents(in), in.Steer),
+	}
+	res := TryResult{Model: p.Model, PromptKey: p.Key()}
+	c, err := w.model.Complete(ctx, apiKey, p, onDelta)
+	res.Cost = c.Cost
+	if err != nil {
+		return res, fmt.Errorf("try profile: %w", err)
+	}
+	res.Text = strings.TrimSpace(c.Text)
+	res.Findings = guard(in, res.Text)
+	return res, nil
+}
+
 func defaultLines(text string) int {
 	return linefit.Lines(text, linefit.Style{Font: "Arial", Size: 11}, fallbackWidthPt)
 }

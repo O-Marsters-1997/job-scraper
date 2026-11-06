@@ -826,7 +826,11 @@ export function DraftEditor(props: {
 				{suggestions.announcement()}
 			</div>
 			<Show when={lab()}>
-				<PromptSheet draftId={props.draft.id} onClose={() => setLab(false)} />
+				<PromptSheet
+					draftId={props.draft.id}
+					measureLines={(text) => measureLines(PROFILE_SLOT, text)}
+					onClose={() => setLab(false)}
+				/>
 			</Show>
 			<Show when={rolesOpen()}>
 				<RolesDrawer

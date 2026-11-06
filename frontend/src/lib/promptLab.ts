@@ -53,6 +53,29 @@ export function sentRows(lab: PromptLab): SentRow[] {
 	];
 }
 
+export function changedPaths(
+	lab: PromptLab,
+	edited: Record<string, string>,
+): string[] {
+	return lab.parts
+		.filter((p) => edited[p.path] !== undefined && edited[p.path] !== p.text)
+		.map((p) => p.path);
+}
+
+export function editedParts(
+	lab: PromptLab,
+	edited: Record<string, string>,
+): Record<string, string> {
+	return Object.fromEntries(
+		changedPaths(lab, edited).map((path) => [path, edited[path] ?? ""]),
+	);
+}
+
+export function baseProfile(lab: PromptLab): string {
+	const text = lab.documents.find((d) => d.path === "profile.md")?.text ?? "";
+	return text.replace(/^---\n[\s\S]*?\n---\n\n?/, "");
+}
+
 export function rawMessage(lab: PromptLab): string {
 	const docs = sentRows(lab)
 		.filter((r) => r.source !== "Instructions")
