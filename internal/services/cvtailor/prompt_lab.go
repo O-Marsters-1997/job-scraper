@@ -98,7 +98,7 @@ func (m *Module) PromptLab(ctx context.Context, userID string, q dto.PromptLabQu
 		return dto.PromptLab{}, err
 	}
 	for _, p := range parts {
-		lab.Parts = append(lab.Parts, dto.PromptPart{Path: p.Path, Text: p.Text, Source: string(p.Source)})
+		lab.Parts = append(lab.Parts, dto.PromptPart{Path: p.Path, Text: p.Text, Source: string(p.Source), Default: p.Default, BasedOn: p.BasedOn})
 	}
 	for _, d := range profiledraft.Documents(profiledraft.Input{
 		Profile: profile, JobTitle: job.Title, Company: job.Company, JobDescription: job.Description,

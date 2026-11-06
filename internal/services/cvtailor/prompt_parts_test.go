@@ -72,6 +72,26 @@ func TestPromptPartOverrides(t *testing.T) {
 		}
 	})
 
+	t.Run("a file saved against an older default reports it, and keeping it clears the notice", func(t *testing.T) {
+		t.Parallel()
+		e, id, _, r := setup(t)
+		o := promptparts.Override{Path: "voice.md", Text: "mine", BaseDefault: "an older default"}
+		if err := e.store.SavePartOverride(t.Context(), userID, promptparts.ProfileRedraft, o); err != nil {
+			t.Fatal(err)
+		}
+
+		moved := lab(t, r, id)["voice.md"]
+		handlerstest.Do[dto.PromptPart](t, r, http.StatusOK, putVoice, `{"text":"mine"}`)
+		kept := lab(t, r, id)["voice.md"]
+
+		if moved.BasedOn == nil || *moved.BasedOn != "an older default" || moved.Default == "" {
+			t.Errorf("moved voice.md = %+v, want basedOn the older default", moved)
+		}
+		if kept.BasedOn != nil || kept.Text != "mine" {
+			t.Errorf("kept voice.md = %+v, want no basedOn and the same text", kept)
+		}
+	})
+
 	t.Run("using the default deletes the saved file", func(t *testing.T) {
 		t.Parallel()
 		_, id, _, r := setup(t)
