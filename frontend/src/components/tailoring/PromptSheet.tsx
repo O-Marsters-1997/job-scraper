@@ -197,20 +197,27 @@ function Brief(props: {
 	onApply: (changes: { path: string; to: string }[]) => void;
 }) {
 	const [brief, setBrief] = createSignal("");
-	const [copied, setCopied] = createSignal(false);
+	const [note, setNote] = createSignal("");
 	const [pasting, setPasting] = createSignal(false);
 	const texts = () => partTexts(props.lab, props.edits);
+	let timer: number | undefined;
+	onCleanup(() => clearTimeout(timer));
 	const copy = async () => {
-		await navigator.clipboard.writeText(
-			tailoringPrompt({
-				brief: brief(),
-				lab: props.lab,
-				texts: texts(),
-				tries: [],
-			}),
-		);
-		setCopied(true);
-		setTimeout(() => setCopied(false), 2500);
+		try {
+			await navigator.clipboard.writeText(
+				tailoringPrompt({
+					brief: brief(),
+					lab: props.lab,
+					texts: texts(),
+					tries: [],
+				}),
+			);
+			setNote("Copied, paste it into Claude Code");
+		} catch {
+			setNote("Could not copy. Check clipboard permission.");
+		}
+		clearTimeout(timer);
+		timer = window.setTimeout(() => setNote(""), 2500);
 	};
 	return (
 		<section class="flex flex-col gap-2">
@@ -231,9 +238,7 @@ function Brief(props: {
 				<Button size="sm" variant="ghost" onClick={() => setPasting(true)}>
 					Paste reply
 				</Button>
-				<output class="text-xs text-muted">
-					{copied() && "Copied, paste it into Claude Code"}
-				</output>
+				<output class="text-xs text-muted">{note()}</output>
 			</div>
 			<PasteReplyDialog
 				open={pasting()}
