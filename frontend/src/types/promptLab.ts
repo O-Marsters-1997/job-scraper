@@ -37,7 +37,11 @@ export type PromptTry = {
 	lines: number | null;
 	changed: string[];
 	steer: string;
+	parts: Record<string, string>;
 	cost: number;
 	error?: string;
+	used?: boolean;
+	useError?: string | undefined;
 };
 export type PromptTryRequest = { parts: Record<string, string>; steer: string };
+export type ProfileUseRequest = PromptTryRequest & { text: string };

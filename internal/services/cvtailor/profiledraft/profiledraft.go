@@ -129,11 +129,37 @@ type TryResult struct {
 	PromptKey string
 }
 
-func (w *Writer) Try(ctx context.Context, apiKey string, in Input, onDelta func(string)) (TryResult, error) {
-	p := lineedit.Prompt{
+func tryPrompt(in Input) lineedit.Prompt {
+	return lineedit.Prompt{
 		Model: redraftModel, System: promptparts.System, MaxTokens: redraftMaxTokens,
 		User: promptparts.Message(Generation, in.Parts, Documents(in), in.Steer),
 	}
+}
+
+type UseResult struct {
+	Overlong bool
+	Attempt  Attempt
+}
+
+func Use(in Input, text string) UseResult {
+	text = strings.TrimSpace(text)
+	p := tryPrompt(in)
+	found := guard(in, text)
+	lines := defaultLines
+	if in.Lines != nil {
+		lines = in.Lines
+	}
+	return UseResult{
+		Overlong: lines(text) > lines(in.Profile),
+		Attempt: Attempt{
+			Text: text, Steer: in.Steer, Findings: found, Model: p.Model,
+			PromptKey: p.Key(), Rejection: rejection(text, found),
+		},
+	}
+}
+
+func (w *Writer) Try(ctx context.Context, apiKey string, in Input, onDelta func(string)) (TryResult, error) {
+	p := tryPrompt(in)
 	res := TryResult{Model: p.Model, PromptKey: p.Key()}
 	c, err := w.model.Complete(ctx, apiKey, p, onDelta)
 	res.Cost = c.Cost

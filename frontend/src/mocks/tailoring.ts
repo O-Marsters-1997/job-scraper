@@ -1,4 +1,5 @@
 import type {
+	ProfileUseRequest,
 	PromptLab,
 	PromptPart,
 	PromptTryDone,
@@ -487,6 +488,14 @@ export function redraftProfile(id: string, input: ProfileRedraftInput): Draft {
 		...entry.draft,
 		content: { ...content, profile: `Redrafted profile${steer}.` },
 	};
+	return entry.draft;
+}
+
+export function adoptProfileTry(id: string, req: ProfileUseRequest): Draft {
+	const entry = mockEntry(id);
+	const { content } = entry.draft;
+	if (!content) throw new Error(`mock draft ${id} is not ready`);
+	entry.draft = { ...entry.draft, content: { ...content, profile: req.text } };
 	return entry.draft;
 }
 

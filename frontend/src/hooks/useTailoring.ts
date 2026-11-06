@@ -2,6 +2,7 @@ import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { type Accessor, createMemo } from "solid-js";
 import { keys } from "../api/keys";
 import {
+	adoptProfileTry,
 	createDraft,
 	discardDraft,
 	explainDraft,
@@ -23,6 +24,7 @@ import {
 	savePromptPart,
 } from "../api/tailoring";
 import { isSettled } from "../lib/tailoring";
+import type { ProfileUseRequest } from "../types/promptLab";
 import type {
 	HeadingMapping,
 	ProfileRedraftInput,
@@ -216,6 +218,13 @@ export function useResetPromptPart(draftId: Accessor<string>) {
 export function useRedraftProfile(id: Accessor<string>) {
 	return useInvalidatingMutation(
 		(input: ProfileRedraftInput) => redraftProfile(id(), input),
+		() => [keys.tailoring.draft(id()), keys.tailoring.draftInsights(id())],
+	);
+}
+
+export function useUseProfileTry(id: Accessor<string>) {
+	return useInvalidatingMutation(
+		(req: ProfileUseRequest) => adoptProfileTry(id(), req),
 		() => [keys.tailoring.draft(id()), keys.tailoring.draftInsights(id())],
 	);
 }

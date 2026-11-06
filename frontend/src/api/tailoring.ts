@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createSseParser } from "../lib/sse";
 import { KeptDraftExistsError } from "../lib/tailoring";
 import {
+	type ProfileUseRequest,
 	type PromptLab,
 	type PromptPart,
 	type PromptTryDone,
@@ -353,6 +354,24 @@ export async function streamSuggestion(
 				onDelta,
 				signal,
 			),
+	);
+}
+
+export async function adoptProfileTry(
+	id: string,
+	req: ProfileUseRequest,
+): Promise<Draft> {
+	return mocked(
+		(db) => db.adoptProfileTry(id, req),
+		() =>
+			apiFetch(
+				`/tailoring/drafts/${id}/profile/use`,
+				draftSchema,
+				jsonInit("POST", req),
+			).catch((err) => {
+				const message = err instanceof ApiError && bodyError(err);
+				throw message ? new Error(message) : err;
+			}),
 	);
 }
 

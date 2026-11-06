@@ -41,6 +41,7 @@ import {
 	usePromptLab,
 	useResetPromptPart,
 	useSavePromptPart,
+	useUseProfileTry,
 } from "../../hooks/useTailoring";
 import { Marked } from "./ChangesDiff";
 import { PasteReplyDialog } from "./PasteReplyDialog";
@@ -422,6 +423,9 @@ function TryCard(props: {
 	base: string;
 	budgetWords: number;
 	baseLines: number;
+	latest: boolean;
+	using: boolean;
+	onUse: () => void;
 }) {
 	const words = () => wordCount(props.t.text);
 	const over = () => words() > props.budgetWords;
@@ -507,6 +511,38 @@ function TryCard(props: {
 					</p>
 				)}
 			</For>
+			<Show when={props.latest && !props.t.streaming && !props.t.error}>
+				<div class="flex flex-wrap items-center gap-2 text-xs">
+					<Show
+						when={!props.t.used}
+						fallback={
+							<output class="text-foreground">
+								In your Draft. Saved as a Profile Attempt.
+							</output>
+						}
+					>
+						<Button
+							size="sm"
+							variant="outline"
+							disabled={props.t.findings.length > 0}
+							loading={props.using}
+							onClick={() => props.onUse()}
+						>
+							Use this text
+						</Button>
+						<Show when={props.t.findings.length > 0}>
+							<span class="text-muted">
+								Blocked: fix the findings above first.
+							</span>
+						</Show>
+					</Show>
+					<Show when={props.t.useError}>
+						<span role="alert" class="text-destructive-strong">
+							{props.t.useError}
+						</span>
+					</Show>
+				</div>
+			</Show>
 		</li>
 	);
 }
@@ -566,6 +602,25 @@ function Workbench(props: {
 	const baseLines = createMemo(() => props.measureLines(base()));
 	const sessionCost = () => tries.reduce((sum, t) => sum + t.cost, 0);
 
+	const use = useUseProfileTry(() => props.draftId);
+	async function useText(t: PromptTry) {
+		const patch = (p: Partial<PromptTry>) => setTries((x) => x.n === t.n, p);
+		patch({ useError: undefined });
+		try {
+			await use.mutateAsync({
+				text: t.text,
+				steer: t.steer,
+				parts: t.parts,
+			});
+			patch({ used: true });
+		} catch (err) {
+			patch({
+				useError:
+					err instanceof Error ? err.message : "Could not use this text",
+			});
+		}
+	}
+
 	async function run() {
 		if (running()) return;
 		const n = tries.length + 1;
@@ -583,6 +638,7 @@ function Workbench(props: {
 					lines: null,
 					changed: changedPaths(props.loaded, edited),
 					steer: req.steer,
+					parts: req.parts,
 					cost: 0,
 				});
 			}),
@@ -661,6 +717,9 @@ function Workbench(props: {
 										base={base()}
 										budgetWords={budgetWords()}
 										baseLines={baseLines()}
+										latest={t.n === tries.length}
+										using={use.isPending}
+										onUse={() => void useText(t)}
 									/>
 								)}
 							</For>
