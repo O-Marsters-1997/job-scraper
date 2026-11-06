@@ -11,7 +11,6 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/promptparts"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
-	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/linefit"
 )
@@ -24,11 +23,6 @@ const (
 	msgNotOneParagraph = "the profile must be exactly one paragraph"
 	fallbackWidthPt    = 468
 )
-
-//go:embed profile.md
-var profileRules string
-
-var systemPrompt = cvedit.Voice + "\n" + profileRules
 
 //go:embed parts/redraft-profile.md
 var redraftProfilePart string
@@ -86,7 +80,7 @@ type Writer struct{ model lineedit.Model }
 func New(model lineedit.Model) *Writer { return &Writer{model: model} }
 
 func (w *Writer) Redraft(ctx context.Context, apiKey string, in Input) (Result, error) {
-	base := userPrompt(in)
+	base := promptparts.Message(Generation, in.Parts, Documents(in), in.Steer)
 	user := base
 	var res Result
 	lines := defaultLines
@@ -95,7 +89,7 @@ func (w *Writer) Redraft(ctx context.Context, apiKey string, in Input) (Result, 
 	}
 	budget := lines(in.Profile)
 	for range 2 {
-		p := lineedit.Prompt{Model: redraftModel, System: systemPrompt, User: user, MaxTokens: redraftMaxTokens}
+		p := lineedit.Prompt{Model: redraftModel, System: promptparts.System, User: user, MaxTokens: redraftMaxTokens}
 		c, err := w.model.Complete(ctx, apiKey, p, func(string) {})
 		if err != nil {
 			return res, fmt.Errorf("redraft profile: %w", err)
@@ -129,20 +123,6 @@ func (w *Writer) Redraft(ctx context.Context, apiKey string, in Input) (Result, 
 
 func defaultLines(text string) int {
 	return linefit.Lines(text, linefit.Style{Font: "Arial", Size: 11}, fallbackWidthPt)
-}
-
-func userPrompt(in Input) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Job: %s at %s\n\nJob description:\n%s\n\nCurrent profile:\n%s\n\nSkills the person has:\n",
-		in.JobTitle, in.Company, JobText(in.JobDescription), in.Profile)
-	for _, s := range in.BankSkills {
-		fmt.Fprintf(&b, "- %s\n", s)
-	}
-	fmt.Fprintf(&b, "\nBudget: at most %d words, the length of the current profile.\n", len(strings.Fields(in.Profile)))
-	if steer := strings.TrimSpace(in.Steer); steer != "" {
-		fmt.Fprintf(&b, "The person asks: %s\nThe steer reorders and re-emphasises content within the budget; it does not add length.\n", steer)
-	}
-	return b.String()
 }
 
 func guard(in Input, text string) []checks.Finding {
