@@ -9,6 +9,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 
+	"github.com/ollymarsters/job-scraper/internal/promptparts"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/lineedit"
@@ -29,15 +30,38 @@ var profileRules string
 
 var systemPrompt = cvedit.Voice + "\n" + profileRules
 
+//go:embed parts/redraft-profile.md
+var redraftProfilePart string
+
+//go:embed parts/voice.md
+var voicePart string
+
+var Generation = promptparts.Generation{
+	Name: promptparts.ProfileRedraft,
+	Main: "redraft-profile.md",
+	Parts: []promptparts.Part{
+		{Path: "redraft-profile.md", Default: redraftProfilePart},
+		{Path: "voice.md", Default: voicePart},
+	},
+}
+
 type Input struct {
 	Profile        string
-	BankSkills     []string
 	Bank           []string
+	BankSkills     []string
 	JobTitle       string
 	Company        string
 	JobDescription string
 	Steer          string
+	Parts          map[string]string
 	Lines          func(string) int
+}
+
+func Documents(in Input) []promptparts.Document {
+	return []promptparts.Document{
+		{Path: "job.md", Text: fmt.Sprintf("# %s at %s\n\n%s", in.JobTitle, in.Company, JobText(in.JobDescription))},
+		{Path: "profile.md", Text: fmt.Sprintf("---\nbudget_words: %d\n---\n\n%s", len(strings.Fields(in.Profile)), in.Profile)},
+	}
 }
 
 type Attempt struct {
