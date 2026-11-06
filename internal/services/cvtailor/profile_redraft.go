@@ -25,19 +25,13 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 	if strings.ContainsAny(steer, "\r\n") || len([]rune(steer)) > maxSteerRunes {
 		return dto.Draft{}, apperr.Invalid("the steer must be one line of at most 200 characters")
 	}
-	draft, err := m.store.GetDraft(ctx, userID, in.ID)
+	draft, err := m.editableDraft(ctx, userID, in.ID)
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	if draft.Status != statusReady || draft.DraftDocID == "" {
-		return dto.Draft{}, apperr.Conflict("only a ready draft can be edited")
-	}
-	if outcome(draft) == dto.OutcomeDiscarded {
-		return dto.Draft{}, apperr.Conflict("this draft was discarded")
-	}
-	var base baseContent
-	if len(draft.BaseContent) == 0 || json.Unmarshal(draft.BaseContent, &base) != nil || base.Profile == nil {
-		return dto.Draft{}, apperr.Unprocessable("this CV has no profile to redraft")
+	profile, err := baseProfile(draft)
+	if err != nil {
+		return dto.Draft{}, err
 	}
 	key, err := m.creds.Get(ctx, userID, jev.Provider)
 	if errors.Is(err, data.ErrNotFound) {
@@ -59,7 +53,7 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 		return dto.Draft{}, err
 	}
 	input := profiledraft.Input{
-		Profile: *base.Profile, Bank: indexBank(positions, nil).all, Steer: steer,
+		Profile: profile, Bank: indexBank(positions, nil).all, Steer: steer,
 		JobTitle: job.Title, Company: job.Company, JobDescription: job.Description,
 	}
 	for _, s := range skills {
@@ -94,6 +88,28 @@ func (m *Module) RedraftProfile(ctx context.Context, userID string, in dto.Profi
 		saved.RedraftWarning = "The redraft is longer than your current profile. Shorten it to keep the page layout."
 	}
 	return saved, err
+}
+
+func baseProfile(draft dto.Draft) (string, error) {
+	var base baseContent
+	if len(draft.BaseContent) == 0 || json.Unmarshal(draft.BaseContent, &base) != nil || base.Profile == nil {
+		return "", apperr.Unprocessable("this CV has no profile to redraft")
+	}
+	return *base.Profile, nil
+}
+
+func (m *Module) editableDraft(ctx context.Context, userID, id string) (dto.Draft, error) {
+	draft, err := m.store.GetDraft(ctx, userID, id)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	if draft.Status != statusReady || draft.DraftDocID == "" {
+		return dto.Draft{}, apperr.Conflict("only a ready draft can be edited")
+	}
+	if outcome(draft) == dto.OutcomeDiscarded {
+		return dto.Draft{}, apperr.Conflict("this draft was discarded")
+	}
+	return draft, nil
 }
 
 func (m *Module) profileLines(ctx context.Context, userID string, draft dto.Draft) (func(string) int, error) {

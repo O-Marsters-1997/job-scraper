@@ -68,18 +68,30 @@ const WAND_BUTTON =
 const WAND_ROW =
 	"pointer-events-none absolute right-2 z-20 flex w-[min(20rem,calc(100%-1rem))] justify-end";
 
-export function RedraftWand(props: { top: number; onRedraft: () => void }) {
+export function RedraftWand(props: {
+	top: number;
+	onRedraft: () => void;
+	onTune: () => void;
+}) {
 	return (
 		<div class={WAND_ROW} style={{ top: `${props.top}px` }}>
-			<button
-				type="button"
-				aria-label="Redraft profile"
-				title="Redraft profile"
-				class={WAND_BUTTON}
-				onClick={() => props.onRedraft()}
-			>
-				<Icon name="wand" size={15} />
-			</button>
+			<DropdownMenu modal={false} placement="bottom-end">
+				<DropdownMenuTrigger
+					aria-label="Profile actions"
+					title="Profile actions"
+					class={WAND_BUTTON}
+				>
+					<Icon name="wand" size={15} />
+				</DropdownMenuTrigger>
+				<DropdownMenuContent>
+					<DropdownMenuItem onSelect={() => props.onRedraft()}>
+						Redraft
+					</DropdownMenuItem>
+					<DropdownMenuItem onSelect={() => props.onTune()}>
+						Tune prompt…
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
 		</div>
 	);
 }

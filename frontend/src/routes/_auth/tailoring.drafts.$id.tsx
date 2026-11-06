@@ -13,6 +13,7 @@ import { useDraft, useDraftLayout } from "../../hooks/useTailoring";
 
 type DraftSearch = {
 	queue?: string[];
+	lab?: true;
 };
 
 export const Route = createFileRoute("/_auth/tailoring/drafts/$id")({
@@ -20,7 +21,10 @@ export const Route = createFileRoute("/_auth/tailoring/drafts/$id")({
 		const queue = Array.isArray(raw.queue)
 			? raw.queue.filter((id): id is string => typeof id === "string")
 			: [];
-		return queue.length > 0 ? { queue } : {};
+		return {
+			...(queue.length > 0 && { queue }),
+			...(raw.lab === true || raw.lab === "true" ? { lab: true as const } : {}),
+		};
 	},
 	component: DraftReviewPage,
 });

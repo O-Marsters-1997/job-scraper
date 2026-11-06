@@ -1,3 +1,4 @@
+import type { PromptLab } from "@/types/promptLab";
 import type {
 	BulletLean,
 	CVHeading,
@@ -113,6 +114,38 @@ export function getDraftRoles(): DraftRoles {
 		roles: [
 			role("position-1", "Senior Backend Engineer", "Acme Ltd", 4, 6),
 			role("position-2", "Software Engineer", "Globex", 3, 2),
+		],
+	};
+}
+
+export function getPromptLab(): PromptLab {
+	return {
+		generation: "profile-redraft",
+		main: "redraft-profile.md",
+		parts: [
+			{
+				path: "redraft-profile.md",
+				text: "# Redraft the profile\n\nRewrite the paragraph in [profile.md](profile.md) so it speaks to the role in [job.md](job.md). Write it the way [voice.md](voice.md) describes.\n\n## Make a minimal edit\n- Keep the profile's structure and sentence order.\n\n## Reply\nThe new paragraph only.",
+			},
+			{
+				path: "voice.md",
+				text: "# Voice\n\nPlain, specific and calm. No hype.",
+			},
+		],
+		documents: [
+			{
+				path: "job.md",
+				text: "# Platform Engineer at Acme\n\nBuild and run the platform.",
+			},
+			{
+				path: "profile.md",
+				text: "---\nbudget_words: 6\n---\n\nEngineer who ships reliable services.",
+			},
+		],
+		checks: [
+			"Grounding: every claim must come from your experience bank or skills.",
+			"Banned words: the redraft is rejected if it uses one.",
+			"Line budget: the redraft may not run longer than the current profile.",
 		],
 	};
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createSseParser } from "../lib/sse";
 import { KeptDraftExistsError } from "../lib/tailoring";
+import { type PromptLab, promptLabSchema } from "../types/promptLab";
 import {
 	type BulletLean,
 	bulletLeanSchema,
@@ -220,6 +221,13 @@ export async function fetchDraftRoles(id: string): Promise<DraftRoles> {
 	return mocked(
 		(db) => db.getDraftRoles(),
 		() => apiFetch(`/tailoring/drafts/${id}/roles`, draftRolesSchema),
+	);
+}
+
+export async function fetchPromptLab(id: string): Promise<PromptLab> {
+	return mocked(
+		(db) => db.getPromptLab(),
+		() => apiFetch(`/tailoring/drafts/${id}/prompt`, promptLabSchema),
 	);
 }
 

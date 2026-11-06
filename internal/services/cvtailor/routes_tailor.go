@@ -48,6 +48,7 @@ func (m *Module) tailorRoutes(r chi.Router) {
 		r.Get("/drafts/{id}/lean", handlers.Query(m.svc.DraftLean))
 		r.Get("/drafts/{id}/roles", handlers.Query(m.svc.DraftRoles))
 		r.Get("/drafts/{id}/insights", handlers.Query(m.svc.DraftInsights))
+		r.Get("/drafts/{id}/prompt", handlers.Query(m.PromptLab))
 		r.Post("/drafts/{id}/insights", withWriteWindow(scaffoldWriteWindow, handlers.Update(m.ExplainDraft)))
 		r.Get("/drafts/{id}/pdf", m.draftPDF())
 		r.Post("/drafts/{id}/profile/redraft", withWriteWindow(scaffoldWriteWindow, handlers.Update(m.RedraftProfile)))
